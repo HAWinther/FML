@@ -142,9 +142,14 @@ namespace FML::GLASSIC {
         return load;
     }
     struct Options {
-        int mesh{32}, max_steps{1000}, min_steps{20}, stable_steps{5};
+        // mesh = 0: automatic, the smallest multiple of the task count (and of 2) >= 3 N^(1/3). With the split scale
+        // tied to the mesh (split_cells/mesh) a coarse mesh makes the short-range pair work dominate: for N = 32^3
+        // one force evaluation took 1.2 s with mesh 2 N^(1/3), 0.43 s with 3 N^(1/3) and 0.26 s with 4 N^(1/3)
+        // (1 thread), at 4 x 8 bytes x mesh^3 of grid memory
+        int mesh{0}, max_steps{1000}, min_steps{20}, stable_steps{5};
         double timestep{.1}, damping{2}, max_step_spacing{.05};
-        double split_cells{1.25}, softening_spacing{.1}, cutoff_tolerance{1e-6};
+        // cutoff_tolerance 1e-4: the forces differ from those with 1e-6 by ~2e-6 of the rms force, ~1.6x faster
+        double split_cells{1.25}, softening_spacing{.1}, cutoff_tolerance{1e-4};
         double force_tolerance{1e-3}, velocity_tolerance{1e-3}; // RMS vector norms / mean spacing.
     };
     struct Residuals {
@@ -278,6 +283,12 @@ namespace FML::GLASSIC {
             return result;
         }
     };
+    /// The default relaxation mesh: the smallest multiple of the task count (and of 2) that is >= 3 N^(1/3), and >= 4
+    inline int automatic_mesh(std::uint64_t count) {
+        const int step = FML::NTasks % 2 == 0 ? FML::NTasks : 2 * FML::NTasks;
+        const int target = std::max(4, int(std::ceil(3.0 * std::cbrt(double(count)) - 1e-9)));
+        return ((target + step - 1) / step) * step;
+    }
     inline Result relax(Load & load, Options o = {}) {
         for (int x : {o.max_steps, o.min_steps, o.stable_steps})
             detail::same(x, "[GlassIC] Relaxation settings differ between ranks");
@@ -290,6 +301,8 @@ namespace FML::GLASSIC {
                             std::isfinite(o.velocity_tolerance),
                         "[GlassIC] Invalid relaxation settings");
         detail::check_load(load);
+        if (o.mesh <= 0)
+            o.mesh = automatic_mesh(load.particles.get_npart_total());
         Force force(o.mesh, load.particles.get_npart_total(), o.split_cells, o.softening_spacing, o.cutoff_tolerance);
         const double spacing = 1 / std::cbrt(double(load.particles.get_npart_total()));
         auto acceleration = force(load);

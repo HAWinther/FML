@@ -65,8 +65,9 @@ FML's real PM-force convention.
 
 FFTW MPI returns both an owned slab and a possibly larger required allocation.
 The class honors the complete allocation, not just `local_nx*N*N`. It uses aligned
-storage with reusable forward/inverse plans, with FFTW_ESTIMATE planning and no
-transposed-output layout. Only owned elements enter field operations and sums.
+storage with reusable forward/inverse plans, planned with FML's planner flag
+(`FML::GRID::set_fftw_planner_flag`, FFTW_ESTIMATE by default; wisdom is shared with
+FFTWGrid) and no transposed-output layout. Only owned elements enter field operations and sums.
 Empty slabs, uneven partitions and odd meshes are supported. No FML particle-domain
 or r2c-grid partition is assumed: use `wave().local_start()`, `local_nx()`,
 `coordinate(i)` and `position(i)` for the actual complex-grid layout.
@@ -217,9 +218,15 @@ stores external density. `memory()` reports their allocated capacities, includin
 FFTW's larger complex allocation when needed. It excludes opaque FFTW plan/scratch
 allocations and process overhead; use peak RSS alongside the report.
 
-A self-gravitating advance performs six complex FFTs (two potential solves and
-one kinetic pair). G=0 skips the four potential FFTs. Diagnostics and force hooks
-perform additional transforms, all counted by `fft_count()`. No per-step full-grid
+A self-gravitating advance performs four complex FFTs (the potential solve at the
+end of the step and one kinetic pair): the potential at the start of a step is the
+one computed at the end of the previous step, kept until the wave or the external
+source changes (`initialize`, non-const `wave()`, `set_external_density`,
+`clear_external_density`). The first step after such a change performs six. G=0
+skips the potential FFTs. The kinetic phase is the product of three 1D factors
+exp(-i alpha k_d^2), tabulated once per step. Diagnostics and force hooks
+perform additional transforms (`potential()` and `diagnostics()` reuse the kept
+potential), all counted by `fft_count()`. No per-step full-grid
 allocation is required, though FFTW itself may have internal workspace costs.
 Global reductions only transmit scalar diagnostics/settings. The example reports
 measured max-rank time, local accounted bytes and transform counts. No GPU, pencil

@@ -95,6 +95,10 @@ namespace FML::COSMOLOGY::GROWTH {
         double koverH0_min = 1e-4 * FML::UTILS::SI::c_over_H0_mpch;  ///< 1e-4 h/Mpc
         double koverH0_max = 100.0 * FML::UTILS::SI::c_over_H0_mpch; ///< 100 h/Mpc
         int n_k = 200;
+        /// With scale dependence: tabulate E, dlnE/dx and rho_m on a fine grid in x (n_tabulate points, cubic spline;
+        /// relative error ~1e-9) once instead of evaluating the background in every right hand side of the n_k ODE
+        /// solves. 0: evaluate the background directly
+        int n_tabulate = 4000;
     };
 
     class LPTGrowthFactors {
@@ -239,6 +243,26 @@ namespace FML::COSMOLOGY::GROWTH {
 
         static double call(const LPTGrowthEquations::FunctionK & f, double x, double k) { return f ? f(x, k) : 1.0; }
 
+        /// The equations with E, dlnE/dx and rho_m replaced by cubic splines in x on [xmin, xmax] (n points; the
+        /// functions are evaluated directly outside the range)
+        static LPTGrowthEquations tabulated_background(const LPTGrowthEquations & eq, double xmin, double xmax, int n) {
+            auto table = [&](const LPTGrowthEquations::Function & f, const char * name) {
+                DVector x(n), y(n);
+                for (int i = 0; i < n; i++) {
+                    x[i] = xmin + (xmax - xmin) * i / double(n - 1);
+                    y[i] = f(x[i]);
+                }
+                auto spline = std::make_shared<Spline>(x, y, name);
+                return LPTGrowthEquations::Function(
+                    [spline, f, xmin, xmax](double xx) { return (xx >= xmin and xx <= xmax) ? (*spline)(xx) : f(xx); });
+            };
+            LPTGrowthEquations res = eq;
+            res.E = table(eq.E, "E(x)");
+            res.dlogEdx = table(eq.dlogEdx, "dlogE/dx(x)");
+            res.matter_density = table(eq.matter_density, "rho_m(x)");
+            return res;
+        }
+
         void solve(const LPTGrowthEquations & eq) {
             double amin = s.a_min;
             if (s.start_in_radiation_era and not s.eds_initial_conditions) {
@@ -252,7 +276,14 @@ namespace FML::COSMOLOGY::GROWTH {
             for (int i = 0; i < s.n_a; i++)
                 xgrid[i] = std::log(amin) + std::log(s.a_max / amin) * i / double(s.n_a - 1);
 
-            auto D = solve_k(eq, 0.0, y_low);
+            // With n_k solves the background evaluations dominate: tabulate the k-independent functions once
+            LPTGrowthEquations eq_tab;
+            const bool tabulate = s.scale_dependent and s.n_tabulate >= 4;
+            if (tabulate)
+                eq_tab = tabulated_background(eq, xgrid.front(), xgrid.back(), s.n_tabulate);
+            const LPTGrowthEquations & eqs = tabulate ? eq_tab : eq;
+
+            auto D = solve_k(eqs, 0.0, y_low);
             const char * names[4] = {"D1LPT(log(a))", "D2LPT(log(a))", "D3LPTa(log(a))", "D3LPTb(log(a))"};
             for (int i = 0; i < 4; i++)
                 D0[i].create(xgrid, D[i], names[i]);
@@ -270,7 +301,7 @@ namespace FML::COSMOLOGY::GROWTH {
 #pragma omp parallel for
 #endif
             for (int ik = 0; ik < s.n_k; ik++) {
-                auto d = solve_k(eq, std::exp(logkgrid[ik]), y_low);
+                auto d = solve_k(eqs, std::exp(logkgrid[ik]), y_low);
                 for (int i = 0; i < 4; i++)
                     Dg[i][ik] = std::move(d[i]);
             }

@@ -166,6 +166,13 @@ int main(int argc, char ** argv) {
     const auto failed = relax(overflow, extreme);
     check(failed.status == Status::NonFinite && failed.steps == 0,
           "overflowing residuals fail closed before any drift");
+    // The automatic relaxation mesh: >= 3 N^(1/3), a multiple of the task count and even
+    {
+        const int m1 = automatic_mesh(32768), m2 = automatic_mesh(1000), m3 = automatic_mesh(1);
+        check(m1 >= 96 && m2 >= 30 && m3 >= 4 && m1 % FML::NTasks == 0 && m2 % FML::NTasks == 0 && m1 % 2 == 0 &&
+                  m2 % 2 == 0 && m1 < 96 + 2 * FML::NTasks,
+              "automatic relaxation mesh is >= 3 N^(1/3), even and a multiple of the task count");
+    }
     // Evolve Poisson to a quiet load: test requirements are measurable suppression, not an assumed k^4 fit.
     auto glass = poisson_load(512, 73);
     Options o;

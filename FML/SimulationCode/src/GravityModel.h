@@ -240,7 +240,7 @@ class GravityModel {
     // Factors in the LPT equations
     virtual double source_factor_1LPT([[maybe_unused]] double a, [[maybe_unused]] double koverH0 = 0) const {
         double factor = 1.0;
-        const double fnu = this->cosmo->f_nu(a);
+        const double fnu = f_nu_of_a(a);
         if (fnu > 0.0 and koverH0 > 0.0) {
             if (transfers) {
                 const double T_nu =
@@ -253,7 +253,7 @@ class GravityModel {
         return factor;
     };
     virtual double source_factor_2LPT([[maybe_unused]] double a, [[maybe_unused]] double koverH0 = 0) const {
-        return 1.0 - this->cosmo->f_nu(a);
+        return 1.0 - f_nu_of_a(a);
     };
     // The D1^2 source of the 2LPT equation relative to the D2 term (1 in GR):
     //   D2'' + (2 + dlogH/dloga) D2' = rhs source_factor_2LPT (D2 - nonlinear_source_factor_2LPT D1^2)
@@ -263,10 +263,10 @@ class GravityModel {
         return 1.0;
     };
     virtual double source_factor_3LPTa([[maybe_unused]] double a, [[maybe_unused]] double koverH0 = 0) const {
-        return 1.0 - this->cosmo->f_nu(a);
+        return 1.0 - f_nu_of_a(a);
     };
     virtual double source_factor_3LPTb([[maybe_unused]] double a, [[maybe_unused]] double koverH0 = 0) const {
-        return 1.0 - this->cosmo->f_nu(a);
+        return 1.0 - f_nu_of_a(a);
     };
 
     /// The force D Phi from the density field (Fourier space): D^2 Phi = 1.5 OmegaM a G_eff/G(a, k) delta, with
@@ -358,6 +358,20 @@ class GravityModel {
         }
         const bool use_neutrino_transfer = transfers and nu_growth;
 
+        // f_nu(x) on a fine grid covering the integration (LPTGrowthFactors may start up to ~1e5 earlier than alow in
+        // the radiation era; outside the range f_nu is evaluated directly)
+        if (cosmo->get_fMNu() > 0.0) {
+            const int n = 4000;
+            f_nu_xmin = std::log(alow) - std::log(1e5);
+            f_nu_xmax = std::log(ahigh);
+            std::vector<double> x(n), f(n);
+            for (int i = 0; i < n; i++) {
+                x[i] = f_nu_xmin + (f_nu_xmax - f_nu_xmin) * i / double(n - 1);
+                f[i] = cosmo->f_nu(std::exp(x[i]));
+            }
+            f_nu_spline = FML::INTERPOLATION::SPLINE::Spline(x, f, "f_nu(x)");
+        }
+
         namespace GROWTH = FML::COSMOLOGY::GROWTH;
         auto eq = GROWTH::LPTGrowthEquations::from_background(cosmo->background());
         eq.mu = [this](double x, double k) { return GeffOverG(std::exp(x), k); };
@@ -419,6 +433,15 @@ class GravityModel {
 
     // The background cosmology
     std::shared_ptr<Cosmology> cosmo;
+
+    // The massive neutrino fraction f_nu(a) of the source factors, splined in x = ln a by compute_growth_factors
+    // (the background sum with the neutrino momentum integral was most of the cost of the scale-dependent growth)
+    FML::INTERPOLATION::SPLINE::Spline f_nu_spline;
+    double f_nu_xmin{0.0}, f_nu_xmax{-1.0};
+    double f_nu_of_a(double a) const {
+        const double x = std::log(a);
+        return (x >= f_nu_xmin and x <= f_nu_xmax) ? f_nu_spline(x) : this->cosmo->f_nu(a);
+    }
 
     // The theory's quasi-static limit (see get_quasi_static_gravity)
     std::shared_ptr<const QuasiStaticGravity> quasi_static;

@@ -11,8 +11,7 @@ follow [the shared build guide](../BUILDING.md).
 #include <FML/GlassIC/LoadIO.h>
 using namespace FML::GLASSIC;
 auto load = poisson_load(32768, 12345, 250.0); // Count, seed, box size in Mpc/h.
-Options options;
-options.mesh = 96;
+Options options;          // options.mesh = 0 (default): the smallest task multiple >= 3 N^(1/3)
 options.max_steps = 3000;
 auto result = relax(load, options);
 if (result.status != Status::Converged) {
@@ -47,7 +46,9 @@ CIC assignment and CIC force-interpolation windows. The short-range solve reuses
 the softened spline kernel and cell-list backend. Its coupling is `1/(4 pi N)`
 for unit source masses and unit-box coordinates. Split scale is `split_cells/mesh`;
 compact softening **support** is `softening_spacing/N^(1/3)` (not a Plummer epsilon).
-The omitted pair-force tolerance is `cutoff_tolerance`; the implied cutoff must be
+The omitted pair-force tolerance is `cutoff_tolerance` (1e-4 in `Options`; the forces then
+differ from those with 1e-6 by ~2e-6 of the rms force, `Force` itself defaults to 1e-6);
+the implied cutoff must be
 less than half the box and at least as large as the softening support. These are
 approximated periodic P3M forces, with finite mesh anisotropy and interpolation
 errors. Reversing only a mesh force would leave unresolved close pairs unconstrained.
@@ -193,3 +194,12 @@ not establish an asymptotic k^4 law or isotropy at production volume, and glass
 loads do not eliminate all discreteness artifacts. See
 [Wang & White (2007)](https://arxiv.org/abs/astro-ph/0702575) and
 [Garrison et al. (2016)](https://doi.org/10.1093/mnras/stw1594).
+
+## Cost and the mesh
+
+With the split scale tied to the mesh (`split_cells/mesh`) the short-range pair work grows as
+(N^(1/3)/mesh)^3 per particle, so a coarse mesh is slow. One force evaluation for N = 32^3 (1 thread,
+cutoff tolerance 1e-4): mesh 64 0.71 s, 96 0.27 s, 128 0.20 s, 160 0.30 s; for N = 64^3: mesh 192 4.0 s,
+256 2.8 s. The default (`mesh = 0`) is ~3 N^(1/3); ~4 N^(1/3) is faster still but needs 4 x 8 bytes x
+mesh^3 of grid memory (2 KB per particle).
+

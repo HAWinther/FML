@@ -78,6 +78,31 @@ namespace FML::WAVEDM {
             }
         }
 
+        // psi(k) *= exp(-i alpha k^2) = prod_d exp(-i alpha k_d^2): the phase is a product of three 1D factors (a table
+        // of N values per step instead of cos/sin of every cell)
+        void kinetic_drift(ComplexGrid & wave, double alpha) {
+            const int n = wave.mesh();
+            const double twopi = 2 * std::acos(-1.);
+            std::vector<Complex> factor(n);
+            for (int j = 0; j < n; ++j) {
+                const int m = j > n / 2 ? j - n : j;
+                const double k = twopi * m / box_;
+                const double angle = std::remainder(-alpha * k * k, twopi);
+                factor[j] = Complex(Real(std::cos(angle)), Real(std::sin(angle)));
+            }
+            const size_t nrows = size_t(wave.local_nx()) * size_t(n);
+            const ptrdiff_t start = wave.local_start();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (size_t row = 0; row < nrows; ++row) {
+                const Complex fxy = factor[size_t(start) + row / n] * factor[row % n];
+                Complex * data = wave.data() + row * n;
+                for (int iz = 0; iz < n; ++iz)
+                    data[iz] *= fxy * factor[iz];
+            }
+        }
+
       public:
         Solver(int mesh, double boxsize, Physics physics = {}, double time = 0, double a = 1)
             : physics_(physics), box_(boxsize), time_(time), a_(a) {
@@ -101,14 +126,20 @@ namespace FML::WAVEDM {
                     k2 += k * k;
                 }
                 k2_[i] = k2;
+                k2max_ = std::max(k2max_, k2);
                 valid &= std::isfinite(k2);
             }
+            FML::MaxOverTasks(&k2max_);
             detail::require(valid && std::isfinite(volume_element()) && volume_element() > 0,
                             "[WaveDM] Unrepresentable spatial scales");
         }
         Solver(const Solver &) = delete;
         Solver & operator=(const Solver &) = delete;
-        ComplexGrid & wave() { return *wave_; }
+        // Mutable access may change the wave, so the cached potential of the wave is no longer valid
+        ComplexGrid & wave() {
+            potential_valid_ = false;
+            return *wave_;
+        }
         const ComplexGrid & wave() const { return *wave_; }
         Physics physics() const { return physics_; }
         double boxsize() const { return box_; }
@@ -126,10 +157,12 @@ namespace FML::WAVEDM {
             detail::require(valid, "[WaveDM] External comoving density must be finite and nonnegative");
             external_ = rho;
             external_enabled_ = true;
+            potential_valid_ = false;
         }
         void clear_external_density() {
             external_.clear();
             external_enabled_ = false;
+            potential_valid_ = false;
         }
         bool has_external_density() const { return external_enabled_; }
         void set_restart_steps(std::uint64_t steps) {
@@ -158,6 +191,7 @@ namespace FML::WAVEDM {
             }
             detail::require(valid, "[WaveDM] Invalid initial wavefunction");
             wave_->copy_values(*candidate_);
+            potential_valid_ = false;
         }
         void initialize_density_phase(const std::function<double(std::array<double, 3>)> & rho,
                                       const std::function<double(std::array<double, 3>)> & phase) {
@@ -193,28 +227,25 @@ namespace FML::WAVEDM {
             check_wave(*wave_);
             if (dt == 0)
                 return;
-            bool valid = true;
-            for (double k2 : k2_)
-                valid &= std::isfinite((.5 * physics_.eta * factors.kinetic) * k2);
-            detail::require(valid, "[WaveDM] Kinetic phase overflows");
+            const double alpha = .5 * physics_.eta * factors.kinetic;
+            detail::require(std::isfinite(alpha * k2max_), "[WaveDM] Kinetic phase overflows");
+            // The potential of the wave at the start of the step is the one at the end of the previous step (unless
+            // the wave or the source changed in between)
+            const bool reuse_potential = potential_valid_;
+            potential_valid_ = false;
             candidate_->copy_values(*wave_);
-            solve_potential(*candidate_);
+            if (not reuse_potential)
+                solve_potential(*candidate_);
             phase_kick(*candidate_, .5 * factors.potential);
             candidate_->forward();
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-            for (size_t i = 0; i < wave_->size(); ++i) {
-                const double angle =
-                    std::remainder(-(.5 * physics_.eta * factors.kinetic) * k2_[i], 2 * std::acos(-1.));
-                candidate_->data()[i] *= Complex(Real(std::cos(angle)), Real(std::sin(angle)));
-            }
+            kinetic_drift(*candidate_, alpha);
             candidate_->inverse();
             check_wave(*candidate_);
             solve_potential(*candidate_);
             phase_kick(*candidate_, .5 * factors.potential);
             check_wave(*candidate_);
             wave_.swap(candidate_);
+            potential_valid_ = true;
             time_ += dt;
             a_ = factors.a_end;
             ++steps_;
@@ -226,7 +257,9 @@ namespace FML::WAVEDM {
         // Zero-mean comoving potential U=a*Phi, in code velocity^2. Recomputed from the live wave/source.
         const std::vector<double> & potential() {
             check_wave(*wave_);
-            solve_potential(*wave_);
+            if (not potential_valid_)
+                solve_potential(*wave_);
+            potential_valid_ = true;
             return potential_;
         }
         // Full-complex odd derivatives. Even-N Nyquist derivatives are zero, as for FML's real PM gradients.
@@ -267,7 +300,9 @@ namespace FML::WAVEDM {
             detail::require(tail_start > 0 && tail_start <= 1 && std::isfinite(tail_start),
                             "[WaveDM] Invalid spectral tail cutoff");
             check_wave(*wave_);
-            solve_potential(*wave_);
+            if (not potential_valid_)
+                solve_potential(*wave_);
+            potential_valid_ = true;
             Diagnostics result;
             double sourceW = 0;
             for (size_t i = 0; i < wave_->size(); ++i) {
@@ -329,6 +364,10 @@ namespace FML::WAVEDM {
 
       private:
         bool external_enabled_{false};
+        // potential_ is that of the current wave (and source)
+        bool potential_valid_{false};
+        // The largest k^2 of the grid (for the kinetic phase overflow check)
+        double k2max_{0.0};
     };
 } // namespace FML::WAVEDM
 #endif

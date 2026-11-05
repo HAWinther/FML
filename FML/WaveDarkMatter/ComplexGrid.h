@@ -86,13 +86,27 @@ namespace FML::WAVEDM {
                 auto * native = reinterpret_cast<FML::GRID::my_fftw_complex *>(data_);
                 static_assert(sizeof(Complex) == sizeof(FML::GRID::my_fftw_complex));
 #ifdef USE_MPI
-                forward_ = FML_WAVE_FFT(
-                    mpi_plan_dft_3d)(n, n, n, native, native, FML::communicator, FFTW_FORWARD, FFTW_ESTIMATE);
-                inverse_ = FML_WAVE_FFT(
-                    mpi_plan_dft_3d)(n, n, n, native, native, FML::communicator, FFTW_BACKWARD, FFTW_ESTIMATE);
+                forward_ = FML_WAVE_FFT(mpi_plan_dft_3d)(n,
+                                                         n,
+                                                         n,
+                                                         native,
+                                                         native,
+                                                         FML::communicator,
+                                                         FFTW_FORWARD,
+                                                         FML::GRID::get_fftw_planner_flag());
+                inverse_ = FML_WAVE_FFT(mpi_plan_dft_3d)(n,
+                                                         n,
+                                                         n,
+                                                         native,
+                                                         native,
+                                                         FML::communicator,
+                                                         FFTW_BACKWARD,
+                                                         FML::GRID::get_fftw_planner_flag());
 #else
-                forward_ = FML_WAVE_FFT(plan_dft_3d)(n, n, n, native, native, FFTW_FORWARD, FFTW_ESTIMATE);
-                inverse_ = FML_WAVE_FFT(plan_dft_3d)(n, n, n, native, native, FFTW_BACKWARD, FFTW_ESTIMATE);
+                forward_ = FML_WAVE_FFT(
+                    plan_dft_3d)(n, n, n, native, native, FFTW_FORWARD, FML::GRID::get_fftw_planner_flag());
+                inverse_ = FML_WAVE_FFT(
+                    plan_dft_3d)(n, n, n, native, native, FFTW_BACKWARD, FML::GRID::get_fftw_planner_flag());
 #endif
                 detail::require(forward_ && inverse_, "[WaveDM] Complex FFT plan creation failed");
                 std::fill_n(data_, allocated_, Complex{});

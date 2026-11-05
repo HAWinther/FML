@@ -215,14 +215,22 @@ void NBodySimulation<NDIM, T>::add_linear_neutrinos(FFTWGrid<NDIM> & density_gri
     // delta_cb(zini,k) -> delta_nu(z,k) using the transfer functions
     const double aini = 1.0 / (1.0 + ic_initial_redshift);
     const double koverkBox = 1.0 / params.simulation.boxsize;
-    // (below k_min of the tables, including the k = 0 mode, the ratio at k_min)
+    // (below k_min of the tables, including the k = 0 mode, the ratio at k_min). The ratio is splined in log k once per
+    // call up to the largest k of the grid (evaluating the transfer functions for every mode cost ~200 ns per mode)
     const double kmin = transfers->range().kmin_hmpc;
-    auto norm = [&](double kBox) {
-        const double k = std::max(kBox * koverkBox, kmin);
-        double T_mnu = transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::MassiveNeutrino, k, a);
-        double T_cb_ini = transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, k, aini);
-        return (T_mnu / T_cb_ini);
-    };
+    const double kmax_grid = std::sqrt(double(NDIM)) * M_PI * density_grid_fourier.get_nmesh() * koverkBox;
+    const double kmax =
+        std::max(std::min(1.001 * kmax_grid, std::max(kmax_grid, transfers->range().kmax_hmpc)), 1.01 * kmin);
+    const Spline ratio = SIMCODE::spline_of_logk(
+        kmin,
+        kmax,
+        [&](double logk) {
+            const double k = std::exp(logk);
+            return transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::MassiveNeutrino, k, a) /
+                   transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, k, aini);
+        },
+        "T_nu(k,z) / T_cb(k,zini)");
+    auto norm = [&](double kBox) { return ratio(SIMCODE::clamped_logk(kBox * koverkBox, kmin, kmax)); };
 
     // The total matter density-field deltaM = (OmegaCB deltaCB + OmegaMNu deltaMNu)/OmegaM. With
     // force_neutrino_energy_density the neutrino term is f_nu <E/m>(a) delta_nu (delta_nu from the transfer functions

@@ -633,58 +633,54 @@ namespace FML {
                     if (skip)
                         continue;
 
-                    // Get total number of particles in cell
-                    const size_t np_boundary = PartCells[index_nbor_cell].np_boundary;
-                    const size_t np = PartCells[index_nbor_cell].np;
-                    const size_t np_total = np + np_boundary;
+                    // Loop over all particles in nbor cell that do not have an FoF ID yet. A particle that has an
+                    // ID can never link again, so it is removed from the cell (swapped to the end of the active part
+                    // and the count decremented; the cells are not used after the linking). Without this every
+                    // FindAllFriends call rescans the linked particles of the 3^NDIM cells, which is quadratic in
+                    // the number of particles per cell inside dense groups
+                    auto & cell = PartCells[index_nbor_cell];
+                    for (int type : {BOUNDARY_PARTICLE, REGULAR_PARTICLE}) {
+                        const bool boundary = (type == BOUNDARY_PARTICLE);
+                        auto & np_active = boundary ? cell.np_boundary : cell.np;
+                        size_t * index_list = boundary ? cell.ParticleIndexBoundary : cell.ParticleIndex;
+                        for (int ii = 0; ii < np_active;) {
+                            const size_t nborlocalindex = index_list[ii];
+                            const size_t nborglobalindex =
+                                boundary ? nborlocalindex : nborlocalindex + NumPart_boundary;
 
-                    // Loop over all particles in nbor cell
-                    for (size_t ii = 0; ii < np_total; ii++) {
-                        T * nborpart{};
-                        int nbortype{};
-                        size_t nborglobalindex{};
-                        size_t nborlocalindex{};
+                            // Already processed so that it has an ID (this includes the current particle): remove it
+                            if (particle_id_FoF[nborglobalindex] != no_FoF_ID) {
+                                std::swap(index_list[ii], index_list[np_active - 1]);
+                                np_active--;
+                                continue;
+                            }
+                            ii++;
+                            if (nborglobalindex == globalindex)
+                                continue;
+                            T * nborpart = boundary ? &boundary_particles[nborlocalindex] : &part[nborlocalindex];
 
-                        // Type of particle
-                        if (ii < np_boundary) {
-                            nborlocalindex = PartCells[index_nbor_cell].ParticleIndexBoundary[ii];
-                            nborglobalindex = nborlocalindex;
-                            nborpart = &boundary_particles[nborlocalindex];
-                            nbortype = BOUNDARY_PARTICLE;
-                        } else {
-                            nborlocalindex = PartCells[index_nbor_cell].ParticleIndex[ii - np_boundary];
-                            nborglobalindex = nborlocalindex + NumPart_boundary;
-                            nborpart = &part[nborlocalindex];
-                            nbortype = REGULAR_PARTICLE;
-                        }
+                            // Compute distance
+                            double dist2 = 0.0;
+                            const auto * pos2 = FML::PARTICLE::GetPos(*nborpart);
+                            std::array<double, NDIM> dx2;
+                            for (int idim = 0; idim < NDIM; idim++) {
+                                dx2[idim] = std::abs(pos2[idim] - pos1[idim]);
+                                if (dx2[idim] > 0.5 and periodic)
+                                    dx2[idim] -= 1.0;
+                            }
+                            for (int idim = 0; idim < NDIM; idim++)
+                                dist2 += dx2[idim] * dx2[idim];
 
-                        // If same particle or already processed so that it has an ID skip going further
-                        if (particle_id_FoF[nborglobalindex] != no_FoF_ID)
-                            continue;
-                        if (nborglobalindex == globalindex)
-                            continue;
-
-                        // Compute distance
-                        double dist2 = 0.0;
-                        const auto * pos2 = FML::PARTICLE::GetPos(*nborpart);
-                        std::array<double, NDIM> dx2;
-                        for (int idim = 0; idim < NDIM; idim++) {
-                            dx2[idim] = std::abs(pos2[idim] - pos1[idim]);
-                            if (dx2[idim] > 0.5 and periodic)
-                                dx2[idim] -= 1.0;
-                        }
-                        for (int idim = 0; idim < NDIM; idim++)
-                            dist2 += dx2[idim] * dx2[idim];
-
-                        // Check if we have a link. Set the FoF ID in the particle list
-                        if (dist2 < fof_distance2) {
-                            particle_id_FoF[nborglobalindex] = FoFID;
-                            // Only need to set this one time so avoid a write by adding if test
-                            if (particle_id_FoF[globalindex] == no_FoF_ID)
-                                particle_id_FoF[globalindex] = FoFID;
-                            // Push partice info to FoF list
-                            friend_local_index_list.push_back(nborlocalindex);
-                            friend_type_list.push_back(nbortype);
+                            // Check if we have a link. Set the FoF ID in the particle list
+                            if (dist2 < fof_distance2) {
+                                particle_id_FoF[nborglobalindex] = FoFID;
+                                // Only need to set this one time so avoid a write by adding if test
+                                if (particle_id_FoF[globalindex] == no_FoF_ID)
+                                    particle_id_FoF[globalindex] = FoFID;
+                                // Push partice info to FoF list
+                                friend_local_index_list.push_back(nborlocalindex);
+                                friend_type_list.push_back(type);
+                            }
                         }
                     }
                 }
