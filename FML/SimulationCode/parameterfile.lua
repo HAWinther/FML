@@ -535,6 +535,30 @@ force_use_finite_difference_force = false
 force_finite_difference_stencil_order = 4
 
 ------------------------------------------------------------
+-- Optional short-range gravity (common-timestep P3M / TreePM)
+------------------------------------------------------------
+-- Initial scope: 3D GR, simulation_use_cola = false, timestep_method = "Quinn",
+-- continuous Green/gradient kernels, assignment density/interpolation and no early
+-- force switch. Requires one cold particle species, no massive neutrinos and no
+-- N-body gauge source. See SHORT_RANGE.md for units, validation and remaining work.
+force_short_range = false
+if force_short_range then
+  -- cell: P3M cell lists; tree: monopole TreePM
+  force_short_range_backend = "cell"
+  -- Comoving Gaussian split scale in Mpc/h (example: two force-mesh cells)
+  force_short_range_split_scale = 2.0 * simulation_boxsize / force_nmesh
+  -- Comoving spline support h in Mpc/h; h = 2.8 * Plummer-equivalent epsilon
+  -- Example: 0.1 times the mean particle spacing; test force/timestep convergence
+  force_short_range_softening_support = 0.1 * simulation_boxsize / particle_Npart_1D
+  -- Truncated pair-window tolerance; not a bound on relative net-force error
+  force_short_range_cutoff_tolerance = 1e-6
+  -- Pair-kernel table points (0 evaluates the analytic kernel)
+  force_short_range_table_points = 16384
+  -- Tree only: opening angle (0 gives exact leaf sums)
+  force_short_range_opening_angle = 0.3
+end
+
+------------------------------------------------------------
 -- Lightcone option
 ------------------------------------------------------------
 lightcone = false

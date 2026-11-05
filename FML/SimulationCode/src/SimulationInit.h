@@ -11,6 +11,16 @@ template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::read_parameters(const ParameterMap & param, const Parameters & _params) {
     parameters = std::make_shared<ParameterMap>(param);
     params = _params;
+    // Library callers can construct the simulation without Main.cpp's model checks.
+    if (params.force.short_range.enabled) {
+        params.validate();
+        if (NDIM != 3 || grav->get_name() != "GR" || cosmo->get_OmegaMNu() != 0.0 ||
+            SIMCODE::get_parameter<bool>(param, "force_use_finite_difference_force"))
+            throw std::invalid_argument(
+                "Short-range integration requires 3D GR, no massive neutrinos and Fourier forces");
+        if (!FML::PARTICLE::has_get_id<T>())
+            throw std::invalid_argument("Short-range integration requires particle IDs");
+    }
 
     // We cannot use COLA if the particle type is not compatible with it
     if (params.simulation.use_cola and not FML::PARTICLE::has_get_D_1LPT<T>()) {

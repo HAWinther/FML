@@ -56,6 +56,7 @@ class GravityModel {
     // Name of the model
     //========================================================================
     std::string get_name() const { return name; }
+    bool uses_finite_difference_force() const { return force_use_finite_difference_force; }
 
     std::shared_ptr<Cosmology> get_cosmo() { return cosmo; }
 

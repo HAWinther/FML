@@ -239,6 +239,7 @@ void NBodySimulation<NDIM, T>::step(const Step & s) {
     std::array<FFTWGrid<NDIM>, NDIM> & force_real = pm_force_grids;
     if (s.delta_time_kick != 0.0 and not sim.enforce_LPT_trajectories) {
         timer.StartTiming("ComputeForce");
+        SIMCODE::filter_short_range_long_force(density_grid_fourier, force.short_range, sim.boxsize);
         grav->compute_force(s.apos,
                             grav->H0_hmpc * sim.boxsize,
                             density_grid_fourier,
@@ -267,12 +268,30 @@ void NBodySimulation<NDIM, T>::step(const Step & s) {
                                               sim.boxsize);
             });
         }
+        kick_short_range_force(s);
         // The delta-f weights depend on the momenta
         if (has_neutrino_particles())
             part_neutrinos.update_weights();
         timer.EndTiming("Kick");
     }
     drift_and_lightcone(s);
+}
+
+/// Add the short acceleration once, after the ordinary PM velocity scaling and before any drift.
+template <int NDIM, class T>
+void NBodySimulation<NDIM, T>::kick_short_range_force(const Step & s) {
+    if (!current_force.short_range.enabled || s.delta_time_kick == 0)
+        return;
+    if constexpr (NDIM == 3) {
+        timer.StartTiming("ShortRangeForce");
+        SIMCODE::kick_short_range(part,
+                                  current_force.short_range,
+                                  params.simulation.boxsize,
+                                  1.5 * cosmo->get_OmegaM() * s.apos,
+                                  s.delta_time_kick);
+        timer.EndTiming("ShortRangeForce");
+    } else
+        throw std::invalid_argument("Short-range integration requires NDIM=3");
 }
 
 /// The rest of a step after the (PM) kick: COLA kick-drift, lightcone and drift
@@ -382,6 +401,7 @@ void NBodySimulation<NDIM, T>::kick_with_interlaced_force(const Step & s) {
 
         timer.StartTiming("ComputeForce");
         std::array<FFTWGrid<NDIM>, NDIM> & force_real = pm_force_grids;
+        SIMCODE::filter_short_range_long_force(density_grid_fourier, force.short_range, sim.boxsize);
         grav->compute_force(s.apos,
                             grav->H0_hmpc * sim.boxsize,
                             density_grid_fourier,
@@ -420,6 +440,7 @@ void NBodySimulation<NDIM, T>::kick_with_interlaced_force(const Step & s) {
         for (int idim = 0; idim < NDIM; idim++)
             vel[idim] = vel[idim] * s.velocity_scale - force_sum[idim][i] * s.delta_time_kick;
     }
+    kick_short_range_force(s);
 }
 
 /// Do all the on the fly analysis that is turned on and write the output

@@ -33,6 +33,7 @@
 #include "NeutrinoParticles.h"
 #include "Particles.h"
 #include "SimulationParameters.h"
+#include "ShortRangeForce.h"
 #include "Species.h"
 #include "TimeStepping.h"
 
@@ -334,6 +335,7 @@ class NBodySimulation {
 
     // The parts of run() (a step: where the positions and velocities are, and the kick/drift sizes)
     using Step = FML::NBODY::TimeStepping::Step;
+    void kick_short_range_force(const Step & s);
     void step(const Step & s);
     void drift_and_lightcone(const Step & s);
     void kick_with_interlaced_force(const Step & s);

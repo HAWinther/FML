@@ -5,6 +5,7 @@
 #include "BaryonificationParameters.h"
 #include "ParameterDefaults.h"
 #include "ParameterFields.h"
+#include "ShortRangeSettings.h"
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/ParameterMap/ParameterMap.h>
@@ -241,6 +242,7 @@ namespace SIMCODE {
     };
 
     struct ForceSettings {
+        ShortRangeSettings short_range;
         int nmesh;                             // The gridsize to bin particles to and compute PM forces
         std::string density_assignment_method; // Density assignment (NGP,CIC,TSC,PCS,PQS)
         bool linear_massive_neutrinos;         // Include the effects of massive neutrinos using linear theory
@@ -264,6 +266,7 @@ namespace SIMCODE {
         /// The parameters (see ParameterFields.h)
         template <class F>
         void fields(F && f) {
+            short_range.fields(f);
             f.required("force_nmesh", nmesh, 0, "Grid size used to compute the PM forces", check::positive());
             f.optional("force_density_assignment_method",
                        density_assignment_method,
@@ -1354,6 +1357,22 @@ namespace SIMCODE {
                 if (baryonification.output_particles && output.fileformat == ParticleFileFormat::HDF5)
                     fail("baryonification_output_particles with HDF5 needs USE_HDF5=true");
 #endif
+            }
+
+            if (force.short_range.enabled) {
+                force.short_range.validate(simulation.boxsize);
+                if (simulation.use_cola || simulation.enforce_LPT_trajectories || particle.baryons ||
+                    particle.neutrinos || force.nbody_gauge)
+                    fail("force_short_range initially requires ordinary N-body and one cold particle species, without "
+                         "N-body gauge sources");
+                if (timestep.method != TimestepMethod::Quinn)
+                    fail("force_short_range initially requires timestep_method=Quinn (common cosmological kick/drift)");
+                if (force.greens_function_kernel != "continuous" || force.gradient_kernel != "continuous")
+                    fail("force_short_range requires explicit continuous Green and gradient kernels");
+                if (force.density_method != "assignment" || force.interpolation_method != "assignment" ||
+                    force.early_method != "none")
+                    fail("force_short_range initially requires assignment density/interpolation and "
+                         "force_early_method=none");
             }
 
             // COLA

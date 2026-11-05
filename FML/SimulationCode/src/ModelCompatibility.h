@@ -23,6 +23,10 @@ namespace SIMCODE {
                                          bool has_transfers) {
         auto fail = [](const std::string & msg) { throw std::runtime_error(msg); };
 
+        if (params.force.short_range.enabled && (NDIM != 3 || grav.get_name() != "GR" || cosmo.get_OmegaMNu() != 0.0 ||
+                                                 grav.uses_finite_difference_force()))
+            fail("force_short_range requires 3D GR with no massive neutrinos and a continuous Fourier force");
+
         if (params.baryonification.enabled) {
             if (NDIM != 3 || grav.get_name() != "GR" || cosmo.get_OmegaMNu() != 0.0)
                 fail("baryonification currently requires NDIM=3, gravity_model=GR and cosmology_OmegaMNu=0");

@@ -2,3 +2,5 @@
 /test_cola_frame
 /test_models
 /test_lightcone_crossing
+/test_short_range_force
+/test_short_range_simulation
