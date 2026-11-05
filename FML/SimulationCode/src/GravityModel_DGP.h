@@ -43,6 +43,8 @@ class GravityModelDGP final : public GravityModelScreened<NDIM> {
     //========================================================================
     using QuasiStaticGravity_DGP = FML::COSMOLOGY::PERTURBATIONS::QuasiStaticGravity_DGP;
     const QuasiStaticGravity_DGP & dgp() const { return static_cast<const QuasiStaticGravity_DGP &>(this->qs()); }
+    double GeffOverG_highk(double a) const override { return this->GeffOverG(a, 0); }
+    double short_range_comoving_range(double /*a*/) const override { return 0.; }
     void init() override {
         this->quasi_static = std::make_shared<const QuasiStaticGravity_DGP>(this->cosmo->background(), rcH0_DGP, -1);
         GravityModelScreened<NDIM>::init();

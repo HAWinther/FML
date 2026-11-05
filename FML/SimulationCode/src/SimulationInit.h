@@ -14,10 +14,11 @@ void NBodySimulation<NDIM, T>::read_parameters(const ParameterMap & param, const
     // Library callers can construct the simulation without Main.cpp's model checks.
     if (params.force.short_range.enabled) {
         params.validate();
-        if (NDIM != 3 || grav->get_name() != "GR" || cosmo->get_OmegaMNu() != 0.0 ||
-            SIMCODE::get_parameter<bool>(param, "force_use_finite_difference_force"))
+        if (cosmo->get_OmegaMNu() != 0.0 || SIMCODE::get_parameter<bool>(param, "force_use_finite_difference_force"))
             throw std::invalid_argument(
-                "Short-range integration requires 3D GR, no massive neutrinos and Fourier forces");
+                "Short-range integration currently excludes massive neutrinos and finite-difference forces");
+        grav->validate_short_range_support();
+        grav->short_range_interaction(params.ic.a_initial());
         if (!FML::PARTICLE::has_get_id<T>())
             throw std::invalid_argument("Short-range integration requires particle IDs");
     }

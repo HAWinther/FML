@@ -13,7 +13,7 @@ namespace SIMCODE {
             f.always_optional("force_short_range",
                               enabled,
                               false,
-                              "Periodic Newtonian PM plus short-range forces; initial common-timestep N-body scope");
+                              "Periodic unscreened PM plus short-range forces; initial common-timestep N-body scope");
             f.if_true("force_short_range", [&] {
                 f.required("force_short_range_split_scale",
                            split_scale,

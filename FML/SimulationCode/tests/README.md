@@ -160,3 +160,9 @@ before the source factors were included).
 
 Small simulations covering all the main code paths, for checking that a change does not change the
 results (or only changes what it should). See `regression/README.md`.
+
+
+`test_gravity_short_range` checks the model-owned unscreened mesh/pair split,
+analytic Yukawa limits/ranges, the inherited finite-k fallback for new models,
+an independent particle kick and collective model validation. Run in serial and
+with 1/2/4 MPI ranks; see [../SHORT_RANGE.md](../SHORT_RANGE.md) for end-to-end runs.

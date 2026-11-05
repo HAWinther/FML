@@ -6,7 +6,7 @@ USE_GSL ?= true
 ifneq ($(filter test_short_range_simulation,$(MAKECMDGOALS)),)
 USE_LUA ?= true
 endif
-TARGETS := test_baryonification_parameters test_cola_frame test_models test_lightcone_crossing test_short_range_force
+TARGETS := test_baryonification_parameters test_cola_frame test_models test_lightcone_crossing test_short_range_force test_gravity_short_range
 include ../../Makefile.config
 OPTIONS += -DNDIM_SPACE=3
 FML_MODULES := Global Spline ODESolver ParameterMap FileUtils Math GadgetUtils
@@ -33,6 +33,9 @@ test_lightcone_crossing: test_lightcone_crossing.o
 test_models: test_models.o TransferInput.o $(INTERNAL_COSMO_OBJS) Global.o Spline.o ODESolver.o ParameterMap.o FileUtils.o Math.o NumericalMethods.o
 	$(LINK_EXE)
 
+test_gravity_short_range: test_gravity_short_range.o TransferInput.o $(INTERNAL_COSMO_OBJS) Global.o Spline.o ODESolver.o ParameterMap.o FileUtils.o Math.o NumericalMethods.o
+	$(LINK_EXE)
+
 test_short_range_force: test_short_range_force.o Global.o
 	$(LINK_EXE)
 
@@ -48,3 +51,4 @@ run: $(TARGETS)
 	./test_models
 	./test_lightcone_crossing
 	./test_short_range_force
+	./test_gravity_short_range

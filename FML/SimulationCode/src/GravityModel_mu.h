@@ -77,6 +77,16 @@ class GravityModelMu final : public GravityModel<NDIM> {
 
     /// The force (mu(a, k) delta(k) if it depends on k) and the growth are the defaults of GravityModel
     double GeffOverG(double a, double koverH0 = 0) const override { return mu_of_a_k(a, koverH0 * this->H0_hmpc); }
+    double GeffOverG_highk(double a) const override {
+        if (parametrization == "BZ")
+            return BZ_lambda1_mpch == 0 ? 1. : BZ_beta1;
+        if (!scale_dependent())
+            return GeffOverG(a, 0);
+        return GravityModel<NDIM>::GeffOverG_highk(a); // Generic finite-k fiducial, including k-dependent tables.
+    }
+    double short_range_comoving_range(double a) const override {
+        return parametrization == "BZ" ? std::abs(BZ_lambda1_mpch) * std::pow(a, .5 * BZ_s) : 0.;
+    }
     bool geff_scale_dependent() const override { return scale_dependent(); }
 
     //========================================================================

@@ -62,10 +62,32 @@ else:
  pm=run('pm-only',dict(timestep_nsteps=[8],force_short_range=False))
  tiny=run('tiny-split',dict(timestep_nsteps=[8],force_short_range_split_scale=1e-6,force_short_range_softening_support=1e-8))
  diff=max(abs(a-b) for k in pm for a,b in zip(pm[k],tiny[k]));assert diff<1e-9,diff;print('TINY_SPLIT_PM_DIFFERENCE',diff)
- for key,value in [('simulation_use_cola',True),('force_gradient_kernel','discrete_2pt'),('force_density_method','sheet'),('timestep_method','FastPM'),('gravity_model','mu'),('force_use_finite_difference_force',True)]:
+ for key,value in [('simulation_use_cola',True),('force_gradient_kernel','discrete_2pt'),('force_density_method','sheet'),('timestep_method','FastPM'),('force_use_finite_difference_force',True)]:
   invalid={key:value,'timestep_nsteps':[1]}
-  if key=='gravity_model':invalid.update(gravity_model_mu_parametrization='DE',gravity_model_mu_mu0=.5)
   run('reject-'+key,invalid,expected=1)
+
+
+# Model-owned unscreened forces: exact tree/cell agreement and MPI rank invariance.
+models={
+ 'mu':dict(gravity_model_mu_parametrization='BZ',gravity_model_mu_BZ_params=[4./3.,8.,4.]),
+ 'f(R)':dict(gravity_model_fofr_fofr0=1e-5,gravity_model_fofr_nfofr=1.),
+ 'DGP':dict(gravity_model_dgp_rcH0overc=1.),
+ 'Symmetron':dict(gravity_model_symmetron_assb=.5,gravity_model_symmetron_beta=.7,gravity_model_symmetron_L_mpch=2.),
+ 'mbeta':dict(gravity_model_mbeta_params=[.4,0.,100.,-2.]),
+}
+for model,params in models.items():
+ settings=dict(params,gravity_model=model,gravity_model_screening=False,
+  gravity_model_fofr_exact_solution=False,gravity_model_dgp_exact_solution=False,
+  gravity_model_symmetron_exact_solution=False,timestep_nsteps=[4])
+ ref=run('model-'+model+'-cell',settings)
+ other=dict(settings,force_short_range_backend='tree',force_short_range_opening_angle=0.)
+ x=run('model-'+model+'-compare',other,2 if mpi else 1)
+ diff=max(abs(a-b) for key in ref for a,b in zip(ref[key],x[key]));assert diff<2e-9,(model,diff)
+ print('MODEL_STATE_DIFFERENCE',model,diff,flush=True)
+if not mpi:
+ for key in ['gravity_model_screening','gravity_model_dgp_exact_solution']:
+  run('reject-'+key,dict(gravity_model='DGP',gravity_model_dgp_rcH0overc=1.,gravity_model_screening=False,
+   gravity_model_dgp_exact_solution=False,timestep_nsteps=[1]) | {key:True},expected=1)
 
 # Isolated calls of the actual SimulationCode::step, with a non-unit velocity scale,
 # compare the complete kick to independent Ewald forces.

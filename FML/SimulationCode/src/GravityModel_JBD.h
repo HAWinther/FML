@@ -22,6 +22,8 @@ class GravityModelJBD final : public GravityModel<NDIM> {
             "As currently written the JBD gravity model requires a JBD cosmology as we need phi(a) from there");
     }
 
+    double GeffOverG_highk(double a) const override { return this->GeffOverG(a, 0); }
+    double short_range_comoving_range(double /*a*/) const override { return 0.; }
     void init() override {
         this->quasi_static = std::make_shared<const FML::COSMOLOGY::PERTURBATIONS::QuasiStaticGravity_BransDicke>(
             this->cosmo->background());

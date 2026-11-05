@@ -4,3 +4,5 @@
 /test_lightcone_crossing
 /test_short_range_force
 /test_short_range_simulation
+
+/test_gravity_short_range

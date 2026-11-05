@@ -4,6 +4,7 @@
 #include "Cosmology.h"
 #include "GravityModelSettings.h"
 #include "ParameterDefaults.h"
+#include "ShortRangeForce.h"
 
 #include "TransferInput.h"
 #include <FML/Cosmology/Growth/LPTGrowthFactors.h>
@@ -238,6 +239,62 @@ class GravityModel {
     /// Whether G_eff/G depends on k (then the force and the growth do too)
     virtual bool geff_scale_dependent() const { return quasi_static and quasi_static->scale_dependent(); }
 
+    // Defaults for new models: sample their existing Geff function at a large finite k.
+    // Units of k are H0/c, as in GeffOverG. Override for an exact asymptote when known.
+    static constexpr double short_range_fiducial_koverH0 = 1e12;
+    virtual double GeffOverG_highk(double a) const { return GeffOverG(a, short_range_fiducial_koverH0); }
+    // Comoving Mpc/h. The zero sentinel denotes an infinite-range surrogate.
+    virtual double short_range_comoving_range(double /*a*/) const { return 0.; }
+    virtual bool short_range_screening_active() const { return false; }
+    void validate_short_range_support() const {
+        if (NDIM != 3 || uses_finite_difference_force() || short_range_screening_active())
+            throw std::invalid_argument("force_short_range requires 3D continuous Fourier forces with screening and "
+                                        "exact nonlinear solvers disabled");
+    }
+    SIMCODE::ShortRangeInteraction short_range_interaction(double a) const {
+        if (!(a > 0) || !std::isfinite(a))
+            throw std::invalid_argument("Invalid short-range force epoch");
+        SIMCODE::ShortRangeInteraction model{GeffOverG(a, 0), GeffOverG_highk(a), short_range_comoving_range(a)};
+        model.validate();
+        return model;
+    }
+    // Coordinate errors and parameter consistency before any force communication.
+    SIMCODE::ShortRangeInteraction checked_short_range_interaction(double a) const {
+        SIMCODE::ShortRangeInteraction model;
+        int valid = 1;
+        try {
+            validate_short_range_support();
+            model = short_range_interaction(a);
+        } catch (const std::exception &) {
+            valid = 0;
+        }
+        FML::MinOverTasks(&valid);
+        if (!valid)
+            throw std::invalid_argument("Invalid/unsupported short-range model on at least one rank");
+        double low[]{a, model.mu0, model.muinf, model.range_mpch}, high[4];
+        std::copy_n(low, 4, high);
+        FML::MinArrayOverTasks(low, 4);
+        FML::MaxArrayOverTasks(high, 4);
+        if (!std::equal(low, low + 4, high))
+            throw std::invalid_argument("Short-range model or epoch differs across ranks");
+        return model;
+    }
+    template <class P>
+    void kick_short_range(FML::PARTICLE::MPIParticles<P> & particles,
+                          const SIMCODE::ShortRangeSettings & settings,
+                          double a,
+                          double boxsize,
+                          double dt) const {
+        if (!settings.enabled || dt == 0)
+            return;
+        SIMCODE::kick_short_range(particles,
+                                  settings,
+                                  boxsize,
+                                  1.5 * cosmo->get_OmegaM() * a,
+                                  dt,
+                                  checked_short_range_interaction(a));
+    }
+
     // Factors in the LPT equations
     virtual double source_factor_1LPT([[maybe_unused]] double a, [[maybe_unused]] double koverH0 = 0) const {
         double factor = 1.0;
@@ -297,6 +354,45 @@ class GravityModel {
                                          density_assignment_method_used,
                                          force_real,
                                          options);
+    }
+
+    // Model-owned split. The resolved remainder keeps arbitrary future Geff(k,a) models intact:
+    // mu_long = mu_true - mu_pair + mu_pair_long. For an exact Yukawa model the remainder is zero.
+    void compute_force_for_step(double a,
+                                double H0Box,
+                                FFTWGrid<NDIM> & density,
+                                const std::string & assignment,
+                                std::array<FFTWGrid<NDIM>, NDIM> & force,
+                                const FML::NBODY::ForceOptions & options,
+                                const SIMCODE::ShortRangeSettings & settings) const {
+        if (!settings.enabled) {
+            compute_force(a, H0Box, density, assignment, force, options);
+            return;
+        }
+        const auto model = checked_short_range_interaction(a);
+        double boxsize = 0;
+        int valid = 1;
+        std::optional<FML::SHORT_RANGE_GRAVITY::Kernel> storage;
+        try {
+            if (!(H0Box > 0) || !std::isfinite(H0Box))
+                throw std::invalid_argument("Invalid box scale");
+            boxsize = H0Box / H0_hmpc;
+            auto filter_settings = settings;
+            filter_settings.table_points = 0;
+            storage.emplace(model.kernel(filter_settings, boxsize));
+        } catch (const std::exception &) {
+            valid = 0;
+        }
+        FML::MinOverTasks(&valid);
+        if (!valid)
+            throw std::invalid_argument("Invalid short-range force kernel on at least one rank");
+        const auto & kernel = *storage;
+        FML::NBODY::compute_delta_fifth_force<NDIM>(density, density_workspace, [&](double kbox) {
+            const double k2 = kbox * kbox;
+            return GeffOverG(a, kbox / H0Box) - model.fourier_multiplier(k2, boxsize) +
+                   model.prefactor() * kernel.long_range_filter(k2);
+        });
+        compute_force_from_total_density(density_workspace, 1.5 * cosmo->get_OmegaM() * a, assignment, force, options);
     }
 
     //========================================================================

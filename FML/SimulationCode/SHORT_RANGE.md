@@ -1,6 +1,6 @@
 # Common-timestep PM plus short-range gravity
 
-Initial milestone of backlog #47: opt-in periodic Newtonian forces in ordinary
+Initial milestone of backlog #47: opt-in periodic unscreened forces in ordinary
 3D N-body evolution, using the existing cosmological Quinn coefficients
 and a common timestep for the long and short forces. COLA and short-range subcycling
 remain separate follow-ups. The default is the existing PM-only evolution.
@@ -11,7 +11,7 @@ multi-slab MPI ghosts. No particle-payload all-gather is added to the simulation
 
 ## Configuration
 
-Starting from a valid GR N-body parameter file, add:
+Starting from a valid unscreened N-body parameter file, add:
 
 ```lua
 simulation_use_cola = false
@@ -43,7 +43,7 @@ and h must not exceed it. Kernel settings are validated before simulation setup.
 `force_short_range=false` requires no new lengths and follows the PM-only path.
 With the option enabled, the first milestone requires:
 
-- 3D GR, with no massive neutrinos, separate baryon/neutrino particles or N-body gauge
+- 3D linear unscreened gravity, with screening and exact nonlinear solvers disabled; no massive neutrinos, separate baryon/neutrino particles or N-body gauge
   source; the single cold species can carry finite nonnegative particle masses;
 - ordinary N-body evolution, not COLA or enforced LPT trajectories;
 - Quinn timesteps and continuous Fourier Laplacian/gradient kernels; select these
@@ -68,9 +68,10 @@ v_new = velocity_scale * v_old - delta_time_kick * F_long
                                 + delta_time_kick * A_short.
 ```
 
-The long force uses a density filtered by `exp[-k_box² (split_scale/L)²]`. Filtering
-is applied exactly once per density realization before the ordinary GR force solve.
-The short kernel uses coupling `C(a)/(4*pi*M)` and unit-box positions/lengths. The
+In GR, the long force uses a density filtered by `exp[-k_box² (split_scale/L)²]`.
+The model owns both the matched mesh solve and the particle kick (see below).
+The short kernel uses normalization `C(a)/(4*pi*M)` multiplied by the model coupling,
+with unit-box positions/lengths. The
 actual mass sum is reduced globally, matching mass-normalized mesh deposition;
 neither a rank's local count nor its owned-plus-ghost mass is used as M.
 
@@ -91,6 +92,53 @@ for that potential. Thus lightcone output retains its unsplit PM potential estim
 It does not acquire a particle-pair small-scale potential or TreePM-resolution
 relativistic corrections. No claim of such potential accuracy is made here.
 
+## GravityModel extension
+
+`GravityModel::GeffOverG_highk(a)` defaults to the existing
+`GeffOverG(a, 1e12)`, with k in H0/c units. A new model implementing only
+`GeffOverG` therefore inherits the short-range implementation. Models with known
+asymptotes override this method. This finite fiducial is an approximation for a
+new model, and should be checked against its physical high-k behavior.
+
+`short_range_comoving_range(a)` defaults to **0, denoting infinite range**.
+Override it to supply a comoving Mpc/h Yukawa range. f(R), Symmetron and m,beta
+convert their physical inverse mass to this convention, including the factor 1/a.
+DGP, JBD and GR use infinite range. The mu BZ model uses its analytic comoving
+range; scale-dependent tables retain the generic default.
+
+The model describes a pair potential outside the spline support as
+
+```
+Phi_pair = -G M/r [mu0 + (muinf-mu0) exp(-r/lambda)]
+mu0 = GeffOverG(a,0), muinf = GeffOverG_highk(a).
+```
+
+The force enhancement is `mu0+(muinf-mu0)*(1+r/lambda)*exp(-r/lambda)`.
+For f(R), this retains the overall `1/(1+fR)` prefactor and the relative 1/3
+Yukawa amplitude. Infinite range gives a Newtonian pair kernel of strength muinf.
+The finite-range kernel requires positive mu0; the infinite-range kernel requires
+nonnegative muinf. Invalid or inconsistent model descriptors fail collectively.
+
+`compute_force_for_step` uses the matched long filter from ShortRangeGravity,
+which includes the Yukawa mass-dependent Gaussian factor. It also retains a
+resolved Fourier remainder:
+
+```
+mu_mesh(k) = GeffOverG(a,k) - mu_pair(k) + mu_pair_long(k).
+```
+
+Thus future models with arbitrary scale dependence retain their mesh response,
+even when inheriting the infinite-range pair surrogate. For the analytic Yukawa
+models the remainder vanishes. The approximation below the mesh scale remains
+the chosen surrogate; this is not an exact real-space representation of an
+arbitrary Geff. Override the limit/range for an appropriate physical model.
+No extra Geff factor is applied after constructing this mesh response.
+The existing virtual force solver remains in use when short-range forces are off.
+
+For screened models set `gravity_model_screening=false` and the model's
+`gravity_model_*_exact_solution=false`. Nonlinear screening is not represented by
+a density-independent pair kernel and remains explicitly rejected.
+
 ## Validation and reproduction
 
 The existing SimulationCode build includes the feature. The diagnostic driver runs
@@ -98,15 +146,17 @@ the real `NBodySimulation` pipeline and saves full-precision final states by ID:
 
 ```
 cd FML/SimulationCode/tests
-make test_short_range_force test_short_range_simulation USE_MPI=false
+make test_short_range_force test_gravity_short_range test_short_range_simulation USE_MPI=false
 ./test_short_range_force
+./test_gravity_short_range
 python3 regression/short_range.py --binary ./test_short_range_simulation \
     --output /tmp/fml-short-range-serial
 
 # Clean and rebuild before changing MPI/compiler/precision options.
 make clean
-make test_short_range_force test_short_range_simulation USE_MPI=true
+make test_short_range_force test_gravity_short_range test_short_range_simulation USE_MPI=true
 mpirun -np 4 ./test_short_range_force
+mpirun -np 4 ./test_gravity_short_range
 python3 regression/short_range.py --binary ./test_short_range_simulation \
     --output /tmp/fml-short-range-mpi --mpi --launcher "mpirun"
 ```

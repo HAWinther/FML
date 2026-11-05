@@ -39,6 +39,13 @@ class GravityModelFofR final : public GravityModelScreened<NDIM> {
     const QuasiStaticGravity_HuSawicky & hu_sawicky() const {
         return static_cast<const QuasiStaticGravity_HuSawicky &>(this->qs());
     }
+    double GeffOverG_highk(double a) const override {
+        const double fR = hu_sawicky().fR(std::log(a));
+        return fR == 0 ? 1. : (4. / 3.) / (1 + fR);
+    }
+    double short_range_comoving_range(double a) const override {
+        return hu_sawicky().compton_wavelength(std::log(a)) / (a * this->H0_hmpc);
+    }
     void init() override {
         this->quasi_static =
             std::make_shared<const QuasiStaticGravity_HuSawicky>(this->cosmo->background(), fofr0, nfofr);

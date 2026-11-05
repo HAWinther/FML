@@ -248,7 +248,8 @@ target_link_libraries(nbody PRIVATE ${LUA_LIBRARIES} ${CMAKE_DL_LIBS})
 if(FML_BUILD_TESTS)
   enable_testing()
   set(_tests test_baryonification_parameters test_cola_frame test_models test_lightcone_crossing
-             test_short_range_force)
+             test_short_range_force
+             test_gravity_short_range)
   foreach(t IN LISTS _tests)
     add_executable(${t} tests/${t}.cpp)
     target_link_libraries(${t} PRIVATE fml_core)

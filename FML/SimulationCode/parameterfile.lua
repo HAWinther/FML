@@ -537,10 +537,12 @@ force_finite_difference_stencil_order = 4
 ------------------------------------------------------------
 -- Optional short-range gravity (common-timestep P3M / TreePM)
 ------------------------------------------------------------
--- Initial scope: 3D GR, simulation_use_cola = false, timestep_method = "Quinn",
+-- Initial scope: 3D unscreened gravity, simulation_use_cola = false, timestep_method = "Quinn",
 -- continuous Green/gradient kernels, assignment density/interpolation and no early
 -- force switch. Requires one cold particle species, no massive neutrinos and no
 -- N-body gauge source. See SHORT_RANGE.md for units, validation and remaining work.
+-- GravityModel supplies the coupling and comoving range (zero means infinite range).
+-- For modified gravity disable screening and any exact nonlinear solver.
 force_short_range = false
 if force_short_range then
   -- cell: P3M cell lists; tree: monopole TreePM

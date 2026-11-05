@@ -239,13 +239,13 @@ void NBodySimulation<NDIM, T>::step(const Step & s) {
     std::array<FFTWGrid<NDIM>, NDIM> & force_real = pm_force_grids;
     if (s.delta_time_kick != 0.0 and not sim.enforce_LPT_trajectories) {
         timer.StartTiming("ComputeForce");
-        SIMCODE::filter_short_range_long_force(density_grid_fourier, force.short_range, sim.boxsize);
-        grav->compute_force(s.apos,
-                            grav->H0_hmpc * sim.boxsize,
-                            density_grid_fourier,
-                            force.density_assignment_method,
-                            force_real,
-                            force_options);
+        grav->compute_force_for_step(s.apos,
+                                     grav->H0_hmpc * sim.boxsize,
+                                     density_grid_fourier,
+                                     force.density_assignment_method,
+                                     force_real,
+                                     force_options,
+                                     force.short_range);
         timer.EndTiming("ComputeForce");
 
         timer.StartTiming("Kick");
@@ -284,11 +284,7 @@ void NBodySimulation<NDIM, T>::kick_short_range_force(const Step & s) {
         return;
     if constexpr (NDIM == 3) {
         timer.StartTiming("ShortRangeForce");
-        SIMCODE::kick_short_range(part,
-                                  current_force.short_range,
-                                  params.simulation.boxsize,
-                                  1.5 * cosmo->get_OmegaM() * s.apos,
-                                  s.delta_time_kick);
+        grav->kick_short_range(part, current_force.short_range, s.apos, params.simulation.boxsize, s.delta_time_kick);
         timer.EndTiming("ShortRangeForce");
     } else
         throw std::invalid_argument("Short-range integration requires NDIM=3");
@@ -401,13 +397,13 @@ void NBodySimulation<NDIM, T>::kick_with_interlaced_force(const Step & s) {
 
         timer.StartTiming("ComputeForce");
         std::array<FFTWGrid<NDIM>, NDIM> & force_real = pm_force_grids;
-        SIMCODE::filter_short_range_long_force(density_grid_fourier, force.short_range, sim.boxsize);
-        grav->compute_force(s.apos,
-                            grav->H0_hmpc * sim.boxsize,
-                            density_grid_fourier,
-                            force.density_assignment_method,
-                            force_real,
-                            force_options);
+        grav->compute_force_for_step(s.apos,
+                                     grav->H0_hmpc * sim.boxsize,
+                                     density_grid_fourier,
+                                     force.density_assignment_method,
+                                     force_real,
+                                     force_options,
+                                     force.short_range);
         timer.EndTiming("ComputeForce");
 
         timer.StartTiming("Kick");

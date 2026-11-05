@@ -9,6 +9,8 @@
 template <int NDIM>
 class GravityModelGR final : public GravityModel<NDIM> {
   public:
+    double GeffOverG_highk(double /*a*/) const override { return 1.; }
+    double short_range_comoving_range(double /*a*/) const override { return 0.; }
     explicit GravityModelGR(std::shared_ptr<Cosmology> cosmo) : GravityModel<NDIM>(cosmo, "GR") {}
 };
 

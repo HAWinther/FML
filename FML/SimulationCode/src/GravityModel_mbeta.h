@@ -34,6 +34,15 @@ class GravityModelmbeta : public GravityModelScreened<NDIM> {
     const QuasiStaticGravity_MBeta & mbeta() const { return static_cast<const QuasiStaticGravity_MBeta &>(this->qs()); }
     double phi_over_mpl_of_a(double a) const { return mbeta().phi_over_Mpl(a); }
 
+    double GeffOverG_highk(double a) const override {
+        const double b = mbeta().beta_of_a(a);
+        return 1 + 2 * b * b;
+    }
+    double short_range_comoving_range(double a) const override {
+        const double mass2 = mbeta().mass2_of_a(a);
+        return mass2 == 0 ? 0. : 1 / (a * std::sqrt(mass2) * this->H0_hmpc);
+    }
+
     std::string fifth_force_label() const override { return "(m(a),beta(a)) models"; }
 
     void init() override {

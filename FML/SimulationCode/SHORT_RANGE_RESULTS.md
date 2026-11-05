@@ -86,3 +86,42 @@ workloads, finite-opening tree errors/momentum drift and peak workspace/RSS rema
 No production speedup is claimed: the purpose is a usable higher-resolution force
 workflow, with added short-range work. Subcycling and its cosmological time/frame
 factors are the next integration stage, after common-timestep calibration.
+
+
+## Model-owned unscreened extension (2026-11-05)
+
+`GravityModel` now provides a generic finite-k coupling fallback and a matched
+mesh/pair split. Analytic limits/ranges are supplied for GR, f(R), DGP, JBD,
+Symmetron, m,beta and BZ mu. Screening and exact nonlinear solvers remain excluded.
+
+- New model test: 30 checks in serial and MPI (1/2/4 ranks). Includes a model
+  implementing only the old Geff interface, a deliberately non-Yukawa response,
+  analytic response checks across epochs and k, the f(R) one-third relative
+  amplitude, a differentiated Yukawa potential, preserved input density, an
+  independent erfc particle kick with unequal masses, and collective failure
+  when only rank zero returns an invalid limit.
+- Long Fourier coefficients match independent analytic expressions within
+  8e-8 absolute error (test tolerance 2e-7). This includes the existing
+  `compute_delta_fifth_force` coupling-spline approximation; it is not a
+  machine-precision claim for that interpolation.
+- Explicit Clang CMake build and CTest run of the new model suite pass. The
+  default local GCC CMake build encounters a macOS stdio/FILE header error in
+  unchanged Spline.cpp, before reaching this extension.
+- Existing 15-check force suite passes in serial, address/undefined sanitizers,
+  and MPI 1/2/4. Existing model, COLA-frame, parameter and lightcone tests pass.
+- Complete serial/MPI integration script passes, including unscreened f(R),
+  DGP, Symmetron, m,beta and BZ mu. Exact tree/cell state differences are at most
+  1.2e-16 in serial; MPI/backend comparisons are at most 3.4e-16. Screening and
+  exact nonlinear-solver configurations are rejected.
+- GR timestep errors against 64 steps remain 2.14815e-4, 7.68772e-5,
+  2.14970e-5 and 4.54248e-6 for 4/8/16/32 steps. The tiny-split PM limit differs
+  by at most 1.45e-15. The saved PM-only baseline is bitwise unchanged; the
+  enabled GR eight-step state shifts by at most 3.96e-9 from the previous
+  implementation because the matched filter now uses the coupling spline.
+- Real-step isolated Ewald checks and unsplit lightcone potential checks pass
+  with and without interlacing in serial and MPI.
+
+These checks verify the implementation and its linear kernels. They do not
+calibrate nonlinear modified-gravity observables or justify a generic surrogate
+as an exact pair force for arbitrary new theories. Such models preserve their
+resolved Fourier remainder but need physical small-scale validation.

@@ -1,6 +1,6 @@
 #ifndef SIMCODE_SHORT_RANGE_FORCE_H
 #define SIMCODE_SHORT_RANGE_FORCE_H
-#include "ShortRangeSettings.h"
+#include "ShortRangeInteraction.h"
 #include <optional>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/ShortRangeGravity/LongRangePM.h>
@@ -12,7 +12,8 @@ namespace SIMCODE {
     FML::SHORT_RANGE_GRAVITY::Result short_range_acceleration(FML::PARTICLE::MPIParticles<P> & particles,
                                                               const ShortRangeSettings & settings,
                                                               double boxsize,
-                                                              double poisson_normalization) {
+                                                              double poisson_normalization,
+                                                              const ShortRangeInteraction & interaction = {}) {
         namespace SR = FML::SHORT_RANGE_GRAVITY;
         P prototype{};
         int valid = FML::PARTICLE::has_get_id<P>() && FML::PARTICLE::GetNDIM(prototype) == 3;
@@ -39,7 +40,7 @@ namespace SIMCODE {
         std::optional<SR::Kernel> storage;
         try {
             const auto coupling = SR::fml_acceleration_coupling(poisson_normalization, total_mass, 1);
-            storage.emplace(settings.options(boxsize, coupling));
+            storage.emplace(interaction.kernel(settings, boxsize, coupling));
         } catch (const std::exception &) {
             valid = 0;
         }
@@ -59,10 +60,11 @@ namespace SIMCODE {
                           const ShortRangeSettings & settings,
                           double boxsize,
                           double poisson_normalization,
-                          double dt) {
+                          double dt,
+                          const ShortRangeInteraction & interaction = {}) {
         if (!settings.enabled || dt == 0)
             return;
-        auto force = short_range_acceleration(particles, settings, boxsize, poisson_normalization);
+        auto force = short_range_acceleration(particles, settings, boxsize, poisson_normalization, interaction);
         auto * p = particles.get_particles_ptr();
 #ifdef USE_OMP
 #pragma omp parallel for
