@@ -1,3 +1,4 @@
+#include <cstdio>
 #include <FML/NBody/NBody.h>
 #include <FML/ShortRangeGravity/LongRangePM.h>
 #include <FML/ShortRangeGravity/Octree.h>
@@ -67,6 +68,34 @@ void kernel_tests() {
     check(near(k.long_range_filter(0), 1) &&
               near(k.long_range_filter(1 / (o.split_scale * o.split_scale)), std::exp(-1.)),
           "Gaussian Fourier filter normalization");
+    // The tabulated coefficient of the pair loops against the exact one (relative to the Newtonian 1/r^3, which bounds
+    // it outside the softening; inside the softening it is exact)
+    {
+        double worst = 0;
+        bool exact_inside = true;
+        for (int i = 0; i <= 20000; ++i) {
+            const double r = k.cutoff() * i / 20000.0;
+            const double exact = k.coefficient(r), fast = k.fast_coefficient(r * r);
+            if (r < o.softening_support)
+                exact_inside &= fast == exact;
+            else if (r > 0)
+                worst = std::max(worst, std::abs(fast - exact) * r * r * r / o.coupling);
+        }
+        Options exact_options = o;
+        exact_options.table_points = 0;
+        Kernel ke(exact_options);
+        const double r = .5 * (o.softening_support + k.cutoff());
+        check(
+            worst < 1e-7 && exact_inside && ke.fast_coefficient(r * r) == ke.coefficient(r) &&
+                k.fast_coefficient(k.cutoff() * k.cutoff()) == 0,
+            "tabulated pair coefficient matches the exact kernel (max error " +
+                [&] {
+                    char buffer[32];
+                    std::snprintf(buffer, sizeof(buffer), "%.1e", worst);
+                    return std::string(buffer);
+                }() +
+                " of G/r^3)");
+    }
     bool rejected = true;
     for (int problem = 0; problem < 6; ++problem) {
         auto bad = o;

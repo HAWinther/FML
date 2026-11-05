@@ -226,8 +226,10 @@ class Lightcone {
     /// Has the potential been computed for the step that starts at scale factor a?
     bool has_potential(double a) const { return phi_a == a; }
 
+    /// The potential is no longer valid (the grid is kept for the next step; release_potential_memory frees it)
+    void free_potential() { phi_a = -1.0; }
     /// Free the potential grid
-    void free_potential() {
+    void release_potential_memory() {
         phi_grid.free();
         phi_a = -1.0;
     }
@@ -1094,8 +1096,7 @@ void Lightcone<NDIM, T, U>::create_weak_lensing_maps(std::string particle_type) 
     if (maps.size() == 0)
         return;
 
-    // The Born weights of a shell for the kappa-maps (FML::WEAKLENSING::BornPlan: the integral over the shell of the
-    // lensing kernel 3/2 OmegaM chi (1+z) (1 - chi/chi_s) / D_H^2 with a source plane at the distance of each map)
+    // The flat geometry of the Born kernel (FML::WEAKLENSING)
     FML::WEAKLENSING::FlatGeometry geometry;
     geometry.omega_m = cosmo->get_OmegaM();
     geometry.hubble_distance = 1.0 / cosmo->get_H0_hmpc();
@@ -1107,8 +1108,19 @@ void Lightcone<NDIM, T, U>::create_weak_lensing_maps(std::string particle_type) 
         return (map.get_rmin() + map.get_rmax()) / 2.0;
     };
 
-    // Allocate kappa-map container
-    std::vector<OnionSlice<double, NDIM>> kappa_maps(maps.size());
+    // With a source plane at chi_s behind a shell the Born weight of the shell is
+    //   int_shell K(chi) (1 - chi / chi_s) dchi = A - B / chi_s,  K = 3/2 OmegaM chi (1+z) / D_H^2,
+    //   A = int_shell K dchi, B = int_shell K chi dchi
+    // so kappa_j = sum_{i >= j} (A_i delta_i) - (1/chi_j) sum_{i >= j} (B_i delta_i): two running maps (summed from the
+    // observer outwards) give every kappa-map exactly, in O(N npix) time and the memory of three maps (the old loop
+    // added every shell to every kappa-map and kept all N kappa-maps allocated)
+    const FML::WEAKLENSING::Quadrature quadrature(8);
+    auto K = [&](double chi) {
+        return 1.5 * geometry.omega_m / (geometry.hubble_distance * geometry.hubble_distance) * chi *
+               (1.0 + geometry.redshift(chi));
+    };
+    std::vector<double> sum_A, sum_B;
+    std::vector<std::pair<double, double>> kappa_info(maps.size());
 
     // Loop over the delta-maps (start with the map closest to the observer)
     for (int i = int(maps.size()) - 1; i >= 0; i--) {
@@ -1129,60 +1141,60 @@ void Lightcone<NDIM, T, U>::create_weak_lensing_maps(std::string particle_type) 
         // The r of the delta-map
         const double r_delta_map = get_r_of_delta_map(delta_map);
 
-        // Allocate all the kappa-maps
         if (i == int(maps.size()) - 1) {
-            std::cout << "# Allocating kappa-maps\n";
-            for (size_t j = 0; j < maps.size(); j++) {
-                const auto & curmap = maps[j];
-                const double amap = curmap.get_amin();
-                const double rmap = curmap.get_rmax();
-                kappa_maps[j].init(rmap, rmap, amap, amap, nside, false, 0);
-            }
-            std::cout << "# Memory used: "
-                      << maps.size() * npix * sizeof(maps[0].get_map_data()[0]) / double(1024. * 1024.) << " MB\n";
+            sum_A.assign(npix, 0.0);
+            sum_B.assign(npix, 0.0);
+            std::cout << "# Memory used by the kappa accumulators: "
+                      << 3 * npix * sizeof(double) / double(1024. * 1024.) << " MB\n";
         }
 
         std::cout << "# Processing delta-map i = " << i << " ";
         std::cout << "r_map = " << r_delta_map * boxsize << " Mpc/h ";
         std::cout << "[rmin = " << rmin * boxsize << " -> rmax = " << rmax * boxsize << " Mpc/h]\n";
 
-        // The kappa-maps with j <= i (sources behind or at the end of the shell) get the contribution of the shell
-        std::vector<FML::WEAKLENSING::Sources> sources;
-        for (int j = 0; j <= i; j++)
-            sources.push_back(FML::WEAKLENSING::Sources::plane(kappa_maps[j].get_rmax() * boxsize));
-        const FML::WEAKLENSING::BornPlan born({rmin * boxsize, rmax * boxsize}, sources, geometry);
-        for (int j = 0; j <= i; j++) {
-            auto & kappa_map = kappa_maps[j];
-            auto * kappa_map_data = kappa_map.get_map_data();
-            const double r_kappa_map = kappa_map.get_rmax();
-            const double integral = born.weight(j, 0);
-
-            std::cout << "# Adding delta i = " << i << " ";
-            std::cout << "[" << rmin * boxsize << " -> " << rmax * boxsize << " Mpc/h] ";
-            std::cout << "to kappa-map j = " << j << " rmap = " << r_kappa_map * boxsize << " Mpc/h\n";
-            for (long k = 0; k < npix; k++) {
-                kappa_map_data[k] += delta_map_data[k] * integral;
-            }
+        // Add the shell to the running sums
+        const double A = quadrature.integrate(K, rmin * boxsize, rmax * boxsize);
+        const double B = quadrature.integrate([&](double chi) { return K(chi) * chi; }, rmin * boxsize, rmax * boxsize);
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+        for (long k = 0; k < npix; k++) {
+            sum_A[k] += A * delta_map_data[k];
+            sum_B[k] += B * delta_map_data[k];
         }
+
+        // The kappa-map with the source plane at the end of this shell (all the shells in front are added)
+        OnionSlice<double, NDIM> kappa_map;
+        const double amap = delta_map.get_amin();
+        const double rmap = delta_map.get_rmax();
+        kappa_map.init(rmap, rmap, amap, amap, nside, false, 0);
+        kappa_info[i] = {amap, rmap};
+        auto * kappa_map_data = kappa_map.get_map_data();
+        const double inv_chi_source = 1.0 / (rmap * boxsize);
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+        for (long k = 0; k < npix; k++)
+            kappa_map_data[k] = sum_A[k] - sum_B[k] * inv_chi_source;
 
         // Only the part of the sky observed in all the delta-maps is complete: this is the observed part at the
         // distance of the kappa-map (the region covered by the box and its replicas can only shrink with the
         // distance). Zero outside
-        kappa_maps[i].apply_mask([this](const std::array<double, NDIM> & n, double r) { return is_observed(n, r); },
-                                 kappa_maps[i].get_rmax());
+        kappa_map.apply_mask([this](const std::array<double, NDIM> & n, double r) { return is_observed(n, r); },
+                             kappa_map.get_rmax());
 
-        // Output the kappa-map and free the memory (the first map is all zeros so skip this)
+        // Output the kappa-map and free the memory
         std::cout << "# Outputting kappa-map with ";
-        std::cout << "a = " << kappa_maps[i].get_amin() << " ";
-        std::cout << "r = " << kappa_maps[i].get_rmax() * boxsize << " Mpc/h\n";
+        std::cout << "a = " << kappa_map.get_amin() << " ";
+        std::cout << "r = " << kappa_map.get_rmax() * boxsize << " Mpc/h\n";
         std::string filename = plc_folder + "/OnionMap_kappa_" + particle_type + "_imap" + std::to_string(i);
-        kappa_maps[i].output(filename);
+        kappa_map.output(filename);
 
         // Compute min/max of kappa
         double kappa_min = std::numeric_limits<double>::max();
         double kappa_max = -std::numeric_limits<double>::max();
         double kappa_mean = 0.0;
-        const auto * kappa_data = kappa_maps[i].get_map_data();
+        const auto * kappa_data = kappa_map.get_map_data();
         for (long k = 0; k < npix; k++) {
             const double kappa = kappa_data[k];
             kappa_min = std::min(kappa_min, kappa);
@@ -1195,8 +1207,8 @@ void Lightcone<NDIM, T, U>::create_weak_lensing_maps(std::string particle_type) 
 
         // Compute and output C_kappakappa(ell)
         std::string filename_cell = plc_folder + "/Cell_kappa_" + particle_type + "_imap" + std::to_string(i) + ".txt";
-        kappa_maps[i].compute_and_output_angular_powerspectrum(filename_cell, "kappa_" + particle_type, false);
-        kappa_maps[i].free();
+        kappa_map.compute_and_output_angular_powerspectrum(filename_cell, "kappa_" + particle_type, false);
+        kappa_map.free();
 
         // Free the density-map no longer needed
         delta_map.free();
@@ -1207,9 +1219,9 @@ void Lightcone<NDIM, T, U>::create_weak_lensing_maps(std::string particle_type) 
     std::ofstream fp(filename_kappa_info);
     fp << "# Info about the maps we output\n";
     fp << "# imap     amap           rmap (Mpc/h)\n";
-    for (size_t i = 0; i < kappa_maps.size(); i++) {
-        fp << std::setw(3) << i << " " << std::setw(12) << kappa_maps[i].get_amin() << " " << std::setw(12)
-           << kappa_maps[i].get_rmax() * boxsize << "\n";
+    for (size_t i = 0; i < kappa_info.size(); i++) {
+        fp << std::setw(3) << i << " " << std::setw(12) << kappa_info[i].first << " " << std::setw(12)
+           << kappa_info[i].second * boxsize << "\n";
     }
 }
 

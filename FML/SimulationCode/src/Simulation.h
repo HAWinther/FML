@@ -308,6 +308,10 @@ class NBodySimulation {
     // Released before the analysis at the outputs, which needs the memory for other grids
     FFTWGrid<NDIM> pm_density_grid;
     std::array<FFTWGrid<NDIM>, NDIM> pm_force_grids;
+    // Other grids of the step kept between steps (the second CDM+baryon species, the neutrino particles, the lightcone
+    // density), by name; freed with the PM grids
+    std::map<std::string, FFTWGrid<NDIM>> pm_extra_grids;
+    FFTWGrid<NDIM> & pm_workspace(const std::string & slot, int nmesh, int nleft, int nright);
     FFTWGrid<NDIM> & pm_density_workspace(int nmesh, int nleft, int nright);
     void release_pm_workspace();
 

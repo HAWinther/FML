@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <numeric>
 #include <stdexcept>
 #include <vector>
@@ -31,6 +32,9 @@ namespace FML::SHORT_RANGE_GRAVITY {
         double cutoff_tolerance{1e-6}; // Residual pair force relative to unsoftened Newtonian force at the cutoff.
         double coupling{1};            // G in physical coordinates, or the explicitly derived simulation prefactor.
         std::size_t max_cells{1000000};
+        // Points of the table of coefficient(r) r^3 on [softening_support, cutoff] used in the pair and tree loops
+        // (linear interpolation; the coefficient's erfc/exp cost ~60 ns per pair). 0: always evaluate it exactly
+        std::size_t table_points{16384};
     };
 
     inline double short_range_window(double q) {
@@ -80,6 +84,27 @@ namespace FML::SHORT_RANGE_GRAVITY {
                 throw std::invalid_argument("[ShortRangeGravity] Length scale outside representable force range");
             if (alpha_ != 0)
                 (void)detail::yukawa_quadrature();
+            build_table();
+        }
+
+        // The table of g(r) = untruncated_coefficient(r) r^3 on [softening_support, cutoff] (smooth there: the
+        // softening only acts below its support)
+        std::shared_ptr<const std::vector<double>> table_;
+        double table_rmin_{0}, table_inverse_spacing_{0};
+        void build_table() {
+            const std::size_t n = options_.table_points;
+            if (n < 2 || !(cutoff_ > options_.softening_support))
+                return;
+            table_rmin_ = options_.softening_support;
+            const double spacing = (cutoff_ - table_rmin_) / double(n - 1);
+            table_inverse_spacing_ = 1 / spacing;
+            auto table = std::make_shared<std::vector<double>>(n + 1);
+            for (std::size_t i = 0; i < n; ++i) {
+                const double r = std::min(cutoff_, table_rmin_ + spacing * double(i));
+                (*table)[i] = untruncated_coefficient(r) * r * r * r;
+            }
+            (*table)[n] = (*table)[n - 1];
+            table_ = std::move(table);
         }
 
       public:
@@ -225,6 +250,20 @@ namespace FML::SHORT_RANGE_GRAVITY {
             return options_.coupling * (n + alpha_ * y);
         }
         double coefficient(double r) const { return r >= cutoff_ ? 0 : untruncated_coefficient(r); }
+        /// coefficient(sqrt(r2)) from the table (relative error ~1e-8 with the default 16384 points; exact below the
+        /// softening support or without a table). For the inner loops: r2 must be finite and nonnegative
+        double fast_coefficient(double r2) const {
+            if (r2 >= cutoff_ * cutoff_)
+                return 0;
+            const double r = std::sqrt(r2);
+            if (!table_ || r < table_rmin_)
+                return untruncated_coefficient(r);
+            const double u = (r - table_rmin_) * table_inverse_spacing_;
+            const auto i = std::size_t(u);
+            const double t = u - double(i);
+            const auto & g = *table_;
+            return (g[i] + t * (g[i + 1] - g[i])) / (r2 * r);
+        }
     };
 
     /// For FML's unit-box Poisson equation laplacian_x Phi=C delta, return accelerations -grad_x Phi.
@@ -284,7 +323,7 @@ namespace FML::SHORT_RANGE_GRAVITY {
             const double r2 = dx[0] * dx[0] + dx[1] * dx[1] + dx[2] * dx[2];
             if (r2 >= k.cutoff() * k.cutoff())
                 return false;
-            const double factor = source.mass * k.coefficient(std::sqrt(r2));
+            const double factor = source.mass * k.fast_coefficient(r2);
             for (int d = 0; d < 3; ++d)
                 acceleration[d] += factor * dx[d];
             return true;

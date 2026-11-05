@@ -119,7 +119,7 @@ namespace FML::SHORT_RANGE_GRAVITY {
                 min2 >= kernel_.options().softening_support * kernel_.options().softening_support &&
                 diameter < options_.opening_angle * std::sqrt(r2) &&
                 kernel_.tree_scale_resolved(diameter, options_.opening_angle)) {
-                const double factor = node.mass * kernel_.coefficient(std::sqrt(r2));
+                const double factor = node.mass * kernel_.fast_coefficient(r2);
                 for (int d = 0; d < 3; ++d)
                     acceleration[d] += factor * com_dx[d];
                 ++approximated;

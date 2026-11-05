@@ -351,21 +351,40 @@ namespace FML {
                 gradient_kernel[Nmesh / 2 + i] = gradient_kernel_fourier(k_j, Nmesh, GRADIENT_KERNEL);
             }
 
-            // Allocate grid (just copy it over)
+            // The force grids get the layout of the density grid. The general loop below works in place on copies of
+            // the density; the fast path only reads the density, so it only needs the grids allocated (and keeps
+            // grids that already have the layout, e.g. the PM workspace of the simulation: no copies of the density)
+            bool aliased = false;
+            for (int idim = 0; idim < N; idim++)
+                aliased = aliased or (&force_real[idim] == &density_grid_fourier);
+            const bool fast_path = (N == 3) and not aliased;
             for (int idim = 0; idim < N; idim++) {
-                force_real[idim] = density_grid_fourier;
+                if (fast_path) {
+                    auto & g = force_real[idim];
+                    if (g.get_nmesh() != Nmesh or
+                        g.get_n_extra_slices_left() != density_grid_fourier.get_n_extra_slices_left() or
+                        g.get_n_extra_slices_right() != density_grid_fourier.get_n_extra_slices_right())
+                        g = FFTWGrid<N>(Nmesh,
+                                        density_grid_fourier.get_n_extra_slices_left(),
+                                        density_grid_fourier.get_n_extra_slices_right());
+                    g.set_grid_status_real(false);
+                } else {
+                    force_real[idim] = density_grid_fourier;
+                    force_real[idim].set_grid_status_real(idim == 0);
+                }
                 force_real[idim].add_memory_label("FFTWGrid::compute_force_from_density_fourier::force_real_" +
                                                   std::to_string(idim));
-                force_real[idim].set_grid_status_real(idim == 0);
             }
 
             // Fast path for N = 3: the same operations in the same order as the general loop below (identical
             // results) without decoding every Fourier index and with a table for the window function
-            if constexpr (N == 3) {
-                const FML::INTERPOLATION::WindowFunctionTable<N> window_table(density_assignment_method_used, Nmesh);
-                const int nover2 = Nmesh / 2;
-                const int nover2plus1 = Nmesh / 2 + 1;
-                const double twopi = 2.0 * M_PI;
+            if constexpr (N == 3)
+                if (fast_path) {
+                    const FML::INTERPOLATION::WindowFunctionTable<N> window_table(density_assignment_method_used,
+                                                                                  Nmesh);
+                    const int nover2 = Nmesh / 2;
+                    const int nover2plus1 = Nmesh / 2 + 1;
+                    const double twopi = 2.0 * M_PI;
                 // OpenMP over the rows (islice, iy): a task can have fewer slices than threads
 #ifdef USE_OMP
 #pragma omp parallel for collapse(2)
@@ -390,7 +409,7 @@ namespace FML {
                             k_vec_integer[2] = iz <= nover2 ? iz : iz - Nmesh;
                             kvec[2] = twopi * double(k_vec_integer[2]);
                             const double kmag2 = kvec[0] * kvec[0] + kvec[1] * kvec[1] + kvec[2] * kvec[2];
-                            auto value = force_real[0].get_fourier_from_index(fourier_index);
+                            auto value = density_grid_fourier.get_fourier_from_index(fourier_index);
                             if (LAPLACE_KERNEL == CONTINUOUS_GREENS_FUNCTION) {
                                 value *= -1.0 / kmag2;
                             } else {
@@ -414,7 +433,7 @@ namespace FML {
                 for (int idim = 0; idim < N; idim++)
                     force_real[idim].fftw_c2r();
                 return;
-            }
+                }
 
             // Loop over all local fourier grid cells
 #ifdef USE_OMP

@@ -176,12 +176,32 @@ auto NBodySimulation<NDIM, T>::pm_density_workspace(int nmesh, int nleft, int nr
     return grid;
 }
 
-/// Free the PM density and force grids (they are allocated again at the next step)
+/// A grid of the step kept between steps (allocated when the layout changes; the content is that of the last use)
+template <int NDIM, class T>
+auto NBodySimulation<NDIM, T>::pm_workspace(const std::string & slot, int nmesh, int nleft, int nright)
+    -> FFTWGrid<NDIM> & {
+    auto & grid = pm_extra_grids[slot];
+    if (grid.get_nmesh() != nmesh or grid.get_n_extra_slices_left() != nleft or
+        grid.get_n_extra_slices_right() != nright) {
+        grid = FFTWGrid<NDIM>(nmesh, nleft, nright);
+        grid.add_memory_label("NBodySimulation::pm_workspace " + slot);
+    }
+    grid.set_grid_status_real(true);
+    return grid;
+}
+
+/// Free the PM density and force grids and the other grids kept between steps (they are allocated again at the next
+/// step)
 template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::release_pm_workspace() {
     pm_density_grid.free();
     for (auto & grid : pm_force_grids)
         grid.free();
+    pm_extra_grids.clear();
+    if (grav)
+        grav->release_workspace();
+    if (lightcone)
+        lightcone->release_potential_memory();
 }
 
 /// One kick-drift step: density -> force -> kick -> COLA kick -> lightcone -> COLA drift -> drift
@@ -293,7 +313,8 @@ void NBodySimulation<NDIM, T>::drift_and_lightcone(const Step & s) {
         // CDM+baryon density only)
         if (lightcone->needs_potential(s.apos, s.apos_new) and not lightcone->has_potential(s.apos)) {
             const auto nleftright = FML::INTERPOLATION::get_extra_slices(current_force.density_assignment_method);
-            FFTWGrid<NDIM> density(current_force.nmesh, nleftright.first, nleftright.second);
+            FFTWGrid<NDIM> & density =
+                pm_workspace("lightcone density", current_force.nmesh, nleftright.first, nleftright.second);
             assign_cb_particles_to_grid(density, s.apos, current_force);
             timer.StartTiming("LightconePotential");
             lightcone->compute_potential(

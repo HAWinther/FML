@@ -25,7 +25,6 @@ namespace FML::BARYONIFICATION {
         Baryonifier(std::vector<HaloDisplacement> halos, double boxsize, bool periodic = true)
             : halos(std::move(halos)), boxsize(boxsize), periodic(periodic) {
             detail::require(detail::positive(boxsize), "Baryonifier: boxsize must be finite and positive");
-            FML::KDTREE::pointVec centers;
             for (auto & halo : this->halos) {
                 for (double & x : halo.center) {
                     detail::require(std::isfinite(x), "Baryonifier: non-finite halo center");
@@ -36,9 +35,31 @@ namespace FML::BARYONIFICATION {
                 detail::require(!periodic || support < 0.5 * boxsize,
                                 "Baryonifier: periodic support must be smaller than half the box");
                 max_support = std::max(max_support, support);
-                centers.emplace_back(halo.center.begin(), halo.center.end());
             }
-            tree = FML::KDTREE::KDTree(centers, periodic ? boxsize : 0.0);
+            // The halos are grouped by their support (within a factor of 2 in each group) with one tree per group,
+            // queried with the largest support of the group: querying all halos with the largest support of the
+            // catalogue returned ~18x more halos than contribute for a realistic mass function
+            std::vector<std::vector<size_t>> members;
+            for (size_t i = 0; i < this->halos.size(); ++i) {
+                const double support = this->halos[i].mapping.maximum_radius();
+                const int bin = std::min(max_support_bins - 1, int(std::floor(std::log2(max_support / support))));
+                if (int(members.size()) <= bin)
+                    members.resize(bin + 1);
+                members[bin].push_back(i);
+            }
+            for (auto & indices : members) {
+                if (indices.empty())
+                    continue;
+                SupportGroup group;
+                FML::KDTREE::pointVec centers;
+                for (size_t i : indices) {
+                    group.support = std::max(group.support, this->halos[i].mapping.maximum_radius());
+                    centers.emplace_back(this->halos[i].center.begin(), this->halos[i].center.end());
+                }
+                group.halo_index = std::move(indices);
+                group.tree = FML::KDTREE::KDTree(centers, periodic ? boxsize : 0.0);
+                groups.push_back(std::move(group));
+            }
         }
 
         std::array<double, 3> displacement_at(std::array<double, 3> position) const {
@@ -50,7 +71,11 @@ namespace FML::BARYONIFICATION {
             std::array<double, 3> result{};
             if (halos.empty())
                 return result;
-            auto neighbors = tree.neighborhood_indices({position.begin(), position.end()}, max_support);
+            std::vector<size_t> neighbors;
+            const FML::KDTREE::point_t point(position.begin(), position.end());
+            for (const auto & group : groups)
+                for (size_t local : group.tree.neighborhood_indices(point, group.support))
+                    neighbors.push_back(group.halo_index[local]);
             std::sort(neighbors.begin(), neighbors.end()); // stable summation for repeated/threaded queries
             for (size_t index : neighbors) {
                 const auto & halo = halos[index];
@@ -127,7 +152,14 @@ namespace FML::BARYONIFICATION {
         std::vector<HaloDisplacement> halos;
         double boxsize, max_support = 0.0;
         bool periodic;
-        FML::KDTREE::KDTree tree;
+        // Halos with support in (max_support / 2^(b+1), max_support / 2^b] (the last group: all smaller ones)
+        struct SupportGroup {
+            double support = 0.0;
+            std::vector<size_t> halo_index; // index in halos of the tree's points
+            FML::KDTREE::KDTree tree;
+        };
+        static constexpr int max_support_bins = 16;
+        std::vector<SupportGroup> groups;
     };
 
 } // namespace FML::BARYONIFICATION

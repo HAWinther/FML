@@ -129,9 +129,10 @@ void NBodySimulation<NDIM, T>::assign_cb_particles_to_grid(FFTWGrid<NDIM> & dens
             assign(density_grid_fourier);
             weight_first = info.weight_cb;
         } else {
-            FFTWGrid<NDIM> grid(density_grid_fourier.get_nmesh(),
-                                density_grid_fourier.get_n_extra_slices_left(),
-                                density_grid_fourier.get_n_extra_slices_right());
+            FFTWGrid<NDIM> & grid = pm_workspace("species density",
+                                                 density_grid_fourier.get_nmesh(),
+                                                 density_grid_fourier.get_n_extra_slices_left(),
+                                                 density_grid_fourier.get_n_extra_slices_right());
             assign(grid);
             FML::GRID::linear_combination_fourier<NDIM>(density_grid_fourier,
                                                         grid,
@@ -174,9 +175,10 @@ template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::add_neutrino_particles(FFTWGrid<NDIM> & density_grid_fourier, double a) {
     if (FML::ThisTask == 0)
         std::cout << "Adding the neutrino particles to the densityfield\n";
-    FFTWGrid<NDIM> density_nu(density_grid_fourier.get_nmesh(),
-                              density_grid_fourier.get_n_extra_slices_left(),
-                              density_grid_fourier.get_n_extra_slices_right());
+    FFTWGrid<NDIM> & density_nu = pm_workspace("neutrino density",
+                                               density_grid_fourier.get_nmesh(),
+                                               density_grid_fourier.get_n_extra_slices_left(),
+                                               density_grid_fourier.get_n_extra_slices_right());
     {
         // With force_neutrino_energy_density the field is the energy-density contrast (weights w E / (m <E/m>))
         typename SIMCODE::NeutrinoParticles<NDIM>::ScopedEnergyWeights energy_weights(

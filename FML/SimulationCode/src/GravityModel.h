@@ -286,8 +286,8 @@ class GravityModel {
                                              options);
             return;
         }
-        // G_eff/G(a, k) delta(k) (kBox = k Box, koverH0 = kBox / H0Box)
-        FFTWGrid<NDIM> density_geff;
+        // G_eff/G(a, k) delta(k) (kBox = k Box, koverH0 = kBox / H0Box), in a grid kept between steps
+        FFTWGrid<NDIM> & density_geff = density_workspace;
         FML::NBODY::compute_delta_fifth_force<NDIM>(density_fourier, density_geff, [&](double kBox) {
             return GeffOverG(a, kBox / H0Box);
         });
@@ -419,6 +419,9 @@ class GravityModel {
 
     virtual ~GravityModel() = default;
 
+    /// Free the grids compute_force keeps between steps
+    virtual void release_workspace() const { density_workspace.free(); }
+
   protected:
     /// The parameters of the gravity models (read in read_parameters; those of other models keep their defaults)
     SIMCODE::GravityModelSettings settings;
@@ -433,6 +436,10 @@ class GravityModel {
 
     // The background cosmology
     std::shared_ptr<Cosmology> cosmo;
+
+    // A density-sized grid of compute_force kept between steps (G_eff(k) delta, the fifth-force density); freed by
+    // release_workspace (the simulation frees it with its PM grids before the analysis at an output)
+    mutable FFTWGrid<NDIM> density_workspace;
 
     // The massive neutrino fraction f_nu(a) of the source factors, splined in x = ln a by compute_growth_factors
     // (the background sum with the neutrino momentum integral was most of the cost of the scale-dependent growth)

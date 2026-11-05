@@ -258,22 +258,53 @@ namespace FML::BARYONIFICATION {
         EnclosedMassProfile collisionless(radii, clm);
         if (p.relax_collisionless && p.relaxation_amplitude > 0.0 && fclm < 1.0) {
             std::vector<double> rf = radii;
+            // The residual r_f/r_i - 1 - A [(M_i/M_f)^n - 1] increases with r_f (M_f does), so the root is bracketed by
+            // [(1 - A) r_i, r_max] where the residual is negative at the lower end. Since M_f >= f_clm M_i the root is
+            // also below r_i (1 + A (f_clm^-n - 1)). Solved with the Illinois (bracketed false position) method to a
+            // relative tolerance of 1e-14 (a bisection to full precision took ~50 iterations per shell, ~18 ms per halo
+            // with 2048 bins; this takes ~5-8)
             for (size_t i = 1; i + 1 < rf.size(); ++i) {
                 const double ri = radii[i], mi = nfw[i];
+                auto residual = [&](double r) {
+                    const double mf = fclm * mi + gas_profile.mass(r) + stellar_profile.mass(r);
+                    return r / ri - 1.0 - p.relaxation_amplitude * (std::pow(mi / mf, p.relaxation_exponent) - 1.0);
+                };
                 double lo = (1.0 - p.relaxation_amplitude) * ri, hi = radii.back();
-                for (int iter = 0; iter < 100; ++iter) {
-                    const double mid = lo + 0.5 * (hi - lo);
-                    if (mid == lo || mid == hi)
-                        break;
-                    const double mf = fclm * mi + gas_profile.mass(mid) + stellar_profile.mass(mid);
-                    const double residual =
-                        mid / ri - 1.0 - p.relaxation_amplitude * (std::pow(mi / mf, p.relaxation_exponent) - 1.0);
-                    if (residual > 0.0)
-                        hi = mid;
-                    else
-                        lo = mid;
+                if (fclm > 0.0) {
+                    const double bound =
+                        ri * (1.0 + p.relaxation_amplitude * (std::pow(fclm, -p.relaxation_exponent) - 1.0)) * 1.000001;
+                    if (bound > lo && bound < hi)
+                        hi = bound;
                 }
-                rf[i] = lo + 0.5 * (hi - lo);
+                double flo = residual(lo), fhi = residual(hi);
+                if (!(fhi > 0.0)) {
+                    // No sign change below hi: the root is at the end of the bracket (as the bisection would give)
+                    rf[i] = hi;
+                } else if (!(flo <= 0.0)) {
+                    rf[i] = lo;
+                } else {
+                    int side = 0;
+                    for (int iter = 0; iter < 200 && hi - lo > 1e-14 * hi; ++iter) {
+                        double mid = (lo * fhi - hi * flo) / (fhi - flo);
+                        if (!(mid > lo && mid < hi))
+                            mid = lo + 0.5 * (hi - lo);
+                        const double fmid = residual(mid);
+                        if (fmid > 0.0) {
+                            hi = mid;
+                            fhi = fmid;
+                            if (side == -1)
+                                flo *= 0.5;
+                            side = -1;
+                        } else {
+                            lo = mid;
+                            flo = fmid;
+                            if (side == +1)
+                                fhi *= 0.5;
+                            side = +1;
+                        }
+                    }
+                    rf[i] = lo + 0.5 * (hi - lo);
+                }
                 require(rf[i] > rf[i - 1], "Baryonification: relaxation produced shell crossing");
             }
             EnclosedMassProfile relaxed_shells(rf, clm);

@@ -8,6 +8,11 @@
 #include <FML/GadgetUtils/GadgetUtils.h>
 #include <FML/GadgetUtils/GadgetUtilsHDF5.h>
 #include <FML/Global/MPICounts.h>
+
+#include <algorithm>
+#include <limits>
+#include <optional>
+#include <string>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/Units/Units.h>
 #include <climits>
@@ -153,18 +158,63 @@ namespace SIMCODE {
         FML::SumOverTasks(&below_cut);
         FML::SumOverTasks(&too_large);
         const auto hosts = all_hosts(local);
-        std::vector<HaloDisplacement> corrections;
         std::vector<double> concentrations;
-        corrections.reserve(hosts.size());
-        for (const auto & h : hosts) {
-            const double c = s.concentration_norm *
-                             std::pow(h.mass_msunh / s.concentration_pivot_mass_msunh, s.concentration_mass_slope) *
-                             std::pow(1.0 + redshift, s.concentration_redshift_power);
-            auto profiles =
-                make_halo_profiles({h.mass_msunh, h.radius_box, c}, model, background_mass_per_box_volume, numerics);
-            corrections.push_back({h.center, profiles.mapping()});
-            concentrations.push_back(c);
+        for (const auto & h : hosts)
+            concentrations.push_back(
+                s.concentration_norm *
+                std::pow(h.mass_msunh / s.concentration_pivot_mass_msunh, s.concentration_mass_slope) *
+                std::pow(1.0 + redshift, s.concentration_redshift_power));
+
+        // Only the hosts whose support reaches a local particle (in x: the particles of a task lie in its slab) are
+        // needed here: build the profiles of those (in parallel) instead of all the hosts on every task
+        double xlo = std::numeric_limits<double>::max(), xhi = -std::numeric_limits<double>::max();
+        for (size_t i = 0; i < particles.get_npart(); ++i) {
+            const double x = double(FML::PARTICLE::GetPos(particles.get_particles_ptr()[i])[0]);
+            xlo = std::min(xlo, x);
+            xhi = std::max(xhi, x);
         }
+        std::vector<size_t> needed;
+        if (particles.get_npart() > 0) {
+            for (size_t i = 0; i < hosts.size(); ++i) {
+                const double support = numerics.maximum_radius * hosts[i].radius_box;
+                const double x = hosts[i].center[0];
+                double distance = 1.0;
+                for (int image = -1; image <= 1; ++image)
+                    distance = std::min(distance, std::max({xlo - (x + image), (x + image) - xhi, 0.0}));
+                if (distance <= support)
+                    needed.push_back(i);
+            }
+        }
+        std::vector<std::optional<RadialMapping>> mappings(needed.size());
+        std::string error;
+#ifdef USE_OMP
+#pragma omp parallel for schedule(dynamic, 4)
+#endif
+        for (size_t j = 0; j < needed.size(); ++j) {
+            const auto & h = hosts[needed[j]];
+            try {
+                auto profiles = make_halo_profiles({h.mass_msunh, h.radius_box, concentrations[needed[j]]},
+                                                   model,
+                                                   background_mass_per_box_volume,
+                                                   numerics);
+                mappings[j].emplace(profiles.mapping());
+            } catch (const std::exception & e) {
+#ifdef USE_OMP
+#pragma omp critical
+#endif
+                error = e.what();
+            }
+        }
+        // (collectively: a task that failed would otherwise leave the others waiting in the redistribution)
+        int failed = error.empty() ? 0 : 1;
+        FML::MaxOverTasks(&failed);
+        if (failed)
+            throw std::runtime_error(error.empty() ? "Baryonification: building a halo profile failed on another task" :
+                                                     error);
+        std::vector<HaloDisplacement> corrections;
+        corrections.reserve(needed.size());
+        for (size_t j = 0; j < needed.size(); ++j)
+            corrections.push_back({hosts[needed[j]].center, std::move(*mappings[j])});
         Baryonifier field(std::move(corrections), 1.0);
 
         // Measure both spectra on the copy, after the same FoF reordering. Identical binning/normalization

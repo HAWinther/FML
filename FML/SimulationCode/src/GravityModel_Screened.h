@@ -413,7 +413,8 @@ class GravityModelScreened : public GravityModel<NDIM> {
             std::cout << "Linear fifth force (" << this->get_name() << ") at z = " << 1.0 / a - 1.0
                       << " > multigrid_start_redshift = " << multigrid_start_redshift << "\n";
 
-        FFTWGrid<NDIM> density_fifth_force;
+        // (in a grid kept between steps)
+        FFTWGrid<NDIM> & density_fifth_force = this->density_workspace;
         if (before_start)
             compute_linear_fifth_force(coupling, density_fourier, density_fifth_force);
         else if (solve_exact_equation)

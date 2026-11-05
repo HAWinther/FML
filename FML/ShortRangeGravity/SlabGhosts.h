@@ -82,22 +82,43 @@ namespace FML::SHORT_RANGE_GRAVITY {
                                                      all_settings[base + 1],
                                                      o.boxsize) < kernel.cutoff();
         };
+        // The ranks whose slab is within the cutoff of ours (periodic): only they can need any of our particles, so
+        // the particles are only tested against those (testing every particle against every rank was O(N NTasks))
+        std::vector<char> candidate(FML::NTasks, 0);
+        for (int rank = 0; rank < FML::NTasks; ++rank) {
+            const auto base = std::size_t(rank) * nsettings;
+            const double lo = all_settings[base], hi = all_settings[base + 1];
+            double gap = o.boxsize;
+            for (int image = -1; image <= 1; ++image)
+                gap = std::min(gap, std::max({lo + image * o.boxsize - xmax, xmin - (hi + image * o.boxsize), 0.0}));
+            candidate[rank] = rank != FML::ThisTask and gap < kernel.cutoff();
+        }
         std::vector<std::uint64_t> send_counts(FML::NTasks), recv_counts(FML::NTasks);
         for (int rank = 0; rank < FML::NTasks; ++rank)
-            if (rank != FML::ThisTask)
+            if (candidate[rank])
                 for (const auto & p : owned)
                     send_counts[rank] += needed(p, rank);
         MPI_Alltoall(send_counts.data(), 1, MPI_UINT64_T, recv_counts.data(), 1, MPI_UINT64_T, FML::communicator);
+        // The number of rounds of every pairwise exchange in one reduction; offsets with nothing to send anywhere
+        // are skipped (instead of one reduction and an empty Sendrecv per offset)
         // Send one destination at a time. Fixed-size packed records avoid padding, datatype extents and int overflow.
         constexpr std::size_t record_bytes = 4 * sizeof(double) + sizeof(std::uint64_t);
         constexpr std::size_t batch = 16384;
         std::vector<char> send_buffer(batch * record_bytes), recv_buffer(batch * record_bytes);
+        std::vector<std::uint64_t> all_rounds(FML::NTasks, 0);
         for (int offset = 1; offset < FML::NTasks; ++offset) {
             const int dest = (FML::ThisTask + offset) % FML::NTasks;
             const int source = (FML::ThisTask - offset + FML::NTasks) % FML::NTasks;
-            std::uint64_t rounds = std::max(send_counts[dest], recv_counts[source]) / batch +
-                                   (std::max(send_counts[dest], recv_counts[source]) % batch != 0);
-            FML::MaxOverTasks(&rounds);
+            const auto n = std::max(send_counts[dest], recv_counts[source]);
+            all_rounds[offset] = n / batch + (n % batch != 0);
+        }
+        FML::MaxArrayOverTasks(all_rounds.data(), all_rounds.size());
+        for (int offset = 1; offset < FML::NTasks; ++offset) {
+            const int dest = (FML::ThisTask + offset) % FML::NTasks;
+            const int source = (FML::ThisTask - offset + FML::NTasks) % FML::NTasks;
+            const std::uint64_t rounds = all_rounds[offset];
+            if (rounds == 0)
+                continue;
             std::size_t cursor = 0;
             std::uint64_t sent = 0, received = 0;
             for (std::uint64_t round = 0; round < rounds; ++round) {
