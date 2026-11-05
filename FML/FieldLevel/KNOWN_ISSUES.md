@@ -2,7 +2,7 @@
 
 Recorded 29 October 2026; safety status updated 4 November 2026. **FL-1 and FL-2
 were resumed and fixed at the user's request.** FL-4, FL-5 and FL-6 remain deferred.
-The general-framework plan and newly authorized stages 1–3 are recorded in
+The general-framework plan and initial periodic stages 1–3 are recorded in
 [FRAMEWORK_PLAN.md](FRAMEWORK_PLAN.md). Safety fixes do not establish production readiness.
 
 The original review examined commit `6edc763`. Engineering #17 was subsequently
@@ -120,9 +120,21 @@ The relevant code is [FieldLevelBAO.h](FieldLevelBAO.h),
 
 ## Resuming the work
 
-The FL-1/FL-2 prerequisite is resolved. Next authorized work is stages 1–3 of
-[the general-framework plan](FRAMEWORK_PLAN.md). The deferred FL-4 numerical
+The FL-1/FL-2 prerequisite is resolved. The initial periodic implementation of stages 1–3
+is described in [the general-framework plan](FRAMEWORK_PLAN.md) and [its guide](FRAMEWORK.md). The deferred FL-4 numerical
 verification, FL-5 scientific validation and measured FL-6 workspace work remain
 separate follow-ups. The current Clang suite passes, but FL-4's portable
 step-convergence acceptance criteria have not been completed. Recheck current
 source before implementing the open entries; historical evidence can become stale.
+
+## General framework sampler follow-up
+
+The initial framework checks joint linear field/bias/noise inference against exact
+field-marginalized quadrature with two dispersed chains and shared Rhat/ESS diagnostics.
+Wide log-noise priors expose a narrow-noise geometry: rare divergent proposals remain
+in the tested joint sampler despite good acceptance, Rhat/ESS and mean/width agreement.
+These are explicitly reported in `tests/FRAMEWORK_RESULTS.md`; the regression accepts
+a small measured proposal rate, not a claim of divergence-free production sampling.
+Production users must investigate divergences, tune or reparameterize as needed,
+and validate field summaries/tails and nonlinear/model-mismatch coverage. The field-only
+linear Gaussian sampler is checked separately against its exact conditional covariance.

@@ -6,6 +6,22 @@ The current BAO prototype will become its first application. Backlog #52 remains
 open. The user authorized the MPI/input-safety prerequisite first, followed by stages
 1–3 as the first implementation milestone.
 
+## Initial milestone status (4 November 2026)
+
+- Safety prerequisite completed in `9f88b6c`: early single-rank rejection, once-only
+  startup and public field/filter dimension checks, with serial/MPI/sanitizer tests.
+- Stages 1–3 have an initial periodic implementation in [Framework.h](Framework.h),
+  documented in [FRAMEWORK.md](FRAMEWORK.md). It includes generic spectra and scalar
+  priors, distinct cutoffs, linear/1LPT/2LPT with smoothed bias/RSD adjoints,
+  Gaussian likelihood with noise normalization, exact linear conditionals, MAP,
+  joint field/bias/noise HMC and streamed/reconstructed field outputs.
+- Shared BAO kernels are retained behind a compatibility adapter; full extraction
+  of independent evolution/tracer numerical components remains a refactoring option.
+  High-cutoff padding, full cosmological growth derivatives, distributed execution,
+  survey/count observations, PM/COLA and production nonlinear coverage are not claimed.
+- Validation and sampler limitations, including rare divergent proposals with wide
+  noise priors, are recorded in [tests/FRAMEWORK_RESULTS.md](tests/FRAMEWORK_RESULTS.md).
+
 ## Aim and posterior
 
 Build composable physics, observation, likelihood and inference components around

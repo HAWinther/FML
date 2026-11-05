@@ -1,7 +1,7 @@
 USE_MPI ?= false
 USE_OMP ?= true
 USE_FFTW ?= true
-TARGETS := fieldlevel calibration
+TARGETS := fieldlevel calibration framework
 include ../../Makefile.config
 FML_MODULES := Global
 Global.o: $(FML_ROOT)/Global/Global.cpp
@@ -9,4 +9,7 @@ Global.o: $(FML_ROOT)/Global/Global.cpp
 fieldlevel: Main.o Global.o
 	$(LINK_EXE)
 calibration: Calibration.o Global.o
+	$(LINK_EXE)
+
+framework: Framework.o Global.o
 	$(LINK_EXE)

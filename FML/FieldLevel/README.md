@@ -1,4 +1,11 @@
-# Field-level BAO inference (prototype)
+# Field-level inference
+
+The [periodic framework](FRAMEWORK.md) now provides a general spectrum interface,
+linear/Zel'dovich/2LPT forward models, distinct initial/bias/likelihood cutoffs,
+joint field/bias/noise inference, MAP, exact linear references and streamed field
+outputs. See [the saved plan](FRAMEWORK_PLAN.md) for the broader #52 scope.
+
+## BAO application (prototype)
 
 `FieldLevelBAO.h` is a small, self-contained prototype of field-level inference of the BAO scale in the spirit of
 [arXiv:2407.01524](https://arxiv.org/abs/2407.01524): instead of compressing the data into a power spectrum, the
@@ -154,5 +161,5 @@ The gradient-portability, scientific-validation and workspace follow-ups remain
 deferred. Engineering #17 resolved the frozen-chain diagnostics finding.
 
 The saved [general-framework plan](FRAMEWORK_PLAN.md) separates prior/evolution,
-tracers, observations, likelihood and inference. Stages 1–3 are authorized as the
-first milestone; backlog #52 remains open until the broader scope is delivered.
+tracers, observations, likelihood and inference. Stages 1–3 now have an initial periodic implementation documented in [FRAMEWORK.md](FRAMEWORK.md);
+backlog #52 remains open until the broader scope is delivered.

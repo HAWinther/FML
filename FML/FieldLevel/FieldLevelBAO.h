@@ -21,6 +21,11 @@
 #include <stdexcept>
 #include <vector>
 
+namespace FML::FIELDLEVEL::FRAMEWORK {
+    class PeriodicBackend;
+    class Model;
+} // namespace FML::FIELDLEVEL::FRAMEWORK
+
 namespace FML::FIELDLEVEL {
     using Complex = std::complex<double>;
     using Field = std::vector<double>; // compact real field, index (ix * N + iy) * N + iz
@@ -96,6 +101,8 @@ namespace FML::FIELDLEVEL {
         // Model::LPT only
         int lpt_order{2};      // 1 or 2
         double b2{0};          // Lagrangian b2 (weight b2 (delta^2 - <delta^2>))
+        double bias_cutoff{0}; // Optional sharp smoothing cutoff of bias operators [h/Mpc]; 0 retains legacy behavior.
+        double bLap{0};        // Higher-derivative Lagrangian bias coefficient [(Mpc/h)^2].
         double bG2{0};         // Lagrangian tidal bias (weight bG2 G2)
         double growth_rate{0}; // f; 0 = real space, otherwise redshift space along the z axis
         // Parametrisation of the sampled field x: s_k = (T(beta_ref) / T(beta))^c x_k, with s the unit white noise.
@@ -113,6 +120,9 @@ namespace FML::FIELDLEVEL {
     /// with sigma^2 = P_eps / V; the sum over the full (Hermitian) set of modes is the exact Gaussian likelihood of a
     /// real field. Every Field argument below is the sampled field x unless the name says white.
     class FieldLevelBAO {
+        friend class FRAMEWORK::PeriodicBackend;
+        friend class FRAMEWORK::Model;
+
       public:
         struct Mode {
             int n[3];                  // integer wavevector
@@ -383,8 +393,10 @@ namespace FML::FIELDLEVEL {
             std::array<Field, 3> psi; // total displacement (box units), per particle
             Field delta;              // Lagrangian linear density (Model::LPT)
             std::array<Field, 6> tij; // c2r(k_i k_j / k^2 delta_k): xx, yy, zz, xy, xz, yz (Model::LPT)
-            Field weight;             // bias weights (Model::LPT; empty means 1)
-            double prefactor{1};      // pred = prefactor * delta_CIC
+            Field bias_delta, bias_lap;
+            std::array<Field, 6> bias_tij;
+            Field weight;        // bias weights (Model::LPT; empty means 1)
+            double prefactor{1}; // pred = prefactor * delta_CIC
         };
         struct FullMode {
             std::size_t index;
@@ -438,12 +450,16 @@ namespace FML::FIELDLEVEL {
                              settings.beta_max,
                              settings.b2,
                              settings.bG2,
+                             settings.bias_cutoff,
+                             settings.bLap,
                              settings.growth_rate,
                              settings.centering,
                              settings.beta_ref})
                 if (!std::isfinite(x))
                     throw std::invalid_argument("[FieldLevelBAO] Settings must be finite");
             const double kf = 2 * M_PI / settings.boxsize;
+            if (settings.bias_cutoff < 0 || settings.bias_cutoff >= kf * (settings.nmesh / 2))
+                throw std::invalid_argument("[FieldLevelBAO] Invalid bias smoothing cutoff");
             if (settings.assignment == Assignment::Smooth &&
                 !(settings.kernel_width >= 4 && settings.kernel_width <= 8 && settings.kernel_width % 2 == 0))
                 throw std::invalid_argument("[FieldLevelBAO] kernel_width must be 4, 6 or 8");
@@ -567,6 +583,37 @@ namespace FML::FIELDLEVEL {
                 for (std::size_t p = 0; p < ncells_; ++p)
                     w.weight[p] = 1 + b1L * w.delta[p] + s_.b2 * (w.delta[p] * w.delta[p] - mean_d2) +
                                   (tidal ? s_.bG2 * G2[p] : 0.);
+            }
+            if (s_.model == Model::LPT && (s_.bias_cutoff > 0 || s_.bLap != 0)) {
+                auto bias_modes = dk;
+                for (std::size_t i = 0; i < bias_modes.size(); ++i)
+                    if (s_.bias_cutoff > 0 && modes_[i].k >= s_.bias_cutoff)
+                        bias_modes[i] = 0;
+                w.bias_delta = from_modes(bias_modes, [](const Mode &) { return Complex(1); });
+                w.bias_lap = from_modes(bias_modes, [](const Mode & m) { return Complex(-m.k * m.k); });
+                for (int a = 0; a < 6; ++a)
+                    w.bias_tij[a] = from_modes(bias_modes, [&](const Mode & m) {
+                        return Complex(kc(m.n, pair_[a][0]) * kc(m.n, pair_[a][1]) / k2(m.n));
+                    });
+                double d2mean = 0, gmean = 0;
+                for (std::size_t q = 0; q < ncells_; ++q) {
+                    const double delta = w.bias_delta[q];
+                    double tt = 0;
+                    for (int a = 0; a < 6; ++a)
+                        tt += (a < 3 ? 1 : 2) * w.bias_tij[a][q] * w.bias_tij[a][q];
+                    d2mean += delta * delta;
+                    gmean += tt - delta * delta;
+                }
+                d2mean /= ncells_;
+                gmean /= ncells_;
+                for (std::size_t q = 0; q < ncells_; ++q) {
+                    const double delta = w.bias_delta[q];
+                    double tt = 0;
+                    for (int a = 0; a < 6; ++a)
+                        tt += (a < 3 ? 1 : 2) * w.bias_tij[a][q] * w.bias_tij[a][q];
+                    w.weight[q] = 1 + (s_.bias - 1) * delta + s_.b2 * (delta * delta - d2mean) +
+                                  s_.bG2 * (tt - delta * delta - gmean) + s_.bLap * w.bias_lap[q];
+                }
             }
             const int Nd = s_.nmesh_density;
             auto & d = density_;
@@ -708,7 +755,10 @@ namespace FML::FIELDLEVEL {
         }
 
         // Adjoint of the LPT models: from Gbar on the modes to Q on the modes
-        void lpt_adjoint(const std::vector<Complex> & gbar, const Workspace & w, std::vector<Complex> & Q) const {
+        void lpt_adjoint(const std::vector<Complex> & gbar,
+                         const Workspace & w,
+                         std::vector<Complex> & Q,
+                         std::array<double, 4> * bias_gradient = nullptr) const {
             const int N = s_.nmesh, Nd = s_.nmesh_density;
             const double Nd3 = double(std::size_t(Nd) * Nd * Nd);
             // delta_d-bar = A^T (prefactor Gbar) = c2r(prefactor Gbar) / Nd^3 on the density grid
@@ -789,16 +839,63 @@ namespace FML::FIELDLEVEL {
                 for (std::size_t p = 0; p < ncells_; ++p)
                     G2bar[p] -= .5 * S2bar[p];
             }
-            // Weights w = 1 + b1L delta + b2 (delta^2 - mean delta^2) + bG2 G2
-            const double b1L = s_.bias - 1;
+            const bool separate_bias = s_.bias_cutoff > 0 || s_.bLap != 0;
+            if (separate_bias) {
+                double mean_w = 0, mean_d2 = 0, mean_G = 0;
+                for (std::size_t q = 0; q < ncells_; ++q) {
+                    mean_w += wbar[q];
+                    mean_d2 += w.bias_delta[q] * w.bias_delta[q];
+                    double tt = 0;
+                    for (int a = 0; a < 6; ++a)
+                        tt += (a < 3 ? 1 : 2) * w.bias_tij[a][q] * w.bias_tij[a][q];
+                    mean_G += tt - w.bias_delta[q] * w.bias_delta[q];
+                }
+                mean_w /= ncells_;
+                mean_d2 /= ncells_;
+                mean_G /= ncells_;
+                Field db(ncells_);
+                std::array<Field, 6> tb;
+                for (auto & v : tb)
+                    v.resize(ncells_);
+                if (bias_gradient)
+                    bias_gradient->fill(0);
+                for (std::size_t q = 0; q < ncells_; ++q) {
+                    const double d = w.bias_delta[q], wb = wbar[q] - mean_w;
+                    db[q] = (s_.bias - 1) * wbar[q] + 2 * (s_.b2 - s_.bG2) * d * wb;
+                    double tt = 0;
+                    for (int a = 0; a < 6; ++a) {
+                        tb[a][q] = (a < 3 ? 2 : 4) * s_.bG2 * w.bias_tij[a][q] * wb;
+                        tt += (a < 3 ? 1 : 2) * w.bias_tij[a][q] * w.bias_tij[a][q];
+                    }
+                    if (bias_gradient) {
+                        (*bias_gradient)[0] += wbar[q] * d;
+                        (*bias_gradient)[1] += wbar[q] * (d * d - mean_d2);
+                        (*bias_gradient)[2] += wbar[q] * (tt - d * d - mean_G);
+                        (*bias_gradient)[3] += wbar[q] * w.bias_lap[q];
+                    }
+                }
+                const auto keep = [&](const Mode & m) { return s_.bias_cutoff == 0 || m.k < s_.bias_cutoff; };
+                add_adjoint(db, [&](const Mode & m) { return Complex(keep(m) ? 1 : 0); }, Q);
+                for (int a = 0; a < 6; ++a)
+                    add_adjoint(
+                        tb[a],
+                        [&](const Mode & m) {
+                            return Complex(keep(m) ? kc(m.n, pair_[a][0]) * kc(m.n, pair_[a][1]) / k2(m.n) : 0);
+                        },
+                        Q);
+                add_adjoint(wbar, [&](const Mode & m) { return Complex(keep(m) ? -s_.bLap * m.k * m.k : 0); }, Q);
+            }
+            // Legacy weights retain their original adjoint; separate smoothed operators were handled above.
+            const double b1L = separate_bias ? 0 : s_.bias - 1;
+            const double b2 = separate_bias ? 0 : s_.b2, bG2 = separate_bias ? 0 : s_.bG2;
             double mean_wbar = 0;
             for (double v : wbar)
                 mean_wbar += v;
             mean_wbar /= double(ncells_);
             for (std::size_t p = 0; p < ncells_; ++p) {
-                deltabar[p] += wbar[p] * (b1L + 2 * s_.b2 * w.delta[p]) - 2 * s_.b2 * w.delta[p] * mean_wbar;
+                deltabar[p] += wbar[p] * (b1L + 2 * b2 * w.delta[p]) - 2 * b2 * w.delta[p] * mean_wbar;
                 if (tidal)
-                    G2bar[p] += s_.bG2 * wbar[p];
+                    G2bar[p] += bG2 * wbar[p];
             }
             if (tidal)
                 for (std::size_t p = 0; p < ncells_; ++p) {

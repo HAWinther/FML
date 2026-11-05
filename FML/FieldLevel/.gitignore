@@ -2,3 +2,7 @@ example/fieldlevel
 example/chain.txt
 tests/test_field_level
 example/calibration
+example/framework
+tests/test_framework
+tests/test_framework_resolution
+tests/test_field_level_safety
