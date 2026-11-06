@@ -175,6 +175,24 @@ checking that long filtering and the short contribution occur once. Lightcone ru
 exercise the unsplit potential path with/without interlacing. See the exported
 review and [SHORT_RANGE_RESULTS.md](SHORT_RANGE_RESULTS.md) for numerical results.
 
+## Clustered static-force validation
+
+An optional larger experiment now covers concentrated and overlapping halos, a
+periodic-boundary halo, and mesh-relative translations. It uses independent
+softened Ewald references, samples error distributions and radial dependence,
+and measures exact/finite-tree momentum balance in serial and MPI. See
+[CLUSTERED_FORCE.md](CLUSTERED_FORCE.md) for scope, results and reproduction.
+It does not yet validate time evolution of these clustered fixtures.
+
+## Controlled orbit and cluster evolution
+
+A second optional driver evolves near-circular/eccentric pairs and compact
+16-particle cluster/merger fixtures through the actual simulation step, comparing
+synchronized states to independent adaptive direct Ewald evolution. It checks
+reference refinement, second-order timestep convergence, exact tree/cell and
+interlaced trajectories, canonical momentum and MPI migration. See
+[DYNAMICS.md](DYNAMICS.md) for units, results, reproduction and validation limits.
+
 ## Limits and remaining #47 work
 
 This is a common-timestep implementation, not completion of the full item.

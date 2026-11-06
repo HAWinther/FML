@@ -6,3 +6,7 @@
 /test_short_range_simulation
 
 /test_gravity_short_range
+
+/benchmark_clustered_force
+
+/benchmark_short_range_dynamics

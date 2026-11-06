@@ -125,3 +125,77 @@ These checks verify the implementation and its linear kernels. They do not
 calibrate nonlinear modified-gravity observables or justify a generic surrogate
 as an exact pair force for arbitrary new theories. Such models preserve their
 resolved Fourier remainder but need physical small-scale validation.
+
+
+## Clustered static-force experiment (2026-11-06)
+
+Added an optional reproducible experiment with 2,048 unequal-mass sources and
+128 sampled targets per fixture: concentrated halo, overlapping halos, a periodic
+boundary halo, and a globally translated copy. Twelve cases vary mesh, split,
+softening, interlacing, tree opening and kernel-table use. It calls the model-owned
+mesh solve and kick; no production force behavior changes.
+
+The independent oracle combines direct Ewald images and reciprocal structure
+factors with a separate quadrature of the compact spline density. Inverse splits
+5/7 with Fourier bounds 10/16 agree within 2.0e-14 relative RMS. A separate older
+pairwise oracle checks one target per fixture. Sampled targets include 172–361
+directed pairs inside the baseline spline support.
+
+All 190 full-size checks pass in serial and MPI 1/2/4 ranks. An address/undefined-
+sanitized 128-source/16-target smoke run passes 138 checks (new driver/header
+code instrumented, prebuilt background objects uninstrumented). Per-case sampled
+MPI force differences are below 2.4e-15 relative RMS. Cell RMS errors decrease
+from 2.85e-4–3.90e-4 on 16³ meshes to 5.72e-7–6.98e-7 on 64³ meshes; 64³
+99th-percentile errors are below 1e-5. Exact backends retain normalized
+mass-weighted momentum balance near roundoff.
+
+Angle 0.6 genuinely exercises tree approximation: RMS errors are
+2.44e-4–3.05e-4 and normalized instantaneous momentum imbalance reaches 1.05e-5.
+Angle 0.3 still traverses to exact leaf sums on these particular catalogues;
+that agreement is not evidence of a tree speedup. The figures retain radial
+error distributions and absolute errors normalized by reference RMS, alongside
+relative errors with an explicit denominator floor near cancellations.
+
+See [CLUSTERED_FORCE.md](CLUSTERED_FORCE.md) for reproduction and the complete
+contract. These are static GR tests; orbit/cluster time evolution, cosmological
+timestep convergence, modified-gravity reference forces and production
+performance/ghost-memory calibration remain open.
+
+
+## Controlled orbit and cluster evolution (2026-11-06)
+
+Added a second optional driver using actual SimulationCode steps and a separate
+full-state adaptive RKF45 reference with direct periodic softened Ewald forces.
+Near-circular and boundary-crossing eccentric pairs, a compact unequal-mass
+16-particle cluster and two approaching eight-particle clusters all pass the
+serial and MPI 1/2/4-rank workflow. Reference spatial-force refinement is checked
+at every output; ODE tolerances 1e-10/1e-12 differ by less than 3.46e-7 in the
+normalized trajectory metrics. Position/velocity outputs are synchronized at
+16 common epochs and positions are unwrapped across the periodic boundary.
+
+Temporal refinement approaches a factor-four error reduction per doubling.
+At 256 steps, maximum position/velocity RMS errors relative to their initial
+radius/dispersion scales are 0.00102/0.00164 (near-circular),
+0.000424/0.000953 (cluster) and 0.000378/0.00412 (merger).
+The eccentric pair needs 1,024 steps to reach 0.00126/0.00516; at 256 steps
+it still has 0.0200/0.0825 errors in these same initial-scale normalizations.
+This exposes the close-orbit timestep requirement without changing the solver.
+
+Exact tree/cell trajectories agree below 6.6e-14 in these metrics; the MPI
+comparisons agree below 4.5e-16. The boundary pair has three ownership changes
+on both 2 and 4 ranks. Interlaced finest trajectories meet the same accuracy
+budgets. Canonical momentum remains constant near roundoff.
+
+PM-only runs are matched continuous-gradient controls, not optimized PM baselines;
+these compact particle loads are sensitive to the unfiltered kernel. A separate
+fiducial-gradient PM check also remains much less accurate than the split force
+on these fixtures. These comparisons do not establish general PM performance.
+No mechanical-energy conservation claim is made for the expanding system.
+Sanitized cluster smoke runs pass both the pipeline (16 synchronization checks)
+and reference (17 spatial-refinement checks); new driver/headers are instrumented
+while linked background objects are prebuilt without instrumentation.
+
+See [DYNAMICS.md](DYNAMICS.md) and the exported trajectories, convergence plots
+and execution/rendering provenance. Small-N dynamics do not calibrate larger
+production halos or finite-opening tree drift. COLA, short-range subcycling and
+automatic acceleration-based timestep selection remain separate work.

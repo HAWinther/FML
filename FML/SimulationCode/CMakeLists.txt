@@ -247,6 +247,15 @@ target_link_libraries(nbody PRIVATE ${LUA_LIBRARIES} ${CMAKE_DL_LIBS})
 #-------------------------------------------------------------------
 if(FML_BUILD_TESTS)
   enable_testing()
+  # Explicit, longer accuracy experiment (not part of the default build/CTest).
+  add_executable(benchmark_clustered_force EXCLUDE_FROM_ALL tests/benchmark_clustered_force.cpp)
+  target_link_libraries(benchmark_clustered_force PRIVATE fml_core)
+  set_target_properties(benchmark_clustered_force PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
+  add_executable(benchmark_short_range_dynamics EXCLUDE_FROM_ALL tests/benchmark_short_range_dynamics.cpp src/BaryonificationOutput.cpp)
+  target_link_libraries(benchmark_short_range_dynamics PRIVATE fml_core ${LUA_LIBRARIES} ${CMAKE_DL_LIBS})
+  target_compile_definitions(benchmark_short_range_dynamics PRIVATE USE_LUA)
+  target_include_directories(benchmark_short_range_dynamics PRIVATE ${LUA_INCLUDE_DIR})
+  set_target_properties(benchmark_short_range_dynamics PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
   set(_tests test_baryonification_parameters test_cola_frame test_models test_lightcone_crossing
              test_short_range_force
              test_gravity_short_range)

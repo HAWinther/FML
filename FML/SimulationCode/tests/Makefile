@@ -3,14 +3,14 @@ USE_OMP ?= false
 # test_cola_frame uses the cosmology, gravity models and COLA of the solver (FFTW grids and the GSL ODE solver)
 USE_FFTW ?= true
 USE_GSL ?= true
-ifneq ($(filter test_short_range_simulation,$(MAKECMDGOALS)),)
+ifneq ($(filter test_short_range_simulation benchmark_short_range_dynamics,$(MAKECMDGOALS)),)
 USE_LUA ?= true
 endif
 TARGETS := test_baryonification_parameters test_cola_frame test_models test_lightcone_crossing test_short_range_force test_gravity_short_range
 include ../../Makefile.config
 OPTIONS += -DNDIM_SPACE=3
 FML_MODULES := Global Spline ODESolver ParameterMap FileUtils Math GadgetUtils
-EXTRA_CLEAN += test_short_range_simulation
+EXTRA_CLEAN += test_short_range_simulation benchmark_clustered_force benchmark_short_range_dynamics
 # TransferInput.cpp (the transfer functions the gravity models read) is in ../src
 EXTRA_VPATH := ../src
 
@@ -52,3 +52,11 @@ run: $(TARGETS)
 	./test_lightcone_crossing
 	./test_short_range_force
 	./test_gravity_short_range
+
+# Longer controlled clustered-force experiment; not part of the fast default suite.
+benchmark_clustered_force: benchmark_clustered_force.o TransferInput.o $(INTERNAL_COSMO_OBJS) Global.o Spline.o ODESolver.o ParameterMap.o FileUtils.o Math.o NumericalMethods.o
+	$(LINK_EXE)
+
+# Actual pipeline trajectories and independent direct-reference evolution.
+benchmark_short_range_dynamics: benchmark_short_range_dynamics.o TransferInput.o BaryonificationOutput.o GadgetUtils.o $(INTERNAL_COSMO_OBJS) Global.o Spline.o ODESolver.o ParameterMap.o FileUtils.o Math.o NumericalMethods.o
+	$(LINK_EXE)
