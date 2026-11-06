@@ -199,3 +199,42 @@ See [DYNAMICS.md](DYNAMICS.md) and the exported trajectories, convergence plots
 and execution/rendering provenance. Small-N dynamics do not calibrate larger
 production halos or finite-opening tree drift. COLA, short-range subcycling and
 automatic acceleration-based timestep selection remain separate work.
+
+
+## Common-timestep COLA enablement (2026-11-06)
+
+The existing short-kick placement before the COLA correction passed validation;
+no force or frame-update formula change was necessary. Removed the blanket COLA
+rejection and allowed Quinn or Tassev with 1LPT/2LPT COLA, including scale-dependent
+frames. Ordinary N-body stays Quinn-only. Enforced LPT, screening/exact nonlinear
+solvers, massive/separate species, unsupported density/interpolation methods and
+noncontinuous kernels remain excluded. An effective order-zero COLA setting cannot
+bypass the Tassev restriction.
+
+The serial workflow passes 105 executions; the MPI workflow passes 117, including
+1/2/4-rank cases. Nonzero manufactured frames use independent EdS factors or
+numerically differentiated model frame velocities, plus independent periodic
+Newtonian/Yukawa body forces. All nine checks per manufactured run pass for kick,
+drift and combined steps, including nonunit residual scaling and physical velocity
+restoration. Maximum velocity discrepancy is 1.77e-8 in code units, position below
+1e-10. No new claim about softened Yukawa or nonlinear MG LPT theory follows.
+
+Seeded mild-load trajectories cover GR 1/2LPT, DGP 2LPT, f(R) ordinary 2LPT and
+scale-dependent 1/2LPT with Quinn/Tassev and 4/8/16/32 steps. Initial full positions
+match N-body exactly and full velocity RMS differences are below 4.7e-12. At 32
+steps, position RMS differences from 128-step N-body are below 7.63e-6 box units;
+velocity RMS differences are below 4.01e-6 canonical units. The reference's own
+64-to-128-step differences reach 1.54e-6/9.77e-7, so these are finite-resolution
+state comparisons, not exact-solution error bounds or bitwise COLA/N-body claims.
+
+Exact tree/cell, default table/analytic kernels, interlacing, lightcone-on/off state
+transparency, order-zero Quinn reduction and negative input checks pass. Matching
+MPI state differences are below 1.23e-17 RMS; lightcone differences below 6.5e-19.
+Ordinary N-body short-range regressions pass in serial/MPI, existing COLA-frame/model
+unit tests pass, and production nbody smoke runs pass for GR/Tassev and scaled f(R)/Quinn.
+Sanitized GR/scaled-f(R) manufactured-frame smoke runs pass (new driver/headers
+instrumented; linked background objects prebuilt without instrumentation).
+
+See [COLA_SHORT_RANGE.md](COLA_SHORT_RANGE.md) for configuration, equations and
+reproduction. Subcycling, production nonlinear/halo and finite-opening tree COLA
+calibration, and model-specific theory limits remain open. No speedup is claimed.

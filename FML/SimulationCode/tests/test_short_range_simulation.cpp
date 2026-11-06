@@ -7,12 +7,15 @@
 #include <fstream>
 #include <iomanip>
 #include "ShortRangeReference.h"
-struct DiagnosticSimulation : NBodySimulation<3, ParticleBasic<3>> {
-    using Base = NBodySimulation<3, ParticleBasic<3>>;
+using DiagnosticParticle = ParticleFiducial<3>;
+struct DiagnosticSimulation : NBodySimulation<3, DiagnosticParticle> {
+    using Base = NBodySimulation<3, DiagnosticParticle>;
     using Base::Base;
     using Base::Step;
     using Base::step;
+    auto & frame() { return this->cola; }
 };
+#include "ShortRangeCOLAReference.h"
 int main(int argc, char ** argv) {
     FML::FMLSetup::init(&argc, &argv);
     if (argc != 3 && argc != 4) {
@@ -35,7 +38,10 @@ int main(int argc, char ** argv) {
         DiagnosticSimulation simulation(cosmo, grav);
         simulation.read_parameters(param, params);
         simulation.init();
-        if (argc == 4) {
+        const std::string mode = argc == 4 ? argv[3] : "run";
+        if (mode == "frame-check") {
+            check_short_range_cola_frame(simulation, grav, params);
+        } else if (mode == "single-kick") {
             // Isolate one real pipeline kick against a reference independent of the mesh and adapter.
             using Vector = SIMCODE::TEST_REFERENCE::Vector;
             std::vector<Vector> positions{{.013, .12, .11},
@@ -45,7 +51,7 @@ int main(int argc, char ** argv) {
                                           {.529, .54, .55},
                                           {.251, .25, .25},
                                           {.731, .7, .7}};
-            std::vector<ParticleBasic<3>> all(positions.size());
+            std::vector<DiagnosticParticle> all(positions.size());
             for (size_t i = 0; i < all.size(); ++i) {
                 all[i].id = i + 1;
                 for (int d = 0; d < 3; ++d) {
@@ -91,8 +97,16 @@ int main(int argc, char ** argv) {
                 std::cout << "REAL_STEP_EWALD_ERROR " << relative << '\n';
             if (!(relative < .002))
                 throw std::runtime_error("Real PM/short-range kick failed independent Ewald check");
-        } else
+        } else if (mode == "run" || mode == "true-state")
             simulation.run();
+        else
+            throw std::invalid_argument("Unknown diagnostic mode: " + mode);
+        std::unique_ptr<ScopedLPTVelocity<3, DiagnosticParticle>> physical_velocity;
+        if (mode == "true-state")
+            physical_velocity =
+                std::make_unique<ScopedLPTVelocity<3, DiagnosticParticle>>(simulation.frame(),
+                                                                           simulation.get_particles(),
+                                                                           1. / (1. + params.output.redshifts.back()));
         auto & particles = simulation.get_particles();
         auto * p = particles.get_particles_ptr();
         std::ofstream file(std::string(argv[2]) + "." + std::to_string(FML::ThisTask) + ".txt");

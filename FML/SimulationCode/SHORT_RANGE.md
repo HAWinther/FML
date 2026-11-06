@@ -1,9 +1,9 @@
 # Common-timestep PM plus short-range gravity
 
-Initial milestone of backlog #47: opt-in periodic unscreened forces in ordinary
-3D N-body evolution, using the existing cosmological Quinn coefficients
-and a common timestep for the long and short forces. COLA and short-range subcycling
-remain separate follow-ups. The default is the existing PM-only evolution.
+Backlog #47 provides opt-in periodic unscreened forces in 3D N-body and COLA
+evolution, with a common timestep for the long and short forces. Ordinary N-body
+uses Quinn; COLA supports Quinn and Tassev with its existing 1LPT/2LPT frames.
+Short-range subcycling remains separate work. The default is PM-only evolution.
 
 The implementation reuses [ShortRangeGravity](../ShortRangeGravity/README.md):
 its Gaussian/spline force split, cell-list P3M or monopole-tree backend, and selective
@@ -41,12 +41,12 @@ unit-box coordinates explicitly. The resulting cutoff must be smaller than L/2,
 and h must not exceed it. Kernel settings are validated before simulation setup.
 
 `force_short_range=false` requires no new lengths and follows the PM-only path.
-With the option enabled, the first milestone requires:
+With the option enabled, the supported scope requires:
 
-- 3D linear unscreened gravity, with screening and exact nonlinear solvers disabled; no massive neutrinos, separate baryon/neutrino particles or N-body gauge
+- 3D unscreened gravity, with screening and exact nonlinear solvers disabled; no massive neutrinos, separate baryon/neutrino particles or N-body gauge
   source; the single cold species can carry finite nonnegative particle masses;
-- ordinary N-body evolution, not COLA or enforced LPT trajectories;
-- Quinn timesteps and continuous Fourier Laplacian/gradient kernels; select these
+- ordinary N-body or 1LPT/2LPT COLA (including scale-dependent frames), without enforced LPT trajectories;
+- Quinn timesteps, or Tassev with COLA, and continuous Fourier Laplacian/gradient kernels; select these
   explicitly because the usual fiducial gradient can switch to a discrete stencil;
 - assignment-based density and interpolation; no sheet, NUFFT or early-time switch;
 - stable globally unique particle IDs. Standard generated ICs already assign these.
@@ -56,6 +56,9 @@ assignment choices keep their existing validation. Small-scale aliasing and part
 sampling effects are not removed by the analytic split; resolve the Gaussian long
 force and test assignment/interpolation convergence. The initial validation used
 double FFT grids; float-FFT production calibration remains work to do.
+
+For COLA configuration, frame ordering and validation, see
+[COLA_SHORT_RANGE.md](COLA_SHORT_RANGE.md).
 
 ## Force assembly and time factors
 
@@ -196,7 +199,7 @@ interlaced trajectories, canonical momentum and MPI migration. See
 ## Limits and remaining #47 work
 
 This is a common-timestep implementation, not completion of the full item.
-Short-range subcycling, COLA-frame validation, screened/multispecies force
+Short-range subcycling, broader nonlinear COLA calibration, screened/multispecies force
 prescriptions, particle-pair lightcone potentials and production halo/orbit,
 power-spectrum and memory/performance calibration remain. The tree's finite opening
 can introduce asymmetric force errors; validate its force-error distribution,

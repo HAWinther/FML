@@ -62,8 +62,9 @@ else:
  pm=run('pm-only',dict(timestep_nsteps=[8],force_short_range=False))
  tiny=run('tiny-split',dict(timestep_nsteps=[8],force_short_range_split_scale=1e-6,force_short_range_softening_support=1e-8))
  diff=max(abs(a-b) for k in pm for a,b in zip(pm[k],tiny[k]));assert diff<1e-9,diff;print('TINY_SPLIT_PM_DIFFERENCE',diff)
- for key,value in [('simulation_use_cola',True),('force_gradient_kernel','discrete_2pt'),('force_density_method','sheet'),('timestep_method','FastPM'),('force_use_finite_difference_force',True)]:
+ for key,value in [('simulation_enforce_LPT_trajectories',True),('force_gradient_kernel','discrete_2pt'),('force_density_method','sheet'),('timestep_method','FastPM'),('force_use_finite_difference_force',True)]:
   invalid={key:value,'timestep_nsteps':[1]}
+  if key=='simulation_enforce_LPT_trajectories':invalid['simulation_use_cola']=True
   run('reject-'+key,invalid,expected=1)
 
 

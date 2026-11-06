@@ -162,7 +162,7 @@ Parameters marked *optional* take the default value if they are not in the param
 
 | Parameter | Type | Default | Used when | Description |
 |---|---|---|---|---|
-| `force_short_range` | bool | `false` | always | Periodic unscreened PM plus short-range forces; initial common-timestep N-body scope |
+| `force_short_range` | bool | `false` | always | Periodic unscreened PM plus short-range forces; common-timestep N-body or COLA scope |
 | `force_short_range_split_scale` | double | *required* | force_short_range = true | Comoving Gaussian split scale in Mpc/h |
 | `force_short_range_softening_support` | double | *required* | force_short_range = true | Comoving spline support h in Mpc/h; h=2.8 Plummer-equivalent epsilon |
 | `force_short_range_backend` | string | `"cell"` | force_short_range = true | Short-range backend: cell (P3M) or tree (monopole TreePM). Options: `cell`, `tree` |

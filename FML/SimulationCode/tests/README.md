@@ -183,3 +183,11 @@ MPI ownership migration. Build the target explicitly and run
 `python3 regression/short_range_dynamics.py --binary ./benchmark_short_range_dynamics --output /tmp/fml-dynamics`.
 See [../DYNAMICS.md](../DYNAMICS.md) for the fixture-specific refinement grids,
 reference tolerances, plotting/MPI options and scope.
+
+
+`regression/short_range_cola.py` validates common-timestep short forces in COLA
+with Quinn/Tassev, nonzero 1LPT/2LPT and scale-dependent frames, physical state
+restoration, timestep refinement, interlacing, lightcone transparency and MPI.
+Build `test_short_range_simulation` explicitly (Make or CMake); see
+[../COLA_SHORT_RANGE.md](../COLA_SHORT_RANGE.md) for the supported combinations
+and independent frame/body reference. The longer suite is outside default CTest.

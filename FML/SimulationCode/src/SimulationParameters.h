@@ -1361,12 +1361,14 @@ namespace SIMCODE {
 
             if (force.short_range.enabled) {
                 force.short_range.validate(simulation.boxsize);
-                if (simulation.use_cola || simulation.enforce_LPT_trajectories || particle.baryons ||
-                    particle.neutrinos || force.nbody_gauge)
-                    fail("force_short_range initially requires ordinary N-body and one cold particle species, without "
+                if (simulation.enforce_LPT_trajectories || particle.baryons || particle.neutrinos || force.nbody_gauge)
+                    fail("force_short_range requires ordinary evolution and one cold particle species, without "
+                         "enforced LPT or "
                          "N-body gauge sources");
-                if (timestep.method != TimestepMethod::Quinn)
-                    fail("force_short_range initially requires timestep_method=Quinn (common cosmological kick/drift)");
+                if (timestep.method != TimestepMethod::Quinn &&
+                    !(simulation.use_cola && simulation.cola_LPT_order >= 1 &&
+                      timestep.method == TimestepMethod::Tassev))
+                    fail("force_short_range requires Quinn, or Tassev with COLA (common kick/drift timesteps)");
                 if (force.greens_function_kernel != "continuous" || force.gradient_kernel != "continuous")
                     fail("force_short_range requires explicit continuous Green and gradient kernels");
                 if (force.density_method != "assignment" || force.interpolation_method != "assignment" ||

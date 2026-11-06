@@ -162,6 +162,7 @@ with the exported results, with non-plot Python code unchanged.
 This completes the controlled small-N dynamical check following the clustered
 static-force experiment. Larger-N halo evolution, finite-opening dynamical
 momentum drift, broader force/mesh/timestep calibration and performance/ghost-memory
-measurements remain. COLA support and short-range subcycling are still separate
-implementation milestones. No automatic acceleration-based timestep controller
+measurements remain. Common-timestep COLA is now covered in
+[COLA_SHORT_RANGE.md](COLA_SHORT_RANGE.md); short-range subcycling remains a separate
+implementation milestone. No automatic acceleration-based timestep controller
 is introduced here.

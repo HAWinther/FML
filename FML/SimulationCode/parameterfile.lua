@@ -537,10 +537,11 @@ force_finite_difference_stencil_order = 4
 ------------------------------------------------------------
 -- Optional short-range gravity (common-timestep P3M / TreePM)
 ------------------------------------------------------------
--- Initial scope: 3D unscreened gravity, simulation_use_cola = false, timestep_method = "Quinn",
+-- Scope: 3D unscreened gravity, Quinn N-body or Quinn/Tassev COLA (1LPT/2LPT).
+-- COLA may use scale-dependent frames; enforced LPT trajectories remain excluded.
 -- continuous Green/gradient kernels, assignment density/interpolation and no early
 -- force switch. Requires one cold particle species, no massive neutrinos and no
--- N-body gauge source. See SHORT_RANGE.md for units, validation and remaining work.
+-- N-body gauge source. See SHORT_RANGE.md and COLA_SHORT_RANGE.md for scope/tests.
 -- GravityModel supplies the coupling and comoving range (zero means infinite range).
 -- For modified gravity disable screening and any exact nonlinear solver.
 force_short_range = false

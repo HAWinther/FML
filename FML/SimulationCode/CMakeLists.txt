@@ -256,6 +256,11 @@ if(FML_BUILD_TESTS)
   target_compile_definitions(benchmark_short_range_dynamics PRIVATE USE_LUA)
   target_include_directories(benchmark_short_range_dynamics PRIVATE ${LUA_INCLUDE_DIR})
   set_target_properties(benchmark_short_range_dynamics PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
+  add_executable(test_short_range_simulation EXCLUDE_FROM_ALL tests/test_short_range_simulation.cpp src/BaryonificationOutput.cpp)
+  target_link_libraries(test_short_range_simulation PRIVATE fml_core ${LUA_LIBRARIES} ${CMAKE_DL_LIBS})
+  target_compile_definitions(test_short_range_simulation PRIVATE USE_LUA)
+  target_include_directories(test_short_range_simulation PRIVATE ${LUA_INCLUDE_DIR})
+  set_target_properties(test_short_range_simulation PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
   set(_tests test_baryonification_parameters test_cola_frame test_models test_lightcone_crossing
              test_short_range_force
              test_gravity_short_range)
