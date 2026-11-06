@@ -1,0 +1,4 @@
+numpy==1.26.4
+scipy==1.12.0
+numba==0.59.1
+astropy==6.0.1
