@@ -38,7 +38,11 @@ namespace FML::COSMOLOGY {
                             std::vector<double> & D2NL,
                             double & k_sigma,
                             double & n_eff,
-                            double & C) {
+                            double & C,
+                            double f_nu,
+                            double h) {
+        if (!(f_nu >= 0.0 && f_nu < 1.0) || !(h > 0.0))
+            throw std::invalid_argument("Halofit: require 0 <= f_nu < 1 and h > 0");
         D2NL = D2L;
         double s, s1, s2;
         const double R_min = 1.0 / std::exp(lnk.back()) * 3.0; // the table must resolve the filter
@@ -68,16 +72,22 @@ namespace FML::COSMOLOGY {
         const double c = std::pow(10.0, 0.3698 + 2.0404 * n + 0.8161 * n2 + 0.5869 * C);
         const double gamma = 0.1971 - 0.0843 * n + 0.8460 * C;
         const double alpha = std::fabs(6.0835 + 1.3373 * n - 0.1959 * n2 - 5.5274 * C);
-        const double beta = 2.0379 - 0.7354 * n + 0.3157 * n2 + 1.2490 * n3 + 0.3980 * n4 - 0.1682 * C;
+        const double beta = 2.0379 - 0.7354 * n + 0.3157 * n2 + 1.2490 * n3 + 0.3980 * n4 - 0.1682 * C +
+                            f_nu * (1.081 + 0.395 * n2);
         const double mu = 0.0;
         const double nu = std::pow(10.0, 5.2105 + 3.6902 * n);
         const double f1 = std::pow(Om, -0.0307), f2 = std::pow(Om, -0.0585), f3 = std::pow(Om, 0.0743);
         for (size_t i = 0; i < lnk.size(); i++) {
             const double y = std::exp(lnk[i]) / k_sigma, dl = D2L[i];
-            const double Q = dl * std::pow(1.0 + dl, beta) / (1.0 + alpha * dl) * std::exp(-y / 4.0 - y * y / 8.0);
+            // Bird's k is in h/Mpc; the input grid is in 1/Mpc. Only the rational part of the
+            // quasi-linear term uses the corrected linear power (its leading dl is unchanged).
+            const double kh = std::exp(lnk[i]) / h;
+            const double dnu = dl * (1.0 + f_nu * 47.48 * kh * kh / (1.0 + 1.5 * kh * kh));
+            const double Q = dl * std::pow(1.0 + dnu, beta) / (1.0 + alpha * dnu) *
+                             std::exp(-y / 4.0 - y * y / 8.0);
             const double Hp =
                 a * std::pow(y, 3.0 * f1) / (1.0 + b * std::pow(y, f2) + std::pow(c * f3 * y, 3.0 - gamma));
-            const double H = Hp / (1.0 + mu / y + nu / (y * y));
+            const double H = Hp / (1.0 + mu / y + nu / (y * y)) * (1.0 + 0.977 * f_nu);
             D2NL[i] = Q + H;
         }
         return true;
@@ -86,7 +96,12 @@ namespace FML::COSMOLOGY {
     Halofit::Halofit(const BackgroundCosmology & bg,
                      const std::function<double(double, double)> & P_lin,
                      double z_max,
-                     int n_z) {
+                     int n_z,
+                     Version version) {
+        if (!(z_max > 0.0) || n_z < 4)
+            throw std::invalid_argument("Halofit: require z_max > 0 and n_z >= 4");
+        const double om0 = bg.rhoB(0.0) + bg.rhoCDM(0.0) + bg.rhoNcdm(0.0);
+        const double fnu = version == Version::Bird ? bg.rhoNcdm(0.0) / om0 : 0.0;
         // ln k grid [1/Mpc]: 1e-4 .. 1e3, dln k = 0.02 (the sigma integrals need the far tail at high z)
         std::vector<double> lnk;
         for (double l = std::log(1e-4); l <= std::log(1e3) + 1e-9; l += 0.02)
@@ -112,7 +127,7 @@ namespace FML::COSMOLOGY {
                 Ode = std::max(0.0, 1.0 - Om - (bg.rhoGamma(x) + bg.rhoNu(x)) / E2);
             std::vector<double> D2NL;
             double ks, ne, C;
-            if (nonlinear(lnk, D2, Om, Ode, w, D2NL, ks, ne, C))
+            if (nonlinear(lnk, D2, Om, Ode, w, D2NL, ks, ne, C, fnu, bg.get_params().h))
                 for (size_t i = 0; i < lnk.size(); i++)
                     lr[ix][i] = std::log(D2NL[i] / D2[i]);
         }

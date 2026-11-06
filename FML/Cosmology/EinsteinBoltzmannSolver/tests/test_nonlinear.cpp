@@ -10,6 +10,8 @@
 
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
 #include <FML/Cosmology/Spectra/Halofit.h>
+#include <FML/Cosmology/Spectra/HMcode.h>
+#include <FML/ReACT/ReACT.h>
 #include <FML/Cosmology/EinsteinBoltzmannSolver/ParameterFile.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Spectra/PowerSpectrum.h>
@@ -115,6 +117,53 @@ int main() {
                   hf.ratio(0.0, k),
                   1e-12,
                   "solve_matter(): P_NL/P_L = Halofit");
+        o.nonlinear = PowerSpectrumOptions::Nonlinear::HalofitBird;
+        PowerSpectrum bird(bg, rec, pert, o);
+        bird.solve_matter();
+        check_rel(bird.get_matter_power_spectrum_nonlinear(0.0, k),
+                  pm.get_matter_power_spectrum_nonlinear(0.0, k), 1e-12,
+                  "massless neutrinos: Bird and existing Halofit agree through the solver");
+        o.nonlinear = PowerSpectrumOptions::Nonlinear::HMcode2020;
+        PowerSpectrum hm(bg, rec, pert, o);
+        hm.solve_matter();
+        hm.solve_matter(); // idempotent
+        check_rel(hm.get_matter_power_spectrum_cb_extrapolated(0.0, k),
+                  hm.get_matter_power_spectrum_cb(0.0, k), 1e-12,
+                  "HMcode cold-spectrum extrapolation preserves the computed k range");
+        auto total = [&](double x, double kk) { return hm.get_matter_power_spectrum_extrapolated(x, kk); };
+        auto cold = [&](double x, double kk) { return hm.get_matter_power_spectrum_cb_extrapolated(x, kk); };
+        const auto direct = HMcode::spectrum(bg, total, cold, -std::log(2.0), {0.3});
+        const double V = std::pow(Mpc / h, 3);
+        check_rel(hm.get_matter_power_spectrum_nonlinear(-std::log(2.0), k) / V,
+                  direct.nonlinear[0], 2e-4, "HMcode time/k table matches direct evaluation off the table nodes");
+        check_rel(hm.get_matter_power_spectrum_nonlinear(-std::log(20.0), k),
+                  total(-std::log(20.0), k), 1e-12, "HMcode: linear above z_max");
+        hm.output_matter_power(file, 0.0);
+        std::ifstream hin(file);
+        std::getline(hin, line);
+        check(line.find("HMcode-2020") != std::string::npos, "matter output identifies HMcode-2020");
+        std::getline(hin, line);
+        std::istringstream hls(line);
+        n = 0;
+        while (hls >> v)
+            n++;
+        check(n == 4, "HMcode nonlinear power is written as the fourth column");
+        if (ReACT::available()) {
+            o.nonlinear = PowerSpectrumOptions::Nonlinear::ReACT;
+            o.react_n_z = 4;
+            o.react_n_k = 64;
+            o.react_mass_loop = 10;
+            PowerSpectrum reaction(bg, rec, pert, o);
+            reaction.solve_matter();
+            for (double z : {0.0, 1.0, 5.0})
+                check_rel(reaction.get_matter_power_spectrum_nonlinear(-std::log1p(z), k),
+                          hm.get_matter_power_spectrum_nonlinear(-std::log1p(z), k), 1e-12,
+                          "massless GR: ReACT x matched pseudo = HMcode exactly, z=" + std::to_string(z));
+            reaction.output_matter_power(file, 0);
+            std::ifstream rin(file);
+            std::getline(rin, line);
+            check(line.find("ReACT") != std::string::npos, "matter output identifies ReACT");
+        }
         std::remove(file.c_str());
     }
 

@@ -5,6 +5,29 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### ReACT: optional official halo-model reaction engine
+- `FML/ReACT` interfaces to pinned ACTio-ReACTio v2, including massive neutrinos, with explicit [z][k]
+  spectrum inputs, unit/order checks, serialized backend calls and immutable reaction tables. The optional
+  private-backend builder includes SUNDIALS 4.1.0; ordinary builds do not require either dependency.
+- `nonlinear=react` combines reactions with an HMcode-2020 GR pseudo spectrum matched to the target linear
+  power at every redshift. Supports flat LCDM, Hu-Sawicki n=1, LCDM-background nDGP and smooth CPL models.
+  At z>react_z_max (at most 2.5), it explicitly uses the matched pseudo with R=1; this is a high-z approximation.
+- Reference fixtures compare the C++ interface with the official Python wrapper for GR, f(R), nDGP and
+  CPL with neutrinos; separate tests cover input validation and interpolation. See `ReACT/README.md`.
+
+### Nonlinear spectra: Bird neutrinos and HMcode-2020
+- `nonlinear = halofit_bird` adds the updated Takahashi-compatible Bird neutrino corrections; the existing
+  `halofit` option is unchanged. The massless-neutrino limit reproduces it exactly.
+- `nonlinear = hmcode2020` adds gravity-only HMcode-2020 for LCDM and smooth w0wa backgrounds, including curvature,
+  cold-matter variances, massive neutrinos, growth-history-dependent collapse, concentration corrections and BAO
+  damping. Both new methods feed nonlinear matter outputs and the Limber lensing potential.
+- `Cosmology/Spectra/HMcode.h` exposes total/cold linear-spectrum callbacks, configurable tables and single-redshift
+  halo terms. The older `HaloModel` module keeps its HMcode-2016 prescription. Baryonic feedback and nonlinear
+  modified-gravity reactions are not included.
+- Identical-linear-input reference checks against CAMB 1.5.4 and CLASS: maximum differences 0.075% (HMcode-2020)
+  and 0.051% (Bird) over k=0.01--10 h/Mpc at z=0,1,2. Documentation and reproducible fixtures in
+  `Cosmology/Spectra/NONLINEAR.md` and `EinsteinBoltzmannSolver/tests/reference/nonlinear2020`.
+
 ### SimulationCode: dead code
 - `OnionSlices::init()` (never called) and the unused `npix` member removed; the members it set are
   default-initialised. The always-false mass / velocity / v_r columns of the ascii lightcone output removed (the

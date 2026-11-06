@@ -94,7 +94,9 @@ namespace FML::COSMOLOGY {
         }
         const std::map<std::string, PowerSpectrumOptions::Nonlinear> & nonlinear_methods() {
             using N = PowerSpectrumOptions::Nonlinear;
-            static const std::map<std::string, N> m = {{"none", N::None}, {"halofit", N::Halofit}};
+            static const std::map<std::string, N> m = {{"none", N::None}, {"halofit", N::Halofit},
+                                                       {"halofit_bird", N::HalofitBird}, {"hmcode2020", N::HMcode2020},
+                                                       {"react", N::ReACT}};
             return m;
         }
         const std::map<std::string, Perturbations::SourceTerm> & source_terms() {
@@ -542,9 +544,13 @@ namespace FML::COSMOLOGY {
                  [](const S & s) { return enum_name(source_terms(), s.ps.source_term); }},
                 {"PowerSpectrum",
                  "nonlinear",
-                 "nonlinear matter power for lensing and P(k): none or halofit (Takahashi 2012)",
+                 "nonlinear matter power for lensing and P(k): none, halofit, halofit_bird, hmcode2020, react",
                  [](S & s, const std::string & v) { s.ps.nonlinear = enum_value(nonlinear_methods(), v); },
                  [](const S & s) { return enum_name(nonlinear_methods(), s.ps.nonlinear); }},
+                I("PowerSpectrum", "react_n_z", "ReACT redshift samples (>=4)", REF(int, ps.react_n_z)),
+                I("PowerSpectrum", "react_n_k", "ReACT logarithmic k samples, 1e-5 to 100 h/Mpc (>=32)", REF(int, ps.react_n_k)),
+                I("PowerSpectrum", "react_mass_loop", "ReACT spherical-collapse mass samples (10..1000)", REF(int, ps.react_mass_loop)),
+                D("PowerSpectrum", "react_z_max", "maximum ReACT redshift (<=2.5); above it use the matched pseudo baseline with R=1", REF(double, ps.react_z_max)),
                 // --- Output ------------------------------------------------------------
                 Str("Output", "output_dir", "directory for all output files", REF(std::string, output_dir)),
                 B("Output", "write_background", "background.txt", REF(bool, write_background)),

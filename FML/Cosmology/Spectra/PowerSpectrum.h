@@ -37,7 +37,7 @@
 //   C_ell^phiphi   = 4 pi int dk/k P_R(k) phi_ell(k)^2
 // (Phi_ell^nu and sin_K in a curved universe), followed by the lensed spectra from Lensing::lens.
 //
-// Nonlinear (options.nonlinear = Halofit, Halofit.h): P_NL = P_L * ratio(x, k) from Takahashi et al. (2012); the
+// Nonlinear (Halofit, HalofitBird, HMcode2020): P_NL = P_L * ratio(x, k); the
 // Weyl potential in the Limber part of C_ell^phiphi is scaled by sqrt(P_NL/P_L) (as CLASS), so the lensed
 // spectra include nonlinear lensing.
 //
@@ -85,6 +85,8 @@ namespace FML::COSMOLOGY {
 
     class Tensors;
     class Halofit;
+    class HMcode;
+    class ReACT;
 
     struct PowerSpectrumOptions {
         int ell_max = 2000;
@@ -101,9 +103,12 @@ namespace FML::COSMOLOGY {
         // there it is extrapolated with the asymptotic CDM shape Phi ~ ln(beta k)/k^2 (beta from the
         // logarithmic slope at k_max).
         int lensing_limber_ell = 30;
-        // Nonlinear matter power for the lensing potential and P_NL(k) (Halofit.h)
-        enum class Nonlinear { None, Halofit };
+        // Nonlinear matter power for the lensing potential and P_NL(k) (Halofit.h, HMcode.h)
+        enum class Nonlinear { None, Halofit, HalofitBird, HMcode2020, ReACT };
         Nonlinear nonlinear = Nonlinear::None;
+        // ReACT reactions are computed only up to z <= 2.5. Above that, use the matched GR pseudo baseline.
+        int react_n_z = 12, react_n_k = 256, react_mass_loop = 30;
+        double react_z_max = 2.5;
         std::vector<int> ells; // ell values where C_ell is computed (default list if empty)
         int ell_step = 25;     // spacing of the default list above ell = 100
 
@@ -163,7 +168,7 @@ namespace FML::COSMOLOGY {
         const Tensors * get_tensors() const { return tensors; }
 
         void solve();
-        // Only what the matter outputs need (the Halofit table): for runs without C_ell. solve() calls it.
+        // Only what the matter outputs need (the nonlinear table): for runs without C_ell. solve() calls it.
         void solve_matter();
 
         double primordial_power_spectrum(double k) const; // P_R(k), dimensionless, k in 1/m
@@ -201,7 +206,7 @@ namespace FML::COSMOLOGY {
         double get_matter_power_spectrum_cb(double x, double k) const;
         double get_Delta_M(double x, double k, int comp = 0) const;
         double get_Delta_cb(double x, double k, int comp = 0) const;
-        // Nonlinear total-matter power (Halofit; = linear, extrapolated, if options.nonlinear = None) [m^3]
+        // Nonlinear total-matter power (= linear, extrapolated, if options.nonlinear = None) [m^3]
         double get_matter_power_spectrum_nonlinear(double x, double k) const;
 
         // -------------------------------------------------------------------------
@@ -209,6 +214,7 @@ namespace FML::COSMOLOGY {
         // -------------------------------------------------------------------------
         double get_Delta_M_extrapolated(double x, double k, int comp = 0) const; // Delta_M for any k > 0
         double get_matter_power_spectrum_extrapolated(double x, double k) const;
+        double get_matter_power_spectrum_cb_extrapolated(double x, double k) const;
         // Matter correlation function xi(r) at x for the radii r [m]; optional Gaussian smoothing R [m].
         // Linear theory; for r < ~10 Mpc it depends on the extrapolation beyond k_max.
         std::vector<double> get_xi_matter(double x, const std::vector<double> & r, double R_smooth = 0.0) const;
@@ -262,7 +268,12 @@ namespace FML::COSMOLOGY {
         const Perturbations * cur = nullptr;      // the component of the current line-of-sight integration
         // per component: Theta, ThetaE, ThetaPhi
         std::vector<std::vector<std::vector<double>>> Theta_c, ThetaE_c, ThetaPhi_c;
-        std::unique_ptr<Halofit> halofit; // built in solve() when options.nonlinear = Halofit
+        std::unique_ptr<Halofit> halofit; // built by solve_matter() for either Halofit version
+        std::unique_ptr<HMcode> hmcode;
+        std::unique_ptr<ReACT> react;
+        void solve_react();
+        double nonlinear_ratio(double x, double k) const;
+        const char * nonlinear_name() const;
         // tensor D_ell [muK^2] at (non-integer) ell: 0 = TT, 1 = EE, 2 = BB, 3 = TE; linear between integers
         double tensor_dell(int which, double ell) const;
 

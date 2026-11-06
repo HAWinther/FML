@@ -3,7 +3,8 @@
 
 // =============================================================================
 // Nonlinear matter power spectrum with Halofit in the revised form of Takahashi et al. (2012, arXiv:1208.2701),
-// as CLASS's "halofit" (without the massive-neutrino corrections of Bird et al. 2012, i.e. exact for m_nu = 0).
+// Optional Bird et al. (2012, arXiv:1109.4416) neutrino corrections, in the updated Takahashi-compatible
+// form used by CLASS (no obsolete Omega_m-dependent one-halo correction).
 //
 // At each redshift, from the linear Delta^2_L(k) = k^3 P_L/(2 pi^2):
 //   sigma^2(R) = int dln k Delta^2_L e^{-k^2 R^2},   sigma(1/k_sigma) = 1,
@@ -30,15 +31,18 @@ namespace FML::COSMOLOGY {
 
     class Halofit {
       public:
+        enum class Version { Takahashi2012, Bird };
         // P_lin(x, k): linear power spectrum [m^3] at k [1/m] (extrapolated beyond the perturbation k-range)
         Halofit(const BackgroundCosmology & bg,
                 const std::function<double(double, double)> & P_lin,
                 double z_max = 10.0,
-                int n_z = 60);
+                int n_z = 60,
+                Version version = Version::Takahashi2012);
 
         double ratio(double x, double k) const; // P_NL / P_L
         // One redshift: Delta^2_NL from Delta^2_L on the log-k grid lnk (k in 1/Mpc); returns false (and copies
         // Delta^2_L) if there is no nonlinear scale. k_sigma [1/Mpc], n_eff and C are returned for tests.
+        // f_nu > 0 adds the Takahashi-compatible Bird terms; h converts k to h/Mpc in those terms.
         static bool nonlinear(const std::vector<double> & lnk,
                               const std::vector<double> & D2L,
                               double Omega_m,
@@ -47,7 +51,9 @@ namespace FML::COSMOLOGY {
                               std::vector<double> & D2NL,
                               double & k_sigma,
                               double & n_eff,
-                              double & C);
+                              double & C,
+                              double f_nu = 0.0,
+                              double h = 1.0);
 
       private:
         double x_min;

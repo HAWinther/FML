@@ -218,6 +218,7 @@ file(GLOB FML_COSMO_SOURCES CONFIGURE_DEPENDS
   ${FML_ROOT}/Cosmology/Perturbations/*.cpp
   ${FML_ROOT}/Cosmology/Spectra/*.cpp)
 list(APPEND FML_COSMO_SOURCES
+  ${FML_ROOT}/ReACT/ReACT.cpp
   ${FML_ROOT}/Cosmology/EinsteinBoltzmannSolver/ParameterFile.cpp
   ${FML_ROOT}/Cosmology/EinsteinBoltzmannSolver/EinsteinBoltzmannSolver.cpp)
 

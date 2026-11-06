@@ -50,6 +50,21 @@ namespace FML::COSMOLOGY {
         return 2.0 * M_PI * M_PI / (k * k * k) * primordial_power_spectrum(k) * D2;
     }
 
+    double PowerSpectrum::get_matter_power_spectrum_cb_extrapolated(double x, double k) const {
+        const auto & kp = pert.get_k_array();
+        const double anchor = std::clamp(k, kp.front(), kp.back());
+        double D2 = 0;
+        double factor = 1;
+        if (k < kp.front())
+            factor = (k / anchor) * (k / anchor);
+        else if (k > kp.back())
+            factor = (k / anchor) * (k / anchor) * transfer_EH_nowiggle(cosmo.get_params(), k * Mpc) /
+                     transfer_EH_nowiggle(cosmo.get_params(), anchor * Mpc);
+        for (size_t cc = 0; cc < comps.size(); ++cc)
+            D2 += std::pow(factor * get_Delta_cb(x, anchor, int(cc)), 2);
+        return 2 * M_PI * M_PI / (k * k * k) * primordial_power_spectrum(k) * D2;
+    }
+
     namespace {
         // P(k) tabulated for the 3D integrals, 1e-5 to 100 /Mpc: dln k = 0.002, and dk <= 5e-4/Mpc below 1/Mpc so
         // that the linear interpolation in Filon's method resolves the BAO wiggles (period 2 pi/r_d ~ 0.04/Mpc)

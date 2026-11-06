@@ -36,7 +36,7 @@ Conventions: SI units internally, time variable `x = ln a`, Newtonian gauge (Dod
 | Spectra | C_ℓ^TT, EE, TE by line of sight (hyperspherical Bessel functions when curved, with CLASS's flat approximation), P(k) of total matter and CDM+baryons; primordial P_R = A_s (k/k_pivot)^(n_s − 1 + α_s/2 ln(k/k_pivot)) with optional running `alpha_s` (as CLASS; adiabatic mode only, C_ℓ ratios to CLASS 5e-4) |
 | Tensor modes | Gravitational waves (`r`, `n_t` or the consistency relation): photon temperature and polarization and neutrino hierarchies, anisotropic stress, tight coupling, modified-gravity friction (α_M, M*² of Horndeski, Brans–Dicke, f(R)); TT, EE, TE, BB by line of sight, added to the scalar spectra and lensed with them; flat |
 | Isocurvature modes | CDM, baryon, neutrino density and neutrino velocity isocurvature (`f_*`, `n_*`, `c_ad_*` as CLASS), each correlated with the adiabatic mode; CLASS initial conditions; one extra perturbation solve per mode; GR only |
-| Nonlinear | Halofit (Takahashi et al. 2012) P_NL(k, z) (`nonlinear = halofit`), used for nonlinear CMB lensing |
+| Nonlinear | Halofit, Halofit+Bird, HMcode-2020 and optional ReACT reactions (`halofit`, `halofit_bird`, `hmcode2020`, `react`), used for nonlinear CMB lensing |
 | Lensing | C_ℓ^φφ (LOS + Limber), lensed TT, EE, TE, BB (full-sky correlation-function method) |
 | Two-point functions | CMB C(θ), ξ±, ξ_X with beams; matter ξ(r), σ_R, σ₈; angular C_ℓ and w(θ) of a projected tracer (exact + Limber) |
 | Fitting | MCMC, best fits and profile likelihoods with background, Planck CMB and lensing data: `FML/CosmologyFitting` (samplers in `FML/MCMC`) |
@@ -145,6 +145,18 @@ lensing. Against CLASS: P_NL to < 1e-3 at z = 0 and 1 for k ≤ 1 h/Mpc (`python
 `pert_k_max = 1`), C_ℓ^φφ to 0.1% up to L = 2500, lensed TT 0.3%, EE 0.6% and BB 1% for ℓ ≤ 1500 (BB near ℓ_max needs
 `lensing_delta_ell` ≳ 1500). `Yp_bbn = true` takes Y_p from standard BBN for the run's ω_b and N_eff (PArthENoPE 3.0
 table, the CLASS default; 2e-5 from CLASS, which uses ΔN = N_eff − 3.046 with this table).
+
+`nonlinear = halofit_bird` adds the updated Bird massive-neutrino correction; `nonlinear = hmcode2020`
+selects gravity-only HMcode-2020 with cold-matter variances, neutrinos and BAO damping. Both use the same
+nonlinear output and lensing paths. HMcode-2020 supports `lcdm` and smooth `w0wa` backgrounds (with curvature)
+and rejects other models. The original Halofit option remains unchanged. See
+[nonlinear methods, library API and validation](../Spectra/NONLINEAR.md) for units, limits and reference tests.
+
+`nonlinear = react` adds the official ReACT reaction multiplied by an HMcode-2020 matched GR pseudo spectrum.
+It requires an enabled optional backend (`USE_REACT=true`) and supports flat `lcdm`, `fr` with n=1, `w0wa`,
+and normal-branch `dgp` with `dgp_lcdm_background=1`, including massive neutrinos. Reactions are restricted to
+z<=2.5; above `react_z_max` the solver uses the matched pseudo baseline with R=1 and reports this approximation.
+See [ReACT setup, conventions, reference tests and limits](../../ReACT/README.md).
 
 **Tensor modes.** `r = 0.05` (tensor-to-scalar ratio at `k_pivot`) adds gravitational waves; the tilt is
 n_t = −r/8 (2 − r/8 − n_s) (CLASS's `scc`) unless `n_t_consistency = false` and `n_t = ...`. The tensor TT, EE, TE
@@ -341,7 +353,7 @@ cd report && pdflatex paper && pdflatex paper     # REVTeX 4.2
 
 ## Possible next steps
 
-HMcode and modified-gravity nonlinear corrections (Halofit is for LCDM/wCDM; no massive-neutrino correction), Horndeski
+HMcode baryonic feedback and ReACT support for additional gravity models, Horndeski
 with alpha_T != 0 or from G_i(phi, X), f(R) beyond the quasi-static approximation, tensor modes in curved universes,
 several massive neutrino species, speed-ups beyond `precision = fast` (CLASS-like radiation-streaming and
 ultra-relativistic fluid approximations, analytic Jacobians for the stiff solver).

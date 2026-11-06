@@ -1,5 +1,7 @@
 #include <FML/Cosmology/Spectra/PowerSpectrum.h>
 #include <FML/Cosmology/Spectra/Halofit.h>
+#include <FML/Cosmology/Spectra/HMcode.h>
+#include <FML/ReACT/ReACT.h>
 #include <FML/Cosmology/Perturbations/Tensors.h>
 #include <FML/Cosmology/Spectra/HypersphericalBessel.h>
 #include <FML/Cosmology/Spectra/Lensing.h>
@@ -576,8 +578,7 @@ namespace FML::COSMOLOGY {
             double W2 = 0.0;
             for (size_t cc = 0; cc < comps.size(); cc++)
                 W2 += std::pow(weyl_potential(x, k, int(cc)), 2);
-            if (halofit)
-                W2 *= halofit->ratio(x, k);
+            W2 *= nonlinear_ratio(x, k);
             const double Pk = 2.0 * M_PI * M_PI / (k * k * k) * primordial_power_spectrum(k) * W2;
             sum += dx * c / cosmo.Hp_of_x(x) * kernel * kernel / (r * r) * Pk;
         }
@@ -668,14 +669,22 @@ namespace FML::COSMOLOGY {
     void PowerSpectrum::solve_matter() {
         if (matter_solved)
             return;
-        if (options.nonlinear == PowerSpectrumOptions::Nonlinear::Halofit) {
+        using N = PowerSpectrumOptions::Nonlinear;
+        if (options.nonlinear == N::Halofit || options.nonlinear == N::HalofitBird) {
             halofit = std::make_unique<Halofit>(cosmo, [this](double x, double k) {
                 return get_matter_power_spectrum_extrapolated(x, k);
-            });
+            }, 10.0, 60, options.nonlinear == N::HalofitBird ? Halofit::Version::Bird :
+                                                            Halofit::Version::Takahashi2012);
             static std::atomic<bool> warned{false}; // once per process (parameter fits make many spectra)
-            if (cosmo.get_params().has_massive_nu() && !warned.exchange(true))
+            if (options.nonlinear == N::Halofit && cosmo.get_params().has_massive_nu() && !warned.exchange(true))
                 std::cerr << "Warning: Halofit (Takahashi 2012) has no massive-neutrino correction (Bird et al. 2012): "
-                             "with m_nu > 0 the nonlinear P(k) is up to ~2% below CLASS's halofit, which includes it\n";
+                             "use nonlinear = halofit_bird to include it\n";
+        } else if (options.nonlinear == N::HMcode2020) {
+            hmcode = std::make_unique<HMcode>(cosmo,
+                [this](double x, double k) { return get_matter_power_spectrum_extrapolated(x, k); },
+                [this](double x, double k) { return get_matter_power_spectrum_cb_extrapolated(x, k); });
+        } else if (options.nonlinear == N::ReACT) {
+            solve_react();
         }
         matter_solved = true;
     }
@@ -686,9 +695,26 @@ namespace FML::COSMOLOGY {
 
     PowerSpectrum::~PowerSpectrum() = default;
 
+    double PowerSpectrum::nonlinear_ratio(double x, double k) const {
+        const double base = halofit ? halofit->ratio(x, k) : hmcode ? hmcode->ratio(x, k) : 1.0;
+        return react && x >= react->x_min() ? base * react->reaction(std::min(x, react->x_max()),
+                                                                    k * Mpc / cosmo.get_params().h) : base;
+    }
+
+    const char * PowerSpectrum::nonlinear_name() const {
+        using N = PowerSpectrumOptions::Nonlinear;
+        switch (options.nonlinear) {
+            case N::Halofit: return "Halofit (Takahashi 2012)";
+            case N::HalofitBird: return "Halofit (Takahashi + Bird)";
+            case N::HMcode2020: return "HMcode-2020";
+            case N::ReACT: return "ReACT x HMcode-2020 matched pseudo";
+            default: return "linear";
+        }
+    }
+
     double PowerSpectrum::get_matter_power_spectrum_nonlinear(double x, double k) const {
         const double P = get_matter_power_spectrum_extrapolated(x, k);
-        return halofit ? P * halofit->ratio(x, k) : P;
+        return P * nonlinear_ratio(x, k);
     }
 
     void PowerSpectrum::require_solved(const char * f) const {
@@ -964,14 +990,14 @@ namespace FML::COSMOLOGY {
         const double Mpc_h = Mpc / h;
         fp << "# x = " << x
            << ". k [h/Mpc]  P_m(k) [(Mpc/h)^3] (CDM + baryons + massive neutrinos)  P_cb(k) (CDM + baryons)"
-           << (halofit ? "  P_m nonlinear (Halofit)" : "") << "\n";
+           << ((halofit || hmcode) ? std::string("  P_m nonlinear (") + nonlinear_name() + ")" : "") << "\n";
         fp << std::scientific << std::setprecision(10);
         const auto & kp = pert.get_k_array();
         const double V = Mpc_h * Mpc_h * Mpc_h;
         for (double k : Utils::logspace(kp.front(), kp.back(), 500)) {
             fp << k * Mpc_h << " " << get_matter_power_spectrum(x, k) / V << " "
                << get_matter_power_spectrum_cb(x, k) / V;
-            if (halofit)
+            if (halofit || hmcode)
                 fp << " " << get_matter_power_spectrum_nonlinear(x, k) / V;
             fp << "\n";
         }

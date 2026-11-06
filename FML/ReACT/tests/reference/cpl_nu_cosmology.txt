@@ -1,0 +1,2 @@
+# Omega_nu at z=0 from CAMB
+7.182741931667527280e-03

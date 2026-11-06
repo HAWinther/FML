@@ -12,8 +12,8 @@ COSMO_OBJS := $(notdir $(patsubst %.cpp,%.o,$(wildcard $(addsuffix /*.cpp,$(addp
               ParameterFile.o EinsteinBoltzmannSolver.o
 
 # FML modules the solver uses (FML_MODULES must include them: $(COSMO_FML_MODULES))
-COSMO_FML_MODULES := Spline ODESolver Math
-COSMO_OBJS += Spline.o ODESolver.o NumericalMethods.o
+COSMO_FML_MODULES := Spline ODESolver Math ReACT
+COSMO_OBJS += Spline.o ODESolver.o NumericalMethods.o ReACT.o
 # Errors in splines and ODEs are exceptions also with MPI (a failing parameter point in an MCMC is rejected)
 OPTIONS += -DSPLINE_THROW_ON_ERROR -DODESOLVER_THROW_ON_ERROR
 
