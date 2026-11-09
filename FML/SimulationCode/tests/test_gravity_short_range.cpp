@@ -36,7 +36,14 @@ ParameterMap parameters() {
     p["gravity_model_symmetron_assb"] = .5;
     p["gravity_model_symmetron_beta"] = .7;
     p["gravity_model_symmetron_L_mpch"] = 2.;
+    p["gravity_model_symmetron_N"] = 2.;
+    p["gravity_model_symmetron_M"] = 4.;
     p["gravity_model_symmetron_exact_solution"] = false;
+    p["gravity_model_dilaton_A2"] = 5e5;
+    p["gravity_model_dilaton_beta0"] = .5;
+    p["gravity_model_dilaton_r"] = 1.;
+    p["gravity_model_dilaton_xi"] = 1e-3;
+    p["gravity_model_dilaton_exact_solution"] = false;
     p["gravity_model_mbeta_params"] = std::vector<double>{.4, 0., 100., -2.};
     p["gravity_model_mu_parametrization"] = std::string("BZ");
     p["gravity_model_mu_BZ_params"] = std::vector<double>{4. / 3., 8., 4.};
@@ -150,7 +157,7 @@ int main(int argc, char ** argv) {
           "new model inherits large finite-k fiducial from GeffOverG");
     check(future.short_range_comoving_range(.8) == 0, "new model inherits explicit infinite-range convention");
     check_modes(future, true);
-    for (const std::string name : {"GR", "f(R)", "DGP", "Symmetron", "mbeta", "mu"}) {
+    for (const std::string name : {"GR", "f(R)", "DGP", "Symmetron", "Dilaton", "mbeta", "mu"}) {
         auto g = SIMCODE::make_gravity_model<3>(name, c);
         FML::TESTS::quietly([&] {
             g->read_parameters(p);
