@@ -25,6 +25,10 @@ namespace SIMCODE {
         double symmetron_assb{};
         double symmetron_beta{};
         double symmetron_L_mpch{};
+        double dilaton_A2{};
+        double dilaton_beta0{};
+        double dilaton_r{};
+        double dilaton_xi{};
         double dgp_rcH0overc{};
         bool screening{};
         std::string dgp_smoothing_filter{};
@@ -35,6 +39,7 @@ namespace SIMCODE {
         bool fofr_exact_solution{};
         std::string fofr_multigrid_method{};
         bool symmetron_exact_solution{};
+        bool dilaton_exact_solution{};
         bool dgp_exact_solution{};
         int multigrid_nsweeps{};
         int multigrid_nsweeps_first_step{};
@@ -109,10 +114,34 @@ namespace SIMCODE {
                            "Range of the fifth force in the background today "
                            "(Mpc/h)");
             });
+            f.for_gravity({"Dilaton"}, [&]() {
+                f.optional("gravity_model_dilaton_A2",
+                           dilaton_A2,
+                           5e5,
+                           "A2 in the coupling A(phi) = 1 + A2 phi^2 / (2 Mpl^2) (A2 >> 1; Brax et al. 2012, "
+                           "arXiv:1206.3568). The screening threshold is Phi_crit = 1 / (2 A2)",
+                           check::positive());
+                f.optional("gravity_model_dilaton_beta0",
+                           dilaton_beta0,
+                           0.5,
+                           "The coupling today beta0 in beta(a) = beta0 exp[s (a^(2r-3) - 1) / (2r - 3)], "
+                           "s = 9 OmegaM A2 xi^2");
+                f.optional("gravity_model_dilaton_r",
+                           dilaton_r,
+                           1.0,
+                           "The index r in the mass m(a) = m0 a^-r (r <= 3/2; 3/2 is the original dilaton with "
+                           "beta = beta0 a^s)",
+                           check::at_most(1.5));
+                f.optional("gravity_model_dilaton_xi",
+                           dilaton_xi,
+                           1e-3,
+                           "xi = H0 / m0: the range of the fifth force today is 2998 xi Mpc/h",
+                           check::positive());
+            });
             f.for_gravity({"DGP"}, [&]() {
                 f.required("gravity_model_dgp_rcH0overc", dgp_rcH0overc, 1.0, "The cross-over scale rc H0 / c");
             });
-            f.for_gravity({"mbeta", "f(R)", "Symmetron", "DGP"}, [&]() {
+            f.for_gravity({"mbeta", "f(R)", "Symmetron", "Dilaton", "DGP"}, [&]() {
                 f.optional("gravity_model_screening",
                            screening,
                            true,
@@ -139,7 +168,7 @@ namespace SIMCODE {
                                screening_linear_scale_hmpc,
                                0.05,
                                "Use the linear solution for k < k* and the screened solution for k > k* (h/Mpc)");
-                    f.for_gravity({"mbeta", "f(R)"}, [&]() {
+                    f.for_gravity({"mbeta", "f(R)", "Dilaton"}, [&]() {
                         f.optional("gravity_model_screening_efficiency",
                                    screening_efficiency,
                                    1.0,
@@ -170,6 +199,12 @@ namespace SIMCODE {
                            false,
                            "Solve the exact symmetron equation with the multigrid solver (slow, mainly for testing)");
             });
+            f.for_gravity({"Dilaton"}, [&]() {
+                f.optional("gravity_model_dilaton_exact_solution",
+                           dilaton_exact_solution,
+                           false,
+                           "Solve the exact dilaton equation with the multigrid solver (slow, mainly for testing)");
+            });
             f.for_gravity({"DGP"}, [&]() {
                 f.optional("gravity_model_dgp_exact_solution",
                            dgp_exact_solution,
@@ -184,6 +219,7 @@ namespace SIMCODE {
                 auto model = p.get<std::string>("gravity_model");
                 return (model == "f(R)" and p.get<bool>("gravity_model_fofr_exact_solution")) or
                        (model == "Symmetron" and p.get<bool>("gravity_model_symmetron_exact_solution")) or
+                       (model == "Dilaton" and p.get<bool>("gravity_model_dilaton_exact_solution")) or
                        (model == "DGP" and p.get<bool>("gravity_model_dgp_exact_solution"));
             };
             f.when(exact_solution, "solving the exact equation of the gravity model", [&]() {

@@ -9,6 +9,9 @@
 //     force, and the sqrt method converges for |f_R0| = 1e-6 at a = 0.5 (where the log method gives NaN) and for n = 2
 //   - SymmetronSolverCosmology: zero field before symmetry breaking, linear theory for a small cosine density
 //     perturbation (with the discrete Laplacian), screening in a halo
+//   - DilatonSolverCosmology: a uniform density (the minimum of the effective potential, r = 1 and r = 3/2), linear
+//     theory for a small cosine perturbation, the exact discrete solution for a strongly nonlinear sine profile
+//     (the test of Brax et al. 2012, arXiv:1206.3568, eq. 86-87), screening in a halo and the warm start
 //   - DGPSolverCosmology: converges with a clustered field
 // Run with: make run (in this folder) or make test (from the top folder)
 //==========================================================
@@ -17,6 +20,7 @@
 #include <FML/Units/Units.h>
 #ifdef USE_FFTW
 #include <FML/MultigridSolver/DGPSolver.h>
+#include <FML/MultigridSolver/DilatonSolver.h>
 #include <FML/MultigridSolver/FofrSolver.h>
 #include <FML/MultigridSolver/SymmetronSolver.h>
 #endif
@@ -503,6 +507,162 @@ int main() {
             check_local(pmin < 0.3 * f0 and pmax > f0 and pmax < 1.0,
                         "Symmetron a = 1 with a halo: phi/phi0 from " + num(pmin, 3) + " (screened) to " +
                             num(pmax, 3) + " (background " + num(f0, 3) + ", vacuum 1)");
+        }
+
+        // 5b. Dilaton (box 256 Mpc/h; A2 = 5e5, beta0 = 0.5, xi = 1e-3: range 3 Mpc/h today, shorter than a cell,
+        // and A2 = 5e3, xi = 1e-2: 30 Mpc/h, the same s = 1.35, where the Laplacian matters). We look at
+        // u = ln(phi / phi_bar) = ln(PhiF / PhiF_bar) / 2
+        {
+            const double OmegaM = 0.3, beta0 = 0.5;
+            double A2 = 5e5, xi = 1e-3;
+            auto dilaton_u = [&](double r,
+                                 double a,
+                                 FML::GRID::FFTWGrid<NDIM> & d,
+                                 FML::GRID::FFTWGrid<NDIM> & u,
+                                 double eps = 1e-10,
+                                 FML::GRID::FFTWGrid<NDIM> * previous = nullptr,
+                                 double aprev = -1.0) {
+                DilatonSolverCosmology<NDIM> solver(OmegaM, A2, beta0, r, xi, H0Box, false);
+                solver.set_epsilon(eps);
+                solver.set_maxsteps(100);
+                if (previous)
+                    solver.set_previous_solution(*previous, aprev);
+                solver.solve(a, d, u);
+                const double phifbar = solver.get_phif_background(a);
+                for (int islice = 0; islice < u.get_local_nx(); islice++)
+                    for (auto && ri : u.get_real_range(islice, islice + 1))
+                        u.set_real_from_index(ri, 0.5 * std::log(u.get_real_from_index(ri) / phifbar));
+                return solver.get_number_of_vcycles();
+            };
+            auto max_over_grid = [](const FML::GRID::FFTWGrid<NDIM> & g, auto && f) {
+                double m = 0.0;
+                for (int islice = 0; islice < g.get_local_nx(); islice++)
+                    for (auto && ri : g.get_real_range(islice, islice + 1)) {
+                        auto c = g.get_coord_from_index(ri);
+                        c[0] += g.get_local_x_start();
+                        m = std::max(m, f(c, double(g.get_real_from_index(ri))));
+                    }
+                FML::MaxOverTasks(&m);
+                return m;
+            };
+            const double s = 9.0 * OmegaM * A2 * xi * xi;
+            for (double r : {1.0, 1.5}) {
+                // A uniform density 1 + delta0: the field is at the minimum of the effective potential,
+                // (1 + p y)^(-3/p) = (1 + delta0) a^-3 with y = (a^p - 1)/p + u/s
+                const double a = 0.8, delta0 = 2.0, p = 2.0 * r - 3.0;
+                const double Ea = p == 0.0 ? std::log(a) : (std::pow(a, p) - 1.0) / p;
+                const double T = (1.0 + delta0) / (a * a * a);
+                const double y = p == 0.0 ? -std::log(T) / 3.0 : (std::pow(T, -p / 3.0) - 1.0) / p;
+                const double uexact = s * (y - Ea);
+                FML::GRID::FFTWGrid<NDIM> d(N, 1, 1), u;
+                d.fill_real_grid(delta0);
+                dilaton_u(r, a, d, u);
+                const double err = max_over_grid(u, [&](auto &, double v) { return std::abs(v - uexact); });
+                check_local(err < 1e-8 * std::abs(uexact),
+                            "Dilaton r = " + num(r, 3) + ": uniform density 1 + delta = 3 gives the minimum of the "
+                            "effective potential, u = " + num(uexact, 4) + " (error " + num(err, 3) + ")");
+            }
+            for (double xx : {1e-3, 1e-2}) {
+                // delta = A cos(2 pi m x): u = amp cos(2 pi m x) with -k^2 amp = norm a^-3 (A + 3 a^-p amp / s)
+                xi = xx;
+                A2 = 5e5 * 1e-6 / (xi * xi);
+                const double a = 1.0, A = 1e-5, r = 1.0, p = 2.0 * r - 3.0;
+                const int m = 4;
+                FML::GRID::FFTWGrid<NDIM> d(N, 1, 1), u;
+                for (int islice = 0; islice < d.get_local_nx(); islice++)
+                    for (auto && ri : d.get_real_range(islice, islice + 1)) {
+                        auto c = d.get_coord_from_index(ri);
+                        c[0] += d.get_local_x_start();
+                        d.set_real_from_index(ri, A * std::cos(2 * M_PI * m * (c[0] + 0.5) / N));
+                    }
+                dilaton_u(r, a, d, u, 1e-12);
+                const double norm = 3.0 * A2 * OmegaM * a * a * H0Box * H0Box / (a * a * a);
+                const double k2 = 2.0 * N * N * (1.0 - std::cos(2 * M_PI * m / N));
+                const double amp = -norm * A / (k2 + 3.0 * norm * std::pow(a, -p) / s);
+                const double err = max_over_grid(u, [&](auto & c, double v) {
+                    return std::abs(v - amp * std::cos(2 * M_PI * m * (c[0] + 0.5) / N));
+                });
+                check_local(err < 1e-4 * std::abs(amp),
+                            "Dilaton xi = " + num(xi, 3) + ": linear theory for a small cosine perturbation (error " +
+                                num(err / std::abs(amp), 3) + " of the amplitude)");
+            }
+            // The long range from here on
+            A2 = 5e3;
+            xi = 1e-2;
+            for (double r : {1.0, 1.5}) {
+                // The sine profile of the paper (eq. 86-87): e^u = (2 - sin(2 pi x)) / 3 and the density that gives it
+                // with the discrete operator (so the discrete solution is exact): u from ln(1/3) to 0
+                const double a = 0.7, p = 2.0 * r - 3.0;
+                const double Ea = p == 0.0 ? std::log(a) : (std::pow(a, p) - 1.0) / p;
+                const double norm = 3.0 * A2 * OmegaM * a * a * H0Box * H0Box;
+                auto uexact = [&](int ix) { return std::log((2.0 - std::sin(2 * M_PI * ((ix + N) % N + 0.5) / N)) / 3.0); };
+                FML::GRID::FFTWGrid<NDIM> d(N, 1, 1), u;
+                double dmin = 1e30;
+                for (int islice = 0; islice < d.get_local_nx(); islice++)
+                    for (auto && ri : d.get_real_range(islice, islice + 1)) {
+                        auto c = d.get_coord_from_index(ri);
+                        const int ix = c[0] + d.get_local_x_start();
+                        const double uc = uexact(ix);
+                        double kin = 0.0;
+                        for (int o : {-1, 1}) {
+                            const double un = uexact(ix + o);
+                            kin += (std::exp(un) - std::exp(uc)) * N * N;
+                        }
+                        const double y = Ea + uc / s;
+                        const double T = p == 0.0 ? std::exp(-3.0 * y) : std::pow(1.0 + p * y, -3.0 / p);
+                        const double dd = a * a * a * (T + kin / (norm * std::exp(uc))) - 1.0;
+                        dmin = std::min(dmin, dd);
+                        d.set_real_from_index(ri, dd);
+                    }
+                FML::MinOverTasks(&dmin);
+                const int nv = dilaton_u(r, a, d, u, 1e-10);
+                const double err = max_over_grid(u, [&](auto & c, double v) { return std::abs(v - uexact(c[0])); });
+                check_local(dmin > -1.0 and err < 1e-8 and nv < 30,
+                            "Dilaton r = " + num(r, 3) + ", a = 0.7: the nonlinear sine profile (phi/phi_bar from 1/3 "
+                            "to 1) is the discrete solution (max error in u " + num(err, 3) + ", " +
+                                std::to_string(nv) + " V-cycles)");
+            }
+            {
+                // A halo: screened in the center (phi << phi_bar), above the background in the voids. The warm start
+                // from the solution at a = 0.9 gives the same field in fewer V-cycles
+                FML::GRID::FFTWGrid<NDIM> u, u09, uwarm;
+                FML::GRID::FFTWGrid<NDIM> phif09;
+                const int nv = dilaton_u(1.0, 1.0, delta, u, 1e-9);
+                double umin = 1e30, umax = -1e30;
+                bool finite = true;
+                for (int islice = 0; islice < u.get_local_nx(); islice++)
+                    for (auto && ri : u.get_real_range(islice, islice + 1)) {
+                        const double v = u.get_real_from_index(ri);
+                        finite = finite and std::isfinite(v);
+                        umin = std::min(umin, v);
+                        umax = std::max(umax, v);
+                    }
+                FML::MinOverTasks(&umin);
+                FML::MaxOverTasks(&umax);
+                int nfinite = finite ? 1 : 0;
+                FML::MinOverTasks(&nfinite);
+                finite = nfinite == 1;
+                check_local(finite and umin < -1.0 and umax > 0.0 and nv < 30,
+                            "Dilaton a = 1 with a halo: ln(phi/phi_bar) from " + num(umin, 3) + " (screened) to " +
+                                num(umax, 3) + " (" + std::to_string(nv) + " V-cycles)");
+
+                // The warm start (the solver's own output at a = 0.9 is the previous solution)
+                {
+                    DilatonSolverCosmology<NDIM> solver(OmegaM, A2, beta0, 1.0, xi, H0Box, false);
+                    solver.set_epsilon(1e-9);
+                    solver.solve(0.9, delta, phif09);
+                }
+                const int nvwarm = dilaton_u(1.0, 1.0, delta, uwarm, 1e-9, &phif09, 0.9);
+                double maxdiff = 0.0;
+                for (int islice = 0; islice < u.get_local_nx(); islice++)
+                    for (auto && ri : u.get_real_range(islice, islice + 1))
+                        maxdiff = std::max(maxdiff,
+                                           std::abs(double(u.get_real_from_index(ri) - uwarm.get_real_from_index(ri))));
+                FML::MaxOverTasks(&maxdiff);
+                check_local(maxdiff < 1e-6 and nvwarm <= nv,
+                            "Dilaton warm start from a = 0.9: the same field (max difference " + num(maxdiff, 3) +
+                                ") in " + std::to_string(nvwarm) + " V-cycles (" + std::to_string(nv) + " cold)");
+            }
         }
 
         // 6. DGP (rc H0 = 1, a = 1)

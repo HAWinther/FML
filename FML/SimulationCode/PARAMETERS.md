@@ -61,7 +61,7 @@ Parameters marked *optional* take the default value if they are not in the param
 
 | Parameter | Type | Default | Used when | Description |
 |---|---|---|---|---|
-| `gravity_model` | string | `"GR"` | always | The gravity model (growth of perturbations and forces). Options: `GR`, `f(R)`, `DGP`, `JBD`, `Symmetron`, `mbeta`, `mu` |
+| `gravity_model` | string | `"GR"` | always | The gravity model (growth of perturbations and forces). Options: `GR`, `f(R)`, `DGP`, `JBD`, `Symmetron`, `Dilaton`, `mbeta`, `mu` |
 | `gravity_model_mu_parametrization` | string | *required* | gravity_model = mu | Poisson equation with G_eff/G = mu(a,k), no screening. DE: mu = 1 + mu0 Omega_DE(a)/Omega_DE(a=1). BZ: mu = (1 + beta1 lambda1^2 k^2 a^s) / (1 + lambda1^2 k^2 a^s) (Bertschinger & Zukin 2008). table: mu(a) or mu(a,k) from a file. Options: `DE`, `BZ`, `table` |
 | `gravity_model_mu_mu0` | double | *required* | gravity_model = mu and gravity_model_mu_parametrization = DE | mu0 in mu = 1 + mu0 Omega_DE(a)/Omega_DE(a=1) |
 | `gravity_model_mu_BZ_params` | double list | *required* | gravity_model = mu and gravity_model_mu_parametrization = BZ | {beta1, lambda1 (Mpc/h), s} in mu = (1 + beta1 lambda1^2 k^2 a^s) / (1 + lambda1^2 k^2 a^s) (k in h/Mpc) |
@@ -72,16 +72,21 @@ Parameters marked *optional* take the default value if they are not in the param
 | `gravity_model_symmetron_assb` | double | `0.5` | gravity_model = Symmetron | Symmetry breaking scale factor (no fifth-force for a < assb) |
 | `gravity_model_symmetron_beta` | double | `1` | gravity_model = Symmetron | Coupling strength relative to gravity |
 | `gravity_model_symmetron_L_mpch` | double | `1` | gravity_model = Symmetron | Range of the fifth force in the background today (Mpc/h) |
+| `gravity_model_dilaton_A2` | double | `500000` | gravity_model = Dilaton | A2 in the coupling A(phi) = 1 + A2 phi^2 / (2 Mpl^2) (A2 >> 1; Brax et al. 2012, arXiv:1206.3568). The screening threshold is Phi_crit = 1 / (2 A2) |
+| `gravity_model_dilaton_beta0` | double | `0.5` | gravity_model = Dilaton | The coupling today beta0 in beta(a) = beta0 exp[s (a^(2r-3) - 1) / (2r - 3)], s = 9 OmegaM A2 xi^2 |
+| `gravity_model_dilaton_r` | double | `1` | gravity_model = Dilaton | The index r in the mass m(a) = m0 a^-r (r <= 3/2; 3/2 is the original dilaton with beta = beta0 a^s) |
+| `gravity_model_dilaton_xi` | double | `0.001` | gravity_model = Dilaton | xi = H0 / m0: the range of the fifth force today is 2998 xi Mpc/h |
 | `gravity_model_dgp_rcH0overc` | double | *required* | gravity_model = DGP | The cross-over scale rc H0 / c |
-| `gravity_model_screening` | bool | `true` | gravity_model in {mbeta, f(R), Symmetron, DGP} | Use the approximate screening model (otherwise linear) |
-| `gravity_model_dgp_smoothing_filter` | string | `"tophat"` | gravity_model in {mbeta, f(R), Symmetron, DGP} and gravity_model_screening = true and gravity_model = DGP | Screening approximation: the filter used to smooth the density field. Options: `tophat`, `sharpk`, `gaussian` |
-| `gravity_model_dgp_smoothing_scale_over_boxsize` | double | `0` | gravity_model in {mbeta, f(R), Symmetron, DGP} and gravity_model_screening = true and gravity_model = DGP | Screening approximation: the smoothing scale R/boxsize (0: no smoothing; 1 smooths over the whole box, which makes the screening very weak) |
-| `gravity_model_screening_enforce_largescale_linear` | bool | `false` | gravity_model in {mbeta, f(R), Symmetron, DGP} and gravity_model_screening = true | Combine the screened solution with the linear solution to get the correct linear evolution on large scales |
-| `gravity_model_screening_linear_scale_hmpc` | double | `0.05` | gravity_model in {mbeta, f(R), Symmetron, DGP} and gravity_model_screening = true | Use the linear solution for k < k* and the screened solution for k > k* (h/Mpc) |
-| `gravity_model_screening_efficiency` | double | `1` | gravity_model in {mbeta, f(R), Symmetron, DGP} and gravity_model_screening = true and gravity_model in {mbeta, f(R)} | Screening efficiency (1 is standard). Increases or decreases the amount of screening |
+| `gravity_model_screening` | bool | `true` | gravity_model in {mbeta, f(R), Symmetron, Dilaton, DGP} | Use the approximate screening model (otherwise linear) |
+| `gravity_model_dgp_smoothing_filter` | string | `"tophat"` | gravity_model in {mbeta, f(R), Symmetron, Dilaton, DGP} and gravity_model_screening = true and gravity_model = DGP | Screening approximation: the filter used to smooth the density field. Options: `tophat`, `sharpk`, `gaussian` |
+| `gravity_model_dgp_smoothing_scale_over_boxsize` | double | `0` | gravity_model in {mbeta, f(R), Symmetron, Dilaton, DGP} and gravity_model_screening = true and gravity_model = DGP | Screening approximation: the smoothing scale R/boxsize (0: no smoothing; 1 smooths over the whole box, which makes the screening very weak) |
+| `gravity_model_screening_enforce_largescale_linear` | bool | `false` | gravity_model in {mbeta, f(R), Symmetron, Dilaton, DGP} and gravity_model_screening = true | Combine the screened solution with the linear solution to get the correct linear evolution on large scales |
+| `gravity_model_screening_linear_scale_hmpc` | double | `0.05` | gravity_model in {mbeta, f(R), Symmetron, Dilaton, DGP} and gravity_model_screening = true | Use the linear solution for k < k* and the screened solution for k > k* (h/Mpc) |
+| `gravity_model_screening_efficiency` | double | `1` | gravity_model in {mbeta, f(R), Symmetron, Dilaton, DGP} and gravity_model_screening = true and gravity_model in {mbeta, f(R), Dilaton} | Screening efficiency (1 is standard). Increases or decreases the amount of screening |
 | `gravity_model_fofr_exact_solution` | bool | `false` | gravity_model = f(R) | Solve the exact f(R) equation with the multigrid solver (slow, mainly for testing) |
 | `gravity_model_fofr_multigrid_method` | string | `"sqrt"` | gravity_model = f(R) and gravity_model_fofr_exact_solution = true | The field the multigrid solver solves for. sqrt: u = sqrt(|f_R|) with the equation in a cell solved exactly (a cubic for n = 1), robust for any f_R0, n and redshift. log: ln|f_R| with Newton steps (the original method; can give NaN for small f_R0 or at high redshift). Options: `sqrt`, `log` |
 | `gravity_model_symmetron_exact_solution` | bool | `false` | gravity_model = Symmetron | Solve the exact symmetron equation with the multigrid solver (slow, mainly for testing) |
+| `gravity_model_dilaton_exact_solution` | bool | `false` | gravity_model = Dilaton | Solve the exact dilaton equation with the multigrid solver (slow, mainly for testing) |
 | `gravity_model_dgp_exact_solution` | bool | `false` | gravity_model = DGP | Solve the exact DGP equation with the multigrid solver (slow, mainly for testing; can be hard to get to converge) |
 | `multigrid_nsweeps` | int | `3` | solving the exact equation of the gravity model | Multigrid solver: Newton-Gauss-Seidel sweeps on every level |
 | `multigrid_nsweeps_first_step` | int | `20` | solving the exact equation of the gravity model | Multigrid solver: sweeps on the first step (increase if the solver fails to converge) |

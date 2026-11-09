@@ -147,7 +147,7 @@ end
 ------------------------------------------------------------
 -- Choose the gravity model
 ------------------------------------------------------------
--- Gravity model: GR, f(R), DGP, JBD, Symmetron, mbeta, mu ... add your own ...
+-- Gravity model: GR, f(R), DGP, JBD, Symmetron, Dilaton, mbeta, mu ... add your own ...
 -- (JBD needs cosmology_model = "JBD": it takes phi(a) from the background)
 gravity_model = "GR"
 
@@ -257,6 +257,41 @@ if gravity_model == "Symmetron" then
   multigrid_nsweeps_first_step = 5
 end
 
+-- The (generalised) environment-dependent dilaton (Brax, Davis, Li, Winther & Zhao 2012, arXiv:1206.3568)
+-- A(phi) = 1 + A2 phi^2 / (2 Mpl^2), m(a) = m0 a^-r, beta(a) = beta0 exp[s (a^(2r-3) - 1) / (2r-3)], s = 9 OmegaM A2 xi^2
+if gravity_model == "Dilaton" then
+  -- A2 (>> 1). The screening threshold is Phi_crit = 1 / (2 A2)
+  gravity_model_dilaton_A2 = 5e5
+  -- The coupling today
+  gravity_model_dilaton_beta0 = 0.5
+  -- The index r in m(a) = m0 a^-r (r <= 3/2; 3/2 is the original dilaton)
+  gravity_model_dilaton_r = 1.0
+  -- xi = H0/m0: the range of the fifth force today is 2998 xi Mpc/h
+  gravity_model_dilaton_xi = 1e-3
+  -- Solve exact dilaton equation using the multigridsolver (slow and mainly for testing)
+  -- This option takes precedent over the approximate screening model below if both are set
+  gravity_model_dilaton_exact_solution = false
+  -- Approximate screening model (otherwise linear)
+  gravity_model_screening = true
+  -- Screening efficiency (1.0 is standard)
+  -- This can be used to increase or decrease the amount of screening if using gravity_model_screening
+  gravity_model_screening_efficiency = 1.0
+  -- Combine screened solution with linear solution to enforce correct
+  -- linear evolution on large scales
+  gravity_model_screening_enforce_largescale_linear = true
+  -- The fourier scale for which we use the linear solution for k < k*
+  -- and the screened solution for k > k*
+  gravity_model_screening_linear_scale_hmpc = 0.1
+
+  -- Options for the multigrid solver in case we solve exact equation:
+  multigrid_solver_residual_convergence = 1e-7
+  -- How many Newton-Gauss-Seidel sweeps to do every level
+  multigrid_nsweeps = 3
+  -- In some cases the multigrid solver fails if we are not close to the
+  -- solution before starting multigrid. Increase this if so
+  multigrid_nsweeps_first_step = 5
+end
+
 -- The normal branch of DGP (nDGP), on any background (e.g. LCDM). The self-accelerating
 -- background is cosmology_model = "DGP"
 if gravity_model == "DGP" then 
@@ -290,8 +325,8 @@ if gravity_model == "DGP" then
   multigrid_nsweeps_first_step = 2
 end
 
--- The multigrid solver of the exact equations (f(R), Symmetron, DGP with *_exact_solution = true)
-if gravity_model_fofr_exact_solution or gravity_model_symmetron_exact_solution or gravity_model_dgp_exact_solution then
+-- The multigrid solver of the exact equations (f(R), Symmetron, Dilaton, DGP with *_exact_solution = true)
+if gravity_model_fofr_exact_solution or gravity_model_symmetron_exact_solution or gravity_model_dilaton_exact_solution or gravity_model_dgp_exact_solution then
   -- Converged when the rms residual is below multigrid_solver_residual_convergence (residual) or below it times
   -- the rms of the linear source of the equation (relative; the residual scale changes a lot during a simulation)
   multigrid_convergence_criterion = "residual"
@@ -302,6 +337,11 @@ if gravity_model_fofr_exact_solution or gravity_model_symmetron_exact_solution o
   multigrid_coarse_restriction = "sharpk"
   -- Solve the field equation only below this redshift (< 0: at all redshifts)...
   multigrid_start_redshift = -1.0
+  -- The dilaton: only below z ~ 3-5 (beta(a) << 1 before anyway). At high redshift the field varies by
+  -- e^(+-40) between the empty and full cells of the particle lattice and the solver does not converge
+  if gravity_model == "Dilaton" then
+    multigrid_start_redshift = 4.0
+  end
   -- ...and above it use the linear fifth force (linear) or none (GR)
   multigrid_force_before_start = "linear"
 end

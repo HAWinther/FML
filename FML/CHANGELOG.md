@@ -5,6 +5,24 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: the dilaton gravity model
+- `gravity_model = "Dilaton"`: the generalised environment-dependent dilaton of Brax, Davis, Li, Winther & Zhao 2012
+  (arXiv:1206.3568) with parameters `gravity_model_dilaton_A2`, `_beta0`, `_r` (r <= 3/2; 3/2 is the original dilaton,
+  beta = beta0 a^s) and `_xi` (range 2998 xi Mpc/h today). Linear, screening (potential screening with
+  Phi_crit = 1/(2 A2), the chameleon estimate with phi(a)/M_pl = beta(a)/A2) and exact (multigrid) fifth force.
+- Theory in `Cosmology/Perturbations/QuasiStaticGravity_Dilaton.h` (beta(a), m(a), mu(k,a), the screening).
+- `MultigridSolver/DilatonSolver.h`: solves for w = phi/phi_bar with the standard Laplacian; the Gauss-Seidel update
+  solves the equation in a cell exactly in ln w (strictly monotone, bracketed by the local minima of the effective
+  potential for the extreme densities). The paper's form (u = ln phi with D[e^u Du]) did not converge at high
+  redshift. At z ~ 30 the field still varies by e^(+-40) between the empty and full cells of the particle lattice, so
+  use `multigrid_start_redshift` (~3-5; beta(a) << 1 before): the example parameterfile sets 4 for the dilaton.
+- 64^3 particles, 128^3 force grid, 200 Mpc/h, A2 = 5e5, beta0 = 0.5, r = 1, xi = 1e-3: P(k)/P_GR - 1 at z = 0 is
+  +19% at k = 1.9 h/Mpc for the linear fifth force, and within 1% of GR for both the screening approximation and the
+  exact solution (which agree to < 1% at all k). 8-22 V-cycles per step below z = 4.
+- Tests: `tests/test_multigrid.cpp` (uniform density = the minimum of the effective potential for r = 1 and 3/2,
+  linear theory, the exact discrete solution for the paper's nonlinear sine profile, a screened halo, the warm start);
+  regression case `dilaton_exact_multigrid`. New parameter check `check::at_most`.
+
 ### ReACT: optional official halo-model reaction engine
 - `FML/ReACT` interfaces to pinned ACTio-ReACTio v2, including massive neutrinos, with explicit [z][k]
   spectrum inputs, unit/order checks, serialized backend calls and immutable reaction tables. The optional

@@ -142,6 +142,9 @@ namespace SIMCODE {
         inline Check at_least(double m) {
             return make("be >= " + value_text(m), [m](double x) { return x >= m; });
         }
+        inline Check at_most(double m) {
+            return make("be <= " + value_text(m), [m](double x) { return x <= m; });
+        }
         /// lo <= x <= hi
         inline Check in_range(double lo, double hi) {
             return make("be in [" + value_text(lo) + ", " + value_text(hi) + "]",
