@@ -9,12 +9,18 @@
 #include <cmath>
 #include <iostream>
 #include <limits>
+#include <stdexcept>
 
 
 //======================================================================
-/// Solver the symmetron gravity equation in a cosmological setting
-/// The solver returns PhiF so that in a
-/// cosmological setting where PhiGR = a^2 Phi / (H0 Box)^2 we simply
+/// Solver the symmetron gravity equation in a cosmological setting, generalised with the powers (N, M) of the
+/// potential (Brax, Davis, Li, Winther & Zhao 2012, arXiv:1206.3568, eq. 57-58 and 68; even integers M > N >= 2,
+/// (2, 4) is the original symmetron; the theory is FML/Cosmology/Perturbations/QuasiStaticGravity_Symmetron.h).
+/// With chi = phi / phi_* (phi_* the vacuum value) and xi = H0 L / c the equation (box units) is
+///   D^2 chi = norm [ chi^(N-1) ((a_ssb/a)^3 (1 + delta) - 1) + chi^(M-1) ],   norm = a^2 (H0 Box)^2 / ((M - N) xi^2)
+/// with the background chi = (1 - (a_ssb/a)^3)^(1/(M-N)) (0 before symmetry breaking).
+/// The solver returns PhiF = a^2 ln A / (H0 Box)^2 = forcenorm chi^N, forcenorm = 3 (M - N)/N OmegaM a^2 beta^2
+/// (xi / H0Box)^2 / a_ssb^3, so that in a cosmological setting where PhiGR = a^2 Phi / (H0 Box)^2 we simply
 /// have the total force = D(PhiGR + PhiF)
 /// This class (kind of) assumes a LCDM cosmology
 //======================================================================
@@ -53,8 +59,11 @@ class SymmetronSolverCosmology {
     double assb{0.5};
     /// The coupling strength
     double beta{1.0};
-    /// The range today in Mpc/h
+    /// The range in vacuum in Mpc/h
     double L_mpch{1.0};
+    /// The powers of the potential (2, 4: the original symmetron)
+    double N{2.0};
+    double M{4.0};
     /// The dimensionless number H0 * Box / c
     double H0Box{};
 
@@ -67,12 +76,38 @@ class SymmetronSolverCosmology {
     /// The number of V-cycles of the last solve
     int last_nvcycles{0};
 
+    /// x^n for an integer n >= 0 (x can be negative)
+    static double ipow(double x, int n) {
+        double r = 1.0;
+        for (int i = 0; i < n; i++)
+            r *= x;
+        return r;
+    }
+
   public:
     /// The number of V-cycles of the last solve
     int get_number_of_vcycles() const { return last_nvcycles; }
 
-    SymmetronSolverCosmology(double OmegaM, double assb, double beta, double L_mpch, double H0Box, bool verbose)
-        : OmegaM(OmegaM), assb(assb), beta(beta), L_mpch(L_mpch), H0Box(H0Box), verbose(verbose) {}
+    SymmetronSolverCosmology(double OmegaM,
+                             double assb,
+                             double beta,
+                             double L_mpch,
+                             double H0Box,
+                             bool verbose,
+                             double N = 2.0,
+                             double M = 4.0)
+        : OmegaM(OmegaM), assb(assb), beta(beta), L_mpch(L_mpch), N(N), M(M), H0Box(H0Box), verbose(verbose) {
+        auto even = [](double x) { return x == std::round(x) and std::fmod(x, 2.0) == 0.0; };
+        if (not(even(N) and even(M) and N >= 2.0 and M > N))
+            throw std::invalid_argument("[SymmetronSolverCosmology] Need even integers M > N >= 2");
+    }
+
+    /// The factor forcenorm in the returned PhiF = forcenorm chi^N
+    double get_forcenorm(double a) const {
+        const double H0L = L_mpch / FML::UTILS::SI::c_over_H0_mpch;
+        return 3.0 * (M - N) / N * OmegaM * a * a * beta * beta * (H0L / H0Box) * (H0L / H0Box) /
+               (assb * assb * assb);
+    }
 
     /// Set how many sweeps over the grid to use when solving a given level
     void set_ngs_steps(double _ngs_fine, double _ngs_coarse, double _ngs_first) {
@@ -88,11 +123,12 @@ class SymmetronSolverCosmology {
     /// so a fixed tolerance is either met trivially or not at all)
     void set_relative_criterion(bool relative) { relative_criterion = relative; }
 
-    /// The cosmological background value f_R(a)
-    double get_phi_background(double a) { return a < assb ? 0.0 : std::sqrt(1.0 - (assb * assb * assb) / (a * a * a)); }
+    /// The cosmological background value chi = phi / phi_*
+    double get_phi_background(double a) const {
+        return a < assb ? 0.0 : std::pow(1.0 - (assb * assb * assb) / (a * a * a), 1.0 / (M - N));
+    }
 
-    /// Do the solving and return the fifth-force potential.
-    /// We solve for f where a phi / phi0 f_R / (2 (H0Box)^2) = e^f and return e^f
+    /// Do the solving and return the fifth-force potential PhiF = forcenorm chi^N
     void solve(double a, FFTWGrid<NDIM> & overdensity_real, FFTWGrid<NDIM> & fifth_force_potential_real) {
 
         Nmesh = overdensity_real.get_nmesh();
@@ -107,6 +143,7 @@ class SymmetronSolverCosmology {
             std::cout << "# assb        : " << assb << "\n";
             std::cout << "# beta        : " << beta << "\n";
             std::cout << "# L_mpch      : " << L_mpch << "\n";
+            std::cout << "# (N, M)      : (" << N << ", " << M << ")\n";
             std::cout << "# H0Box       : " << H0Box << "\n";
             std::cout << "# phi/phi0(a) : " << get_phi_background(a) << "\n";
             std::cout << "# Convergence : residual < " << epsilon << "\n";
@@ -137,7 +174,9 @@ class SymmetronSolverCosmology {
 
         // Factors to define the equation
         const double H0L = L_mpch / FML::UTILS::SI::c_over_H0_mpch;
-        const double norm = 0.5 * a * a * (H0Box * H0Box) / (H0L * H0L);
+        const double norm = a * a * (H0Box * H0Box) / ((M - N) * H0L * H0L);
+        // Integer powers (the field can be negative: the other branch of the symmetry breaking)
+        const int iN = int(std::lround(N)), iM = int(std::lround(M));
         const double fac = (assb * assb * assb) / (a * a * a);
 
         // The background value of the field we solve for
@@ -158,9 +197,9 @@ class SymmetronSolverCosmology {
         // Set the convergence criterion
         // (ConvergenceCriterionResidual is rms-residual < epsilon)
         //======================================================================
-        // The linear source of the equation (norm fac phi_bar delta; zero before symmetry breaking, then the absolute
-        // criterion is used)
-        const double source_rms = norm * fac * f0 * density_multigrid.get_grid(0).norm();
+        // The linear source of the equation (norm fac phi_bar^(N-1) delta; zero before symmetry breaking, then the
+        // absolute criterion is used)
+        const double source_rms = norm * fac * ipow(f0, iN - 1) * density_multigrid.get_grid(0).norm();
         MultiGridConvCrit ConvergenceCriterion = [&](double rms_residual, double rms_residual_ini, int step_number) {
             if (relative_criterion and source_rms > 0.0)
                 return rms_residual < epsilon * source_rms;
@@ -197,8 +236,11 @@ class SymmetronSolverCosmology {
                 //======================================================================
                 // The right hand side source and the derivative of it
                 //======================================================================
-                double source = norm * (fac * delta + (f - f0) * (f + f0)) * f;
-                double dsource = norm * (fac * (1.0 + delta) - 1.0 + 3.0 * f * f);
+                // ((N, M) = (2, 4): norm (fac (1 + delta) - 1 + f^2) f)
+                const double fN2 = ipow(f, iN - 2);
+                const double fM2 = ipow(f, iM - 2);
+                const double source = norm * (fN2 * f * (fac * (1.0 + delta) - 1.0) + fM2 * f);
+                const double dsource = norm * ((N - 1.0) * fN2 * (fac * (1.0 + delta) - 1.0) + (M - 1.0) * fM2);
 
                 //======================================================================
                 // Returns the equation and the derivative to the solver
@@ -213,8 +255,7 @@ class SymmetronSolverCosmology {
         ConvertToFFTWGrid(sol, fifth_force_potential_real);
 
         // Convert to fifth-force potential
-        const double forcenorm =
-            3.0 * OmegaM * a * a * beta * beta * (H0L / H0Box) * (H0L / H0Box) / (assb * assb * assb);
+        const double forcenorm = get_forcenorm(a);
 
         FML::GRID::FloatType fmin = std::numeric_limits<FML::GRID::FloatType>::max();
         FML::GRID::FloatType fmax = -std::numeric_limits<FML::GRID::FloatType>::max();
@@ -230,7 +271,7 @@ class SymmetronSolverCosmology {
                 fmax = std::max(fmax, value);
                 fmin = std::min(fmin, value);
 
-                value = value * value * forcenorm;
+                value = FML::GRID::FloatType(ipow(double(value), iN) * forcenorm);
                 fifth_force_potential_real.set_real_from_index(real_index, value);
             }
         }
@@ -241,9 +282,9 @@ class SymmetronSolverCosmology {
 
         if (FML::ThisTask == 0 and verbose) {
             std::cout << "#=====================================================\n";
-            std::cout << "# The minimum value of phi/phi0 : " << fmin << "\n";
-            std::cout << "# The mean value of phi/phi0: " << fmean << "\n";
-            std::cout << "# The maximum value phi/phi0: " << fmax << "\n";
+            std::cout << "# The minimum value of phi/phi_* : " << fmin << "\n";
+            std::cout << "# The mean value of phi/phi_*: " << fmean << "\n";
+            std::cout << "# The maximum value phi/phi_*: " << fmax << "\n";
             std::cout << "# Background field value phi(a) : " << f0 << "\n";
             std::cout << "#=====================================================\n";
             std::cout << "\n";

@@ -231,8 +231,12 @@ if gravity_model == "Symmetron" then
   gravity_model_symmetron_assb = 0.333
   -- Coupling strength relative to gravity
   gravity_model_symmetron_beta = 1.0
-  -- Range of force in background today
+  -- Range of force in vacuum (Mpc/h)
   gravity_model_symmetron_L_mpch = 1.0
+  -- The powers in V = -(phi/phi_*)^N / N + (phi/phi_*)^M / M, beta(phi) ~ phi^(N-1) (even integers, M > N >= 2;
+  -- Brax et al. 2012). (2, 4) is the original symmetron
+  gravity_model_symmetron_N = 2
+  gravity_model_symmetron_M = 4
   -- Solve exact symmetron equation using the multigridsolver (slow and mainly for testing)
   -- This option takes precedent over the approximate screening model below if both are set
   gravity_model_symmetron_exact_solution = false

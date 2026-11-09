@@ -20,6 +20,8 @@ class GravityModelSymmetron final : public GravityModelScreened<NDIM> {
     double assb{0.5};
     double beta{1.0};
     double L_mpch{1.0};
+    double N{2.0};
+    double M{4.0};
 
   public:
     template <int N>
@@ -38,8 +40,8 @@ class GravityModelSymmetron final : public GravityModelScreened<NDIM> {
         return static_cast<const QuasiStaticGravity_Symmetron &>(this->qs());
     }
     double GeffOverG_highk(double a) const override {
-        const double phi = symmetron().phi(std::log(a));
-        return 1 + 2 * beta * beta * phi * phi;
+        const double b = symmetron().beta_of_a(std::log(a));
+        return 1 + 2 * b * b;
     }
     double short_range_comoving_range(double a) const override {
         const double mass2 = symmetron().mass2(std::log(a));
@@ -47,7 +49,7 @@ class GravityModelSymmetron final : public GravityModelScreened<NDIM> {
     }
     void init() override {
         this->quasi_static =
-            std::make_shared<const QuasiStaticGravity_Symmetron>(this->cosmo->background(), assb, beta, L_mpch);
+            std::make_shared<const QuasiStaticGravity_Symmetron>(this->cosmo->background(), assb, beta, L_mpch, N, M);
         GravityModelScreened<NDIM>::init();
     }
 
@@ -55,9 +57,10 @@ class GravityModelSymmetron final : public GravityModelScreened<NDIM> {
                                  double H0Box,
                                  FFTWGrid<NDIM> & density_real,
                                  FFTWGrid<NDIM> & potential_real) const override {
-        // The solution is the potential C phi^2
+        // The solution is the potential C (phi/phi_*)^N
         const bool verbose = false;
-        SymmetronSolverCosmology<NDIM, double> mgsolver(this->cosmo->get_OmegaM(), assb, beta, L_mpch, H0Box, verbose);
+        SymmetronSolverCosmology<NDIM, double> mgsolver(
+            this->cosmo->get_OmegaM(), assb, beta, L_mpch, H0Box, verbose, N, M);
         mgsolver.set_ngs_steps(this->multigrid_nsweeps, this->multigrid_nsweeps, this->multigrid_nsweeps_first_step);
         mgsolver.set_epsilon(this->multigrid_solver_residual_convergence);
         mgsolver.set_relative_criterion(this->multigrid_relative_criterion);
@@ -79,6 +82,10 @@ class GravityModelSymmetron final : public GravityModelScreened<NDIM> {
         assb = this->settings.symmetron_assb;
         beta = this->settings.symmetron_beta;
         L_mpch = this->settings.symmetron_L_mpch;
+        N = this->settings.symmetron_N;
+        M = this->settings.symmetron_M;
+        FML::assert_mpi(FML::COSMOLOGY::PERTURBATIONS::QuasiStaticGravity_Symmetron::valid_powers(N, M),
+                        "gravity_model_symmetron_N and _M must be even integers with M > N >= 2");
     }
 };
 

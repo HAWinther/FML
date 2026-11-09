@@ -1,7 +1,9 @@
 // Tests of the quasi-static theories (QuasiStaticGravity*.h) on an LCDM background: mu limits and the screening
 //   - Hu-Sawicky: mu -> 1/(1 + f_R) and 4/3 of it for k << m, k >> m; Phi_crit = 3/2 |f_R(a)|; min(1, Phi_crit/|Phi|)
 //   - DGP: mu = 1 + 1/(3 beta); the Vainshtein factor -> 1 for small e, ~ 2/sqrt(e) for large e
-//   - symmetron: no fifth force and no screening factor before symmetry breaking; mu(k >> m) = 1 + 2 beta^2 phi^2
+//   - symmetron: no fifth force and no screening factor before symmetry breaking; mu(k >> m) = 1 + 2 beta^2 phi^2;
+//     the generalised (N, M): the background is the minimum of V_eff and m^2 its curvature, mu, Phi_crit
+//   - dilaton: beta(a), m(a), mu(k >> m) = 1 + 2 beta^2, Phi_crit = 1/(2 A2), r = 3/2 as the limit
 //   - (m(a), beta(a)): phi(a)/M_pl = 9 Omega_m beta0 a^p / (m0^2 p) (power laws), Phi_crit = phi / (2 beta)
 //   - mu-Sigma and Brans-Dicke: no screening
 #include <FML/Cosmology/Background/BackgroundModel_LCDM.h>
@@ -9,12 +11,15 @@
 #include <FML/Cosmology/Perturbations/QuasiStaticGravity_HuSawicky.h>
 #include <FML/Cosmology/Perturbations/QuasiStaticGravity_MBeta.h>
 #include <FML/Cosmology/Perturbations/QuasiStaticGravity_MuSigma.h>
+#include <FML/Cosmology/Perturbations/QuasiStaticGravity_Dilaton.h>
 #include <FML/Cosmology/Perturbations/QuasiStaticGravity_Symmetron.h>
 
 #include <cmath>
 #include <cstdio>
 #include <iostream>
+#include <stdexcept>
 #include <string>
+#include <utility>
 
 using namespace FML::COSMOLOGY;
 using namespace FML::COSMOLOGY::PERTURBATIONS;
@@ -74,6 +79,52 @@ int main() {
         const double L = 1.0 / FML::UTILS::SI::c_over_H0_mpch;
         check(rel(sc.threshold(xa), 3.0 * bg->Omega_m(0.0) * L * L / 0.125), 1e-14,
               "symmetron: Phi_crit = 3 Omega_m (H0 L)^2 / a_ssb^3");
+    }
+    {
+        // The generalised symmetron (N, M): the mass is the curvature of the effective potential at the background
+        // field, S'(chi)/((M - N) xi^2) with S = chi^(N-1) ((a_ssb/a)^3 - 1) + chi^(M-1) (numerical derivative); (2, 4)
+        // is the original
+        const double assb = 0.5, beta = 0.7, Lmpch = 2.0, xi = Lmpch / FML::UTILS::SI::c_over_H0_mpch;
+        for (auto [N, M] : {std::pair<double, double>{2, 4}, {2, 6}, {4, 6}, {4, 8}}) {
+            QuasiStaticGravity_Symmetron sy(*bg, assb, beta, Lmpch, N, M);
+            const double a = 0.8, x = std::log(a), r = std::pow(assb / a, 3);
+            const double chi = sy.phi(x);
+            auto S = [&](double c) { return std::pow(c, N - 1) * (r - 1.0) + std::pow(c, M - 1); };
+            const double h = 1e-6 * chi;
+            const double m2 = (S(chi + h) - S(chi - h)) / (2 * h) / ((M - N) * xi * xi);
+            const std::string nm = "symmetron (N, M) = (" + std::to_string(int(N)) + ", " + std::to_string(int(M)) + "): ";
+            check(std::fabs(S(chi)), 1e-14, nm + "the background field is the minimum of the effective potential");
+            check(rel(sy.mass2(x), m2), 1e-7, nm + "m^2 = V_eff''(phi_bar)");
+            const double b = beta * std::pow(chi, N - 1);
+            check(rel(sy.mu(x, 1e9), 1.0 + 2.0 * b * b), 1e-8, nm + "mu(k >> a m) = 1 + 2 beta^2 chi^(2N-2)");
+            check(rel(sy.screening().threshold(x),
+                      1.5 * (M - N) * bg->Omega_m(0.0) * xi * xi / std::pow(assb, 3) * std::pow(chi, 2 - N)),
+                  1e-14, nm + "Phi_crit = phi / (2 beta(a) M_pl)");
+        }
+        // The original parametrisation (N, M) = (2, 4): m^2 = 2 mu^2 (1 - (a_ssb/a)^3), mu^2 = 1/(2 L^2)
+        QuasiStaticGravity_Symmetron sy(*bg, assb, beta, Lmpch);
+        const double x = std::log(0.8), r = std::pow(assb / 0.8, 3);
+        check(rel(sy.mass2(x), (1.0 - r) / (xi * xi)), 1e-14, "symmetron (2, 4): m^2 = 2 mu^2 (1 - (a_ssb/a)^3)");
+        bool threw = false;
+        try {
+            QuasiStaticGravity_Symmetron bad(*bg, assb, beta, Lmpch, 3.0, 4.0);
+        } catch (const std::invalid_argument &) {
+            threw = true;
+        }
+        check(threw ? 0.0 : 1.0, 0.0, "symmetron: odd N is rejected");
+    }
+    {
+        // The dilaton: beta(a) = A2 phi/M_pl, mu(k >> a m) = 1 + 2 beta^2, Phi_crit = 1/(2 A2), r = 3/2 the limit
+        const double A2 = 5e5, beta0 = 0.5, xi = 1e-3, Om = bg->Omega_m(0.0), s = 9.0 * Om * A2 * xi * xi;
+        QuasiStaticGravity_Dilaton d1(*bg, A2, beta0, 1.0, xi);
+        const double x = std::log(0.6), a = 0.6;
+        check(rel(d1.beta(x), beta0 * std::exp(s * (1.0 - 1.0 / a))), 1e-13, "dilaton r = 1: beta = beta0 e^(s (1 - 1/a))");
+        check(rel(d1.mu(x, 1e9), 1.0 + 2.0 * d1.beta(x) * d1.beta(x)), 1e-8, "dilaton: mu(k >> a m) = 1 + 2 beta^2");
+        check(rel(d1.mass2(x), 1.0 / (a * a * xi * xi)), 1e-14, "dilaton r = 1: m^2 = a^-2 / xi^2");
+        check(rel(d1.screening().threshold(x), 0.5 / A2), 1e-15, "dilaton: Phi_crit = 1/(2 A2)");
+        QuasiStaticGravity_Dilaton d32(*bg, A2, beta0, 1.5, xi), d32m(*bg, A2, beta0, 1.5 - 1e-7, xi);
+        check(rel(d32.beta(x), beta0 * std::pow(a, s)), 1e-13, "dilaton r = 3/2: beta = beta0 a^s");
+        check(rel(d32m.beta(x), d32.beta(x)), 1e-6, "dilaton: r -> 3/2 is continuous");
     }
     {
         const double beta0 = 1.0, nb = 0.0, m0 = 1.0, nm = -2.0; // p = 0 - 3 + 4 = 1

@@ -5,6 +5,20 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Symmetron: the generalised (N, M) potential
+- `gravity_model_symmetron_N` and `_M` (even integers, M > N >= 2; fiducial (2, 4), the original symmetron):
+  V = H0^2 phi_*^2 / (xi^2 (M - N)) [-(phi/phi_*)^N / N + (phi/phi_*)^M / M], beta(phi) = beta (phi/phi_*)^(N-1)
+  (Brax, Davis, Li, Winther & Zhao 2012, arXiv:1206.3568, Sec. III A). L is the range in vacuum (xi = H0 L / c).
+- In the shared theory (`QuasiStaticGravity_Symmetron`: background field, mass, mu, Phi_crit = phi/(2 beta(a) M_pl)),
+  the multigrid solver (`SymmetronSolverCosmology`, eq. 68; returns forcenorm (phi/phi_*)^N) and SimulationCode. Both
+  take (N, M) as optional last arguments (default (2, 4)).
+- (2, 4) gives the same P(k) to the last digit as before (regression case `symmetron_exact_multigrid`).
+- Tests: the background field is the minimum of V_eff and m^2 its curvature for (2,4), (2,6), (4,6), (4,8)
+  (`test_quasi_static`); a uniform density and linear theory with the multigrid solver for (2,4), (2,6), (4,6)
+  (`test_multigrid`). 64^3 particles in 200 Mpc/h, a_ssb = 0.5, beta = 1, L = 4 Mpc/h, exact solution at z = 0:
+  P/P_GR - 1 at k = 1 h/Mpc is +3.4% for (2, 4), +10.5% for (2, 6) and 0.0% for (4, 6) (paper: larger M strengthens,
+  larger N weakens the fifth force).
+
 ### SimulationCode: the dilaton gravity model
 - `gravity_model = "Dilaton"`: the generalised environment-dependent dilaton of Brax, Davis, Li, Winther & Zhao 2012
   (arXiv:1206.3568) with parameters `gravity_model_dilaton_A2`, `_beta0`, `_r` (r <= 3/2; 3/2 is the original dilaton,

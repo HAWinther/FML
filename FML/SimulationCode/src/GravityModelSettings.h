@@ -25,6 +25,8 @@ namespace SIMCODE {
         double symmetron_assb{};
         double symmetron_beta{};
         double symmetron_L_mpch{};
+        double symmetron_N{};
+        double symmetron_M{};
         double dilaton_A2{};
         double dilaton_beta0{};
         double dilaton_r{};
@@ -111,8 +113,20 @@ namespace SIMCODE {
                 f.optional("gravity_model_symmetron_L_mpch",
                            symmetron_L_mpch,
                            1.0,
-                           "Range of the fifth force in the background today "
-                           "(Mpc/h)");
+                           "Range of the fifth force in vacuum (Mpc/h; for (N, M) = (2, 4) also the range in the "
+                           "background today if a_ssb^3 << 1)");
+                f.optional("gravity_model_symmetron_N",
+                           symmetron_N,
+                           2.0,
+                           "The power N in V = -(phi/phi_*)^N / N + (phi/phi_*)^M / M and beta(phi) ~ phi^(N-1) "
+                           "(even integer >= 2; Brax et al. 2012, arXiv:1206.3568). (N, M) = (2, 4) is the "
+                           "original symmetron",
+                           check::at_least(2.0));
+                f.optional("gravity_model_symmetron_M",
+                           symmetron_M,
+                           4.0,
+                           "The power M in the potential (even integer > N)",
+                           check::at_least(4.0));
             });
             f.for_gravity({"Dilaton"}, [&]() {
                 f.optional("gravity_model_dilaton_A2",

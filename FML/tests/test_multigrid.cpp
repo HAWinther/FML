@@ -8,7 +8,8 @@
 //   - FofrSolverCosmology (with FFTW): the cubic of the sqrt method, the sqrt and log methods give the same fifth
 //     force, and the sqrt method converges for |f_R0| = 1e-6 at a = 0.5 (where the log method gives NaN) and for n = 2
 //   - SymmetronSolverCosmology: zero field before symmetry breaking, linear theory for a small cosine density
-//     perturbation (with the discrete Laplacian), screening in a halo
+//     perturbation (with the discrete Laplacian), screening in a halo; the generalised (N, M) = (2, 4), (2, 6),
+//     (4, 6): a uniform density gives the minimum of the effective potential, linear theory
 //   - DilatonSolverCosmology: a uniform density (the minimum of the effective potential, r = 1 and r = 3/2), linear
 //     theory for a small cosine perturbation, the exact discrete solution for a strongly nonlinear sine profile
 //     (the test of Brax et al. 2012, arXiv:1206.3568, eq. 86-87), screening in a halo and the warm start
@@ -507,6 +508,64 @@ int main() {
             check_local(pmin < 0.3 * f0 and pmax > f0 and pmax < 1.0,
                         "Symmetron a = 1 with a halo: phi/phi0 from " + num(pmin, 3) + " (screened) to " +
                             num(pmax, 3) + " (background " + num(f0, 3) + ", vacuum 1)");
+        }
+
+        // 5a. The generalised symmetron (N, M) (Brax et al. 2012): a uniform density gives the minimum of the
+        // effective potential, chi^(M-N) = 1 - (a_ssb/a)^3 (1 + delta0); linear theory for a small cosine
+        // (-k^2 dchi = norm [fac chi^(N-1) A + (M - N) chi^(N-2) (1 - fac) dchi], norm = a^2 H0Box^2 / ((M-N) xi^2));
+        // (2, 4) agrees with the original solver call
+        for (auto [Ns, Ms] : {std::pair<double, double>{2, 4}, {2, 6}, {4, 6}}) {
+            const std::string nm = "Symmetron (N, M) = (" + std::to_string(int(Ns)) + ", " + std::to_string(int(Ms)) + ")";
+            auto chi_field = [&](double a, FML::GRID::FFTWGrid<NDIM> & d, FML::GRID::FFTWGrid<NDIM> & chi) {
+                SymmetronSolverCosmology<NDIM> solver(0.3, assb, 1.0, L, H0Box, false, Ns, Ms);
+                solver.set_epsilon(1e-11);
+                solver.solve(a, d, chi);
+                const double fn = solver.get_forcenorm(a);
+                for (int islice = 0; islice < chi.get_local_nx(); islice++)
+                    for (auto && ri : chi.get_real_range(islice, islice + 1))
+                        chi.set_real_from_index(ri, std::pow(chi.get_real_from_index(ri) / fn, 1.0 / Ns));
+            };
+            auto maxerr = [&](FML::GRID::FFTWGrid<NDIM> & g, auto && f) {
+                double m = 0.0;
+                for (int islice = 0; islice < g.get_local_nx(); islice++)
+                    for (auto && ri : g.get_real_range(islice, islice + 1)) {
+                        auto c = g.get_coord_from_index(ri);
+                        c[0] += g.get_local_x_start();
+                        m = std::max(m, std::abs(double(g.get_real_from_index(ri)) - f(c)));
+                    }
+                FML::MaxOverTasks(&m);
+                return m;
+            };
+            {
+                const double a = 0.9, delta0 = 0.5, fac = std::pow(assb / a, 3);
+                FML::GRID::FFTWGrid<NDIM> d(N, 1, 1), chi;
+                d.fill_real_grid(delta0);
+                chi_field(a, d, chi);
+                const double exact = std::pow(1.0 - fac * (1.0 + delta0), 1.0 / (Ms - Ns));
+                const double err = maxerr(chi, [&](auto &) { return exact; });
+                check_local(err < 1e-8, nm + ": uniform density 1 + delta = 1.5 gives the minimum of the effective "
+                                             "potential, chi = " + num(exact, 4) + " (error " + num(err, 3) + ")");
+            }
+            {
+                const double a = 1.0, A = 1e-5, fac = std::pow(assb / a, 3), xi = H0L;
+                const int m = 4;
+                FML::GRID::FFTWGrid<NDIM> d(N, 1, 1), chi;
+                for (int islice = 0; islice < d.get_local_nx(); islice++)
+                    for (auto && ri : d.get_real_range(islice, islice + 1)) {
+                        auto c = d.get_coord_from_index(ri);
+                        c[0] += d.get_local_x_start();
+                        d.set_real_from_index(ri, A * std::cos(2 * M_PI * m * (c[0] + 0.5) / N));
+                    }
+                chi_field(a, d, chi);
+                const double c0 = std::pow(1.0 - fac, 1.0 / (Ms - Ns));
+                const double norm = a * a * H0Box * H0Box / ((Ms - Ns) * xi * xi);
+                const double k2 = 2.0 * N * N * (1.0 - std::cos(2 * M_PI * m / N));
+                const double amp = -norm * fac * std::pow(c0, Ns - 1) * A /
+                                   (k2 + norm * (Ms - Ns) * std::pow(c0, Ns - 2) * (1.0 - fac));
+                const double err = maxerr(chi, [&](auto & c) { return c0 + amp * std::cos(2 * M_PI * m * (c[0] + 0.5) / N); });
+                check_local(err < 1e-5 * std::abs(amp), nm + ": linear theory for a small cosine perturbation (error " +
+                                                            num(err / std::abs(amp), 3) + " of the amplitude)");
+            }
         }
 
         // 5b. Dilaton (box 256 Mpc/h; A2 = 5e5, beta0 = 0.5, xi = 1e-3: range 3 Mpc/h today, shorter than a cell,

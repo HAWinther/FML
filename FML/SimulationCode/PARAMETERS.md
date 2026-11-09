@@ -71,7 +71,9 @@ Parameters marked *optional* take the default value if they are not in the param
 | `gravity_model_fofr_nfofr` | double | `1` | gravity_model = f(R) | The index n of the Hu-Sawicky model |
 | `gravity_model_symmetron_assb` | double | `0.5` | gravity_model = Symmetron | Symmetry breaking scale factor (no fifth-force for a < assb) |
 | `gravity_model_symmetron_beta` | double | `1` | gravity_model = Symmetron | Coupling strength relative to gravity |
-| `gravity_model_symmetron_L_mpch` | double | `1` | gravity_model = Symmetron | Range of the fifth force in the background today (Mpc/h) |
+| `gravity_model_symmetron_L_mpch` | double | `1` | gravity_model = Symmetron | Range of the fifth force in vacuum (Mpc/h; for (N, M) = (2, 4) also the range in the background today if a_ssb^3 << 1) |
+| `gravity_model_symmetron_N` | double | `2` | gravity_model = Symmetron | The power N in V = -(phi/phi_*)^N / N + (phi/phi_*)^M / M and beta(phi) ~ phi^(N-1) (even integer >= 2; Brax et al. 2012, arXiv:1206.3568). (N, M) = (2, 4) is the original symmetron |
+| `gravity_model_symmetron_M` | double | `4` | gravity_model = Symmetron | The power M in the potential (even integer > N) |
 | `gravity_model_dilaton_A2` | double | `500000` | gravity_model = Dilaton | A2 in the coupling A(phi) = 1 + A2 phi^2 / (2 Mpl^2) (A2 >> 1; Brax et al. 2012, arXiv:1206.3568). The screening threshold is Phi_crit = 1 / (2 A2) |
 | `gravity_model_dilaton_beta0` | double | `0.5` | gravity_model = Dilaton | The coupling today beta0 in beta(a) = beta0 exp[s (a^(2r-3) - 1) / (2r - 3)], s = 9 OmegaM A2 xi^2 |
 | `gravity_model_dilaton_r` | double | `1` | gravity_model = Dilaton | The index r in the mass m(a) = m0 a^-r (r <= 3/2; 3/2 is the original dilaton with beta = beta0 a^s) |
