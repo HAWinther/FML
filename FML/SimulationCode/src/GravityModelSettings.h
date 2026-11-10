@@ -182,13 +182,11 @@ namespace SIMCODE {
                                screening_linear_scale_hmpc,
                                0.05,
                                "Use the linear solution for k < k* and the screened solution for k > k* (h/Mpc)");
-                    f.for_gravity({"mbeta", "f(R)", "Dilaton"}, [&]() {
-                        f.optional("gravity_model_screening_efficiency",
-                                   screening_efficiency,
-                                   1.0,
-                                   "Screening efficiency (1 is standard). Increases or decreases the amount of "
-                                   "screening");
-                    });
+                    f.optional("gravity_model_screening_efficiency",
+                               screening_efficiency,
+                               1.0,
+                               "Screening efficiency (1 is standard). Increases or decreases the amount of "
+                               "screening (it scales Phi_crit, or for DGP the density in the Vainshtein factor)");
                 });
             });
             f.for_gravity({"f(R)"}, [&]() {

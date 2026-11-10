@@ -313,6 +313,9 @@ if gravity_model == "DGP" then
   -- For screening approx: smoothing scale R/boxsize (0: no smoothing; 1 smooths over the whole box,
   -- which makes the screening very weak), e.g. 1.0 / simulation_boxsize for R = 1 Mpc/h
   gravity_model_dgp_smoothing_scale_over_boxsize = 0.0
+  -- Screening efficiency (1.0 is standard)
+  -- This can be used to increase or decrease the amount of screening if using gravity_model_screening
+  gravity_model_screening_efficiency = 1.0
   -- Combine screened solution with linear solution to enforce correct
   -- linear evolution on large scales
   gravity_model_screening_enforce_largescale_linear = true
