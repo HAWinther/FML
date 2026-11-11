@@ -14,6 +14,10 @@
 namespace FML {
     namespace COSMICWEB {
 
+        /// ORIGAMI shell-crossing morphology follows Falck, Neyrinck & Szalay (2012),
+        /// https://arxiv.org/abs/1201.2353. FML's axis sampling and implementation details
+        /// are documented separately; this attribution does not imply bitwise compatibility.
+
         /// ORIGAMI morphology of a particle (number of orthogonal axes along which it has been crossed)
         enum OrigamiMorphology : int { ORIGAMI_VOID = 0, ORIGAMI_WALL = 1, ORIGAMI_FILAMENT = 2, ORIGAMI_HALO = 3 };
 

@@ -20,8 +20,8 @@ namespace FML::NBODY {
     /// The time-stepping of the simulation: where the steps are in the scale factor
     /// and the size of the drift and kick steps. The methods:
     ///
-    ///  Quinn    : standard leapfrog (Quinn et al. 1997)
-    ///  Tassev   : modified leapfrog for COLA (Tassev et al. 2013)
+    ///  Quinn    : standard leapfrog (Quinn et al. 1997, https://arxiv.org/abs/astro-ph/9710043)
+    ///  Tassev   : modified leapfrog for COLA (Tassev et al. 2013, https://arxiv.org/abs/1301.0322)
     ///  FastPM   : leapfrog where the kick and drift factors are computed from the
     ///             linear growth factor so that the linear growing mode is followed
     ///             exactly for any step size (Feng et al. 2016, arXiv:1603.00476)

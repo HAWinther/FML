@@ -85,7 +85,7 @@ namespace FML {
                                                 bool ignore_curl_term,
                                                 Dealiasing dealiasing = Dealiasing::None);
 
-            // Augmented LPT potential (Kitaura and Hess 2013)
+            // Augmented LPT potential (Kitaura & Hess 2013, https://arxiv.org/abs/1212.3514)
             template <int N>
             void compute_ALPT_potential_fourier(const FFTWGrid<N> & delta_fourier,
                                                 const FFTWGrid<N> & phi_2LPT_fourier,
@@ -95,7 +95,7 @@ namespace FML {
                                                 double DoverDini_1LPT = 1.0,
                                                 double DoverDini_2LPT = 1.0);
 
-            // Spherical collapse approximation potential (Bernardeau 1994)
+            // Spherical-collapse approximation potential (Bernardeau 1994, https://arxiv.org/abs/astro-ph/9311066)
             template <int N>
             void compute_spherical_collapse_potential(const FFTWGrid<N> & delta_fourier,
                                                       FFTWGrid<N> & phi_sc_fourier,

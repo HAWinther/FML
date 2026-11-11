@@ -9,8 +9,9 @@ namespace FML::NBODY {
         CONTINUOUS_GREENS_FUNCTION,
         // This kernel corresponds to using the symmetric 2-point formula for D = (phi(i+1)-phi(i-1)) to get D^2 =
         // [phi(i+1)+phi(i-1)-2phi(i)]/h^2
-        // This is also the one in Hockney & Eastwood 1988 (-1 / [ 4/dx^2 * Sum sin(ki * dx / 2)^2) and the one used
-        // by FastPM and GLAM
+        // This is also the discrete Green's function described by Hockney & Eastwood (1988), used by FastPM
+        // (Feng et al. 2016, https://arxiv.org/abs/1603.00476) and GLAM. Compare the GADGET-2 force discussion:
+        // https://arxiv.org/abs/astro-ph/0505010.
         DISCRETE_GREENS_FUNCTION_FROM_TWO_POINT,
         // This kernel corresponds to using the symmetric 4-point formula for D to get D^2
         DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT,

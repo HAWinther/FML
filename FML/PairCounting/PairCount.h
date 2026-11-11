@@ -131,7 +131,11 @@ namespace FML {
                 // The estimators below that were proposed for auto pair-counts have been
                 // symmetrized to also give a result for cross pair-counts
                 // See DOI: 10.1051/0004-6361/201220790 for a summary
-                // and https://arxiv.org/pdf/astro-ph/9912088.pdf for a comparison
+                // and https://arxiv.org/abs/astro-ph/9912088 for a comparison
+                // Original estimators: Landy & Szalay (1993), https://doi.org/10.1086/172900;
+                // Hamilton (1993), https://doi.org/10.1086/173288; Hewett (1982);
+                // Davis & Peebles (1983), https://doi.org/10.1086/160884;
+                // Peebles & Hauser (1974); estimator review: https://arxiv.org/abs/astro-ph/9912088.
                 if (estimator == "LZ" or estimator == "LS") {
                     // Landy & Szalay 1993
                     if (R1R2 == 0.0)

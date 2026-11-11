@@ -17,7 +17,10 @@
 namespace FML {
 
     //========================================================================================
-    /// Void finders for periodic boxes, following Revolver (Nadathur et al. 2019, github.com/seshnadathur/Revolver):
+    /// Void finders for periodic boxes. The voxel watershed follows the Revolver approach
+    /// (Nadathur et al. 2019, https://github.com/seshnadathur/Revolver); the ZOBOV method follows
+    /// Neyrinck (2008, https://arxiv.org/abs/0712.3049). FML's periodic geometry and catalogue
+    /// policies are documented in VoidFinders/README.md.
     ///
     /// ZobovVoidFinder: watershed on the Voronoi densities of the particles (ZOBOV, Neyrinck 2008), see
     /// ZobovVoidFinder.h. VoxelVoidFinder: watershed on a smoothed density field on a grid, see VoxelVoidFinder.h.

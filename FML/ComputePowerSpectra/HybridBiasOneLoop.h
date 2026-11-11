@@ -9,15 +9,17 @@ namespace FML {
 
             //=====================================================================================================
             ///
-            /// The one-loop Lagrangian perturbation theory (CLEFT: Carlson, Reid & White 2013; Vlah, Castorina & White
-            /// 2016; Chen, Vlah & White 2020) prediction for the hybrid bias basis spectra P_ab(k) of the operators 1,
+            /// The one-loop Lagrangian perturbation theory (CLEFT: Carlson, Reid & White 2013,
+            /// https://arxiv.org/abs/1209.0780; Vlah, Castorina & White 2016,
+            /// https://arxiv.org/abs/1609.02908; Chen, Vlah & White 2020, https://arxiv.org/abs/2005.00523)
+            /// prediction for the hybrid bias basis spectra P_ab(k) of the operators 1,
             /// delta_L, delta_L^2, s^2 (see HybridBiasSpectra.h).
             ///
             /// The bias operators are built from the linear field (as in the simulation measurement) and the
             /// displacement is Psi = Psi^(1) + Psi^(2) + Psi^(3). The linear A_ij(q) is kept in the exponent (resummed)
             /// and everything else is expanded to one loop. The q-functions and the integrands follow velocileptors
             /// (LPT/cleft_fftw.py, Utils/qfuncfft.py) term by term, with the loop integrals Q_n(k), R_n(k) (Matsubara
-            /// 2008) computed directly in k-space so that a sharp cut of P(k) is handled exactly. The relation to the
+            /// 2008 (https://arxiv.org/abs/0807.1733)) computed directly in k-space so that a sharp cut of P(k) is handled exactly. The relation to the
             /// velocileptors components (bias monomials 1, b1, b1^2, b2, b1 b2, b2^2, bs, b1 bs, b2 bs, bs^2 with
             /// delta_t = 1 + b1 delta + b2/2 delta^2 + bs s^2) is P_11 = [1], P_1d = [b1]/2, P_dd = [b1^2], P_1d2 =
             /// [b2], P_dd2 = [b1 b2], P_d2d2 = 4 [b2^2], P_1s2 = [bs]/2, P_ds2 = [b1 bs]/2, P_d2s2 = [b2 bs], P_s2s2 =

@@ -19,11 +19,12 @@ namespace FML {
         /// correlation function. NB: this is only implemented in 3D. Its not hard to
         /// generalize, but not done as I can't see any use for it.
         ///
-        /// This version is adapted from https://github.com/slosar/FFTLog
-        /// which again is based on code in Copter by JWG Carlson
-        /// https://github.com/jwgcarlson/Copter
-        /// and the original implementation by Andrew Hamilton
-        /// http://casa.colorado.edu/~ajsh/FFTLog/
+        /// This version is adapted from https://github.com/slosar/FFTLog,
+        /// which is based on code in Copter by J. W. G. Carlson
+        /// (https://github.com/jwgcarlson/Copter) and Andrew Hamilton's FFTLog
+        /// implementation (https://jila.colorado.edu/~ajsh/FFTLog/). Cite
+        /// Talman, J. Comput. Phys. 29, 35 (1978), doi:10.1016/0021-9991(78)90107-9,
+        /// and Hamilton, MNRAS 312, 257 (2000), arXiv:astro-ph/9905191, for the method.
         ///
         /// Requires the FFTW3 library.
         ///

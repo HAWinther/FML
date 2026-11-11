@@ -367,7 +367,8 @@ namespace FML::SURVEY::MOCKS {
     }
 
     //=========================================================================
-    // Volume-preserving cuboid remapping (Carlson & White 2010, BoxRemap). An integer matrix M with det = 1 maps
+    // Volume-preserving cuboid remapping (Carlson & White 2010, https://arxiv.org/abs/1003.3178; BoxRemap).
+    // An integer matrix M with det = 1 maps
     // the periodic unit box one to one onto a cuboid with edges L1 = |u1|, L2 = |u2 - (u2.e1) e1|, L3 = 1/(L1 L2)
     // along the Gram-Schmidt axes e1, e2, e3 of its rows u1, u2, u3 (box units), so a deep or wide survey needs
     // no repetition. remap_objects returns the objects in the cuboid (Mpc/h, velocities in its axes); use them with

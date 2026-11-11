@@ -5,7 +5,8 @@
 
 namespace FML::COSMOLOGY {
 
-    // Native mixed cold/ultralight-axion halo model (Vogt et al. 2022; Dome et al. 2024).
+    // Native mixed cold/ultralight-axion halo model (Vogt et al. 2022, https://arxiv.org/abs/2209.13445;
+    // Dome et al. 2024, https://arxiv.org/abs/2409.11469).
     // Independent of the Einstein--Boltzmann solver. k: h/Mpc; P: (Mpc/h)^3; M: Msun/h.
     class AxionHMcode {
       public:

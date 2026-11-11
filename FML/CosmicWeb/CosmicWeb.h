@@ -19,11 +19,13 @@ namespace FML {
     /// Classification of the cosmic web into voids, sheets, filaments and knots from the eigenvalues of a
     /// tensor on a grid:
     ///
-    /// T-web (Hahn et al. 2007, Forero-Romero et al. 2009): the tidal tensor T_ij = d_i d_j phi with
+    /// T-web (Hahn et al. 2007, https://arxiv.org/abs/astro-ph/0610280; Forero-Romero et al. 2009,
+    /// https://arxiv.org/abs/0809.4135): the tidal tensor T_ij = d_i d_j phi with
     /// laplace(phi) = delta (the density contrast, here smoothed with a Gaussian). In Fourier space
     /// T_ij(k) = k_i k_j / k^2 delta(k), and the trace is delta.
     ///
-    /// V-web (Hoffman et al. 2012): the velocity shear Sigma_ij = -(d_i v_j + d_j v_i) / (2 H), e.g. from the DTFE.
+    /// V-web (Hoffman et al. 2012, https://arxiv.org/abs/1201.3367): the velocity shear
+    /// Sigma_ij = -(d_i v_j + d_j v_i) / (2 H), e.g. from the DTFE.
     ///
     /// A grid cell is a void, sheet, filament or knot if 0, 1, 2 or 3 of the eigenvalues are above the threshold
     /// lambda_threshold (Forero-Romero et al. 2009 and Hoffman et al. 2012 use a threshold > 0).

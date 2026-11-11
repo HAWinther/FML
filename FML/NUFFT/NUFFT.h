@@ -35,8 +35,9 @@ namespace FML {
     /// \f[ f(x_p) = \sum_k F(k) e^{i k\cdot x_p} \f]
     /// summed over the same modes.
     ///
-    /// Both are exact up to a relative error \f$ \sim \epsilon \f$ (in contrast to CIC/TSC/... which have
-    /// aliasing and a window function). The algorithm is the standard one (as in FINUFFT, Barnett et al. 2019):
+    /// Both are accurate to the requested tolerance \f$ \epsilon \f$ (in contrast to CIC/TSC/... which have
+    /// aliasing and a window function). The spreading/deconvolution algorithm follows the FINUFFT method
+    /// (Barnett, Magland & af Klinteberg 2019, https://arxiv.org/abs/1808.06736):
     /// spread with the "exponential of semicircle" kernel \f$ \phi(z) = e^{\beta(\sqrt{1-z^2}-1)} \f$ of width
     /// \f$ w \f$ cells onto a grid \f$ \sigma \f$ times finer, FFT, divide by the Fourier transform of the
     /// kernel and keep the modes of the coarse grid (and the reverse for type 2). The width is

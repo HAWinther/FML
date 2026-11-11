@@ -31,8 +31,9 @@ namespace FML {
 
         //=====================================================================================================
         ///
-        /// Hybrid bias (Lagrangian bias basis) spectra, Modi, Chen & White 2020 (1910.07097), Kokron et al. 2021
-        /// (2101.11014), Zennaro et al. 2021. The tracer field is written as a sum of Lagrangian bias operators
+        /// Hybrid bias (Lagrangian bias basis) spectra, Modi, Chen & White 2020 (https://arxiv.org/abs/1910.07097),
+        /// Kokron et al. 2021 (https://arxiv.org/abs/2101.11014), and Zennaro et al. 2021
+        /// (https://arxiv.org/abs/2110.05408). The tracer field is written as a sum of Lagrangian bias operators
         /// advected with the particles of a simulation:
         ///
         ///   delta_t(k) = sum_a b_a O_a(k), O_a(x) = int d^3q O_a(q) delta_D(x - q - Psi(q))
@@ -737,7 +738,8 @@ namespace FML {
             /// @brief The hybrid bias spectra of the Zel'dovich field of the same initial conditions: the lattice
             /// points q are moved with the 1LPT displacement x = q + Psi(q), Psi(k) = i k / k^2 delta_L(k), of the
             /// linear field scaled to the output (growth_factor_of_kBox) and carry the same operator weights as the
-            /// particles of the simulation. This is the control variate of Kokron et al. 2022 (2205.15327): it is
+            /// particles of the simulation. This is the control variate of Kokron et al. 2022
+            /// (https://arxiv.org/abs/2205.15327): it is
             /// strongly correlated with the measured spectra on large scales and its mean is known (the Zel'dovich
             /// prediction, zeldovich_hybrid_bias_spectra, with W_displacement = the cut kcut_displacement), so
             ///   P_ab^cv = P_ab - beta_ab(k) (P_ab^Zel'dovich field - <P_ab^Zel'dovich>)
@@ -838,7 +840,8 @@ namespace FML {
 
             //=====================================================================================================
             /// @brief A fiducial control-variate coefficient beta(k) for the Zel'dovich control variate: the filter
-            /// F(k) = [1 - tanh((k - k0) / dk)] / 2 of Kokron et al. 2022 (2205.15327, Eq. 4.7; k0 = 0.618 h/Mpc,
+            /// F(k) = [1 - tanh((k - k0) / dk)] / 2 of Kokron et al. 2022
+            /// (https://arxiv.org/abs/2205.15327, Eq. 4.7; k0 = 0.618 h/Mpc,
             /// dk = 0.167 h/Mpc, calibrated on the matter spectrum of the Quijote boxes at z = 0). It is ~1 on large
             /// scales, where the simulation and its Zel'dovich field are almost perfectly correlated, and goes to 0
             /// where they decorrelate. Kokron et al. multiply it with the disconnected estimate of the optimal beta

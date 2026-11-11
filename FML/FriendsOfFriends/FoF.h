@@ -43,6 +43,8 @@ namespace FML {
 
         //========================================================================================
         /// Locate friends of friends groups and bin what you want over these groups.
+        /// The FoF linking definition is the standard cosmological method of Davis et al. (1985),
+        /// https://doi.org/10.1086/163168; the grid search and MPI boundary handling here are FML's implementation.
         ///
         /// @tparam T The particle class
         /// @tparam NDIM The number of dimensions

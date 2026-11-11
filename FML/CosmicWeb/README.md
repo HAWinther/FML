@@ -44,6 +44,12 @@ existing options so existing aggregate initialization keeps its meaning.
 Requesting eigenvalues and computing volume/mass fractions work in either mode.
 Reusing a result with a different mode releases the previous label allocation.
 
+## Method references
+
+- T-web tidal-tensor classification: Hahn et al. (2007), [arXiv:astro-ph/0610280](https://arxiv.org/abs/astro-ph/0610280), and Forero-Romero et al. (2009), [arXiv:0809.4135](https://arxiv.org/abs/0809.4135).
+- V-web velocity-shear classification: Hoffman et al. (2012), [arXiv:1201.3367](https://arxiv.org/abs/1201.3367).
+- ORIGAMI shell-crossing morphology: Falck, Neyrinck & Szalay (2012), [arXiv:1201.2353](https://arxiv.org/abs/1201.2353). FML has its own axis sampling, parallelization and halo definitions; this is method attribution, not a claim of exact catalogue equivalence.
+
 For code needing an FFTW grid, convert explicitly on all MPI ranks using the
 same communicator/layout as classification:
 

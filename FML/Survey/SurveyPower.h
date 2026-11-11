@@ -8,7 +8,8 @@ namespace FML::SURVEY {
         double i2 = 0; // <=0: derive from random nbar.
         bool compensate_cic = true;
         bool subtract_shotnoise = true;
-        // Shot noise of the CIC-painted mesh including its aliased images (Jing 2005): the continuum value times
+        // Shot noise of the CIC-painted mesh including its aliased images (Jing 2005,
+        // https://doi.org/10.1086/427087): the continuum value times
         // prod_i [1 - 2/3 sin^2(k_i h/2)], divided by the CIC window^2 when compensating. false: the continuum
         // value, which after compensation is too small by 0.7% at k h = 1.5 along an axis (growing as (k h)^4),
         // and without compensation too large by 1 - prod_i [1 - 2/3 sin^2(k_i h/2)]

@@ -4,13 +4,14 @@ Four finders, all on particles with wrapped positions in `[0,1)^3` (owned by the
 catalogue of `Void` (Void.h) that is the same on every rank:
 
 - `SphericalVoidFinder` grows underdense spheres around density-grid candidates (radius: the largest sphere with
-  mean density below (1 + Delta) times the mean, Padilla et al. 2005), optionally recenters them, and removes
+  mean density below (1 + Delta) times the mean, following the spherical finder of
+  [Padilla, Ceccarelli & Lambas (2005)](https://doi.org/10.1111/j.1365-2966.2005.09500.x)), optionally recenters them, and removes
   overlaps in descending radius order (`max_overlap` in [0, 1)).
-- `VoxelVoidFinder` (Revolver): a smoothed CIC density grid and a watershed (`VoxelWatershed`, which also works on
+- `VoxelVoidFinder` ([Revolver](https://github.com/seshnadathur/Revolver)): a smoothed CIC density grid and a watershed (`VoxelWatershed`, which also works on
   any density grid, e.g. from the DTFE).
-- `ZobovVoidFinder` (Neyrinck 2008): the watershed of the Voronoi densities (needs CGAL, FML/Triangulation).
+- `ZobovVoidFinder` (the [ZOBOV method of Neyrinck (2008)](https://arxiv.org/abs/0712.3049)): the watershed of the Voronoi densities (needs CGAL, FML/Triangulation).
 - Zones are merged by `ZoneMerging`: `None` (every zone is a void, Revolver), `Threshold` (merge through links below
-  `link_density_threshold` times the mean, 0.2 as in VIDE, Sutter et al. 2015) or `Full` (the ZOBOV hierarchy;
+  `link_density_threshold` times the mean, 0.2 as in [VIDE (Sutter et al. 2015)](https://arxiv.org/abs/1406.1191)) or `Full` (the ZOBOV hierarchy;
   `parent` gives the void a void merges into). With `find_clusters` the same is done on 1/density; clusters with
   `Threshold` need `link_density_threshold > 1` (merge through links above it).
 

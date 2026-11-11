@@ -24,7 +24,10 @@ namespace FML {
     namespace FOF {
 
         //========================================================================================
-        /// The spherical overdensity (SO) properties of a halo around a given (guess for the) center
+        /// The spherical overdensity (SO) properties of a halo around a given (guess for the) center.
+        /// Virial overdensity in matter-plus-cosmological-constant backgrounds follows Bryan & Norman (1998),
+        /// https://doi.org/10.1086/305262. The shrinking-sphere criterion is motivated by Power et al. (2003),
+        /// https://arxiv.org/abs/astro-ph/0201544; FML's MPI search and outermost-crossing policy are its own.
         //========================================================================================
         template <int NDIM>
         struct SOHalo {

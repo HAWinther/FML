@@ -70,7 +70,10 @@ namespace FML {
 #endif
 
         //================================================================================
-        // Spectral sheet interpolation (Hahn, Abel & Kaehler 2013; Stuecker et al 2020; List, Hahn & Rampf 2024).
+        // Spectral sheet interpolation draws on the phase-space sheet methods of Hahn, Abel & Kaehler
+        // (2013, https://arxiv.org/abs/1210.6652), Stuecker et al. (2020, https://arxiv.org/abs/1909.00008),
+        // and List, Hahn & Rampf (2024, https://arxiv.org/abs/2409.19049). This FML tracer-grid routine
+        // is its own implementation; these references describe the underlying sheet/interpolation methods.
         //
         // Particles that started on a regular lattice q_i sample the dark matter sheet x(q) = q + Psi(q). The
         // displacement field Psi(q) = x - q is a smooth function of q (until shell crossing) so it can be Fourier

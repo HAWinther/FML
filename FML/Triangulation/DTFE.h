@@ -16,8 +16,9 @@ namespace FML {
 
         //==========================================================================================
         ///
-        /// Delaunay Tessellation Field Estimator (DTFE), see Schaap & van de Weygaert 2000 and
-        /// Cautun & van de Weygaert 2011.
+        /// Delaunay Tessellation Field Estimator (DTFE), see Schaap & van de Weygaert (2000),
+        /// https://arxiv.org/abs/astro-ph/0011007, and Cautun & van de Weygaert (2011),
+        /// https://arxiv.org/abs/1105.0370. This implementation uses CGAL for tessellation geometry.
         ///
         /// We make a periodic Delaunay tessellation of the particles (in 3D). The density at a particle is
         /// \f$ \rho_i = (D+1) m_i / W_i \f$ where \f$ W_i \f$ is the volume of all the tetrahedra that have the

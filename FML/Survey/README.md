@@ -326,5 +326,7 @@ pypower/pyrecon numerical comparison has yet been performed.
 References for the conventions:
 [Bianchi et al. (2015)](https://arxiv.org/abs/1505.05341),
 [Wilson et al. (2017)](https://arxiv.org/abs/1511.07799),
+[Jing (2005), aliased mass-assignment shot noise](https://doi.org/10.1086/427087),
+[Carlson & White (2010), volume remapping](https://arxiv.org/abs/1003.3178),
 [pypower API](https://pypower.readthedocs.io/en/latest/api/api.html), and
 [pyrecon reconstruction conventions](https://pyrecon.readthedocs.io/en/latest/api/api.html).
