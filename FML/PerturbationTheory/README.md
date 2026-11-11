@@ -1,5 +1,8 @@
 # One-loop matter perturbation theory
 
+Contents: one-loop SPT matter spectra (`FastOneLoop.h`, `OneLoop.h`, below) and one-loop Lagrangian perturbation theory
+of biased tracers in redshift space (`LPTRedshiftSpace.h`, `LagrangianQFunctions.h`, [last section](#redshift-space-lagrangian-perturbation-theory-of-biased-tracers)).
+
 Initial implementation of backlog item 35: EdS-kernel one-loop real-space matter spectra using FFTLog for `P22` and a linear FFT convolution for `P13`. An independent, FFT-free direct quadrature API supports reference calculations and explicitly supplied scale-dependent kernels. Existing `HybridBiasOneLoop*.h` LPT/CLEFT and modified-gravity calculations are unchanged. This module does not replace their time/scale-dependent kernels with EdS approximations.
 
 ## Definitions and units
@@ -107,3 +110,97 @@ make run USE_MPI=true USE_OMP=true MPIRUN=mpirun NP_LIST="1 2 4"
 Production follow-ups: validate cosmological transfer functions and desired k ranges, physical IR/UV-cut dependence and infrared cancellations; add analytic regularization, further supported bias/RSD terms and model-specific kernels before claiming a full FAST-PT replacement or an IR-resummed template library.
 
 Primary references: [Schmittfull, Vlah & McDonald, FFT evaluation of one-loop terms](https://arxiv.org/abs/1603.04405), especially Eq. 25; [McEwen et al., FAST-PT](https://arxiv.org/abs/1603.04826), especially its P13 log-convolution construction. This is an independent implementation using FML's existing FFTLog, not imported FAST-PT code.
+
+## Redshift-space Lagrangian perturbation theory of biased tracers
+
+`LPTRedshiftSpace.h` gives the redshift-space power spectrum P(k, mu) and the multipoles P_0, P_2, P_4 of biased
+tracers in one-loop LPT with the long-wavelength displacements resummed (the direct Lagrangian expansion of Chen,
+Vlah, Castorina & White 2021, [arXiv:2012.04636](https://arxiv.org/abs/2012.04636)). It is a port of
+[velocileptors](https://github.com/sfschen/velocileptors)' `LPT/lpt_rsd_fftw.py` (Chen, Vlah & White, MIT license);
+`LagrangianQFunctions.h` ports its q-functions (`Utils/qfuncfft.py`) and `FFTLog/SphericalBesselTransform.h` its
+FFTLog transform.
+
+```cpp
+#include <FML/PerturbationTheory/LPTRedshiftSpace.h>
+using namespace FML::PERTURBATION;
+LPTRedshiftSpace lpt(k, P_linear);               // k [h/Mpc], P [(Mpc/h)^3] at the redshift
+LPTRedshiftSpace::Bias b;                         // Lagrangian b1, b2, bs, b3, alpha0..6, sn, sn2, sn4
+b.b1 = 0.7; b.b2 = 0.3; b.bs = -0.2; b.alpha0 = 10; b.sn = 1000;
+auto table = lpt.multipole_components(f, kout, apar, aperp);   // the expensive part (bias independent)
+auto pell = LPTRedshiftSpace::combine(table, b);                // P_0, P_2, P_4: cheap for every bias
+auto pkmu = lpt.pkmu(f, mu, kout, b);                           // P(k, mu) (no AP)
+```
+
+The bias expansion is delta_t = 1 + b1 delta + b2/2 delta^2 + bs s^2 + b3 O_3 (Lagrangian; the Eulerian linear bias is
+1 + b1), with the counterterms (alpha0 + alpha2 mu^2 + alpha4 mu^4 + alpha6 mu^6) k^2 P_ct (P_ct the resummed linear
+power, or the Zel'dovich one with `use_Pzel`) and the stochastic terms sn + sn2 k^2 mu^2 + sn4 k^4 mu^4. The
+multipole tables have 19 columns (12 bias monomials, 4 counterterms, 3 stochastic terms) with the Alcock-Paczynski
+parameters applied, so fitting the bias and nuisance parameters only needs `combine`. `pk_components` gives the 13
+components of P(k, mu) (the bias monomials and P_ct). Options: the cutoff exp(-(k/cutoff)^2) of the input (10 h/Mpc),
+the internal grid (`log10_kmin` = -4, `log10_kmax` = 1, `N` = 1024), the number of spherical Bessel orders and
+hypergeometric terms of the angular integrals (`jn` = `nmax` = 10), an IR split `kIR` of the resummed displacements,
+`one_loop`, `use_Pzel`.
+
+Validation (`tests/test_lptrsd.cpp`):
+
+- velocileptors with its settings (jn = nmax = 5, N = 256): the components and the multipole columns with AP, also
+  with kIR and use_Pzel, to 7e-9 (fixture from `python/generate_lptrsd_reference.py`).
+- The redshift-space Zel'dovich P(k, mu) (one_loop = false) against a direct integration over q, independent of the
+  hypergeometric/FFTLog angular series: 0.02-0.12% (f = 0.8, k = 0.05-0.2 h/Mpc).
+- f = 0 against the real-space CLEFT of `ComputePowerSpectra/HybridBiasOneLoop.h` (direct integration): 2e-4.
+- The Kaiser limit (1 + b1 + f mu^2)^2 P_lin at k = 0.001 h/Mpc (log10_kmin = -5): 8e-5. Convergence in jn/nmax
+  (1e-5) and ngauss (6e-5), the bias combination, isotropic AP, rejected options.
+
+velocileptors' default settings are not converged for the angular series: with jn = nmax = 5, P_0 is off by 0.8% (1.5%)
+and P_2 by 4% (1%) at k = 0.2 (0.3) h/Mpc, and ngauss = 3 gets P_4 only to ~1%. The defaults here are therefore jn =
+nmax = 10, ngauss = 4 and N = 1024 (N = 256: 0.2-0.4% against the direct Zel'dovich integration). N must be even (odd N
+gives 1-10% errors, also in velocileptors) and log10_kmax at most 1 (at smaller q the series loses all precision).
+Valid for k >~ 0.005 h/Mpc with the default grid. Cost: ~0.8 s for the multipole tables at 50 k with the defaults
+(0.1 s with velocileptors' settings). Not thread safe: one object per thread. The correlation-function multipoles
+and the moment expansion of velocileptors are not ported.
+
+## IR-resummed Eulerian perturbation theory in redshift space
+
+`EPTRedshiftSpace.h` gives P(k, mu) and the multipoles P_0, P_2, P_4 of biased tracers in one-loop Eulerian
+perturbation theory with IR resummation (velocileptors' "REPT", Chen, Vlah & White 2020,
+[arXiv:2005.00523](https://arxiv.org/abs/2005.00523)): the one-loop P(k, mu) built from the velocity moments up to
+the fourth, with the wiggle part of every term damped by exp(-k^2 Sigma^2 (1 + f (2 + f) mu^2) / 2), Sigma^2 =
+X(r_bao) + Y(r_bao)/3 of the no-wiggle spectrum (r_bao = 110 Mpc/h), and the damped linear term compensated. The
+one-loop spectra are computed with FFTLog from the k-expanded Lagrangian expansion and mapped to the Eulerian bias
+basis (`EPTVelocityMoments`, also usable on its own for the unresummed EPT tables). A port of velocileptors'
+`EPT/ept_fullresum_fftw.py` with `ept_fftw.py`, `velocity_moments_kexpanded_fftw.py` and `cleft_kexpanded_fftw.py`.
+
+```cpp
+#include <FML/PerturbationTheory/EPTRedshiftSpace.h>
+using namespace FML::PERTURBATION;
+EPTRedshiftSpace::Options opt;                   // output grid kmin = 0.01, kmax = 0.5, nk = 100 (log-spaced)
+EPTRedshiftSpace rept(k, P_linear, {}, opt);    // {}: no-wiggle P from a Savitzky-Golay filter; or pass P_nw(k)
+EPTRedshiftSpace::Bias b;                        // Eulerian b1, b2, bs, b3, alpha0..6, sn, sn2, sn4
+b.b1 = 1.7; b.b2 = 0.3; b.alpha0 = 10; b.sn = 1000;
+auto table = rept.multipole_components(f, apar, aperp);   // 19 columns, bias independent
+auto pell = EPTRedshiftSpace::combine(table, b);           // P_0, P_2, P_4 on rept.k()
+auto pkmu = rept.pkmu(f, mu, b, apar, aperp, bFoG);        // P(k, mu)
+```
+
+The bias is Eulerian (P -> (b1 + f mu^2)^2 P_lin on large scales; LPTRedshiftSpace uses the Lagrangian b1 = b1_E - 1).
+The counterterms (alpha0 + alpha2 mu^2 + alpha4 mu^4 + alpha6 mu^6) k^2 multiply the resummed linear power P_nw +
+e^(-k^2 Sigma^2(mu)/2) P_w, the stochastic terms are sn + sn2 k^2 mu^2 + sn4 k^4 mu^4, and `pkmu` has velocileptors'
+optional -bFoG k^4 mu^4 (b1 + f mu^2)^2 P_res term. The columns are the same 19 as in LPTRedshiftSpace. The
+no-wiggle spectrum defaults to velocileptors' Savitzky-Golay filter (order 4, a window of ln 7 in ln k) of the
+linear P on the internal grid; velocileptors applies its cutoff exp(-(k/20)^2) twice to that spectrum, here once.
+Sigma^2 can be set directly (`sigma2_bao`).
+
+Validation (`tests/test_rept.cpp`):
+
+- velocileptors with its internal grid: the no-wiggle filter (6e-8, the accuracy of scipy's own coefficients),
+  Sigma^2, the 31 EPT velocity-moment columns, the 19 columns of P(k, mu) with and without AP, P(k, mu) with bFoG and
+  the multipole columns, all to ~1e-8 (fixture from `python/generate_rept_reference.py`).
+- f = 0, b1 = 1, no wiggles against the direct one-loop SPT P_lin + P_22 + P_13 of `OneLoop.h`: 6e-5 for k = 0.02 -
+  0.5 h/Mpc. The Kaiser limit at k = 0.001-0.003 h/Mpc (6e-4, the loop terms). No resummation two ways (P_nw = P,
+  Sigma^2 = 0). Convergence of the internal grid (5e-5 of P_0) and of ngauss (4e-7).
+
+velocileptors' internal grid (k = 1e-4 - 1e3 h/Mpc, N = 4000) is not converged: the k-expanded loop terms are
+large cancelling powers of k, and with q <= 1e4 Mpc/h the real-space P is off by 0.2% at k = 0.3 h/Mpc and 0.5% at
+k = 0.5 h/Mpc (0.7% in P(k, mu = 0.7)). The default grid is therefore 1e-5 - 1e3 h/Mpc with N = 6000. The angular
+integrals are exact (l <= 4). Cost: ~0.3 s to construct (q-functions of P and of P_nw); the tables are cheap. Not
+thread safe: one object per thread.

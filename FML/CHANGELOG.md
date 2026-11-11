@@ -5,6 +5,28 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### PerturbationTheory: IR-resummed one-loop EPT in redshift space (velocileptors)
+- `PerturbationTheory/EPTRedshiftSpace.h`: P(k, mu) and the multipoles P_0, P_2, P_4 of biased tracers in one-loop
+  Eulerian PT with IR resummation (wiggle/no-wiggle split, the wiggles damped by exp(-k^2 Sigma^2 (1 + f(2 + f) mu^2)
+  / 2)), Eulerian bias to cubic order, counterterms, stochastic terms, Alcock-Paczynski and bias-independent 19-column
+  tables. A port of velocileptors' REPT (MIT) and of the EPT velocity-moment tables behind it (`EPTVelocityMoments`).
+  The no-wiggle spectrum is user-supplied or velocileptors' Savitzky-Golay filter (cutoff applied once).
+- Reproduces velocileptors (its internal grid) to ~1e-8. That grid is not converged (0.2-0.5% at k = 0.3-0.5 h/Mpc
+  in the real-space P), so the default grid is 1e-5 - 1e3 h/Mpc with N = 6000: 6e-5 against the direct one-loop SPT
+  of OneLoop.h for k <= 0.5. `PerturbationTheory/tests/test_rept`.
+
+### PerturbationTheory: one-loop LPT of biased tracers in redshift space (velocileptors)
+- `PerturbationTheory/LPTRedshiftSpace.h`: P(k, mu) and the multipoles P_0, P_2, P_4 of biased tracers in one-loop
+  Lagrangian perturbation theory with resummed displacements (Chen, Vlah, Castorina & White 2021): bias up to cubic
+  order, EFT counterterms, stochastic terms, Alcock-Paczynski, an optional IR split. A port of velocileptors'
+  LPT_RSD (MIT); `LagrangianQFunctions.h` (its q-functions) and `FFTLog/SphericalBesselTransform.h` (its FFTLog).
+  Bias-independent multipole tables, so a fit of the bias/nuisance parameters only combines columns.
+- Reproduces velocileptors (its settings) to 7e-9. Those settings are not converged (jn = nmax = 5: P_2 off by up to
+  4% at k = 0.2 h/Mpc; ngauss = 3: P_4 to ~1%), so the defaults are jn = nmax = 10, ngauss = 4, N = 1024. Checked
+  against a direct integration of the redshift-space Zel'dovich P(k, mu) (0.02-0.12%), the real-space CLEFT of
+  HybridBiasOneLoop.h at f = 0 (2e-4) and the Kaiser limit. Odd N (1-10% errors) and log10_kmax > 1 are rejected.
+  `PerturbationTheory/tests/test_lptrsd`.
+
 ### SimulationCode: a nonlinear P(k) prediction for f(R)
 - `FML/Emulator/FofrFittingFunction.h`: the fitting functions of Winther et al. 2019 (arXiv:1903.08798) for
   P_f(R)/P_LCDM in Hu-Sawicky f(R) with n = 1, nonlinear (`nonlinear_boost`, 1e-7 <= |fR0| <= 1e-4, z <= 3,

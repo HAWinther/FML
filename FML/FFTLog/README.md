@@ -51,3 +51,11 @@ cannot be shared by simultaneous calls.
 Input grids retain the logarithmic-spacing requirement. Transforms reject lengths
 below two or above `INT_MAX`, mismatched vectors, and invalid endpoint spans.
 Interior logarithmic spacing is the caller's responsibility.
+
+## SphericalBesselTransform.h
+
+`SphericalBesselTransform` does the spherical Bessel transforms g_l(y) = C int dx x^2 j_l(xy) f(x) of functions on one
+fixed logarithmic grid for l = 0, ..., L-1 with precomputed kernels (C = 4 pi, or 1/(2 pi^2) with `fourier`). It is
+the mcfit-style FFTLog of velocileptors (zero padding to 2^(ceil(log2 N) + 1) points, tilt max(0, 3/2 - l), a low-ringing
+output grid), reproduced to rounding, and is used by `PerturbationTheory/LPTRedshiftSpace.h`. Header only (FFTW); one
+object per thread.
