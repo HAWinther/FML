@@ -5,7 +5,7 @@
 //     multipole columns
 //   - the real-space matter P(k) (b1 = 1, f = 0, no wiggles) against the direct one-loop SPT of OneLoop.h
 //   - the Kaiser limit, no-wiggle = P (no resummation), the not-a-knot spline, convergence of the internal grid,
-//     the bias combination, the default (internal) no-wiggle spectrum, invalid options
+//     the bias combination, the internal no-wiggle spectra (DST, Savitzky-Golay), invalid options
 // Run from this folder (reads reference/)
 //==========================================================
 #include <FML/Global/Global.h>
@@ -366,22 +366,59 @@ int main() {
     }
 
     //==========================================================
-    // The default no-wiggle spectrum (internal Savitzky-Golay filter) is close to the reference one
+    // The internal no-wiggle spectra: Savitzky-Golay (velocileptors' REPT) ~ the reference (the same filter on
+    // velocileptors' grid, interpolated through the input k-grid); the default DST one = nowiggle_dst; the effect of
+    // the no-wiggle method on the multipoles
     //==========================================================
     {
         EPTRedshiftSpace::Options o = opt;
         o.nk = 30;
-        EPTRedshiftSpace d(k, p, {}, o);
+        o.nowiggle = EPTRedshiftSpace::Options::NoWiggle::SavitzkyGolay;
+        EPTRedshiftSpace sg(k, p, {}, o);
         double err = 0;
         const detail::LogInterp Pnw(knw, pnw);
-        for (size_t j = 0; j < d.k().size(); j++) {
-            const double ref = Pnw(d.k()[j]);
-            err = std::max(err, std::abs(d.plinear_nowiggle()[j] / ref - 1));
+        for (size_t j = 0; j < sg.k().size(); j++)
+            err = std::max(err, std::abs(sg.plinear_nowiggle()[j] / Pnw(sg.k()[j]) - 1));
+        std::cout << "  Savitzky-Golay no-wiggle vs reference: max rel diff " << err << "; Sigma^2 " << sg.sigma2_BAO()
+                  << "\n";
+        check(err < 1e-3, "Savitzky-Golay no-wiggle spectrum ~ the reference");
+        check(std::abs(sg.sigma2_BAO() / rept.sigma2_BAO() - 1) < 1e-3, "Savitzky-Golay Sigma^2 ~ reference");
+    }
+    {
+        // The default (DST) no-wiggle spectrum on the internal grid = nowiggle_dst on the input grid, and the
+        // multipoles with the three no-wiggle methods of NoWiggle.h. A well-sampled CAMB P(k) (the other test
+        // spectrum has dlnk ~ 0.13 at the BAO scales, where the DST cut depends on the sampling)
+        DVector kc, pc;
+        read_two("reference/nowiggle_camb_pk.txt", kc, pc);
+        EPTRedshiftSpace::Options o = opt;
+        o.nk = 30;
+        o.kmin = 0.02;
+        o.kmax = 0.3;
+        EPTRedshiftSpace dst(kc, pc, {}, o);
+        const DVector pd = nowiggle_dst(kc, pc);
+        const detail::LogInterp Pd(kc, pd);
+        double errd = 0;
+        for (size_t j = 0; j < dst.k().size(); j++)
+            errd = std::max(errd, std::abs(dst.plinear_nowiggle()[j] / Pd(dst.k()[j]) - 1));
+        std::cout << "  DST no-wiggle (internal grid) vs nowiggle_dst on the input grid: " << errd << "\n";
+        check(errd < 2e-3, "default (DST) no-wiggle spectrum = nowiggle_dst of the input");
+
+        EisensteinHuParameters eh;
+        eh.Omega_m = (0.02242 + 0.11933) / (0.6766 * 0.6766);
+        eh.Omega_b = 0.02242 / (0.6766 * 0.6766);
+        EPTRedshiftSpace gauss(kc, pc, nowiggle_gaussian(kc, pc, eh), o);
+        o.nowiggle = EPTRedshiftSpace::Options::NoWiggle::SavitzkyGolay;
+        EPTRedshiftSpace sg(kc, pc, {}, o);
+        const auto md = dst.multipoles(f, bias), mg = gauss.multipoles(f, bias), ms = sg.multipoles(f, bias);
+        double dg = 0, ds = 0;
+        for (size_t j = 0; j < md.k.size(); j++) {
+            const double s0 = std::abs(md.p0[j]);
+            dg = std::max({dg, std::abs(mg.p0[j] - md.p0[j]) / s0, std::abs(mg.p2[j] - md.p2[j]) / s0});
+            ds = std::max({ds, std::abs(ms.p0[j] - md.p0[j]) / s0, std::abs(ms.p2[j] - md.p2[j]) / s0});
         }
-        std::cout << "  default no-wiggle vs reference: max rel diff " << err << "; Sigma^2 " << d.sigma2_BAO() << "\n";
-        // (the reference is the filter on velocileptors' grid, interpolated through the input k-grid)
-        check(err < 1e-3, "default no-wiggle spectrum ~ the Savitzky-Golay filter of the reference");
-        check(std::abs(d.sigma2_BAO() / rept.sigma2_BAO() - 1) < 1e-3, "default Sigma^2 ~ reference (different internal grid)");
+        std::cout << "  multipoles (P_0, P_2; / P_0, k <= 0.3): Gaussian-EH vs DST " << dg << ", Savitzky-Golay vs DST "
+                  << ds << "\n";
+        check(dg < 1e-2, "multipoles with the DST and the Gaussian-EH no-wiggle spectra agree to 1% of P_0");
     }
 
     //==========================================================

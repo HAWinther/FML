@@ -174,7 +174,7 @@ basis (`EPTVelocityMoments`, also usable on its own for the unresummed EPT table
 #include <FML/PerturbationTheory/EPTRedshiftSpace.h>
 using namespace FML::PERTURBATION;
 EPTRedshiftSpace::Options opt;                   // output grid kmin = 0.01, kmax = 0.5, nk = 100 (log-spaced)
-EPTRedshiftSpace rept(k, P_linear, {}, opt);    // {}: no-wiggle P from a Savitzky-Golay filter; or pass P_nw(k)
+EPTRedshiftSpace rept(k, P_linear, {}, opt);    // {}: no-wiggle P by the DST method (NoWiggle.h); or pass P_nw(k)
 EPTRedshiftSpace::Bias b;                        // Eulerian b1, b2, bs, b3, alpha0..6, sn, sn2, sn4
 b.b1 = 1.7; b.b2 = 0.3; b.alpha0 = 10; b.sn = 1000;
 auto table = rept.multipole_components(f, apar, aperp);   // 19 columns, bias independent
@@ -185,22 +185,60 @@ auto pkmu = rept.pkmu(f, mu, b, apar, aperp, bFoG);        // P(k, mu)
 The bias is Eulerian (P -> (b1 + f mu^2)^2 P_lin on large scales; LPTRedshiftSpace uses the Lagrangian b1 = b1_E - 1).
 The counterterms (alpha0 + alpha2 mu^2 + alpha4 mu^4 + alpha6 mu^6) k^2 multiply the resummed linear power P_nw +
 e^(-k^2 Sigma^2(mu)/2) P_w, the stochastic terms are sn + sn2 k^2 mu^2 + sn4 k^4 mu^4, and `pkmu` has velocileptors'
-optional -bFoG k^4 mu^4 (b1 + f mu^2)^2 P_res term. The columns are the same 19 as in LPTRedshiftSpace. The
-no-wiggle spectrum defaults to velocileptors' Savitzky-Golay filter (order 4, a window of ln 7 in ln k) of the
-linear P on the internal grid; velocileptors applies its cutoff exp(-(k/20)^2) twice to that spectrum, here once.
+optional -bFoG k^4 mu^4 (b1 + f mu^2)^2 P_res term. The columns are the same 19 as in LPTRedshiftSpace. Without a
+given no-wiggle spectrum it is computed on the internal grid with the discrete sine transform method of
+`NoWiggle.h` (default) or, as in velocileptors' REPT, a Savitzky-Golay filter (`opt.nowiggle`); see below for why
+the default differs (velocileptors also applies its cutoff exp(-(k/20)^2) twice to its filtered spectrum, here once).
 Sigma^2 can be set directly (`sigma2_bao`).
 
 Validation (`tests/test_rept.cpp`):
 
-- velocileptors with its internal grid: the no-wiggle filter (6e-8, the accuracy of scipy's own coefficients),
+- velocileptors with its internal grid and the same no-wiggle spectrum: the Savitzky-Golay filter (6e-8, the
+  accuracy of scipy's own coefficients),
   Sigma^2, the 31 EPT velocity-moment columns, the 19 columns of P(k, mu) with and without AP, P(k, mu) with bFoG and
   the multipole columns, all to ~1e-8 (fixture from `python/generate_rept_reference.py`).
 - f = 0, b1 = 1, no wiggles against the direct one-loop SPT P_lin + P_22 + P_13 of `OneLoop.h`: 6e-5 for k = 0.02 -
   0.5 h/Mpc. The Kaiser limit at k = 0.001-0.003 h/Mpc (6e-4, the loop terms). No resummation two ways (P_nw = P,
   Sigma^2 = 0). Convergence of the internal grid (5e-5 of P_0) and of ngauss (4e-7).
+- The no-wiggle method (a CAMB P(k), k <= 0.3 h/Mpc): the multipoles with the DST and the Gaussian-EH spectra agree to
+  0.5% of P_0; with the Savitzky-Golay one they differ by up to 3%, which is why DST is the default.
 
 velocileptors' internal grid (k = 1e-4 - 1e3 h/Mpc, N = 4000) is not converged: the k-expanded loop terms are
 large cancelling powers of k, and with q <= 1e4 Mpc/h the real-space P is off by 0.2% at k = 0.3 h/Mpc and 0.5% at
 k = 0.5 h/Mpc (0.7% in P(k, mu = 0.7)). The default grid is therefore 1e-5 - 1e3 h/Mpc with N = 6000. The angular
 integrals are exact (l <= 4). Cost: ~0.3 s to construct (q-functions of P and of P_nw); the tables are cheap. Not
 thread safe: one object per thread.
+
+## Wiggle/no-wiggle splits
+
+`NoWiggle.h` gives the smooth (no-wiggle) part P_nw of a linear P(k) (k in h/Mpc), with the BAO removed:
+
+```cpp
+#include <FML/PerturbationTheory/NoWiggle.h>
+using namespace FML::PERTURBATION;
+auto pnw_dst = nowiggle_dst(k, P);                  // discrete sine transform (no cosmology needed)
+EisensteinHuParameters eh;                          // Omega_m, Omega_b, h, TCMB, n_s
+auto pnw_gauss = nowiggle_gaussian(k, P, eh);       // Gaussian smoothing of P / P_EH,nw in ln k (sigma = 0.25)
+auto pnw_sg = nowiggle_savgol(k, P);                // Savitzky-Golay filter in ln k
+double T = eisenstein_hu_transfer(kh, eh), Tnw = eisenstein_hu_transfer_nowiggle(kh, eh);
+```
+
+- `nowiggle_dst`: the method of Hamann et al. 2010 / Wallisch 2018 (arXiv:1810.02800): the BAO bump in the discrete
+  sine transform of ln(k P) on a linear k-grid (1e-3 - 10 h/Mpc, 2^16 points; P_nw = P outside) is cut out and
+  interpolated over. A port of velocileptors' `Utils/pnw_dst.py`, reproduced to 1e-13, except that the bump detection
+  ignores shallow extrema: velocileptors' choice of the cut depends on the sampling of P (3% changes in P_nw for the
+  same P resampled, here < 0.5%). Manual cut indices `ii_l`, `ii_r` (a smooth P has no bump: an error).
+- `nowiggle_gaussian`: P_ref times the Gaussian-smoothed P / P_ref (Vlah et al. 2016; HMcode-2020), with any smooth
+  reference shape or the Eisenstein & Hu no-wiggle one.
+- `nowiggle_savgol`: velocileptors' REPT default (order 4, window ln 7 in ln k).
+- The Eisenstein & Hu (1998) transfer functions with and without the baryon wiggles, equal to colossus' to rounding.
+
+Validation (`tests/test_nowiggle.cpp`; references from `python/generate_nowiggle_reference.py`, including a
+well-sampled CAMB P(k)): the ports above; a smooth P is returned to 9e-5 (DST), 0.5% (Savitzky-Golay) and 0.8%
+(Gaussian with a reference shape for Omega_m = 0.25, n_s = 1 instead of 0.31, 0.97); the wiggles of the CAMB P,
+measured as the largest residual of ln P_nw about a degree-10 polynomial in ln k for k = 0.05 - 0.4 h/Mpc, go from
+4.9% to 0.7% (DST and Savitzky-Golay) and 0.05% (Gaussian-EH). DST and Gaussian-EH agree to 0.7% for k = 0.15 - 2
+h/Mpc but differ by up to 5% around the first wiggle (k = 0.005 - 0.05), where the split is ill-defined.
+The Savitzky-Golay filter leaves wiggles of ~2% at k = 0.1 - 0.3 h/Mpc. The Gaussian-EH method is the cleanest when
+the cosmology is known; DST needs only P. FieldLevel, HMcode-2020 and the Cosmology spectra have their own copies of
+the Eisenstein & Hu no-wiggle fit.

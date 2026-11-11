@@ -4,6 +4,7 @@
 #include <FML/FFTLog/SphericalBesselTransform.h>
 #include <FML/PerturbationTheory/LPTRedshiftSpace.h>
 #include <FML/PerturbationTheory/LagrangianQFunctions.h>
+#include <FML/PerturbationTheory/NoWiggle.h>
 
 #include <algorithm>
 #include <array>
@@ -13,155 +14,6 @@
 #include <vector>
 
 namespace FML::PERTURBATION {
-
-    namespace detail {
-
-        /// Savitzky-Golay smoothing of uniformly sampled y (scipy.signal.savgol_filter(y, window, order) with the
-        /// default mode 'interp': the ends are the polynomial fit to the first/last window points)
-        inline DVector savgol_filter(const DVector & y, int window, int order) {
-            const int n = int(y.size());
-            if (window % 2 != 1 or window <= order or window > n)
-                throw std::invalid_argument("[savgol_filter] the window must be odd, > order and <= the data size");
-            const int h = window / 2, np = order + 1;
-            // Weights w_j such that sum_j w_j y_j is the least-squares polynomial (in t_j = (j - h) / h) at t
-            auto weights = [&](double t) {
-                std::vector<DVector> M(np, DVector(np, 0.0));
-                std::vector<DVector> At(np, DVector(window));
-                for (int j = 0; j < window; j++) {
-                    const double tj = (j - h) / double(h);
-                    double v = 1.0;
-                    for (int a = 0; a < np; a++, v *= tj)
-                        At[a][j] = v;
-                }
-                for (int a = 0; a < np; a++)
-                    for (int b = 0; b < np; b++)
-                        for (int j = 0; j < window; j++)
-                            M[a][b] += At[a][j] * At[b][j];
-                // Solve M c = (1, t, t^2, ...) (symmetric positive definite: Gaussian elimination)
-                DVector rhs(np);
-                double v = 1.0;
-                for (int a = 0; a < np; a++, v *= t)
-                    rhs[a] = v;
-                for (int a = 0; a < np; a++) {
-                    for (int b = a + 1; b < np; b++) {
-                        const double r = M[b][a] / M[a][a];
-                        for (int c = a; c < np; c++)
-                            M[b][c] -= r * M[a][c];
-                        rhs[b] -= r * rhs[a];
-                    }
-                }
-                DVector c(np);
-                for (int a = np - 1; a >= 0; a--) {
-                    double s = rhs[a];
-                    for (int b = a + 1; b < np; b++)
-                        s -= M[a][b] * c[b];
-                    c[a] = s / M[a][a];
-                }
-                DVector w(window, 0.0);
-                for (int j = 0; j < window; j++)
-                    for (int a = 0; a < np; a++)
-                        w[j] += c[a] * At[a][j];
-                return w;
-            };
-            DVector out(n, 0.0);
-            const DVector wc = weights(0.0);
-            for (int i = h; i < n - h; i++) {
-                double s = 0.0;
-                for (int j = 0; j < window; j++)
-                    s += wc[j] * y[i - h + j];
-                out[i] = s;
-            }
-            for (int i = 0; i < h; i++) {
-                const DVector wl = weights((i - h) / double(h));
-                const DVector wr = weights((window - h + i - h) / double(h));
-                double sl = 0.0, sr = 0.0;
-                for (int j = 0; j < window; j++) {
-                    sl += wl[j] * y[j];
-                    sr += wr[j] * y[n - window + j];
-                }
-                out[i] = sl;
-                out[n - h + i] = sr;
-            }
-            return out;
-        }
-
-        /// A cubic spline with not-a-knot end conditions, extrapolated with the end cubics
-        /// (scipy.interpolate.interp1d(kind='cubic', fill_value='extrapolate')). The knots are fixed; any number of
-        /// data sets can be interpolated with the same factorization.
-        class NotAKnotSpline {
-          public:
-            NotAKnotSpline() = default;
-            explicit NotAKnotSpline(const DVector & x_) : x(x_) {
-                n = int(x.size());
-                if (n < 4)
-                    throw std::invalid_argument("[NotAKnotSpline] need >= 4 knots");
-                hs.resize(n - 1);
-                for (int i = 0; i < n - 1; i++) {
-                    hs[i] = x[i + 1] - x[i];
-                    if (not(hs[i] > 0))
-                        throw std::invalid_argument("[NotAKnotSpline] the knots must increase");
-                }
-                // Tridiagonal system for M_1 ... M_(n-2) after eliminating M_0 and M_(n-1) with the not-a-knot
-                // conditions h1 (M1 - M0) = h0 (M2 - M1) and the same at the end
-                const int m = n - 2;
-                a.assign(m, 0.0);
-                b.assign(m, 0.0);
-                c.assign(m, 0.0);
-                for (int r = 0; r < m; r++) {
-                    const int i = r + 1;
-                    a[r] = hs[i - 1];
-                    b[r] = 2 * (hs[i - 1] + hs[i]);
-                    c[r] = hs[i];
-                }
-                const double h0 = hs[0], h1 = hs[1];
-                b[0] += h0 * (h0 + h1) / h1;
-                c[0] -= h0 * h0 / h1;
-                const double hm = hs[n - 2], hm1 = hs[n - 3];
-                b[m - 1] += hm * (hm + hm1) / hm1;
-                a[m - 1] -= hm * hm / hm1;
-                // Thomas factorization
-                cp.assign(m, 0.0);
-                den.assign(m, 0.0);
-                for (int r = 0; r < m; r++) {
-                    den[r] = b[r] - (r > 0 ? a[r] * cp[r - 1] : 0.0);
-                    cp[r] = c[r] / den[r];
-                }
-            }
-
-            /// The spline of y at the points xe
-            DVector operator()(const DVector & y, const DVector & xe) const {
-                if (int(y.size()) != n)
-                    throw std::invalid_argument("[NotAKnotSpline] y has the wrong size");
-                const int m = n - 2;
-                DVector d(m), M(n);
-                for (int r = 0; r < m; r++) {
-                    const int i = r + 1;
-                    d[r] = 6 * ((y[i + 1] - y[i]) / hs[i] - (y[i] - y[i - 1]) / hs[i - 1]);
-                }
-                DVector dp(m);
-                for (int r = 0; r < m; r++)
-                    dp[r] = (d[r] - (r > 0 ? a[r] * dp[r - 1] : 0.0)) / den[r];
-                for (int r = m - 1; r >= 0; r--)
-                    M[r + 1] = dp[r] - (r < m - 1 ? cp[r] * M[r + 2] : 0.0);
-                M[0] = ((hs[0] + hs[1]) * M[1] - hs[0] * M[2]) / hs[1];
-                M[n - 1] = ((hs[n - 2] + hs[n - 3]) * M[n - 2] - hs[n - 2] * M[n - 3]) / hs[n - 3];
-                DVector out(xe.size());
-                for (size_t e = 0; e < xe.size(); e++) {
-                    const double xx = xe[e];
-                    int i = int(std::upper_bound(x.begin(), x.end(), xx) - x.begin()) - 1;
-                    i = std::clamp(i, 0, n - 2);
-                    const double h = hs[i], A = x[i + 1] - xx, B = xx - x[i];
-                    out[e] = M[i] * A * A * A / (6 * h) + M[i + 1] * B * B * B / (6 * h) + (y[i] / h - M[i] * h / 6) * A +
-                             (y[i + 1] / h - M[i + 1] * h / 6) * B;
-                }
-                return out;
-            }
-
-          private:
-            DVector x, hs, a, b, c, cp, den;
-            int n{0};
-        };
-    } // namespace detail
 
     //=================================================================================================================
     ///
@@ -490,9 +342,11 @@ namespace FML::PERTURBATION {
     /// sn + sn2 k^2 mu^2 + sn4 k^4 mu^4.
     ///
     /// Input: the linear P(k) at the redshift (k in h/Mpc, P in (Mpc/h)^3) on any increasing grid, and optionally
-    /// the no-wiggle spectrum on the same grid. Without it the no-wiggle spectrum is a Savitzky-Golay filter (order
-    /// 4, width ln 7 in ln k) of P on the internal grid (velocileptors' default; unlike velocileptors the cutoff
-    /// exp(-(k/cutoff)^2) is applied once to it). The output grid is log-spaced, kmin - kmax with nk points.
+    /// the no-wiggle spectrum on the same grid. Without it the no-wiggle spectrum is computed on the internal grid
+    /// with the discrete sine transform method of NoWiggle.h (default) or, as velocileptors' REPT, a Savitzky-Golay
+    /// filter (order 4, width ln 7 in ln k; its ~0.5% broadband bias at k >~ 0.3 h/Mpc goes straight into P, where
+    /// the wiggles are damped away; velocileptors also applies its cutoff exp(-(k/cutoff)^2) to it twice, here
+    /// once). The output grid is log-spaced, kmin - kmax with nk points.
     /// Alcock-Paczynski parameters apar, aperp (k and mu observed; velocileptors' convention).
     ///
     /// Accuracy (tests/test_rept.cpp). With velocileptors' internal grid (log10_kmin = -4, N = 4000) it reproduces
@@ -515,6 +369,12 @@ namespace FML::PERTURBATION {
             double rbao{110.0};           // Sigma^2 = X + Y/3 at this separation (Mpc/h)
             double sigma2_bao{-1.0};      // >= 0: use this Sigma^2 ((Mpc/h)^2) instead
             EPTVelocityMoments::Options internal{};
+            /// The no-wiggle spectrum when none is given (NoWiggle.h), computed on the internal grid: the discrete
+            /// sine transform method (default) or velocileptors' Savitzky-Golay filter (biased by ~0.5% for
+            /// k >~ 0.3 h/Mpc, where the result is the no-wiggle part)
+            enum class NoWiggle { DST, SavitzkyGolay };
+            NoWiggle nowiggle{NoWiggle::DST};
+            NoWiggleDSTOptions dst{};
         };
 
         /// The columns of the tables: the bias monomials 1, b1, b1^2, b2, b1 b2, b2^2, bs, b1 bs, b2 bs, bs^2, b3,
@@ -557,9 +417,10 @@ namespace FML::PERTURBATION {
                 plin[j] = Pk(kv[j]);
             plin_nw.resize(opt.nk);
             if (Pnw.empty()) {
-                const double dlnk = std::log(kint[io.N - 1] / kint[io.N - 2]);
-                const int window = int(std::ceil(std::log(7.0) / dlnk)) / 2 * 2 + 1;
-                pnw_int = detail::savgol_filter(p_raw, window, 4);
+                if (opt.nowiggle == Options::NoWiggle::DST)
+                    pnw_int = nowiggle_dst(kint, p_raw, opt.dst);
+                else
+                    pnw_int = detail::savgol_filter(p_raw, detail::savgol_window(kint, std::log(7.0)), 4);
                 const detail::LogInterp Pnwk(kint, pnw_int);
                 for (int j = 0; j < opt.nk; j++)
                     plin_nw[j] = Pnwk(kv[j]);

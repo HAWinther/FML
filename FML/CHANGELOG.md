@@ -5,6 +5,15 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### PerturbationTheory: wiggle/no-wiggle splits of the linear P(k)
+- `PerturbationTheory/NoWiggle.h`: the no-wiggle P(k) by the discrete sine transform method (Hamann et al. 2010,
+  Wallisch 2018; a port of velocileptors' pnw_dst, with a bump detection that does not depend on the sampling of P),
+  by a Gaussian smoothing of P / P_ref in ln k (Eisenstein & Hu no-wiggle reference by default) and by a
+  Savitzky-Golay filter; the Eisenstein & Hu (1998) transfer functions with and without wiggles.
+- `EPTRedshiftSpace` now defaults to the DST no-wiggle spectrum (`Options::nowiggle`; the Savitzky-Golay one of
+  velocileptors' REPT leaves ~2% wiggles at k ~ 0.1 - 0.3 h/Mpc and changes the multipoles by up to 3%).
+  `PerturbationTheory/tests/test_nowiggle`.
+
 ### PerturbationTheory: IR-resummed one-loop EPT in redshift space (velocileptors)
 - `PerturbationTheory/EPTRedshiftSpace.h`: P(k, mu) and the multipoles P_0, P_2, P_4 of biased tracers in one-loop
   Eulerian PT with IR resummation (wiggle/no-wiggle split, the wiggles damped by exp(-k^2 Sigma^2 (1 + f(2 + f) mu^2)

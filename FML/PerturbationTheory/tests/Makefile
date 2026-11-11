@@ -4,8 +4,8 @@ USE_FFTW ?= true
 TARGETS := test_direct
 include ../../Makefile.config
 ifeq ($(USE_FFTW),true)
-TARGETS += test_perturbation test_lptrsd test_rept
-all: test_perturbation test_lptrsd test_rept
+TARGETS += test_perturbation test_lptrsd test_rept test_nowiggle
+all: test_perturbation test_lptrsd test_rept test_nowiggle
 endif
 test_direct: test_direct.o Global.o
 	$(LINK_EXE)
@@ -19,6 +19,10 @@ test_lptrsd: test_lptrsd.o Global.o
 
 # IR-resummed one-loop EPT in redshift space (also compared with the direct one-loop SPT)
 test_rept: test_rept.o Global.o
+	$(LINK_EXE)
+
+# Wiggle/no-wiggle splits of the linear P(k)
+test_nowiggle: test_nowiggle.o Global.o
 	$(LINK_EXE)
 MPIRUN ?= mpirun
 NP_LIST ?= 1 2 4
@@ -35,4 +39,5 @@ run: $(TARGETS)
 	  $(if $(filter true,$(USE_FFTW)),OMP_NUM_THREADS=2 OMP_WAIT_POLICY=passive $(RUN) ./test_perturbation,:); \
 	  $(if $(filter true,$(USE_FFTW)),OMP_NUM_THREADS=2 OMP_WAIT_POLICY=passive ./test_lptrsd,:); \
 	  $(if $(filter true,$(USE_FFTW)),OMP_NUM_THREADS=2 OMP_WAIT_POLICY=passive ./test_rept,:); \
+	  $(if $(filter true,$(USE_FFTW)),OMP_NUM_THREADS=2 OMP_WAIT_POLICY=passive ./test_nowiggle,:); \
 	done
