@@ -2,6 +2,8 @@
 #define FML_MPI_COUNTS_HEADER
 #include <FML/Global/Global.h>
 #include <climits>
+#include <cstdio>
+#include <exception>
 #include <cstddef>
 #include <limits>
 #include <stdexcept>
@@ -9,6 +11,36 @@
 #include <vector>
 
 namespace FML::COMMUNICATION {
+    /// Synchronize exceptions from a local phase before its dependent collectives.
+    /// The callback must not contain MPI collectives. All ranks use the same phase name.
+    template <class Function>
+    void collective_try(Function && function, const char * phase) {
+        std::exception_ptr error;
+        char message[512]{};
+        try {
+            function();
+        } catch (const std::exception & exception) {
+            error = std::current_exception();
+            std::snprintf(message, sizeof(message), "%s: %s", phase, exception.what());
+        } catch (...) {
+            error = std::current_exception();
+            std::snprintf(message, sizeof(message), "%s: unknown local exception", phase);
+        }
+        if (FML::NTasks == 1) {
+            if (error)
+                std::rethrow_exception(error);
+            return;
+        }
+        int first = error ? FML::ThisTask : FML::NTasks;
+        FML::MinOverTasks(&first);
+        if (first == FML::NTasks)
+            return;
+#ifdef USE_MPI
+        MPI_Bcast(message, int(sizeof(message)), MPI_CHAR, first, FML::communicator);
+#endif
+        throw std::runtime_error(message);
+    }
+
     using Count = unsigned long long;
     static_assert(sizeof(size_t) <= sizeof(Count));
 

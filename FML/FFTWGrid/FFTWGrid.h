@@ -327,6 +327,12 @@ namespace FML {
                 ptrdiff_t nx, start;
                 return size_t(compute_local_size(nmesh, nx, start)) * sizeof(ComplexType);
             }
+            /// FFTW's local slab geometry, without allocating a mesh or creating plans.
+            static std::array<ptrdiff_t, 2> local_slab(int nmesh) {
+                ptrdiff_t nx, start;
+                compute_local_size(nmesh, nx, start);
+                return {nx, start};
+            }
 
             /// Send slices to the neighboring CPUs which stores them in the left and right extra slice storage
             /// (with more extra slices than local slices they are forwarded from tasks further away)
@@ -344,6 +350,7 @@ namespace FML {
 
             /// Get the status of the grid: is it currently a real grid or a fourier grid?
             bool get_grid_status_real();
+            bool get_grid_status_real() const { return grid_is_in_real_space; }
             /// Set the status of the grid: is it currently a real grid or a fourier grid?
             void set_grid_status_real(bool grid_is_a_real_grid);
 
