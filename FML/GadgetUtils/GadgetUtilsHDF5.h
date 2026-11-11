@@ -26,6 +26,8 @@
 //   /PartTypeN/Coordinates  (npart, 3) positions in [0, BoxSize)
 //   /PartTypeN/Velocities   (npart, 3) sqrt(a) dx/dt in km/s (the standard GADGET convention)
 //   /PartTypeN/ParticleIDs  (npart)
+//   /PartTypeN/Masses       (npart) per-particle masses of the types with MassTable = 0 (read into
+//                           particles with set_mass after set_read_masses(true))
 //
 // A snapshot is either one file <fileprefix>.hdf5 or several files <fileprefix>.0.hdf5,
 // <fileprefix>.1.hdf5, ... (NumFilesPerSnapshot in the header).
@@ -197,6 +199,9 @@ namespace FML {
                 // Velocities in the file times this is km/s
                 double velocity_unit_in_kms{1.0};
 
+                // Read PartTypeN/Masses (types with MassTable = 0) into particles with set_mass
+                bool read_masses_dataset{false};
+
               public:
                 GadgetHDF5Reader() = default;
                 GadgetHDF5Reader(int ndim) : NDIM(ndim) {}
@@ -295,6 +300,10 @@ namespace FML {
                         read_header(filename);
                     return header.num_files;
                 }
+
+                /// Also read the per-particle masses (PartTypeN/Masses of the types with MassTable = 0) into particles
+                /// with set_mass, in the file's mass units (off by default)
+                void set_read_masses(bool read) { read_masses_dataset = read; }
 
                 /// Read the particles in chunks of this many (default 2^20)
                 void set_chunk_size(size_t n) { chunk_size = std::max(size_t(1), n); }
@@ -398,6 +407,15 @@ namespace FML {
                             velocities = open_dataset("Velocities", NDIM);
                         if constexpr (FML::PARTICLE::has_set_id<T>())
                             ids = open_dataset("ParticleIDs", 1);
+                        // Per-particle masses (types with MassTable = 0) for particles with set_mass
+                        HDF5::Handle masses;
+                        bool read_masses = false;
+                        if constexpr (FML::PARTICLE::has_set_mass<T>()) {
+                            if (read_masses_dataset and header.mass[type] == 0.0 and HDF5::exists(g, "Masses")) {
+                                masses = open_dataset("Masses", 1);
+                                read_masses = true;
+                            }
+                        }
 
                         if (part.capacity() < part.size() + npart and not only_keep_part_in_domain)
                             part.reserve(part.size() + npart);
@@ -479,6 +497,26 @@ namespace FML {
                                     if (not is_in_domain[i])
                                         continue;
                                     FML::PARTICLE::SetID(part[index++], id_buffer[i]);
+                                }
+                            }
+
+                            // Masses
+                            if constexpr (FML::PARTICLE::has_set_mass<T>()) {
+                                if (read_masses) {
+                                    buffer.resize(count);
+                                    HDF5::read_rows(masses,
+                                                    group + "/Masses",
+                                                    H5T_NATIVE_DOUBLE,
+                                                    buffer.data(),
+                                                    start,
+                                                    count,
+                                                    1);
+                                    size_t index = index_start;
+                                    for (size_t i = 0; i < count; i++) {
+                                        if (not is_in_domain[i])
+                                            continue;
+                                        FML::PARTICLE::SetMass(part[index++], buffer[i]);
+                                    }
                                 }
                             }
                         }

@@ -1,0 +1,364 @@
+// Tests of FML/Analysis: the context (expansion history, unit conversions), the SO definitions, FoF + SO + the
+// overlap flags on particles with known halos, the mass function, the redistribution of moved particles and
+// baryonification (particle count, ownership, hosts). Run with 1 or more MPI tasks: the results must not depend
+// on the number of tasks.
+
+#include <FML/Analysis/AnalysisContext.h>
+#include <FML/Analysis/Baryonification.h>
+#include <FML/Analysis/Halos.h>
+#include <FML/Analysis/ParticleUtils.h>
+#include <FML/Analysis/PowerSpectrum.h>
+#include <FML/Analysis/Voids.h>
+#include <FML/Analysis/DTFE.h>
+#include <FML/Global/Global.h>
+#include <FML/MPIParticles/MPIParticles.h>
+#include <FML/tests/TestHelpers.h>
+
+#include <cmath>
+#include <cstdio>
+#include <fstream>
+#include <random>
+#include <string>
+#include <vector>
+
+using FML::TESTS::check;
+using FML::TESTS::check_local;
+using FML::TESTS::num;
+namespace AN = FML::ANALYSIS;
+int analysis_odr_check();
+
+namespace {
+    struct Particle {
+        double pos[3];
+        double vel[3];
+        double mass{1.0};
+        double * get_pos() { return pos; }
+        double * get_vel() { return vel; }
+        double get_mass() const { return mass; }
+        int get_ndim() const { return 3; }
+    };
+
+    /// Uniform background (nback particles) plus Gaussian blobs (center, sigma in box units, number of
+    /// particles). Every task makes the same set and keeps the particles in its domain
+    std::vector<Particle> make_particles(size_t nback,
+                                        const std::vector<std::array<double, 3>> & centers,
+                                        const std::vector<double> & sigmas,
+                                        const std::vector<size_t> & counts) {
+        std::mt19937_64 rng(1234);
+        std::uniform_real_distribution<double> uni(0.0, 1.0);
+        std::normal_distribution<double> gauss(0.0, 1.0);
+        std::vector<Particle> all;
+        for (size_t i = 0; i < nback; i++)
+            all.push_back({{uni(rng), uni(rng), uni(rng)}, {100.0, 0.0, 0.0}, 1.0});
+        for (size_t h = 0; h < centers.size(); h++)
+            for (size_t i = 0; i < counts[h]; i++) {
+                Particle p{{0, 0, 0}, {0.0, 0.0, 0.0}, 1.0};
+                for (int d = 0; d < 3; d++) {
+                    double x = centers[h][d] + sigmas[h] * gauss(rng);
+                    x -= std::floor(x);
+                    p.pos[d] = x >= 1.0 ? 0.0 : x;
+                    p.vel[d] = 50.0 * gauss(rng);
+                }
+                all.push_back(p);
+            }
+        std::vector<Particle> local;
+        for (auto & p : all)
+            if (p.pos[0] >= FML::xmin_domain and p.pos[0] < FML::xmax_domain)
+                local.push_back(p);
+        return local;
+    }
+
+    AN::AnalysisContext make_context(double boxsize, double a) {
+        AN::AnalysisContext c;
+        c.boxsize = boxsize;
+        c.scale_factor = a;
+        c.background = AN::Background::LCDM(0.3, 0.7);
+        c.mass_to_msunh = 1e10;
+        c.velocity_to_kms = 1.0;
+        return c;
+    }
+} // namespace
+
+int main() {
+    check_local(analysis_odr_check() == 1, "the headers are usable from several translation units");
+    //=========================================================================
+    // Context
+    //=========================================================================
+    {
+        const auto b = AN::Background::LCDM(0.3, 0.7);
+        check_local(std::abs(b.E(1.0) - 1.0) < 1e-14, "flat LCDM: E(1) = 1");
+        check_local(std::abs(b.E(0.5) - std::sqrt(0.3 * 8 + 0.7)) < 1e-14, "LCDM E(a = 0.5)");
+        check_local(std::abs(b.Omega_m(0.5) - 2.4 / 3.1) < 1e-14, "Omega_m(a)");
+        const auto br = AN::Background::LCDM(0.3, 0.6999, 1e-4);
+        check_local(std::abs(br.E(1e-3) - std::sqrt(1e-4 * 1e12 + 0.3 * 1e9 + 0.6999)) < 1e-6 * br.E(1e-3),
+                    "LCDM with radiation");
+
+        // A table of the same LCDM: exact at the nodes, close in between
+        const std::string table = "test_analysis_hubble_" + std::to_string(FML::ThisTask) + ".txt";
+        {
+            std::ofstream out(table);
+            out << "# a H/H0\n";
+            for (int i = 0; i <= 400; i++) {
+                const double a = std::exp(std::log(0.01) * (1.0 - i / 400.0));
+                out.precision(17);
+                out << a << " " << b.E(a) << "\n";
+            }
+        }
+        const auto bt = AN::Background::from_table(table, 0.3);
+        double err = 0.0;
+        for (double a : {0.0101, 0.1, 0.33, 0.5, 0.77, 0.999})
+            err = std::max(err, std::abs(bt.E(a) / b.E(a) - 1.0));
+        check_local(err < 1e-4, "E(a) from a table (max rel. error " + num(err) + ")");
+        check_local(FML::TESTS::throws<std::runtime_error>([&] { bt.E(2.0); }), "a outside the table is an error");
+        std::remove(table.c_str());
+
+        const auto c = make_context(500.0, 0.5);
+        c.validate();
+        check_local(std::abs(c.velocity_to_displacement() - 1.0 / (100.0 * 0.5 * b.E(0.5) * 500.0)) < 1e-18,
+                    "velocity_to_displacement = 1 / (100 a E(a) Box)");
+        // The particle mass of an Omega_m = 0.3 simulation with N = 256^3 in 500 Mpc/h: total mass from rho_crit
+        const double rho_crit = AN::AnalysisContext::critical_density0_msunh_mpch3();
+        check_local(std::abs(rho_crit / 2.775e11 - 1.0) < 1e-3, "rho_crit = 2.775e11 h^2 Msun/Mpc^3 (" + num(rho_crit, 8) + ")");
+        const double total_mass = 0.3 * rho_crit * std::pow(500.0, 3) / 1e10;
+        check_local(std::abs(c.Omega_of_particles(total_mass) - 0.3) < 1e-12, "Omega from the particle mass");
+    }
+
+    //=========================================================================
+    // SO definitions
+    //=========================================================================
+    {
+        check_local(AN::parse_so_definition("200m").Delta == 200.0 and AN::parse_so_definition("500c").reference == 'c' and
+                        AN::parse_so_definition("vir").virial,
+                    "parse SO definitions");
+        bool all_throw = true;
+        for (std::string bad : {"", "m", "200", "200x", "abc", "-200m", "2e2q", "200mm"})
+            all_throw = all_throw and FML::TESTS::throws<std::runtime_error>([&] { AN::parse_so_definition(bad); });
+        check_local(all_throw, "invalid SO definitions are rejected");
+
+        const auto c = make_context(500.0, 1.0);
+        check_local(std::abs(AN::so_overdensity("200m", c, 0.3) - 200.0) < 1e-12, "200m = 200 x mean");
+        check_local(std::abs(AN::so_overdensity("200c", c, 0.3) - 200.0 / 0.3) < 1e-10, "200c = 200 / Omega");
+        const double x = -0.7, Dvir = 18 * M_PI * M_PI + 82 * x - 39 * x * x;
+        check_local(std::abs(AN::so_overdensity("vir", c, 0.3) - Dvir / 0.3) < 1e-10, "vir (Bryan & Norman 1998)");
+        // Particles that are only part of the matter (Omega_p = 0.25 of Omega_m = 0.3), at a = 0.5
+        const auto c2 = make_context(500.0, 0.5);
+        const double E2 = c2.background.E(0.5) * c2.background.E(0.5);
+        check_local(std::abs(AN::so_overdensity("200c", c2, 0.25) - 200.0 / (0.25 / (0.125 * E2))) < 1e-10,
+                    "200c relative to the particles' own density");
+    }
+
+    //=========================================================================
+    // FoF + SO + overlap on particles with three blobs; the small one is inside the largest
+    //=========================================================================
+    {
+        const std::vector<std::array<double, 3>> centers{{0.3, 0.3, 0.3}, {0.7, 0.6, 0.2}, {0.3 + 0.012, 0.3, 0.3}};
+        const std::vector<double> sigmas{0.004, 0.003, 0.0006};
+        const std::vector<size_t> counts{4000, 2000, 150};
+        auto parts = make_particles(32768, centers, sigmas, counts);
+        auto context = make_context(100.0, 1.0);
+        AN::HaloSettings settings;
+        settings.linking_length = 0.2;
+        settings.nmin_per_halo = 20;
+        settings.buffer_length_mpch = 6.0;
+        settings.so_definitions = {"200m", "500c"};
+        const auto cat = AN::find_halos<3>(parts.data(), parts.size(), settings, context);
+        long long nhalos = cat.halos.size(), noverlap = 0, nbig = 0;
+        double mass_big = 0.0, mass_mid = 0.0;
+        for (auto & h : cat.halos) {
+            noverlap += h.so_overlap;
+            if (h.np > 3000) {
+                nbig++;
+                mass_big = h.so_mass[0];
+            }
+            if (h.np > 1500 and h.np < 3000)
+                mass_mid = h.so_mass[0];
+        }
+        FML::SumOverTasks(&nhalos);
+        FML::SumOverTasks(&noverlap);
+        FML::SumOverTasks(&nbig);
+        FML::SumOverTasks(&mass_big);
+        FML::SumOverTasks(&mass_mid);
+        // The mean particle mass is 1e10 Msun/h; the blobs are far above the mean density at 200m
+        check(nbig == 1, "FoF: one large halo (the blob plus its satellite are linked or the satellite is separate)");
+        check(mass_big > 0.9 * 4000e10 and mass_big < 1.2 * 4150e10, "SO 200m mass of the large blob (" + num(mass_big) + ")");
+        check(mass_mid > 0.9 * 2000e10 and mass_mid < 1.2 * 2000e10, "SO 200m mass of the second blob (" + num(mass_mid) + ")");
+        check(nhalos >= 2 and nhalos <= 4, "FoF: number of halos (" + num(nhalos) + ")");
+        check(std::abs(cat.particle_mass_msunh - 1e10) < 1e-3, "mean particle mass in Msun/h");
+        check(std::abs(cat.so_thresholds[1] - 500.0 / cat.Omega_particles) < 1e-9, "500c threshold");
+
+        // Mass function: n(>M) at the smallest bin counts all halos above its center, dn/dlnM integrates to it
+        const auto mf = AN::compute_mass_function<3>(cat.halos,
+                                                     [](const AN::HaloRecord<3> & h) { return h.mass; },
+                                                     20,
+                                                     1e11,
+                                                     1e15,
+                                                     context.boxsize);
+        double integral = 0.0;
+        for (auto v : mf.dndlnM)
+            integral += v * std::log(1e4) / 20.0;
+        check(std::abs(integral * std::pow(100.0, 3) - double(nhalos)) < 1e-9,
+              "mass function: the bins hold all the halos");
+
+        // Overlap flags: a halo inside the radius of a more massive one is flagged, isolated ones are not
+        std::vector<AN::HaloRecord<3>> fake(3);
+        for (auto & h : fake) {
+            h.so_mass = {1.0};
+            h.so_radius = {0.01};
+        }
+        fake[0].id = 0, fake[0].so_pos = {0.5, 0.5, 0.5}, fake[0].so_mass = {10.0};
+        fake[1].id = 1, fake[1].so_pos = {0.505, 0.5, 0.5};
+        fake[2].id = 2, fake[2].so_pos = {0.999, 0.5, 0.5}, fake[2].so_radius = {0.02}, fake[2].so_mass = {5.0};
+        std::vector<AN::HaloRecord<3>> mine;
+        if (FML::ThisTask == 0)
+            mine = fake;
+        AN::flag_overlapping_so_halos<3>(mine);
+        if (FML::ThisTask == 0)
+            check_local(not mine[0].so_overlap and mine[1].so_overlap and not mine[2].so_overlap,
+                        "overlap flags (inside a more massive halo)");
+        // Periodic: a small halo across the boundary from a massive one
+        if (FML::ThisTask == 0) {
+            mine = fake;
+            mine[1].so_pos = {0.012, 0.5, 0.5};
+        }
+        AN::flag_overlapping_so_halos<3>(mine);
+        if (FML::ThisTask == 0)
+            check_local(mine[1].so_overlap, "overlap flags across the periodic boundary");
+    }
+
+    //=========================================================================
+    // Redistribution: shift every particle by half the box and check ownership and count
+    //=========================================================================
+    {
+        auto parts = make_particles(20000, {}, {}, {});
+        FML::PARTICLE::MPIParticles<Particle> mp;
+        mp.create(parts, parts.size(), [](Particle &) { return true; });
+        const size_t ntotal = mp.get_npart_total();
+        for (size_t i = 0; i < mp.get_npart(); i++) {
+            double x = mp[i].pos[0] + 0.5;
+            mp[i].pos[0] = x >= 1.0 ? x - 1.0 : x;
+        }
+        AN::redistribute_particles(mp);
+        bool owned = true;
+        for (size_t i = 0; i < mp.get_npart(); i++)
+            owned = owned and mp[i].pos[0] >= FML::xmin_domain and mp[i].pos[0] < FML::xmax_domain;
+        size_t n = mp.get_npart();
+        FML::SumOverTasks(&n);
+        check(n == ntotal, "redistribution keeps every particle");
+        check(owned, "redistribution: every particle is on the task owning its position");
+    }
+
+    //=========================================================================
+    // Baryonification of two blobs in 100 Mpc/h: hosts found, particles conserved and owned, P(k) changes only on
+    // small scales
+    //=========================================================================
+    {
+        const std::vector<std::array<double, 3>> centers{{0.3, 0.3, 0.3}, {0.7, 0.6, 0.2}};
+        auto parts = make_particles(65536, centers, {0.006, 0.005}, {6000, 4000});
+        // Mass so that Omega = 0.3 in 100 Mpc/h
+        const double ntot = 65536 + 10000;
+        const double m = 0.3 * AN::AnalysisContext::critical_density0_msunh_mpch3() * 1e6 / ntot / 1e10;
+        for (auto & p : parts)
+            p.mass = m;
+        FML::PARTICLE::MPIParticles<Particle> mp;
+        mp.create(parts, size_t(parts.size() * 1.25) + 16, [](Particle &) { return true; });
+        auto context = make_context(100.0, 1.0);
+        AN::BaryonificationSettings s;
+        s.max_radius_over_r200 = 10.0;
+        s.min_halo_mass_msunh = 1e13;
+        s.fof_buffer_mpch = 8.0; // R200c of the blobs is ~3 Mpc/h
+        AN::PowerSpectrumSettings ps;
+        ps.nmesh = 32;
+        const auto before = AN::measure_power_spectrum<3>(mp.get_particles_ptr(), mp.get_npart(), mp.get_npart_total(), ps, context);
+        const auto result = AN::baryonify(mp, s, context, 0.15);
+        const auto after = AN::measure_power_spectrum<3>(mp.get_particles_ptr(), mp.get_npart(), mp.get_npart_total(), ps, context);
+        bool owned = true;
+        for (size_t i = 0; i < mp.get_npart(); i++)
+            owned = owned and mp[i].pos[0] >= FML::xmin_domain and mp[i].pos[0] < FML::xmax_domain;
+        check(mp.get_npart_total() == size_t(ntot), "baryonification keeps every particle");
+        check(owned, "baryonification: every particle is on the task owning its new position");
+        check(result.hosts.size() == 2, "baryonification: two hosts (" + num(result.hosts.size()) + ")");
+        check(std::abs(result.Delta_200c - 200.0 / 0.3) < 1e-6, "baryonification: 200c from the particle mass");
+        check(std::abs(after.pofk[0] / before.pofk[0] - 1.0) < 1e-3, "P(k) unchanged on the largest scale");
+        double change = 0.0;
+        for (int i = 0; i < after.n; i++)
+            change = std::max(change, std::abs(after.pofk[i] / before.pofk[i] - 1.0));
+        check(change > 1e-3, "P(k) changed on small scales (max " + num(change) + ")");
+        check(FML::TESTS::throws<std::exception>([&] { AN::baryonify(mp, s, context, 1.5); }),
+              "baryonify rejects an invalid baryon fraction");
+    }
+
+    //=========================================================================
+    // Voids: a spherical hole of radius 0.15 (box units) in a uniform particle distribution
+    //=========================================================================
+    {
+        std::mt19937_64 rng(42);
+        std::uniform_real_distribution<double> uni(0.0, 1.0);
+        std::vector<Particle> local;
+        for (size_t i = 0; i < 60000; i++) {
+            Particle p{{uni(rng), uni(rng), uni(rng)}, {0, 0, 0}, 1.0};
+            double r2 = 0.0;
+            for (int d = 0; d < 3; d++)
+                r2 += (p.pos[d] - 0.5) * (p.pos[d] - 0.5);
+            if (r2 < 0.15 * 0.15)
+                continue;
+            if (p.pos[0] >= FML::xmin_domain and p.pos[0] < FML::xmax_domain)
+                local.push_back(p);
+        }
+        AN::VoidSettings vs;
+        vs.nmesh = 32;
+        auto distance_to_hole = [](const FML::VOIDFINDER::Void & v) {
+            double r2 = 0.0;
+            for (int d = 0; d < 3; d++) {
+                double dx = v.pos[d] - 0.5;
+                dx -= std::round(dx);
+                r2 += dx * dx;
+            }
+            return std::sqrt(r2);
+        };
+        auto largest = [](const std::vector<FML::VOIDFINDER::Void> & voids) {
+            size_t imax = 0;
+            for (size_t i = 0; i < voids.size(); i++)
+                if (voids[i].radius > voids[imax].radius)
+                    imax = i;
+            return imax;
+        };
+        const auto voxel = AN::find_voxel_voids(local.data(), local.size(), vs);
+        const bool ok_voxel = not voxel.empty() and distance_to_hole(voxel[largest(voxel)]) < 0.05;
+        check(ok_voxel, "voxel voids: the largest void is the hole");
+        AN::SphericalVoidSettings ss;
+        const auto sph = AN::find_spherical_voids(local.data(), local.size(), ss, vs);
+        const bool ok_sph = not sph.empty() and distance_to_hole(sph[largest(sph)]) < 0.05 and
+                            sph[largest(sph)].radius > 0.1 and sph[largest(sph)].radius < 0.2;
+        check(ok_sph, "spherical voids: the largest void is the hole, with a radius near 0.15");
+        auto bad = vs;
+        bad.merging = "sometimes";
+        check(FML::TESTS::throws<std::runtime_error>([&] { bad.validate(); }), "invalid void settings are rejected");
+#ifdef USE_CGAL
+        AN::ZobovSettings zs;
+        const auto zobov = AN::find_zobov_voids(local.data(), local.size(), zs, vs);
+        check(not zobov.empty() and distance_to_hole(zobov[largest(zobov)]) < 0.05,
+              "ZOBOV: the largest void is the hole");
+        // DTFE of a uniform distribution with a uniform velocity: density ~1 on average, velocity in km/s
+        for (auto & p : local)
+            p.vel[0] = 10.0, p.vel[1] = p.vel[2] = 0.0;
+        AN::DTFESettings ds;
+        ds.nmesh = 16;
+        ds.buffer_fraction = 1.0; // the tetrahedra across the hole need particles beyond half a slab with 4 tasks
+        auto context = make_context(100.0, 1.0);
+        context.velocity_to_kms = 2.0;
+        const auto fields = AN::compute_dtfe_fields(local.data(), local.size(), ds, context);
+        double vmean = 0.0, cells = 0.0;
+        for (int ix = 0; ix < fields.density.get_local_nx(); ix++)
+            for (int iy = 0; iy < 16; iy++)
+                for (int iz = 0; iz < 16; iz++) {
+                    vmean += fields.velocity.velocity[0].get_real({ix, iy, iz});
+                    cells += 1.0;
+                }
+        FML::SumOverTasks(&vmean);
+        FML::SumOverTasks(&cells);
+        check(std::abs(vmean / cells - 20.0) < 1e-6, "DTFE velocity in km/s (" + num(vmean / cells) + ")");
+#endif
+    }
+
+    return FML::TESTS::summary("Analysis");
+}
