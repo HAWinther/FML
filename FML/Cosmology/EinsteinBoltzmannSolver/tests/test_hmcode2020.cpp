@@ -1,6 +1,6 @@
 // Identical-linear-spectrum comparisons with CAMB HMcode-2020 and CLASS Takahashi+Bird.
 // Fixtures: python/generate_nonlinear_reference.py. No external Python packages needed to run.
-#include <FML/Cosmology/Spectra/HMcode.h>
+#include <FML/HaloModel/HMcode2020.h>
 #include <FML/Cosmology/Spectra/Halofit.h>
 #include <FML/Cosmology/EinsteinBoltzmannSolver/ParameterFile.h>
 #include <FML/tests/TestHelpers.h>
@@ -70,7 +70,7 @@ int main() {
             const auto sm = spline(input, 1 + 2 * iz), scb = spline(input, 2 + 2 * iz);
             auto pm = [&](double, double kk) { return volume * std::exp(sm(std::log(kk * length))); };
             auto pcb = [&](double, double kk) { return volume * std::exp(scb(std::log(kk * length))); };
-            const auto result = HMcode::spectrum(bg, pm, pcb, x, k);
+            const auto result = HALOMODEL::HMcode2020::spectrum(bg, pm, pcb, x, k);
             double error = 0;
             for (size_t i = 0; i < k.size(); ++i) {
                 error = std::max(error, std::abs(result.nonlinear[i] / ref[i][iz + 1] - 1));
@@ -82,7 +82,7 @@ int main() {
                       << " dc=" << result.delta_c << " Dv=" << result.Delta_v << " neff=" << result.n_eff << "\n";
             check(error < 0.001, name + " z=" + std::to_string(int(z)) + ": CAMB HMcode-2020 within 0.1%");
             if (name == "lcdm" && iz == 2) {
-                const auto fine = HMcode::spectrum(bg, pm, pcb, x, k, 512, 0.0075);
+                const auto fine = HALOMODEL::HMcode2020::spectrum(bg, pm, pcb, x, k, 512, 0.0075);
                 double change = 0;
                 for (size_t i = 0; i < k.size(); ++i)
                     change = std::max(change, std::abs(fine.nonlinear[i] / result.nonlinear[i] - 1));
@@ -136,7 +136,7 @@ int main() {
         p.model = "musigma";
         BackgroundCosmology bg(p);
         auto pl = [](double, double) { return 1.0; };
-        check(FML::TESTS::throws([&] { HMcode::spectrum(bg, pl, pl, 0, {1.0}); }),
+        check(FML::TESTS::throws([&] { HALOMODEL::HMcode2020::spectrum(bg, pl, pl, 0, {1.0}); }),
               "HMcode rejects modified-gravity models without a nonlinear prescription");
     }
     return FML::TESTS::summary("HMcode-2020 and Bird");

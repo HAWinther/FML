@@ -95,7 +95,8 @@ namespace FML::COSMOLOGY {
         const std::map<std::string, PowerSpectrumOptions::Nonlinear> & nonlinear_methods() {
             using N = PowerSpectrumOptions::Nonlinear;
             static const std::map<std::string, N> m = {{"none", N::None}, {"halofit", N::Halofit},
-                                                       {"halofit_bird", N::HalofitBird}, {"hmcode2020", N::HMcode2020},
+                                                       {"halofit_bird", N::HalofitBird}, {"hmcode2016", N::HMcode2016},
+                                                       {"hmcode2020", N::HMcode2020},
                                                        {"react", N::ReACT}};
             return m;
         }
@@ -544,7 +545,7 @@ namespace FML::COSMOLOGY {
                  [](const S & s) { return enum_name(source_terms(), s.ps.source_term); }},
                 {"PowerSpectrum",
                  "nonlinear",
-                 "nonlinear matter power for lensing and P(k): none, halofit, halofit_bird, hmcode2020, react",
+                 "nonlinear matter power for lensing and P(k): none, halofit, halofit_bird, hmcode2016, hmcode2020, react",
                  [](S & s, const std::string & v) { s.ps.nonlinear = enum_value(nonlinear_methods(), v); },
                  [](const S & s) { return enum_name(nonlinear_methods(), s.ps.nonlinear); }},
                 I("PowerSpectrum", "react_n_z", "ReACT redshift samples (>=4)", REF(int, ps.react_n_z)),

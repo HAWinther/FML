@@ -15,7 +15,7 @@ TARGETS := $(patsubst %.cpp,%,$(wildcard test_*.cpp))
 include ../../../Makefile.config
 include ../Cosmology.mk
 
-FML_MODULES := $(COSMO_MODULES) $(COSMO_FML_MODULES) FileUtils Global
+FML_MODULES := $(COSMO_MODULES) $(COSMO_FML_MODULES) FileUtils Global SphericalCollapse
 
 $(TARGETS): %: %.o $(COSMO_OBJS) Global.o
 	$(LINK_EXE)
@@ -23,6 +23,9 @@ $(TARGETS): %: %.o $(COSMO_OBJS) Global.o
 .PHONY: run
 run: $(TARGETS)
 	@status=0; for t in $(TARGETS); do echo "=== $$t ==="; (cd .. && ./tests/$$t) || status=1; done; exit $$status
+
+# The general halo model (HMcode-2016) also needs the spherical collapse
+test_hmcode2016: FileUtils.o
 
 # Shared transfer preparation can also read a two-column P(k) input.
 test_transfer_provider: FileUtils.o

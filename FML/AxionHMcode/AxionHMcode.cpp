@@ -1,4 +1,5 @@
 #include <FML/AxionHMcode/AxionHMcode.h>
+#include <FML/HaloModel/HaloModelTools.h>
 #include <gsl/gsl_sf_expint.h>
 #include <gsl/gsl_multiroots.h>
 #include <algorithm>
@@ -11,6 +12,7 @@
 
 namespace FML::COSMOLOGY {
     namespace {
+        namespace HM = FML::COSMOLOGY::HALOMODEL;
         using Model = AxionHMcode;
         using Vec = std::vector<double>;
         constexpr double pi = 3.14159265358979323846;
@@ -56,21 +58,9 @@ namespace FML::COSMOLOGY {
             }
             return (a + b) / 2;
         }
-        double window(double x) {
-            if (std::abs(x) < 0.05) {
-                const double t = x * x;
-                return 1 - t / 10 + t * t / 280 - t * t * t / 15120;
-            }
-            return 3 * (std::sin(x) - x * std::cos(x)) / (x * x * x);
-        }
         double sinc(double x) { return std::abs(x) < 1e-4 ? 1 - x * x / 6 : std::sin(x) / x; }
-        double norm(double c) { return std::log1p(c) - c / (1 + c); }
-        double nfw(double k, double r, double c) {
-            if (k * r < 1e-4) return 1;
-            const double q = k * r / c, v = q * c, t = q + v;
-            return (std::cos(q) * (gsl_sf_Ci(t) - gsl_sf_Ci(q)) +
-                    std::sin(q) * (gsl_sf_Si(t) - gsl_sf_Si(q)) - std::sin(v) / t) / norm(c);
-        }
+        double norm(double c) { return HM::nfw_mass_normalisation(c); }
+        double nfw(double k, double r, double c) { return HM::nfw_fourier(k * r, c); }
         // The reference model defines this auxiliary growth integral with z_upper=100 and 2000 nodes.
         double growth(double z, double om) {
             if (z == 100) return 0;
@@ -107,22 +97,21 @@ namespace FML::COSMOLOGY {
         }
         struct Linear {
             const Model::Input & in;
-            Vec weights, dk;
-            explicit Linear(const Model::Input & i) : in(i), weights(i.k.size()), dk(simpson_weights(i.k)) {
+            Vec dk;
+            HM::LinearVariance variance;
+            explicit Linear(const Model::Input & i) : in(i), dk(simpson_weights(i.k)) {
+                Vec weights(i.k.size()), Delta2(i.k.size());
                 for (size_t j = 0; j < i.k.size(); ++j) {
-                    const double d = 0.5 * ((j ? std::log(i.k[j] / i.k[j - 1]) : 0) +
-                                            (j + 1 < i.k.size() ? std::log(i.k[j + 1] / i.k[j]) : 0));
-                    weights[j] = d * std::pow(i.k[j], 3) * i.cold[j] / (2 * pi * pi);
+                    weights[j] = 0.5 * ((j ? std::log(i.k[j] / i.k[j - 1]) : 0) +
+                                        (j + 1 < i.k.size() ? std::log(i.k[j + 1] / i.k[j]) : 0));
+                    Delta2[j] = std::pow(i.k[j], 3) * i.cold[j] / (2 * pi * pi);
                 }
+                variance = HM::LinearVariance(i.k, weights, Delta2);
             }
-            double sigma(double R) const {
-                double v = 0;
-                for (size_t j = 0; j < weights.size(); ++j) v += weights[j] * std::pow(window(R * in.k[j]), 2);
-                return std::sqrt(v);
-            }
+            double sigma(double R) const { return variance.sigma(R); }
             double derivative(double R) const {
                 double d = 0;
-                for (size_t j = 0; j < weights.size(); ++j) {
+                for (size_t j = 0; j < in.k.size(); ++j) {
                     const double k = in.k[j], x = R * k;
                     if (x <= 1e-3) continue;
                     const double a = std::sin(x) * (1 - 3 / (x * x)) + 3 * std::cos(x) / x;
@@ -144,15 +133,15 @@ namespace FML::COSMOLOGY {
             const Model::Options & opt;
             Linear linear;
             double om, oc, fa, dc, dv, alpha, s8, eta, kstar;
+            HM::ShethTormen sheth_tormen{}; // a = 0.707, p = 0.3 and the exact normalisation
             Context(const Model::Cosmology & cc, const Model::Input & in, const Model::Options & o) :
                 c(cc), opt(o), linear(in), om(cc.Omega_b + cc.Omega_cdm + cc.Omega_axion),
                 oc(cc.Omega_b + cc.Omega_cdm), fa(cc.Omega_axion / om) {
                 const double a = 1 / (1 + c.z), g = growth(c.z, om) / a, G = accumulated_growth(c.z, om) / a;
-                const double omz = om / (om + (1 - om) * std::pow(a, 3)), l = std::log10(omz);
-                auto f = [&](double p, double q, double r, double s) { return p + q * (1 - g) + r * (1 - g) * (1 - g) + s * (1 - G); };
+                const double omz = om / (om + (1 - om) * std::pow(a, 3));
+                dc = 1.686 * HM::Mead2017::delta_c_factor(g, G, omz);
+                dv = 177.7 * HM::Mead2017::Delta_v_factor(g, G, omz);
                 const bool dome = opt.version == Model::Version::Dome2024;
-                dc = 1.686 * (1 + f(-.0069, -.0208, .0312, .0021) * l + f(.0001, -.0647, -.0417, .0646));
-                dv = 177.7 * (1 + f(-.79, -10.17, 2.51, 6.51) * l + f(-1.89, .38, 18.8, -15.87) * l * l);
                 if (dome) { dc *= 1 - .041 * fa; dv *= 1 + .763 * fa; }
                 s8 = linear.sigma(8);
                 eta = opt.halo_bloating ? .1281 * std::pow(s8, -.3644) : 0;
@@ -176,15 +165,10 @@ namespace FML::COSMOLOGY {
                 return opt.concentration_amplitude * (1 + zf) / (1 + c.z);
             }
             double mass_function(double M) const {
-                const double R = radius(M), nu = dc / linear.sigma(R), q = .707 * nu * nu;
-                const double A = std::sqrt(2 * .707) / (std::sqrt(pi) + std::tgamma(.2) / std::pow(2, .3));
-                const double st = A * nu * (1 + std::pow(q, -.3)) * std::exp(-q / 2);
-                return rho(oc) / (2 * M * M) * st * std::abs(linear.derivative(R));
+                const double R = radius(M), nu = dc / linear.sigma(R);
+                return rho(oc) / (2 * M * M) * nu * sheth_tormen.f(nu) * std::abs(linear.derivative(R));
             }
-            double bias(double M) const {
-                const double nu = dc / linear.sigma(radius(M)), q = .707 * nu * nu;
-                return 1 + (q - 1 + .6 / (1 + std::pow(q, .3))) / dc;
-            }
+            double bias(double M) const { return sheth_tormen.bias(dc / linear.sigma(radius(M)), dc); }
             double rv(double M) const { return radius(M) / std::cbrt(dv); }
         };
         struct Profile {

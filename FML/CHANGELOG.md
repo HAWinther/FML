@@ -5,6 +5,35 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### HaloModel: one module for the halo models (HMcode-2016, HMcode-2020, shared building blocks)
+- HMcode-2020 moved from `Cosmology/Spectra/HMcode.h` to `FML/HaloModel/HMcode2020.h`
+  (`FML::COSMOLOGY::HALOMODEL::HMcode2020`); `Cosmology/Spectra/HMcode.h` forwards to it (`FML::COSMOLOGY::HMcode`)
+  for now. The solver links `HMcode2020.o` and `HaloModelTools.o` (Cosmology.mk, SimulationCode CMake).
+- New `HaloModel/HaloModelTools.h`: the building blocks the three halo models shared as copies (`LinearVariance` for
+  sigma(R), dln sigma/dln R and sigma_v; top-hat window; NFW profile and transform, now with a series for k r_v < 0.01
+  instead of 1; `ShethTormen` with the exact normalisation; Bullock concentrations; the Mead 2017 and HMcode-2016
+  fits; the HMcode transition). HMcode2020, HaloModel and AxionHMcode use them. HMcode-2020 total P(k) changes by
+  < 2e-14 (its one-halo term by 3e-8 at k = 1e-3 h/Mpc), AxionHMcode by < 6e-16.
+- `HaloModel` rewritten: input `HaloModelCosmology` (collapse model, Omega_m, f_nu, P_m(x, k), P_cb(x, k)) from
+  `cosmology_from_pofk_file`/`_spline` or `cosmology_from_background` (new `HaloModelBackground.h`); options in
+  `HaloModelOptions` with `Prescription::Standard` or `HMcode2016` (was the `hmcode` flag); results through accessors
+  (`pofk`, `pofk_onehalo`, `dndlogM`, `bias_of_M`, `concentration`, ...) and `state()`. Customisation functions get a
+  `const HaloModel &` (were member lambdas taking `HaloModel *`). HMcode-2016 no longer overwrites the user's
+  `hmcode_*` parameters; the global `_ACCURACY_BOOST` is the option `accuracy_boost`.
+- Massive neutrinos in HaloModel (f_nu was never set before): cold-matter variance for the peak heights, mass
+  function and concentrations, total matter for the two-halo term, sigma8 and sigma_v of the fits. HMcode-2016 as
+  CAMB `mead2016`; the Standard model multiplies the one-halo term by (1 - f_nu)^2.
+- HMcode-2016 additions as in CAMB: the Dolag correction (A (D(10)/D_LCDM(10))^1.5, so w0wa and other expansion
+  histories) and alpha clamped to [0.5, 2]. Against CAMB 2.0.5 `mead2016` with identical linear spectra
+  (new `test_hmcode2016`): 0.060% (LCDM), 0.030% (m_nu = 0.3 eV), 0.050% (w0wa, Omega_K = 0.02), z = 0-2,
+  k = 0.01-10 h/Mpc. LCDM P(k) unchanged (< 3e-11); n(M) changes by 2.4e-4 (Sheth-Tormen A = 0.216149 instead of
+  0.2162; P(k) is normalised and does not depend on A).
+- `nonlinear = hmcode2016` in the Einstein-Boltzmann solver: new `HaloModel/HMcode2016.h` with the interface of
+  HMcode2020 (table and one-redshift spectrum) on top of HaloModel. The solver now also links Halomodel.o,
+  SphericalCollapse*.o, Math.o and FileUtils.o (Cosmology.mk).
+- `HaloModel/PythonWrapper`: pybind11 instead of SWIG (`bindings.cpp`; `numpy.i`, `InterfaceFile.i` and `Wrapper.cpp`
+  removed); `HaloModelWrapper.py` keeps its interface.
+
 ### Symmetron: the generalised (N, M) potential
 - `gravity_model_symmetron_N` and `_M` (even integers, M > N >= 2; fiducial (2, 4), the original symmetron):
   V = H0^2 phi_*^2 / (xi^2 (M - N)) [-(phi/phi_*)^N / N + (phi/phi_*)^M / M], beta(phi) = beta (phi/phi_*)^(N-1)

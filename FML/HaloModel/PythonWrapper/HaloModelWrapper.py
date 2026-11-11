@@ -1,14 +1,14 @@
 import numpy as np
-import HaloModelCXX as hm
-import matplotlib.pyplot as plt
+import _halomodel
 
 """
-Input: linear power-spectrum at z=0
-Run the halomodel and get the power-spectra
-P1h, P2h and P(k,z), halo-massfunctions etc.
+The FML halo model from python (pybind11 module _halomodel, built with make).
+Input: the linear power spectrum at z = 0 in a file [k (h/Mpc), P(k) (Mpc/h)^3].
+Run the halo model (hmcode = True: HMcode-2016, False: the standard halo model with deltac and DeltaVir from
+spherical collapse) and get P(k, z) (with the one- and two-halo terms), mass functions, deltac(z), ...
 """
 class HaloModel:
-  def __init__(self, 
+  def __init__(self,
       filename_pofk_lin,
       OmegaM,
       w0=-1.0,
@@ -21,75 +21,44 @@ class HaloModel:
       deltacfac=1.0,
       DeltaVirfac=1.0,
       cofmfac=1.0):
-    self.filename_pofk_lin = filename_pofk_lin
-    self.OmegaM = OmegaM
-    self.w0 = w0
-    self.wa = wa
-    self.mu0 = mu0
-    self.mua = mua
-    self.verbose = verbose
-    self.hmcode = bool(hmcode)
-    self.sigma8norm = bool(sigma8norm)
-    self.deltacfac = deltacfac
-    self.DeltaVirfac = DeltaVirfac
-    self.cofmfac = cofmfac
-    self.is_init = False
-    self.init()
-
-  def init(self):
-    if(self.is_init):
-      return
-    self.halomodel = hm.get()
-    hm.init(self.halomodel,
-        self.filename_pofk_lin,
-        self.OmegaM,
-        self.w0,
-        self.wa,
-        self.mu0,
-        self.mua,
-        self.verbose,
-        self.hmcode,
-        self.sigma8norm,
-        self.deltacfac,
-        self.DeltaVirfac,
-        self.cofmfac)
-    self.is_init = True
+    self.model = _halomodel.HaloModel(filename_pofk_lin, OmegaM, w0, wa, mu0, mua, bool(verbose), bool(hmcode),
+                                      bool(sigma8norm), deltacfac, DeltaVirfac, cofmfac)
 
   def info(self):
-    hm.info(self.halomodel)
+    self.model.info()
 
-  def calc_at_redshift(self,z):
-    hm.calc(self.halomodel,z)
+  def calc_at_redshift(self, z):
+    if not self.model.computed() or abs(self.model.state().z - z) > 1e-8:
+      self.model.compute_at_redshift(z)
+
+  def state(self, z):
+    """deltac, DeltaVir, sigma8, sigmav, neff, kstar, alpha, eta, f_damp, concentration_A at z"""
+    self.calc_at_redshift(z)
+    return self.model.state()
 
   def get_pofk(self, z, k):
-    self.init()
+    """Linear and nonlinear P(k, z)"""
     self.calc_at_redshift(z)
-    pofk_lin = np.zeros_like(k)
-    pofk = np.zeros_like(k)
-    hm.get_pofk(self.halomodel, k, pofk_lin, pofk)
-    return pofk_lin, pofk
-  
+    k = np.asarray(k, dtype=float)
+    return self.model.pofk_linear(k), self.model.pofk(k)
+
   def get_pofk_1h_2h(self, z, k):
-    self.init()
     self.calc_at_redshift(z)
-    pofk_1h = np.zeros_like(k)
-    pofk_2h = np.zeros_like(k)
-    hm.get_pofk_1h_2h(self.halomodel, k, pofk_1h, pofk_2h)
-    return pofk_1h, pofk_2h
-  
+    k = np.asarray(k, dtype=float)
+    return self.model.pofk_onehalo(k), self.model.pofk_twohalo(k)
+
   def get_nofM(self, z, M):
-    self.init()
+    """dn/dlnM and n(>M) in (h/Mpc)^3"""
     self.calc_at_redshift(z)
-    dndlogM = np.zeros_like(M)
-    n = np.zeros_like(M)
-    hm.get_nofM(self.halomodel, M, dndlogM, n)
-    return dndlogM, n
+    M = np.asarray(M, dtype=float)
+    return self.model.dndlogM(M), self.model.n_of_M(M)
+
+  def get_bias_of_M(self, z, M):
+    self.calc_at_redshift(z)
+    return self.model.bias_of_M(np.asarray(M, dtype=float))
 
   def get_deltac_of_z(self, z):
-    self.init()
-    deltac = np.zeros_like(z)
-    hm.get_deltac(self.halomodel, z, deltac)
-    return deltac
+    return self.model.deltac_of_z(np.asarray(z, dtype=float))
 
-  def __del__(self):
-    hm.free(self.halomodel)
+  def get_DeltaVir_of_z(self, z):
+    return self.model.DeltaVir_of_z(np.asarray(z, dtype=float))

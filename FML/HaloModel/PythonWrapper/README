@@ -1,5 +1,8 @@
-A wrapper around the halomodel which allows you to run it from python
-The file containing the C++ functions exposed to pythons are in Wrapper.cpp
-The interface for SWIG is in InterfaceFile.i
-Use of the resulting python library is in HaloModelWrapper.py (wraps is into a class)
-Example on using it is in example.py
+A python interface to the halo model in ../Halomodel.h (the standard halo model and HMcode-2016).
+
+make                  builds the module _halomodel (pybind11: pip install pybind11)
+HaloModelWrapper.py   the class HaloModel around it (P(k, z), one- and two-halo terms, n(M), b(M), deltac(z))
+example.py            an example (needs matplotlib)
+
+HMcode-2020 is FML::COSMOLOGY::HALOMODEL::HMcode2020 (../HMcode2020.h) and is used through the Einstein-Boltzmann
+solver (nonlinear = hmcode2020).

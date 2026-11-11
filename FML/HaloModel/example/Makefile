@@ -14,8 +14,7 @@ TARGETS := halomodel
 
 include ../../Makefile.config
 
-OPTIONS     += -DHMCODETESTING
 FML_MODULES := Global ODESolver Math Spline HaloModel SphericalCollapse FileUtils
 
-halomodel: Main.o Global.o Math.o Spline.o ODESolver.o SphericalCollapse.o SphericalCollapseModel.o Halomodel.o FileUtils.o
+halomodel: Main.o Global.o Math.o Spline.o ODESolver.o SphericalCollapse.o SphericalCollapseModel.o Halomodel.o HaloModelTools.o FileUtils.o
 	$(LINK_EXE)

@@ -2,10 +2,8 @@
 #include <FML/SphericalCollapse/SphericalCollapse.h>
 #include <FML/HaloModel/Halomodel.h>
 
-using SphericalCollapseModel = FML::COSMOLOGY::SPHERICALCOLLAPSE::SphericalCollapseModel;
+using namespace FML::COSMOLOGY::HALOMODEL;
 using Func1 = FML::COSMOLOGY::SPHERICALCOLLAPSE::Func1;
-using HaloModel = FML::COSMOLOGY::HALOMODEL::HaloModel;
-using Spline = FML::INTERPOLATION::SPLINE::Spline;
 
 int main() {
     const bool verbose = true;
@@ -52,30 +50,38 @@ int main() {
     scm.info();
 
     //===================================================
-    // Fetch linear P(k,z=0)
+    // The cosmology for the halo model: the collapse model and the linear P(k, z = 0) in a file (scaled to other
+    // redshifts with the growth factor of the model). With FML's Einstein-Boltzmann solver use
+    // cosmology_from_background (HaloModelBackground.h) instead
     //===================================================
-    const double pofk_normalization = 1.0;
-    std::string filename_pofk = "pofk_lin.txt";
-    const double xinputpofk = 0.0;
-    Spline logDelta_of_logk_spline;
-    FML::COSMOLOGY::HALOMODEL::read_pofk_file(filename_pofk, logDelta_of_logk_spline, pofk_normalization);
-
-    FML::COSMOLOGY::HALOMODEL::_ACCURACY_BOOST = 1;
+    const auto cosmology = cosmology_from_pofk_file(scm, "pofk_lin.txt");
 
     //===================================================
-    // Set up the halomodel
+    // Set up the halo model: HMcode-2016 (Prescription::Standard for the plain halo model with deltac and DeltaVir
+    // from spherical collapse in the model above)
     //===================================================
-    double z = 0.0;
-    bool hmcode = true;
-    std::string label = "testrun";
-    HaloModel hm(scm, logDelta_of_logk_spline, xinputpofk, hmcode, verbose);
-    hm.verbose = true;
+    HaloModelOptions options;
+    options.prescription = Prescription::HMcode2016;
+    options.verbose = verbose;
+    HaloModel hm(cosmology, options);
+
+    const double z = 0.0;
+    const std::string label = "testrun";
     hm.compute_at_redshift(z);
 
     // Output to file
     hm.output_pofk("pofk_" + label + "_z" + std::to_string(z) + ".txt");
     hm.output_nofM("nofM_" + label + "_z" + std::to_string(z) + ".txt");
     hm.output_deltac("sph_" + label + "_z" + std::to_string(z) + ".txt");
+
+    // Compare to the HMcode output (pofk_nl_hmcode.txt)
+    Spline logDelta_hmcode;
+    read_pofk_file("pofk_nl_hmcode.txt", logDelta_hmcode);
+    std::cout << "\n#  k (h/Mpc)   P(k) / P_HMcode(k)\n";
+    for (double k : {0.01, 0.1, 1.0, 10.0}) {
+        const double P_hmcode = std::exp(logDelta_hmcode(std::log(k))) * 2 * M_PI * M_PI / (k * k * k);
+        std::cout << "  " << k << "   " << hm.pofk(k) / P_hmcode << "\n";
+    }
 
     hm.info();
 }

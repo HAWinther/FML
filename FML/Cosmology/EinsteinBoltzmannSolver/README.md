@@ -36,7 +36,7 @@ Conventions: SI units internally, time variable `x = ln a`, Newtonian gauge (Dod
 | Spectra | C_ℓ^TT, EE, TE by line of sight (hyperspherical Bessel functions when curved, with CLASS's flat approximation), P(k) of total matter and CDM+baryons; primordial P_R = A_s (k/k_pivot)^(n_s − 1 + α_s/2 ln(k/k_pivot)) with optional running `alpha_s` (as CLASS; adiabatic mode only, C_ℓ ratios to CLASS 5e-4) |
 | Tensor modes | Gravitational waves (`r`, `n_t` or the consistency relation): photon temperature and polarization and neutrino hierarchies, anisotropic stress, tight coupling, modified-gravity friction (α_M, M*² of Horndeski, Brans–Dicke, f(R)); TT, EE, TE, BB by line of sight, added to the scalar spectra and lensed with them; flat |
 | Isocurvature modes | CDM, baryon, neutrino density and neutrino velocity isocurvature (`f_*`, `n_*`, `c_ad_*` as CLASS), each correlated with the adiabatic mode; CLASS initial conditions; one extra perturbation solve per mode; GR only |
-| Nonlinear | Halofit, Halofit+Bird, HMcode-2020 and optional ReACT reactions (`halofit`, `halofit_bird`, `hmcode2020`, `react`), used for nonlinear CMB lensing |
+| Nonlinear | Halofit, Halofit+Bird, HMcode-2016, HMcode-2020 and optional ReACT reactions (`halofit`, `halofit_bird`, `hmcode2016`, `hmcode2020`, `react`), used for nonlinear CMB lensing |
 | Lensing | C_ℓ^φφ (LOS + Limber), lensed TT, EE, TE, BB (full-sky correlation-function method) |
 | Two-point functions | CMB C(θ), ξ±, ξ_X with beams; matter ξ(r), σ_R, σ₈; angular C_ℓ and w(θ) of a projected tracer (exact + Limber) |
 | Fitting | MCMC, best fits and profile likelihoods with background, Planck CMB and lensing data: `FML/CosmologyFitting` (samplers in `FML/MCMC`) |
@@ -149,7 +149,8 @@ table, the CLASS default; 2e-5 from CLASS, which uses ΔN = N_eff − 3.046 with
 `nonlinear = halofit_bird` adds the updated Bird massive-neutrino correction; `nonlinear = hmcode2020`
 selects gravity-only HMcode-2020 with cold-matter variances, neutrinos and BAO damping. Both use the same
 nonlinear output and lensing paths. HMcode-2020 supports `lcdm` and smooth `w0wa` backgrounds (with curvature)
-and rejects other models. The original Halofit option remains unchanged. See
+and rejects other models. `nonlinear = hmcode2016` selects HMcode-2016 (as CAMB `mead2016`, same backgrounds;
+the general halo model in `FML/HaloModel`). The original Halofit option remains unchanged. See
 [nonlinear methods, library API and validation](../Spectra/NONLINEAR.md) for units, limits and reference tests.
 
 `nonlinear = react` adds the official ReACT reaction multiplied by an HMcode-2020 matched GR pseudo spectrum.

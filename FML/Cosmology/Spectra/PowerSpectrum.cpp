@@ -1,6 +1,7 @@
 #include <FML/Cosmology/Spectra/PowerSpectrum.h>
 #include <FML/Cosmology/Spectra/Halofit.h>
-#include <FML/Cosmology/Spectra/HMcode.h>
+#include <FML/HaloModel/HMcode2016.h>
+#include <FML/HaloModel/HMcode2020.h>
 #include <FML/ReACT/ReACT.h>
 #include <FML/Cosmology/Perturbations/Tensors.h>
 #include <FML/Cosmology/Spectra/HypersphericalBessel.h>
@@ -679,8 +680,12 @@ namespace FML::COSMOLOGY {
             if (options.nonlinear == N::Halofit && cosmo.get_params().has_massive_nu() && !warned.exchange(true))
                 std::cerr << "Warning: Halofit (Takahashi 2012) has no massive-neutrino correction (Bird et al. 2012): "
                              "use nonlinear = halofit_bird to include it\n";
+        } else if (options.nonlinear == N::HMcode2016) {
+            hmcode2016 = std::make_unique<HALOMODEL::HMcode2016>(cosmo,
+                [this](double x, double k) { return get_matter_power_spectrum_extrapolated(x, k); },
+                [this](double x, double k) { return get_matter_power_spectrum_cb_extrapolated(x, k); });
         } else if (options.nonlinear == N::HMcode2020) {
-            hmcode = std::make_unique<HMcode>(cosmo,
+            hmcode = std::make_unique<HALOMODEL::HMcode2020>(cosmo,
                 [this](double x, double k) { return get_matter_power_spectrum_extrapolated(x, k); },
                 [this](double x, double k) { return get_matter_power_spectrum_cb_extrapolated(x, k); });
         } else if (options.nonlinear == N::ReACT) {
@@ -696,7 +701,10 @@ namespace FML::COSMOLOGY {
     PowerSpectrum::~PowerSpectrum() = default;
 
     double PowerSpectrum::nonlinear_ratio(double x, double k) const {
-        const double base = halofit ? halofit->ratio(x, k) : hmcode ? hmcode->ratio(x, k) : 1.0;
+        const double base = halofit      ? halofit->ratio(x, k) :
+                            hmcode       ? hmcode->ratio(x, k) :
+                            hmcode2016   ? hmcode2016->ratio(x, k) :
+                                           1.0;
         return react && x >= react->x_min() ? base * react->reaction(std::min(x, react->x_max()),
                                                                     k * Mpc / cosmo.get_params().h) : base;
     }
@@ -706,6 +714,7 @@ namespace FML::COSMOLOGY {
         switch (options.nonlinear) {
             case N::Halofit: return "Halofit (Takahashi 2012)";
             case N::HalofitBird: return "Halofit (Takahashi + Bird)";
+            case N::HMcode2016: return "HMcode-2016";
             case N::HMcode2020: return "HMcode-2020";
             case N::ReACT: return "ReACT x HMcode-2020 matched pseudo";
             default: return "linear";
@@ -990,14 +999,14 @@ namespace FML::COSMOLOGY {
         const double Mpc_h = Mpc / h;
         fp << "# x = " << x
            << ". k [h/Mpc]  P_m(k) [(Mpc/h)^3] (CDM + baryons + massive neutrinos)  P_cb(k) (CDM + baryons)"
-           << ((halofit || hmcode) ? std::string("  P_m nonlinear (") + nonlinear_name() + ")" : "") << "\n";
+           << ((halofit || hmcode || hmcode2016) ? std::string("  P_m nonlinear (") + nonlinear_name() + ")" : "") << "\n";
         fp << std::scientific << std::setprecision(10);
         const auto & kp = pert.get_k_array();
         const double V = Mpc_h * Mpc_h * Mpc_h;
         for (double k : Utils::logspace(kp.front(), kp.back(), 500)) {
             fp << k * Mpc_h << " " << get_matter_power_spectrum(x, k) / V << " "
                << get_matter_power_spectrum_cb(x, k) / V;
-            if (halofit || hmcode)
+            if (halofit || hmcode || hmcode2016)
                 fp << " " << get_matter_power_spectrum_nonlinear(x, k) / V;
             fp << "\n";
         }

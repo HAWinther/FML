@@ -37,7 +37,7 @@
 //   C_ell^phiphi   = 4 pi int dk/k P_R(k) phi_ell(k)^2
 // (Phi_ell^nu and sin_K in a curved universe), followed by the lensed spectra from Lensing::lens.
 //
-// Nonlinear (Halofit, HalofitBird, HMcode2020): P_NL = P_L * ratio(x, k); the
+// Nonlinear (Halofit, HalofitBird, HMcode2016, HMcode2020): P_NL = P_L * ratio(x, k); the
 // Weyl potential in the Limber part of C_ell^phiphi is scaled by sqrt(P_NL/P_L) (as CLASS), so the lensed
 // spectra include nonlinear lensing.
 //
@@ -85,7 +85,10 @@ namespace FML::COSMOLOGY {
 
     class Tensors;
     class Halofit;
-    class HMcode;
+    namespace HALOMODEL {
+        class HMcode2016;
+        class HMcode2020;
+    }
     class ReACT;
 
     struct PowerSpectrumOptions {
@@ -103,8 +106,8 @@ namespace FML::COSMOLOGY {
         // there it is extrapolated with the asymptotic CDM shape Phi ~ ln(beta k)/k^2 (beta from the
         // logarithmic slope at k_max).
         int lensing_limber_ell = 30;
-        // Nonlinear matter power for the lensing potential and P_NL(k) (Halofit.h, HMcode.h)
-        enum class Nonlinear { None, Halofit, HalofitBird, HMcode2020, ReACT };
+        // Nonlinear matter power for the lensing potential and P_NL(k) (Halofit.h, FML/HaloModel/HMcode2016.h, HMcode2020.h)
+        enum class Nonlinear { None, Halofit, HalofitBird, HMcode2016, HMcode2020, ReACT };
         Nonlinear nonlinear = Nonlinear::None;
         // ReACT reactions are computed only up to z <= 2.5. Above that, use the matched GR pseudo baseline.
         int react_n_z = 12, react_n_k = 256, react_mass_loop = 30;
@@ -269,7 +272,8 @@ namespace FML::COSMOLOGY {
         // per component: Theta, ThetaE, ThetaPhi
         std::vector<std::vector<std::vector<double>>> Theta_c, ThetaE_c, ThetaPhi_c;
         std::unique_ptr<Halofit> halofit; // built by solve_matter() for either Halofit version
-        std::unique_ptr<HMcode> hmcode;
+        std::unique_ptr<HALOMODEL::HMcode2020> hmcode;
+        std::unique_ptr<HALOMODEL::HMcode2016> hmcode2016;
         std::unique_ptr<ReACT> react;
         void solve_react();
         double nonlinear_ratio(double x, double k) const;

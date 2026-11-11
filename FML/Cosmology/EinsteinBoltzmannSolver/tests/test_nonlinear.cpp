@@ -10,7 +10,8 @@
 
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
 #include <FML/Cosmology/Spectra/Halofit.h>
-#include <FML/Cosmology/Spectra/HMcode.h>
+#include <FML/HaloModel/HMcode2016.h>
+#include <FML/HaloModel/HMcode2020.h>
 #include <FML/ReACT/ReACT.h>
 #include <FML/Cosmology/EinsteinBoltzmannSolver/ParameterFile.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
@@ -132,7 +133,7 @@ int main() {
                   "HMcode cold-spectrum extrapolation preserves the computed k range");
         auto total = [&](double x, double kk) { return hm.get_matter_power_spectrum_extrapolated(x, kk); };
         auto cold = [&](double x, double kk) { return hm.get_matter_power_spectrum_cb_extrapolated(x, kk); };
-        const auto direct = HMcode::spectrum(bg, total, cold, -std::log(2.0), {0.3});
+        const auto direct = HALOMODEL::HMcode2020::spectrum(bg, total, cold, -std::log(2.0), {0.3});
         const double V = std::pow(Mpc / h, 3);
         check_rel(hm.get_matter_power_spectrum_nonlinear(-std::log(2.0), k) / V,
                   direct.nonlinear[0], 2e-4, "HMcode time/k table matches direct evaluation off the table nodes");
@@ -148,6 +149,27 @@ int main() {
         while (hls >> v)
             n++;
         check(n == 4, "HMcode nonlinear power is written as the fourth column");
+        {
+            // HMcode-2016 through the solver (the general HaloModel)
+            auto o16 = o;
+            o16.nonlinear = PowerSpectrumOptions::Nonlinear::HMcode2016;
+            PowerSpectrum hm16(bg, rec, pert, o16);
+            hm16.solve_matter();
+            auto total16 = [&](double x, double kk) { return hm16.get_matter_power_spectrum_extrapolated(x, kk); };
+            auto cold16 = [&](double x, double kk) { return hm16.get_matter_power_spectrum_cb_extrapolated(x, kk); };
+            const auto direct16 = HALOMODEL::HMcode2016::spectrum(bg, total16, cold16, -std::log(2.0), {0.3});
+            check_rel(hm16.get_matter_power_spectrum_nonlinear(-std::log(2.0), k) / V, direct16.nonlinear[0], 2e-4,
+                      "HMcode-2016 time/k table matches direct evaluation off the table nodes");
+            check_rel(hm16.get_matter_power_spectrum_nonlinear(-std::log(20.0), k), total16(-std::log(20.0), k), 1e-12,
+                      "HMcode-2016: linear above z_max");
+            const double r16 = hm16.get_matter_power_spectrum_nonlinear(0.0, k) / hm.get_matter_power_spectrum_nonlinear(0.0, k);
+            check(std::abs(r16 - 1) < 0.05, "HMcode-2016 and HMcode-2020 within 5% at k = 0.3 h/Mpc, z = 0 (ratio " +
+                                                std::to_string(r16) + ")");
+            hm16.output_matter_power(file, 0.0);
+            std::ifstream in16(file);
+            std::getline(in16, line);
+            check(line.find("HMcode-2016") != std::string::npos, "matter output identifies HMcode-2016");
+        }
         if (ReACT::available()) {
             o.nonlinear = PowerSpectrumOptions::Nonlinear::ReACT;
             o.react_n_z = 4;

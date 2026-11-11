@@ -175,7 +175,7 @@ test_sphericalcollapse: test_sphericalcollapse.o Global.o Spline.o ODESolver.o M
 	$(LINK_EXE)
 
 # Halo model (reads the linear P(k) and the HMCode reference in ../HaloModel/example)
-test_halomodel: test_halomodel.o Global.o Spline.o ODESolver.o Math.o SphericalCollapse.o SphericalCollapseModel.o Halomodel.o FileUtils.o
+test_halomodel: test_halomodel.o Global.o Spline.o ODESolver.o Math.o SphericalCollapse.o SphericalCollapseModel.o Halomodel.o HaloModelTools.o FileUtils.o
 	$(LINK_EXE)
 
 # Reconstruction, Hessian (GSL eigensolver) and smoothing

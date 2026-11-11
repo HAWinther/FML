@@ -1,5 +1,5 @@
 #include <FML/Cosmology/Spectra/PowerSpectrum.h>
-#include <FML/Cosmology/Spectra/HMcode.h>
+#include <FML/HaloModel/HMcode2020.h>
 #include <FML/ReACT/ReACT.h>
 #include <algorithm>
 #include <atomic>
@@ -111,7 +111,7 @@ namespace FML::COSMOLOGY {
         pseudo_params.m_nu_list.clear();
         BackgroundCosmology pseudo_bg(pseudo_params);
         auto target = [this](double x, double k) { return get_matter_power_spectrum_extrapolated(x, k); };
-        auto pseudo = std::make_unique<HMcode>(pseudo_bg, target, target);
+        auto pseudo = std::make_unique<HALOMODEL::HMcode2020>(pseudo_bg, target, target);
         hmcode = std::move(pseudo);
         react = std::move(reaction);
         static std::atomic<bool> warned{false};

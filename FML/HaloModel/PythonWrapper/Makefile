@@ -1,7 +1,8 @@
 #===================================================================
 # FML: HaloModel/PythonWrapper
 #
-# Builds a python module (_HaloModelCXX.so + HaloModelCXX.py) with SWIG.
+# Builds the python module _halomodel (pybind11) used by
+# HaloModelWrapper.py. Needs pybind11 (pip install pybind11).
 # Compiler, library paths and how the options below are used are set
 # in ../../Makefile.config. Override for your machine in Makefile.local
 # there, or on the command line, e.g. make PYTHON=python3.12
@@ -9,29 +10,25 @@
 
 USE_OMP             ?= true
 USE_GSL             ?= true
-USE_PYTHON          ?= true
 USE_MPI             ?= false
 
 TARGETS := halomodel
 
 include ../../Makefile.config
 
-PYTHONLIBNAME = _HaloModelCXX.so
-PYWRAPFILE    = HaloModelCXX.py
-SWIGFILE      = InterfaceFile.i
-SWIGWRAPPER   = InterfaceFile_wrap.cxx
-SWIGWRAPPERO  = InterfaceFile_wrap.o
+PYBIND11_INCLUDE ?= $(shell $(PYTHON) -m pybind11 --includes 2>/dev/null)
+PYTHON_SUFFIX    ?= $(shell $(PYTHON)-config --extension-suffix 2>/dev/null || echo .so)
+PYTHONLIBNAME     = _halomodel$(PYTHON_SUFFIX)
 
 OPTIONS     += -DDONT_SHOW_INIT_INFO
 CXXFLAGS    += -fPIC
+INC         += $(PYBIND11_INCLUDE)
 FML_MODULES := Global ODESolver Math Spline FileUtils SphericalCollapse HaloModel
-EXTRA_CLEAN := $(SWIGWRAPPER) $(PYTHONLIBNAME) $(PYWRAPFILE) *.pyc __pycache__
+EXTRA_CLEAN := _halomodel*.so *.pyc __pycache__
 
-OBJS = Wrapper.o ODESolver.o Global.o Math.o Spline.o FileUtils.o Halomodel.o SphericalCollapse.o SphericalCollapseModel.o
+OBJS = bindings.o ODESolver.o Global.o Math.o Spline.o FileUtils.o Halomodel.o HaloModelTools.o SphericalCollapse.o SphericalCollapseModel.o
 
-# Run swig and generate a library that can be called from python
 .PHONY: halomodel
 halomodel: $(OBJS)
-	swig -c++ -python $(filter -D%,$(OPTIONS)) $(SWIGFILE)
-	$(CC) -c $(SWIGWRAPPER) $(OPTIONS) $(INC)
-	$(CC) -shared $(OPTIONS) $(OBJS) $(SWIGWRAPPERO) -o $(PYTHONLIBNAME) $(LIB) $(LINK)
+	@if [ -z "$(PYBIND11_INCLUDE)" ]; then echo "pybind11 not found for $(PYTHON) (pip install pybind11)"; exit 1; fi
+	$(CC) -shared $(OPTIONS) $(OBJS) -o $(PYTHONLIBNAME) $(LIB) $(LINK)
