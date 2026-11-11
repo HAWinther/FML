@@ -1,3 +1,4 @@
+#include <FML/Cosmology/Spectra/EisensteinHu.h>
 #include <FML/HaloModel/HMcode2020.h>
 #include <FML/HaloModel/HaloModelTools.h>
 #include <gsl/gsl_sf_expint.h>
@@ -87,18 +88,18 @@ namespace FML::COSMOLOGY::HALOMODEL {
                 throw std::invalid_argument("HMcode-2020 requires positive CDM+baryon density");
         }
 
-        // Eisenstein & Hu (1998), equations 29--31. The broadband shape is divided out before
-        // Gaussian smoothing, so the smoothing removes BAO without changing the turnover or slope.
+        // Eisenstein & Hu (1998) no-wiggle shape k^n_s T_nw^2 (Cosmology/Spectra/EisensteinHu.h). The broadband
+        // shape is divided out before Gaussian smoothing, so the smoothing removes BAO without changing the
+        // turnover or slope.
         double smooth_shape(const BackgroundCosmology & bg, double kh) {
             const auto & p = bg.get_params();
-            const double om = (bg.rhoB(0) + bg.rhoCDM(0) + bg.rhoNcdm(0)) * p.h * p.h;
-            const double ob = bg.rhoB(0) * p.h * p.h, fb = ob / om, theta = p.TCMB / 2.7;
-            const double s = 44.5 * std::log(9.83 / om) / std::sqrt(1 + 10 * std::pow(ob, 0.75));
-            const double ag = 1 - 0.328 * std::log(431 * om) * fb + 0.38 * std::log(22.3 * om) * fb * fb;
-            const double gamma = om / p.h * (ag + (1 - ag) / (1 + std::pow(0.43 * kh * p.h * s, 4)));
-            const double q = kh * theta * theta / gamma;
-            const double L = std::log(2 * M_E + 1.8 * q), C = 14.2 + 731 / (1 + 62.5 * q);
-            return std::pow(kh, p.n_s) * std::pow(L / (L + C * q * q), 2);
+            EisensteinHuParameters eh;
+            eh.Omega_m = bg.rhoB(0) + bg.rhoCDM(0) + bg.rhoNcdm(0);
+            eh.Omega_b = bg.rhoB(0);
+            eh.h = p.h;
+            eh.TCMB = p.TCMB;
+            eh.n_s = p.n_s;
+            return eisenstein_hu_power_shape_nowiggle(kh, eh);
         }
 
         HMcode2020::Spectrum calculate(const BackgroundCosmology & bg, const HMcode2020::LinearPower & Pm,

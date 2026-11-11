@@ -1,3 +1,4 @@
+#include <FML/Cosmology/Spectra/EisensteinHu.h>
 #include <FML/Global/Global.h>
 #include <FML/PerturbationTheory/FastOneLoop.h>
 #include <array>
@@ -13,15 +14,13 @@ bool near(double a, double b, double relative = 1e-6, double absolute = 1e-15) {
 // Eisenstein & Hu (1998) no-wiggle LCDM-like spectrum [k in h/Mpc, P in (Mpc/h)^3], h = 0.67, Om = 0.31,
 // Ob = 0.049, ns = 0.965, Tcmb = 2.7255
 double eisenstein_hu(double k) {
-    const double h = .67, om = .31, ob = .049, ns = .965, theta = 2.7255 / 2.7;
-    const double wm = om * h * h, wb = ob * h * h, fb = ob / om;
-    const double s = 44.5 * std::log(9.83 / wm) / std::sqrt(1 + 10 * std::pow(wb, .75));
-    const double ag = 1 - .328 * std::log(431 * wm) * fb + .38 * std::log(22.3 * wm) * fb * fb;
-    const double gamma = om * h * (ag + (1 - ag) / (1 + std::pow(.43 * k * h * s, 4)));
-    const double q = k * theta * theta / gamma;
-    const double l0 = std::log(2 * std::exp(1.) + 1.8 * q), c0 = 14.2 + 731 / (1 + 62.5 * q);
-    const double t = l0 / (l0 + c0 * q * q);
-    return 4e6 * std::pow(k, ns) * t * t;
+    FML::COSMOLOGY::EisensteinHuParameters p;
+    p.h = .67;
+    p.Omega_m = .31;
+    p.Omega_b = .049;
+    p.n_s = .965;
+    p.TCMB = 2.7255;
+    return 4e6 * FML::COSMOLOGY::eisenstein_hu_power_shape_nowiggle(k, p);
 }
 // Fully symmetrized EdS F3(a, b, c) from the standard recursion (independent of the analytic P13 kernel)
 using V3 = std::array<double, 3>;

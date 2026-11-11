@@ -8,6 +8,7 @@
 // Fourier-diagonal mass matrix.
 //
 // Serial (FFTWGrid without MPI; OpenMP over cells where it is free of races). See README.md for the conventions.
+#include <FML/Cosmology/Spectra/EisensteinHu.h>
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/MCMC/HMC.h>
 #include <algorithm>
@@ -30,16 +31,15 @@ namespace FML::FIELDLEVEL {
     using Complex = std::complex<double>;
     using Field = std::vector<double>; // compact real field, index (ix * N + iy) * N + iz
 
-    /// No-wiggle transfer function of Eisenstein & Hu (1998), k in h/Mpc.
+    /// No-wiggle transfer function of Eisenstein & Hu (1998), k in h/Mpc (Cosmology/Spectra/EisensteinHu.h).
     inline double
     eisenstein_hu_nowiggle_transfer(double k, double Omega_m = .31, double Omega_b = .049, double h = .68) {
-        const double theta = 2.7255 / 2.7, omh2 = Omega_m * h * h, obh2 = Omega_b * h * h, fb = Omega_b / Omega_m;
-        const double s = 44.5 * std::log(9.83 / omh2) / std::sqrt(1 + 10 * std::pow(obh2, .75)); // Mpc
-        const double alpha = 1 - .328 * std::log(431 * omh2) * fb + .38 * std::log(22.3 * omh2) * fb * fb;
-        const double gamma = Omega_m * h * (alpha + (1 - alpha) / (1 + std::pow(.43 * k * h * s, 4)));
-        const double q = k * theta * theta / gamma;
-        const double L0 = std::log(2 * M_E + 1.8 * q), C0 = 14.2 + 731 / (1 + 62.5 * q);
-        return L0 / (L0 + C0 * q * q);
+        COSMOLOGY::EisensteinHuParameters p;
+        p.Omega_m = Omega_m;
+        p.Omega_b = Omega_b;
+        p.h = h;
+        p.TCMB = 2.7255;
+        return COSMOLOGY::eisenstein_hu_transfer_nowiggle(k, p);
     }
 
     /// Toy BAO spectrum P(k, beta) = P_smooth(k) [1 + A sin(k beta r_fid + phase) exp(-k / k_damp)]; k in h/Mpc.

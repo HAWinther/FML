@@ -231,7 +231,8 @@ double T = eisenstein_hu_transfer(kh, eh), Tnw = eisenstein_hu_transfer_nowiggle
 - `nowiggle_gaussian`: P_ref times the Gaussian-smoothed P / P_ref (Vlah et al. 2016; HMcode-2020), with any smooth
   reference shape or the Eisenstein & Hu no-wiggle one.
 - `nowiggle_savgol`: velocileptors' REPT default (order 4, window ln 7 in ln k).
-- The Eisenstein & Hu (1998) transfer functions with and without the baryon wiggles, equal to colossus' to rounding.
+- The Eisenstein & Hu (1998) transfer functions with and without the baryon wiggles (`Cosmology/Spectra/EisensteinHu.h`),
+  equal to colossus' to rounding.
 
 Validation (`tests/test_nowiggle.cpp`; references from `python/generate_nowiggle_reference.py`, including a
 well-sampled CAMB P(k)): the ports above; a smooth P is returned to 9e-5 (DST), 0.5% (Savitzky-Golay) and 0.8%
@@ -240,5 +241,5 @@ measured as the largest residual of ln P_nw about a degree-10 polynomial in ln k
 4.9% to 0.7% (DST and Savitzky-Golay) and 0.05% (Gaussian-EH). DST and Gaussian-EH agree to 0.7% for k = 0.15 - 2
 h/Mpc but differ by up to 5% around the first wiggle (k = 0.005 - 0.05), where the split is ill-defined.
 The Savitzky-Golay filter leaves wiggles of ~2% at k = 0.1 - 0.3 h/Mpc. The Gaussian-EH method is the cleanest when
-the cosmology is known; DST needs only P. FieldLevel, HMcode-2020 and the Cosmology spectra have their own copies of
-the Eisenstein & Hu no-wiggle fit.
+the cosmology is known; DST needs only P. The Eisenstein & Hu fits are those of `Cosmology/Spectra/EisensteinHu.h`
+(header only), the one copy in FML, also used by HMcode-2020, FieldLevel and the Cosmology spectra.

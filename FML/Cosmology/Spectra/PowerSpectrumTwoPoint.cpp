@@ -5,6 +5,7 @@
 
 #include <FML/Cosmology/Spectra/PowerSpectrum.h>
 #include <FML/Cosmology/Common.h>
+#include <FML/Cosmology/Spectra/EisensteinHu.h>
 
 #include <algorithm>
 #include <cmath>
@@ -17,16 +18,16 @@ namespace FML::COSMOLOGY {
     using namespace Constants;
 
     namespace {
-        // Eisenstein & Hu (1998) no-wiggle transfer function (eqs. 29-31), k in 1/Mpc. Used only for the shape
-        // of Delta_M beyond the computed k-range (accurate to ~1.5% up to k = 20/Mpc when anchored at 0.3/Mpc).
+        // Eisenstein & Hu (1998) no-wiggle transfer function (Spectra/EisensteinHu.h), k in 1/Mpc. Used only for
+        // the shape of Delta_M beyond the computed k-range (accurate to ~1.5% up to k = 20/Mpc when anchored at
+        // 0.3/Mpc).
         double transfer_EH_nowiggle(const CosmologyParameters & p, double k) {
-            const double h = p.h, om = p.OmegaM() * h * h, ob = p.OmegaB * h * h, fb = ob / om, Th = p.TCMB / 2.7;
-            const double s = 44.5 * std::log(9.83 / om) / std::sqrt(1.0 + 10.0 * std::pow(ob, 0.75));
-            const double aG = 1.0 - 0.328 * std::log(431.0 * om) * fb + 0.38 * std::log(22.3 * om) * fb * fb;
-            const double G = p.OmegaM() * h * (aG + (1.0 - aG) / (1.0 + std::pow(0.43 * k * s, 4)));
-            const double q = k / h * Th * Th / G;
-            const double L = std::log(2.0 * M_E + 1.8 * q), C = 14.2 + 731.0 / (1.0 + 62.5 * q);
-            return L / (L + C * q * q);
+            EisensteinHuParameters eh;
+            eh.Omega_m = p.OmegaM();
+            eh.Omega_b = p.OmegaB;
+            eh.h = p.h;
+            eh.TCMB = p.TCMB;
+            return eisenstein_hu_transfer_nowiggle(k / p.h, eh);
         }
     } // namespace
 

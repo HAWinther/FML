@@ -5,6 +5,12 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Cosmology: one copy of the Eisenstein & Hu fits
+- `Cosmology/Spectra/EisensteinHu.h` (header only): the Eisenstein & Hu (1998) transfer functions with and without
+  the baryon wiggles and the power spectrum shapes k^n_s T^2 (k in h/Mpc). Replaces the four copies of the no-wiggle
+  fit in `Cosmology/Spectra/PowerSpectrumTwoPoint.cpp`, `HaloModel/HMcode2020.cpp`, `FieldLevel/FieldLevelBAO.h` and
+  `PerturbationTheory/tests/test_perturbation.cpp` (results equal to 2e-15); `PerturbationTheory/NoWiggle.h` uses it.
+
 ### PerturbationTheory: wiggle/no-wiggle splits of the linear P(k)
 - `PerturbationTheory/NoWiggle.h`: the no-wiggle P(k) by the discrete sine transform method (Hamann et al. 2010,
   Wallisch 2018; a port of velocileptors' pnw_dst, with a bump detection that does not depend on the sampling of P),
