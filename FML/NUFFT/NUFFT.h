@@ -62,7 +62,10 @@ namespace FML {
         using ComplexType = FML::GRID::ComplexType;
 
         /// A reusable position snapshot and original-index map grouped by
-        /// spatial blocks. Build one with make_particle_ordering and reuse it
+        /// spatial blocks. Spatial binning is the cache-locality strategy used
+        /// by FINUFFT's spreading algorithm (Barnett et al. 2019,
+        /// https://arxiv.org/abs/1808.06736); this stable counting-sort layout
+        /// is an independent FML implementation. Build one with make_particle_ordering and reuse it
         /// while particle positions and their array order stay unchanged.
         /// Results from type 2 and force evaluation remain in the caller's
         /// original particle order.
@@ -335,8 +338,13 @@ namespace FML {
         /// an even, orthonormal Legendre basis. Kernel weights are then fitted
         /// with the same Chebyshev-in-delta strategy used by ESKernel.
         ///
-        /// Width and shape choices follow the PSWF settings introduced by
-        /// FINUFFT 2.5 (https://github.com/flatironinstitute/finufft/releases/tag/v2.5.0).
+        /// The differential equation is the order-zero prolate spheroidal
+        /// equation (NIST DLMF 30.2.1, https://dlmf.nist.gov/30.2.E1). Width
+        /// and shape choices follow FINUFFT's PSWF parameter selection
+        /// (FINUFFT 2.5.0 changelog,
+        /// https://finufft.readthedocs.io/en/v2.5.0/changelog.html; discussion
+        /// https://github.com/flatironinstitute/finufft/discussions/798). This
+        /// is an independent implementation, not copied FINUFFT code.
         //================================================================================
         template <int N>
         class PSWFKernel {

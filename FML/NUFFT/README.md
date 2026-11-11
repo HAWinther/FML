@@ -123,7 +123,10 @@ function kernel, with width selection following the PSWF settings introduced in
 [FINUFFT 2.5](https://github.com/flatironinstitute/finufft/releases/tag/v2.5.0).
 It solves the angular PSWF eigenproblem in an even Legendre basis, fits the
 particle weights with Chebyshev polynomials, and evaluates the kernel Fourier
-transform by Gauss-Legendre quadrature. It does not depend on FINUFFT.
+transform by Gauss-Legendre quadrature. The special-function definition follows
+the NIST DLMF spheroidal differential equation and the numerical PSWF
+background in Osipov, Rokhlin & Xiao (2013). It does not depend on FINUFFT or
+copy its PSWF evaluator.
 
 The default convenience calls use PSWF. To use ES, construct an `ESKernel`
 explicitly and pass it to the same transform APIs. Construct and reuse either
@@ -146,6 +149,25 @@ substantially between runs, so this is an initial comparison rather than a
 portable performance claim. PSWF is the default based on its stronger observed
 accuracy and small observed speed advantage over ordered ES; ES remains
 available as an explicit alternative.
+
+## References
+
+- The spreading, FFT, and deconvolution NUFFT algorithm and the ES kernel:
+  Barnett, Magland & af Klinteberg, “A Parallel Nonuniform Fast Fourier
+  Transform Library Based on an ‘Exponential of Semicircle’ Kernel,” *SIAM J.
+  Sci. Comput.* 41 (2019), C479–C504, [doi:10.1137/18M120885X](https://doi.org/10.1137/18M120885X).
+- The prolate spheroidal differential equation used to define the PSWF:
+  NIST Digital Library of Mathematical Functions, [Chapter 30, §30.2](https://dlmf.nist.gov/30.2).
+- PSWF numerical background: Osipov, Rokhlin & Xiao, *Prolate Spheroidal Wave
+  Functions of Order Zero: Mathematical Tools for Bandlimited Approximation*,
+  Springer (2013), [doi:10.1007/978-1-4614-8259-8](https://doi.org/10.1007/978-1-4614-8259-8).
+- The PSWF kernel choice and tolerance/width parameter strategy followed by
+  this implementation: [FINUFFT 2.5.0 changelog](https://finufft.readthedocs.io/en/v2.5.0/changelog.html)
+  and [kernel-design discussion #798](https://github.com/flatironinstitute/finufft/discussions/798).
+- Numerical comparison target: [FINUFFT v2.5.1 release](https://github.com/flatironinstitute/finufft/releases/tag/v2.5.1).
+- FINUFFT’s spatial binning informed the cache-locality approach for reusable
+  particle ordering. The stable counting sort and ordering API here are FML's
+  own implementation; see Barnett et al. (2019) above.
 
 `Core.h` now defines the standalone option, point, shape, and full-complex mode
 array types. Its canonical signed-mode mapping is implemented; transform
