@@ -1,31 +1,45 @@
-# Einstein–Boltzmann solver (FML/Cosmology)
+# Einstein–Boltzmann solver
 
-A C++17 Einstein–Boltzmann code for the CMB and large-scale structure. It computes the background expansion,
-recombination, linear perturbations and line-of-sight power spectra of ΛCDM, its main extensions and several
-dark-energy and modified-gravity models, and is validated against CLASS module by module.
+A C++17 Einstein–Boltzmann code for the CMB and large-scale structure, part of [FML](../../../README.md). It computes
+the background expansion, recombination and the linear perturbations, and from them the CMB and matter power spectra,
+for ΛCDM and its extensions and for 12 dark-energy and modified-gravity models. It agrees with CLASS module by
+module, typically to 1e-4–2e-3.
 
-The solver is split into the folders of `FML/Cosmology/`: `Background`
-(the background module `BACKGROUND`, parameters, the SI adapter of the background, BBN), `Recombination`, `Perturbations` (scalar, isocurvature and tensor modes), `Spectra`
-(line-of-sight C_ℓ, lensing, Halofit, two-point functions) and this folder (the parameter files and the programs).
-Everything is in namespace `FML::COSMOLOGY`. Parameter fits use it through `FML/CosmologyFitting` (likelihoods,
-`./mcmc`) and the samplers of `FML/MCMC`. The original teaching solver is in `Cosmology/Legacy`.
+You can use it in four ways:
 
+- as a program: `./cmb params/planck2018.ini`
+- as a library: [`EinsteinBoltzmannSolver.h`](EinsteinBoltzmannSolver.h)
+- for the initial conditions of [SimulationCode](../../SimulationCode/INITIAL_CONDITIONS.md#transfer-function-input),
+  which runs it at start-up (`ic_type_of_input = internal`)
+- as the theory code of the likelihoods and samplers in [CosmologyFitting](../../CosmologyFitting/README.md)
+
+## Quick start
+
+You need a C++17 compiler and GSL (`brew install gsl` / `apt install libgsl-dev`). OpenMP is optional. Put the GSL
+location for your machine in `FML/Makefile.local` (e.g. `LOCAL_PREFIX = /opt/homebrew`). Run the programs from this
+folder: the parameter files are in `params/` and the output goes to `data/`.
 
 ```
-CosmologyParameters ─► BackgroundCosmology ─► RecombinationHistory ─► Perturbations ─► PowerSpectrum ─► Lensing, TwoPoint
-                              ▲                                              ▲
-   Cosmology/Background ComponentBackground   Cosmology/Perturbations PerturbationModel
-   (make_background: every model)             (make_perturbation_model: every model)
+make                                                 # the solver ./cmb (USE_OMP=false: without OpenMP)
+./cmb                                                # the fiducial model
+./cmb params/planck2018.ini                          # parameters from a file
+./cmb m_nu=0.06 lensing=true output_dir=data/test    # command-line values (override the file)
+./cmb --write-defaults my.ini                        # a complete parameter file with every parameter and its default
+make test                                            # build and run all the unit tests (tests/test_*.cpp)
 ```
 
-The background of every model is a `BACKGROUND::ComponentBackground` of `Cosmology/Background` (one solve: species,
-field equations, and the tables of η, t and χ); `BackgroundCosmology` is a thin adapter that gives it in SI units
-(`background()` returns it). The perturbations of the species and the field equations come from `Cosmology/Perturbations`
-(`PerturbationModel`, built on the same background; see Models below).
+The fiducial model takes ~45 s on 2 cores, most of it in the perturbations. `precision = fast` cuts the lensed CMB
+spectra to ℓ = 2500 from ~70 s to 13–16 s, for parameter fits (see [OPTIONS.md](OPTIONS.md#fast-precision-preset-for-parameter-fits)).
+`make milestones benchmark` builds `./milestones` (the data of the report) and `./benchmark`, which times each stage.
+The benchmark gives these extra costs over the fiducial run: lensing +4 s, massive neutrinos +7 s, curvature +15–28 s
+and two-point functions +3 s.
 
-Conventions: SI units internally, time variable `x = ln a`, Newtonian gauge (Dodelson / Callin conventions).
+FML compiles with `-march=native` by default. This changes the results at the 1e-4 level compared with a build
+without it (fused multiply-adds), within all the test tolerances. The programs find FML's data files, such as the
+BBN table in `Cosmology/Background/external/`, through the FML folder compiled into them. If you move FML after
+building, set the environment variable `FML_DIR`.
 
-## Features
+## What it computes
 
 | Area | What is included |
 |---|---|
@@ -40,6 +54,11 @@ Conventions: SI units internally, time variable `x = ln a`, Newtonian gauge (Dod
 | Lensing | C_ℓ^φφ (LOS + Limber), lensed TT, EE, TE, BB (full-sky correlation-function method) |
 | Two-point functions | CMB C(θ), ξ±, ξ_X with beams; matter ξ(r), σ_R, σ₈; angular C_ℓ and w(θ) of a projected tracer (exact + Limber) |
 | Fitting | MCMC, best fits and profile likelihoods with background, Planck CMB and lensing data: `FML/CosmologyFitting` (samplers in `FML/MCMC`) |
+
+## Models
+
+A model is a set of species and a theory of gravity, selected with `model = <name>`. Each model's parameters are in
+its parameter file in `params/` and in `./cmb --write-defaults`.
 
 | Model (`model =`) | Parameters | Physics |
 |---|---|---|
@@ -57,38 +76,16 @@ Conventions: SI units internally, time variable `x = ln a`, Newtonian gauge (Dod
 | `ide` | `ide_xi`, `ide_w`, `ide_cs2`, `ide_stability_check` | Interacting dark energy: fluid (w, ĉ_s²) exchanging energy with CDM, Q = ξHρ_DE along the CDM velocity; analytic background; doom-factor stability check |
 | `fr` | `fR0`, `fR_n` | Hu–Sawicky f(R): ΛCDM background (to O(f_R0)), quasi-static μ(k,a) = (1+4Q)/((1+3Q)(1+f_R)), Σ = 1/(1+f_R), Q = (k/a)² f_RR/(1+f_R) = (k/a)²λ_C²/3; flat |
 
+## Accuracy
+
 Agreement with CLASS (same physics, CLASS with RECFAST): background 1e-7, X_e 3e-4, z_* and r_s 1e-6, TT 5e-4
 rms for ℓ = 30–1000 (3e-4 for 1000–2000), EE 2e-3 rms, P(k) 0.1%, lensed/unlensed TT ratio 1e-3, effect of the
 neutrino mass 5e-4, σ₈ 4e-5. (The Peebles model of the course gives TT 0.6–0.8% and EE 1.4% rms.) Details
 and the physics are in `report/paper.pdf`.
+The measured accuracy of the nonlinear spectra, tensor and isocurvature modes and the precision preset is in
+[OPTIONS.md](OPTIONS.md), and the validation of each model is in [DEVELOPING.md](DEVELOPING.md#models-species-and-field-equations).
 
-## Build
-
-Requires a C++17 compiler and GSL (`brew install gsl` / `apt install libgsl-dev`). The Makefiles use FML's
-`Makefile.config`; put the GSL location for your machine in `FML/Makefile.local` (e.g. `LOCAL_PREFIX = /opt/homebrew`).
-Run the programs from this folder (the parameter files are in `params/`, outputs go to `data/`).
-
-```
-make                       # the solver ./cmb
-make milestones benchmark  # ./milestones (report data) and ./benchmark
-make test                  # build and run all unit tests (tests/test_*.cpp)
-make USE_OMP=false         # without OpenMP
-make USE_DEBUG=true        # with the DEBUG_OPTIONS of Makefile.config
-```
-
-Data files shipped with FML (the BBN table in `Cosmology/Background/external/`) are found through the FML folder
-compiled into the programs; set the environment variable `FML_DIR` if FML is moved after building. FML compiles
-with `-march=native` by default: results then differ from a build without it at the 1e-4 level (fused
-multiply-adds), within all test tolerances.
-
-## Running
-
-```
-./cmb                                     # fiducial model, outputs in data/
-./cmb params/planck2018.ini               # parameters from a file
-./cmb m_nu=0.06 lensing=true output_dir=data/test     # command-line values (override the file)
-./cmb --write-defaults my.ini             # complete parameter file with all parameters and their defaults
-```
+## Parameters
 
 Every cosmological, precision and output parameter can be set in a parameter file (`name = value`, `#` comments)
 or as `name=value` on the command line. `params/default.ini` lists all of them with descriptions; it is generated
@@ -109,105 +106,11 @@ Each run writes `<output_dir>/params_used.ini` (re-readable) and `params.txt` (r
 | `params/tensors.ini` | Planck 2018 with tensor modes, r = 0.05: lensed BB with the primordial B modes |
 | `params/musigma.ini`, `dgp.ini`, `quintessence.ini`, `jbd.ini`, `fr.ini`, `coupled_quintessence.ini`, `dark_scattering.ini`, `cubic_galileon.ini`, `horndeski.ini`, `ede.ini`, `ide.ini` | The models beyond ΛCDM, with their parameters |
 
-Models beyond ΛCDM: `./cmb params/musigma.ini`, or `model=<name>` plus its parameters on the command line. To
-compare all models with ΛCDM (H(z), C_ℓ^TT, C_ℓ^φφ, P(k); ~70 s per model on 2 cores):
-
-```
-for m in "lcdm" "musigma model=musigma mu0=0.3 Sigma0=0.1" "ndgp model=dgp dgp_lcdm_background=1" \
-         "sdgp model=dgp Omega_rc=0 dgp_branch=1" "quintessence model=quintessence quint_lambda=1" \
-         "jbd model=jbd bd_omega=100" "fr model=fr fR0=1e-5 pert_k_max=1" \
-         "coupled_quintessence model=coupled_quintessence" "dark_scattering model=dark_scattering" \
-         "cubic_galileon model=cubic_galileon" "horndeski model=horndeski hd_cK=1 hd_cB=0.6 hd_cM=0.3" \
-         "ede model=ede ede_fEDE=0.12 ede_log10zc=3.56 ede_theta_i=2.83" "ide model=ide"; do
-  set -- $m; name=$1; shift
-  ./cmb lensing=true transfer_ells= output_dir=data/models/$name "$@" > data/models/$name.log; done
-python3 python/plot_models.py                # data/models/models.png
-```
-
-The line-of-sight integration runs over the perturbation k-range unless `los_k_max` is set. When `pert_k_max` is
-raised only for P(k) (f(R) above: 1/Mpc), `los_k_max = 0.3` keeps the C_ℓ cost of the default run (as in
-`params/fr.ini`). Do not set it much lower than the default for the C_ℓ: the check k_max r_* > ℓ is only a minimum
-(ℓ ≤ 500 needs 0.1/Mpc for 2% in TT, and 0.045/Mpc gives 47%).
+## Output
 
 Outputs (in `output_dir`): `background.txt`, `recombination.txt`, `perturbations_k<k>.txt`, `cells.txt`
 (D_ℓ^TT, EE, TE in μK²), `cells_lensed.txt`, `matter_power.txt` (k [h/Mpc], P_m, P_cb), `transfer.txt`, and
 optionally `cmb_correlation_*.txt`, `matter_correlation.txt`, `angular_cl_z<z>.txt`, `angular_w_z<z>.txt`.
-
-Run time of the fiducial model: ~45 s on 2 cores, dominated by the perturbations. `./benchmark` measures the
-time of each stage for the main options (lensing +4 s, massive neutrinos +7 s, curvature +15–28 s, two-point
-functions +3 s).
-
-**Nonlinear power and helium.** `nonlinear = halofit` adds the Halofit P_NL(k) (Takahashi et al. 2012, as CLASS's
-`halofit` without its massive-neutrino correction (Bird et al. 2012): with m_nu > 0 up to ~2% lower than
-CLASS, and the run warns) as a 4th column of `matter_power*.txt` and uses it for the lensing
-potential (the Weyl potential of the Limber part scaled by √(P_NL/P_L)), so the lensed spectra include nonlinear
-lensing. Against CLASS: P_NL to < 1e-3 at z = 0 and 1 for k ≤ 1 h/Mpc (`python/compare_class_halofit.py`, with
-`pert_k_max = 1`), C_ℓ^φφ to 0.1% up to L = 2500, lensed TT 0.3%, EE 0.6% and BB 1% for ℓ ≤ 1500 (BB near ℓ_max needs
-`lensing_delta_ell` ≳ 1500). `Yp_bbn = true` takes Y_p from standard BBN for the run's ω_b and N_eff (PArthENoPE 3.0
-table, the CLASS default; 2e-5 from CLASS, which uses ΔN = N_eff − 3.046 with this table).
-
-`nonlinear = halofit_bird` adds the updated Bird massive-neutrino correction; `nonlinear = hmcode2020`
-selects gravity-only HMcode-2020 with cold-matter variances, neutrinos and BAO damping. Both use the same
-nonlinear output and lensing paths. HMcode-2020 supports `lcdm` and smooth `w0wa` backgrounds (with curvature)
-and rejects other models. `nonlinear = hmcode2016` selects HMcode-2016 (as CAMB `mead2016`, same backgrounds;
-the general halo model in `FML/HaloModel`). The original Halofit option remains unchanged. See
-[nonlinear methods, library API and validation](../Spectra/NONLINEAR.md) for units, limits and reference tests.
-
-`nonlinear = react` adds the official ReACT reaction multiplied by an HMcode-2020 matched GR pseudo spectrum.
-It requires an enabled optional backend (`USE_REACT=true`) and supports flat `lcdm`, `fr` with n=1, `w0wa`,
-and normal-branch `dgp` with `dgp_lcdm_background=1`, including massive neutrinos. Reactions are restricted to
-z<=2.5; above `react_z_max` the solver uses the matched pseudo baseline with R=1 and reports this approximation.
-See [ReACT setup, conventions, reference tests and limits](../../ReACT/README.md).
-
-**Tensor modes.** `r = 0.05` (tensor-to-scalar ratio at `k_pivot`) adds gravitational waves; the tilt is
-n_t = −r/8 (2 − r/8 − n_s) (CLASS's `scc`) unless `n_t_consistency = false` and `n_t = ...`. The tensor TT, EE, TE
-are added to the scalar spectra, BB is the tensor one, and all are lensed together. `cells_tensor.txt` holds the
-tensor contributions alone (ℓ ≤ `tensor_ell_max`, default 600). The equations are those of CLASS (Pitrou et al.
-hierarchy, flat), with the friction (2 + α_M)ℋh′ and the stress divided by M*² from the theory of gravity
-(Horndeski α_M, Brans–Dicke φ, f(R) 1 + f_R; GR otherwise). Massive neutrinos are evolved with the massless
-hierarchy and weighted by 3 p_ncdm in the anisotropic stress (equal to ρ_ncdm while they are relativistic; CLASS's
-`tensor_method = massless` approximation). About 10 s on 2 cores (`[Tensors]` timing); settings `tensor_*` in
-`params/default.ini`. Flat universes only.
-
-| Check (tests/test_tensors, python/compare_class_tensors.py) | Result |
-|---|---|
-| Against CLASS, r = 0.1, unlensed tensor TT, EE, BB | 0.1–0.5% for ℓ ≤ 300; EE, BB 0.5% and TT 3% for 300–600 (where tensor TT is < 10⁻³ of the scalar) |
-| Lensed total BB (scalar + tensor) against CLASS | 0.1% at ℓ = 50–300, 0.7% at ℓ = 10 |
-| Neutrino free streaming (modes entering in the radiation era) | amplitude × 0.8026 (Weinberg 2004: 0.8026) |
-| Matter era without anisotropic stress | h = 3 j₁(kη)/(kη)/√6 to 0.2% |
-| Horndeski c_M = 0.5 | subhorizon h ∝ 1/(a M*) (WKB) to 1e-3 |
-
-**Isocurvature modes.** `f_cdi`, `f_bi`, `f_nid`, `f_niv` (CDM, baryon, neutrino density, neutrino velocity)
-switch on isocurvature modes with P_II = f² A_s (k/k_pivot)^(n_I − 1) (`n_cdi`, ...) and correlation
-P_RI = c √(P_RR P_II) (`c_ad_cdi`, ...; CLASS's parameters and sign convention, Σc² < 1; the isocurvature modes are
-uncorrelated with each other). The correlation matrix is Cholesky-factored into independent components, each a
-perturbation solve with a mix of adiabatic and isocurvature initial conditions (CLASS's superhorizon series,
-Bucher, Moodley & Turok 2000), and the C_ℓ, C_ℓ^φφ and P(k) are summed over components; each active mode adds one
-perturbation solve and line-of-sight pass. GR only (`model = lcdm`, `w0wa`, the dark-energy models; in
-`dark_scattering`, `ide` and `coupled_quintessence` the dark energy starts adiabatic in the isocurvature modes); `python/params.py` passes the
-modes to CLASS (`ic = ad,cdi,...`) so `python/compare_class_spectra.py` compares them directly (`--precise` for NIV).
-Example: `params/isocurvature.ini`.
-
-| Check (tests/test_isocurvature) | Result |
-|---|---|
-| Pure modes against CLASS (fine sampling, `l_max_scalars` = 1500), 10 ≤ ℓ ≤ 600 | CDI, NID < 5e-4 in TT and EE; NIV ~1e-3 (CLASS's NIV at ℓ = 2 is not converged) |
-| f = 1, n = 1.1, c_ad = 0.3 with the adiabatic mode, `precision = fast` | TT, EE, TE < 3e-3 (CDI, NIV); NID with massive neutrinos at the adiabatic level |
-| Decomposition, initial entropy, independence of x_start | exact; S_c = −1; < 1e-6 (CDI), < 1e-3 (NID, NIV) |
-| CDI in `dark_scattering`/`ide` (zero coupling) and `coupled_quintessence` (β = 0) | ds = ide (identical); cq = ΛCDM to 2e-6 |
-
-**Fast precision preset for parameter fits.** `precision = fast` (in a file or on the command line) sets the
-precision parameters to values tuned for CMB likelihoods: lensed TT, EE, TE to ℓ = 2500 in ~13–16 s instead of
-~70 s (2 cores), with Δχ² ≈ 0.2 relative to a high-precision run for Planck-like noise (f_sky = 0.6,
-33 μK·arcmin, 7′ beam; the defaults give 0.02). The main saving is a log-linear k-grid (`pert_dk_max`: the CMB
-sources oscillate in k with period ~2π/r_s, so above k ≈ 0.03/Mpc a linear spacing of 0.004/Mpc is enough;
-112 modes instead of 400); the rest are a coarser stored x-grid, `lmax_nu = 16`, `ode_abserr = 1e-6` and a
-coarser line-of-sight grid. Explicit precision parameters override the preset. `python/precision_scan.py`
-computes Δχ² of any run against a reference (see its header for the reference settings used).
-
-| Setting (Planck 2018 ΛCDM) | Time | Δχ² (Planck noise) | Δχ² (cosmic variance) |
-|---|---|---|---|
-| default | 70 s | 0.02 | 5.4 |
-| `precision = fast` | 13–16 s | 0.22 | 5.8 |
 
 ## Using the solver from code
 
@@ -222,139 +125,13 @@ const auto & bg = ebs.background();             // recombination(), perturbation
 ebs.output();                                   // the files enabled in the settings, in output_dir
 ```
 
-## Code layout
+## Documentation
 
-| File (in `FML/Cosmology/`) | Contents |
-|---|---|
-| `Common.h` | Solver aliases and compatibility names for constants, numerical methods, splines, ODE solvers and timing. Implementations live in shared `FML/Units`, `Math`, `FileUtils`, `Timing` and `Spline` modules. |
-| `Background/CosmologyParameters.h/.cpp` | Parameters with derived Ω's; `fiducial()`, `Planck2018()`, `Planck2018Baseline()` |
-| `EinsteinBoltzmannSolver/ParameterFile.h/.cpp` | Parameter files: one table of all parameters (name, description, unit), reading with overrides and checks, writing |
-| `Background/` (headers, `README.md`, `tests/`) | The background module (`BACKGROUND`): species (with the Fermi–Dirac integrals of massive neutrinos), field equations, `ComponentBackground` and the background models; `Presets.h`: the background registry (parameters with defaults and descriptions) |
-| `Background/BackgroundCosmology.h/.cpp` | The solver's interface to the background (SI units): H, Hp and derivatives, Ω_i(x), η, t, distances, curvature geometry `sinK`, `cotK`, from the `ComponentBackground` of the model; the `PerturbationModel` |
-| `Perturbations/` (headers, `README.md`, `tests/`) | The perturbation module (`PERTURBATIONS`): species perturbations, perturbed field equations, the `PerturbationModel` of every model; `Presets.h`: the model registry (built on the background registry: the models the solver offers, their parameters with defaults and descriptions; parameter file, validation, `--write-defaults`) |
-| `Recombination/RecombinationHistory.h/.cpp` | X_e, T_b, τ, visibility function, sound horizon, reionization |
-| `Perturbations/Perturbations.h/.cpp` | Photon–baryon core (tight coupling, polarization), the species' blocks, segmentation of the ODE, source functions; 2D splines in (x, k) |
-| `Spectra/HypersphericalBessel.h/.cpp` | Hyperspherical Bessel functions Φ^ν_ℓ(χ) (open, closed, flat) |
-| `Spectra/PowerSpectrum.h/.cpp` | Line-of-sight integration, C_ℓ, C_ℓ^φφ, lensed spectra, P(k), transfer functions |
-| `Spectra/PowerSpectrumTwoPoint.cpp` | Two-point functions of `PowerSpectrum`: CMB C(θ), ξ(r), σ₈, projected C_ℓ and w(θ) |
-| `Perturbations/Tensors.h/.cpp` | Tensor modes: gravitational-wave equation with photon and neutrino hierarchies, sources, line of sight, tensor C_ℓ |
-| `Perturbations/Isocurvature.h/.cpp` | Isocurvature modes: correlation matrix → independent components (initial conditions in `Perturbations::isocurvature_values`) |
-| `Spectra/Halofit.h/.cpp` | Nonlinear matter power spectrum (Takahashi et al. 2012) |
-| `Background/BBN.h/.cpp` | Primordial helium from the BBN table (`external/bbn/`) |
-| `Spectra/Lensing.h/.cpp` | Lensing of the CMB spectra (Challinor & Lewis 2005), Wigner d-functions |
-| `Spectra/TwoPoint.h/.cpp` | Two-point numerics: Legendre/Wigner sums, Filon transform for ξ(r), σ_R, redshift windows |
-| `EinsteinBoltzmannSolver/EinsteinBoltzmannSolver.{h,cpp}` | the whole solver in one class: settings, `solve()` (all stages or up to one), accessors, `output()` |
-| `EinsteinBoltzmannSolver/Main.cpp` | `./cmb`: reads a parameter file and runs an `EinsteinBoltzmannSolver` |
-| `EinsteinBoltzmannSolver/tests/` | One unit-test program per module and model (~650 checks): analytic limits, conservation laws, convergence, internal consistency; `test_regression` compares key outputs of several configurations and all models with stored values (`tests/reference/`) |
-| `EinsteinBoltzmannSolver/Milestones.cpp` | `./milestones`: all models and numbers for the report (`report/data/`) |
-| `EinsteinBoltzmannSolver/Benchmark.cpp` | `./benchmark [config ...]`: run time per stage (`data/benchmark.txt`) |
-| `EinsteinBoltzmannSolver/python/params.py` | Reads `params.txt` and builds the matching CLASS input |
-| `EinsteinBoltzmannSolver/python/derive_brans_dicke.py`, `derive_cubic_galileon.py` | Symbolic derivations (sympy) of the Brans–Dicke and cubic Galileon equations |
-| `EinsteinBoltzmannSolver/python/derive_horndeski.py`, `derive_horndeski_alpha.py` | Horndeski (F(φ)R/2 + G2 − G3□φ) in Newtonian gauge, then the equations in terms of α_K, α_B, α_M (run in this order) |
-| `EinsteinBoltzmannSolver/python/compare_hiclass.py` | A `horndeski` run against hi_class (its `class` executable) |
-| `EinsteinBoltzmannSolver/python/compare_class_ede.py` | An `ede` run against CLASS_EDE (its `class` executable) |
-| `EinsteinBoltzmannSolver/python/compare_class_wcdm.py` | wCDM (`dark_scattering` with ξ = 0) against CLASS's fluid dark energy |
-| `EinsteinBoltzmannSolver/python/plot_models.py` | Ratios of H(z), C_ℓ^TT, C_ℓ^φφ and P(k) of all models to ΛCDM |
-| `EinsteinBoltzmannSolver/python/plot_*.py` | Quick-look plots of the outputs in `data/` (CLASS overlay if `classy` is installed) |
-| `EinsteinBoltzmannSolver/python/compare_class_*.py` | Comparisons with CLASS (`pip install classy`): background, recombination, perturbations, spectra (CLASS with RECFAST; `--hyrec` for HyRec), lensing, neutrinos, two-point functions |
-| `external/`, `../Background/external/` | Planck 2018 TT/EE/TE spectra, SDSS DR7 LRG and WMAP+ACT P(k), binned JLA supernovae (for the plots and the report); the BBN helium table (`Cosmology/Background/external/bbn/`). The likelihood data are in `FML/CosmologyFitting/external/` |
-
-### Models
-
-A model is a background (`Cosmology/Background`: species and field equations) and its linear perturbations
-(`Cosmology/Perturbations`: a `PerturbationModel` on that background):
-
-* A **species perturbation** (`Perturbations/SpeciesPerturbation.h`) has its variables (possibly in several
-  approximation schemes, e.g. the massive-neutrino hierarchy and fluid, or a scalar field and the fluid of its
-  oscillations), initial conditions, equations, and the quantities to store (`Perturbations::get(name, x, k)`). It
-  talks to the metric only through its moments δρ, δp, (ρ+p)θ/(ck) and (ρ+p)σ, and receives Φ, Ψ and Φ'. Interacting
-  species (coupled quintessence, dark scattering, interacting dark energy) are one perturbation block with all their
-  variables. Photons and baryons are the fixed core of `Perturbations` (Thomson coupling, tight coupling,
-  polarization and the line-of-sight sources).
-* The **perturbed field equations** (`Perturbations/PerturbedFieldEquation.h`) own their own perturbation
-  variables (GR: Φ; Brans–Dicke, cubic Galileon and Horndeski: Φ and two scalar-field variables), from which, with
-  the summed moments, they give Φ, Ψ and Φ'. `GeneralRelativity` implements the Einstein equations; `MuSigma` the
-  μ–Σ parameterization (evolving the GR potential of the comoving density with an equation derived from
-  energy-momentum conservation, so that μ = Σ = 1 is GR exactly), which `DGP` (μ(a) from its background) and
-  `HuSawicky` (scale-dependent μ(k,a)) reuse.
-* The **registries**: `Background/Presets.h` (the backgrounds, with their parameters) and `Perturbations/Presets.h`
-  (the full models: each entry is built on the background entry of the same name and adds the parameters that only
-  concern the perturbations) build a model by name with its parameters (`make_background`, `make_perturbation_model`);
-  the model registry is the list of models the solver offers, `PERTURBATIONS::model_parameters(name)` their parameters
-  with defaults and descriptions. A run selects one with `model = <name>` (every name of the registry, also
-  `quintessence_inverse_power_law`, `quintessence_pngb`, `quintessence_hilltop` and `ede_zc`, with all their
-  parameters, e.g. `quint_phi_ini`, `quint_dphidlna_ini`, `bd_GeffG_today`, `bd_density_parameter_definition`); its
-  parameters are then valid in the parameter file (and a parameter of another model is an error). `./cmb
-  --write-defaults` lists the models, `params_used.ini` the parameters of the run's model.
-
-To add a model: its species and/or field equations in `Cosmology/Background` and `Cosmology/Perturbations` (a
-`BackgroundModel_<name>.h` and a `PerturbationModel_<name>.h` with their registry entries, the parameters with
-descriptions). A custom model can also be run without a registry entry: `BackgroundCosmology(params, pmodel)` with any
-`PerturbationModel` (e.g. `PERTURBATIONS::PerturbationModel_Assembled` on a `ComponentBackground`;
-`tests/test_models.cpp`, `tests/test_horndeski.cpp`, `tests/test_background.cpp`). The perturbation data types
-(`ModeAtX`, `Moments`, `MetricAtX`, `IsoValues`, `InitialData`, `TensorCoefficients`) are those of
-`Perturbations/PerturbationTypes.h`.
-
-Validation of the models (each test program prints what it checks): the GR/ΛCDM limit of every model;
-μ–Σ and DGP potentials against the algebraic relations with the comoving density, and the growth against an
-independent solution of the growth equation with μ(a) (to < 1e-4); the quintessence background against an
-independent integration in cosmic time, and the Einstein constraints that are not evolved (Poisson and
-momentum, with the field's density and momentum) to 1e-7; the Brans–Dicke background equations, the
-matter-era solution φ ∝ a^(1/(1+ω)), the unused momentum constraint (5e-8), and the growth with
-G_eff = G φ₀/φ; f(R): f_R(a), the Compton wavelength and the limits of μ, the potentials at every k, and
-the scale-dependent growth at each k (to 2e-4); coupled quintessence: an independent cosmic-time integration
-with the coupling, the Einstein constraints (which hold only if the exchange cancels) and the CDM growth with
-fifth force and drag; dark scattering: the constraints with momentum exchange, the drag in the growth, and
-for ξ = 0 the wCDM/ΛCDM ratios against CLASS's fluid dark energy (`python/compare_class_wcdm.py`: P(k) 5e-5,
-C_ℓ^TT 2e-4 for ℓ ≤ 800); cubic Galileon: the tracker (E⁴ − ρE² = Ω_φ, the pressure from the field equations,
-w = −2/(1+Ω_φ)), the unused momentum constraint with all braiding terms (3e-8) and the sub-horizon growth
-against the quasi-static G_eff (7e-5); Horndeski (α's): all α = 0 is ΛCDM, the unused momentum constraint with
-braiding, running Planck mass and kineticity (3e-8), the stability conditions, and three theories rebuilt from
-their α's reproduce the dedicated implementations: the cubic Galileon (α_K = 6Ω_DE, α_B = 2Ω_DE; 5e-9),
-quintessence (α_K = 3(ρ+p)_φ/H²; 2e-11) and Brans–Dicke on its own expansion (M*² = φ, α_M = −α_B,
-α_K = ωα_M²; 9e-9, and the field perturbation). Against hi_class (`python/compare_hiclass.py`, propto_omega with
-ΛCDM and w₀w_a expansion, propto_scale): the ratios to ΛCDM agree to 1e-4 in P(k) and 8e-4 in C_ℓ^TT.
-Early dark energy: the shooting reproduces f_EDE and z_c (1e-10), the stored field satisfies the Klein–Gordon
-equation, the oscillation-averaged dilution a^(−6n/(n+1)), the unused Einstein constraints with the field (5e-6),
-and f_EDE → 0 is ΛCDM; against CLASS_EDE (`python/compare_class_ede.py`) the potential parameters agree (f to
-1e-3) and the ratios to ΛCDM agree to 3e-5 in P(k) for k ≤ 0.05 h/Mpc (7e-4 at 0.1) and 1e-3 in C_ℓ^TT.
-Interacting dark energy: ρ_c against an independent integration, the constraints with energy exchange (2e-6;
-they test that the exchanged energy and momentum cancel), ξ = 0 against the separate wCDM implementation of
-`dark_scattering` (identical), and the rejection of unstable (d > 0) and negative-ρ_c models.
-`test_regression` stores key outputs of all models.
-
-## Report
-
-`report/paper.pdf` describes the physics, numerics and validation of every module (course milestones I–IV, without
-the MCMC fits; these use the course's Peebles recombination) and the extensions (curvature, lensing, massive
-neutrinos, two-point functions, RECFAST, and the model library with its validation). To reproduce it
-(the Python scripts need `classy`; `make_figures.py --no-class` skips the CLASS comparison):
-
-```
-make milestones && ./milestones                 # report/data/ (~2 min on 2 cores)
-python3 report/make_figures.py            # milestone figures and numbers
-for K in -0.2 -0.05 0 0.05 0.2; do
-  ./cmb params/curvature.ini OmegaK=$K output_dir=data/curvature_$K > data/log_curv_$K.txt; done
-python3 report/make_curvature_figure.py
-for m in 0 0.06 0.15 0.3; do
-  ./cmb params/neutrinos.ini m_nu=$m output_dir=data/neutrinos_$m > data/log_nu_$m.txt; done
-python3 report/make_neutrino_figure.py
-./cmb params/twopoint.ini > data/log_twopoint.txt
-python3 report/make_twopoint_figure.py
-./cmb transfer_ells= output_dir=data/rf/fid
-./cmb transfer_ells= output_dir=data/rf/fid_peebles recombination=peebles
-./cmb reionization=false pert_n_k=2 ell_max=20 output_dir=data/rf/norei
-./cmb reionization=false recombination=peebles pert_n_k=2 ell_max=20 output_dir=data/rf/norei_peebles
-python3 report/make_recfast_figure.py
-# all models into data/models/ (see "Running" above; f(R) with pert_k_max=1)
-python3 report/make_models_figure.py
-python3 report/fill_numbers.py             # numbers into the new sections (only where @@key@@ placeholders remain)
-cd report && pdflatex paper && pdflatex paper     # REVTeX 4.2
-```
-
-## Possible next steps
-
-HMcode baryonic feedback and ReACT support for additional gravity models, Horndeski
-with alpha_T != 0 or from G_i(phi, X), f(R) beyond the quasi-static approximation, tensor modes in curved universes,
-several massive neutrino species, speed-ups beyond `precision = fast` (CLASS-like radiation-streaming and
-ultra-relativistic fluid approximations, analytic Jacobians for the stiff solver).
+- [OPTIONS.md](OPTIONS.md): nonlinear P(k) (Halofit, HMcode, ReACT) and helium from BBN, tensor and isocurvature
+  modes, the fast precision preset, comparing all the models, the k-range of the line of sight.
+- [DEVELOPING.md](DEVELOPING.md): the code layout, how a model is built from species and field equations, adding a
+  model, the validation of the models, reproducing the report, possible next steps.
+- [params/default.ini](params/default.ini): every parameter with its description.
+- `report/paper.pdf`: the physics, numerics and validation of every module.
+- The background and perturbation modules: [Background](../Background/README.md), [Perturbations](../Perturbations/README.md).
+- [Nonlinear methods](../Spectra/NONLINEAR.md) and [ReACT](../../ReACT/README.md).

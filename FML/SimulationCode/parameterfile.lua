@@ -433,7 +433,7 @@ ic_random_field_type = "gaussian"
 -- The grid-size used to generate the IC
 ic_nmesh = particle_Npart_1D
 -- Offset of the particle lattice from the force grid nodes: fiducial (half a force-grid cell if
--- force_nmesh > particle_Npart_1D, see README), none, half_force_cell
+-- force_nmesh > particle_Npart_1D, see EVOLUTION.md), none, half_force_cell
 ic_lattice_offset = "fiducial"
 -- For MG: input LCDM P(k) and use GR to scale back and ensure same IC as for LCDM
 -- ONLY use this if you don't have the P(k) for the MG model or if you want to consider PMG/PLCDM run with same IC at high z
@@ -454,7 +454,7 @@ ic_LPT_order = 2
 ic_type_of_input = "powerspectrum"
 ic_input_gauge = "synchronous" -- class: the gauge CLASS was run in (synchronous or newtonian; converted to CDM-synchronous)
 -- internal: settings of the solver as "name=value", e.g. {"Yp=0.245", "z_reion=8", "precision=fast"}
--- (not the cosmology or the k-range, which are the simulation's; see README.md)
+-- (not the cosmology or the k-range, which are the simulation's; see INITIAL_CONDITIONS.md)
 ic_internal_solver_parameters = {}
 -- Path to the input (NB: for using the example files update the path at the top of the file below;
 -- internal: an optional .ini file of the solver, "" for its defaults (internal_solver_default.ini lists the
@@ -524,7 +524,7 @@ force_greens_function_kernel = "fiducial"
 force_gradient_kernel = "fiducial"
 -- Experimental: how the density for the force is computed: assignment (default), nufft (exact Fourier
 -- modes, no window/aliasing; then the force is also evaluated exactly at the particles), sheet or
--- sheet_nufft (spectral sheet interpolation with force_sheet_refinement^3 tracers per particle). See README
+-- sheet_nufft (spectral sheet interpolation with force_sheet_refinement^3 tracers per particle). See EVOLUTION.md
 force_density_method = "assignment"
 if force_density_method == "sheet" or force_density_method == "sheet_nufft" then
   -- The number of tracers per particle per dimension
@@ -535,11 +535,11 @@ end
 -- nufft, otherwise assignment)
 force_interpolation_method = "fiducial"
 -- Experimental: force interlacing (average the force over this many shifted grids; 1 = off) and deconvolution
--- of the assignment window W(k)^2 (only stable with interlacing). See README
+-- of the assignment window W(k)^2 (only stable with interlacing). See EVOLUTION.md
 force_interlacing_order = 1
 force_deconvolve_window = false
 -- Experimental: a more accurate force at early times (nufft or interlaced) for z > force_early_until_redshift
--- (only for force_nmesh = particle_Npart_1D). See README
+-- (only for force_nmesh = particle_Npart_1D). See EVOLUTION.md
 force_early_method = "none"
 if force_early_method == "nufft" or force_early_method == "interlaced" then
   force_early_until_redshift = 10.0

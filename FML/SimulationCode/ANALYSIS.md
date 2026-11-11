@@ -1,0 +1,105 @@
+# On-the-fly analysis and output
+
+## Analysis
+
+The CDM+baryon and total matter power spectra are written at every step (`pofk_every_step`, on by default; the density field is already in Fourier space, so this is almost free). These are written as `pofk_<name>_cb_z<z>.txt` (and `_total_` with massive neutrinos or the N-body gauge) in the output folder, together with linear theory. The P(k) files (also `pofk_z<z>.txt` at the outputs) have a fourth column with a nonlinear prediction P_NL = P_linear B(k, z) when there is one: B is the EuclidEmulator2 boost for LCDM and w0waCDM (`FML/Emulator/EuclidEmulator2.h`). For f(R) with n = 1 it is P_NL = P_linear,GR B_EE2 B_f(R), with P_linear,GR the linear P(k) of GR from the same initial conditions and B_f(R) = P_f(R)/P_GR the fitting function of Winther et al. 2019 (arXiv:1903.08798; `FML/Emulator/FofrFittingFunction.h`). That fit was calibrated on ECOSMOG simulations of one WMAP9 cosmology for 1e-7 <= |fR0| <= 1e-4, z <= 3 and k <= 10 h/Mpc (closest value outside; the paper quotes ~1-3% and a ~1% (2-3%) change of the boost for a 10% change in Omega_m (sigma8)). The other models (and f(R) with n != 1) get the EuclidEmulator2 boost on their own linear P(k), and without the EuclidEmulator2 boost the column is linear theory. They use the force grid and the force density assignment (with the window deconvolved, but no interlacing), so they are accurate on large scales and dominated by aliasing above about half the Nyquist frequency of the force grid; use `pofk` at the outputs for an accurate P(k). Shot noise is subtracted if `pofk_subtract_shotnoise = true`. With force interlacing the unshifted copy of the particles is used. At the output redshifts the code can also:
+
+* Compute P(k) : Options: subtract shot-noise, use interlacing for alias reduction (allowing us to use a smaller grid), free choice of density assignment method (NGP, CIC, TSC, PCS, PQS, ...). Included in the output is also the linear theory predictions to easily be able to compare that.
+
+* Compute P\_ell(k) multipoles (using the plane parallel approximation): Particles are put into redshift-space along the coordinate axes (one by one) and the multipoles are computed from this and we return the mean over the three axes. Options: compute up to any given ellmax, subtract shot-noise, use interlacing for alias reduction (allowing us to use a smaller grid), free choice of density assignment method (NGP, CIC, TSC, PCS, PQS, ...). Included in the output is also the linear theory predictions (the Kaiser limit) to easily be able to compare that.
+
+* Compute friends-of-friends halos (`fof`) from the CDM+baryon particles (with `particle_baryons` both are linked together with their masses, the linking length and `fof_nmin_per_halo` refer to one species; neutrino particles are not included). Halo masses are in Msun/h from OmegaCB. Output: the halo catalogue (`halos_zX.txt`, or `halos_zX.hdf5` with `fof_output_fileformat = "HDF5"`) and the mass function (`massfunc_zX.txt`, binned with `fof_massfunction_nbins/Mmin/Mmax`) together with the Tinker et al. 2008 (Delta = 200 mean) and Watson et al. 2013 (FoF) fits computed from the linear CDM+baryon P(k) at the same redshift. With several MPI tasks each task links its particles plus a buffer of `fof_buffer_length_mpch` copied from the neighbor tasks and keeps the halos whose center is in its domain. The result is independent of the number of tasks as long as no halo is larger than the buffer; the code warns if halos reach the edge of the buffer (they might then be cut off and found twice). Test (128^3 particles in 256 Mpc/h, 2x force grid, COLA, z = 0): the catalogue is identical with 1 and 2 tasks, and the mass function is 0.84-1.1 times the Watson et al. fit for 2e13 - 3e14 Msun/h (fewer small halos from the PM force resolution). If your particle has `set_fofid` the ID of its halo is stored in it (no_FoF_ID if it is in no halo). NB: this does not change the particles, but it sorts them.
+
+* Spherical overdensity (SO) masses around the FoF halos (`fof_so_definitions`, e.g. `{"200m", "200c", "vir"}`; library: `FML::FOF::SphericalOverdensity` in `FriendsOfFriends/SphericalOverdensity.h`). For each FoF halo the center is found with a shrinking sphere (starting at 1.5 times the radius of a sphere with the FoF mass and 200 times the mean density, shrinking by 10% until fewer than max(20, 10%) of the particles are left), then the sphere around it is grown with *all* the CDM+baryon particles until the mean enclosed density is Delta times the reference density: `<Delta>m` the mean CDM+baryon density, `<Delta>c` the critical density, `vir` the Bryan & Norman 1998 overdensity. The radius is defined by M(<R) / (4pi/3 R^3) = Delta rho, with M(<R) the mass of the particles inside. The catalogue gets the SO center, velocity and dispersion (inside the radius of the first definition), M, R and N for each definition, a flag if the sphere did not close within the buffer `fof_buffer_length_mpch` (with a warning; R and M are then lower limits) and a flag if the center lies inside the radius of a more massive halo. There is a mass function `massfunc_so<def>_zX.txt` for each definition with the Tinker et al. 2008 fit for the same Delta (their table interpolated in log Delta, 200 <= Delta <= 3200). The SO results do not depend on the number of tasks (1 and 2 tasks give identical catalogues) and agree with an independent calculation from the snapshot (radii to 1e-15, the same particle counts).
+
+  With PM forces (also COLA) the centers of halos are smoothed on the scale of a force-grid cell, so SO masses are biased low unless R_Delta is several force cells. 128^3 particles in 256 Mpc/h, z = 0, SO mass function relative to the Tinker fit at M = 1.3e14 Msun/h (median M_SO / M_FoF for 1e14 - 1e15 Msun/h, median R_Delta):
+
+  | force grid (cell)  | 200m                | vir                 | 200c                | FoF / Watson |
+  |--------------------|---------------------|---------------------|---------------------|--------------|
+  | 256^3 (1 Mpc/h)    | 0.56 (0.73, 1.17 Mpc/h) | 0.50 (0.50, 0.88 Mpc/h) | 0.25 (0.25, 0.55 Mpc/h) | 1.00 |
+  | 512^3 (0.5 Mpc/h)  | 0.73 (0.83, 1.22 Mpc/h) | 0.68 (0.65, 0.95 Mpc/h) | 0.54 (0.40, 0.65 Mpc/h) | 1.14 |
+
+  So use SO masses only for halos with R_Delta of at least a few force cells (and check convergence with the force grid); FoF masses are much less sensitive to the force resolution.
+
+* Compute bispectrum (or any polyspectrum for that matter): Options: subtract shot-noise, use interlacing for alias reduction (allowing us to use a smaller grid), free choice of density assignment method (NGP, CIC, TSC, PCS, PQS, ...). NB: this is a very expensive operation. We use the method of Scoccimarro and compute everything with fourier transforms. This means we need to do 2nbins FFTS and from these grids we will need to compute nbins^3 integrals (summing all the cells in the grid). Thus for large grid-sizes and a large number of bins this gets both memory and computationally expensive.
+
+* Compute the hybrid bias spectra (`hybridbias`, Modi, Chen & White 2020; Kokron et al. 2021): the 15 cross spectra P\_ab(k) of the Lagrangian bias operators 1, delta\_L, delta\_L^2 - <delta\_L^2>, s^2 - <s^2> and nabla^2 delta\_L advected with the CDM+baryon particles, written to `hybridbias_zX.txt` in the snapshot folder (with the linear P\_cb(k) as the last column). delta\_L is the linear field of the initial conditions (kept on a grid of the size of the particle lattice, so the operators at the particles are exact) scaled to the output redshift with the 1LPT growth factor D(k,z)/D(k,zini) of the gravity model, so scale-dependent growth (massive neutrinos, modified gravity) is included. The tracer spectrum for Lagrangian bias parameters (b1, b2, bs, bnabla) is P\_tt = sum\_ab b\_a b\_b P\_ab with b = (1, b1, b2, bs, bnabla). Options: grid size, number of operators, density assignment, interlacing, shot noise subtraction (off by default) and smoothing of the linear field. The methods are in `FML/ComputePowerSpectra/HybridBiasSpectra.h` and can be used on any simulation that starts from a lattice. Accuracy: the spectra are only as good as the large-scale growth of the simulation. Plain PM with Quinn steps and few steps grows too slowly on large scales (64^3 in 512 Mpc/h, 10 linear steps: P\_11 7.7% low at z = 0, i.e. P\_1delta/P\_11 = 1.045 instead of 1.004), so use COLA, FastPM or BullFrog steps, or many steps. Use a force grid finer than the particle lattice: with `force_nmesh` = `particle_Npart_1D` the advected delta\_L picks up grid artifacts of up to ~7% in P\_1delta and P\_deltadelta at low k (the sign depends on the lattice offset), below 0.3% with a twice finer grid. Not implemented for separate CDM and baryon particles. Test (64^3 particles in 500 Mpc/h): P\_11 agrees with P(k) to 0.1%, P\_1delta = P\_deltadelta = P\_linear on large scales, and the result is identical on 1, 2 and 4 tasks.
+
+  By default the linear field is cut at the Nyquist frequency of the particle lattice with a spherical cut (`hybridbias_kcut_over_nyquist = 1`) so the operators are isotropic. With `hybridbias_zeldovich = true` the Zel'dovich (resummed 1LPT) prediction of all 15 spectra with the same linear P\_cb(k,z), cut and smoothing is written to `hybridbias_zeldovich_zX.txt` (same columns; in the bins below 16 k\_fundamental it is averaged over the modes in the bin like the measurement). The prediction (`FML/ComputePowerSpectra/HybridBiasZeldovich.h`) agrees with ZeNBu to 2e-4 and with the spectra of particles moved with the Zel'dovich approximation to ~1-2%; with the cut at the lattice Nyquist frequency the operators that have most of their power near the cut (nabla^2 delta, delta^2, s^2) are affected by the sampling on the lattice for k > ~0.4 k\_Ny (use `hybridbias_kcut_over_nyquist = 0.5` for a cleaner comparison). Note that the large-scale nabla^2 delta spectra of a simulation are not well described by the Zel'dovich approximation: in a COLA run they are 2-6 times larger than the prediction at k ~ 0.02 h/Mpc at z = 0-1 (from the nonlinear evolution, a one-loop effect). The other spectra agree with the Zel'dovich prediction on large scales to ~1%: at z = 0 P\_1delta/P\_11 and P\_deltadelta/P\_11 are ~0.5% and ~1% above it at k ~ 0.01-0.04 h/Mpc (the nonlinear suppression of P\_11 on large scales, which the one-loop prediction mostly accounts for). With `hybridbias_oneloop = true` the one-loop LPT (CLEFT) prediction is also written to `hybridbias_oneloop_zX.txt` (`FML/ComputePowerSpectra/HybridBiasOneLoop.h`, agrees with velocileptors to 2.5e-4): all 15 spectra at one loop without counterterms (the nabla^2 delta terms, which velocileptors does not have, are derived the same way and tested against 2LPT particles), with the operator cut used for both the operators and the displacement (smoothing not supported). At z = 0 it fixes most of the Zel'dovich deficit of P\_11, P\_1delta, P\_deltadelta, P\_1delta2 and of the nabla^2 delta spectra P\_1n, P\_deltan, P\_nn for k < 0.3 h/Mpc (at k ~ 0.02 h/Mpc the nabla^2 delta spectra of the simulation are still ~2 times the one-loop prediction); the remaining differences at higher k are what the counterterms (alpha k^2 P\_ZA) absorb in a fit. Each prediction takes ~20 s per output on 2 cores, independent of the number of particles.
+
+  In modified gravity the one-loop prediction uses the linear P\_cb(k,z) of the gravity model but by default the Einstein-de Sitter loop kernels (`hybridbias_oneloop_kernels = "EdS"`). With `hybridbias_oneloop_kernels = "model"` the second and third order LPT kernels are instead solved as ODEs in time for every node of the loop integrals (`FML/ComputePowerSpectra/HybridBiasOneLoopMG.h`): the full scale- and time-dependent kernels of the quasi-static equations, with the screening terms, for Hu-Sawicki f(R), nDGP and (without screening) any other model through its G\_eff(k,a)/G; in GR this gives the exact LCDM kernels (+0.9% at second order and +1.9% at third relative to EdS). This includes the transverse part of the second order displacement that a scale-dependent growth generates (~3% of the U\_11 loop term at low k in f(R); MG-PT does not include it). Tested: in EdS it reproduces the GR prediction to 1e-4, the kernels agree with an independent solution of the Eulerian equations to ~3e-6 and the second order loop functions with MG-PT to 0.1%. In f(R) (|f\_R0| = 1e-5) and nDGP (H0 rc = 1) the model kernels change the predicted ratios to GR by less than ~1% for k < 0.35 h/Mpc. The loop functions for all output redshifts are computed together at the first output (~2 minutes on 2 cores for f(R) with two outputs, vs ~20 s per output with the EdS kernels).
+
+New analysis methods are added in `src/AnalyzeOutput.h`. The results can also be kept for post-processing after the run, and with a small modification the code can analyse snapshots of other simulations; the rest of FML has many more methods (correlation functions, tessellations, void finders, ...).
+
+## Snapshot baryonification
+
+`baryonification = true` runs the standalone `FML/Baryonification` method on a temporary particle copy at each
+output. It needs 3D GR, one CDM+baryon particle species, `cosmology_OmegaMNu = 0`, and `pofk = true`. All extra halo
+finding, sorting, displacement, and MPI redistribution take place on the copy. The live particles and their
+subsequent evolution are unchanged. Ordinary FoF output need not be enabled.
+
+```lua
+baryonification = true
+baryonification_model = "schneider2019"
+baryonification_gas_mass_scale_msunh = 1e14
+baryonification_stellar_mass_scale_msunh = 2.5e11
+baryonification_min_halo_mass_msunh = 1e12
+baryonification_gas_ejection_radius_over_r200 = 4.0
+baryonification_fof_buffer_mpch = 3.0
+baryonification_output_particles = false
+```
+
+Every dimensionful parameter has a unit suffix: `_msunh` means Msun/h and `_mpch` means **comoving** Mpc/h.
+Dimensionless radius ratios use `_over_r200`; the halo definition here is always **200c**. All parameters and
+defaults are in `PARAMETERS.md`. The module's baryon fraction is taken from the cosmology, Omega_b/Omega_m.
+
+The correction locates FoF seeds, measures spherical-overdensity M200c/R200c with shrinking-sphere centres, and
+rejects truncated SO measurements, nested halos and hosts below the mass threshold. Choose a halo search buffer
+larger than the halos being measured; rejected counts are recorded. Halo masses are converted to Msun/h, while
+centres/radii passed to the module remain in box units and the common background is converted to mass per
+box-unit volume. The concentration prescription is explicitly an illustrative power law:
+`c200c = concentration_norm * (M200c/concentration_pivot_mass_msunh)^concentration_mass_slope *
+(1+z)^concentration_redshift_power`, with every parameter prefixed by `baryonification_`.
+It is not fitted from unresolved PM halo cores.
+
+Each snapshot folder gets:
+
+- `pofk_baryonified_zX.txt`: k [h/Mpc], corrected and original P(k) [(Mpc/h)^3], their ratio, and a ratio-valid flag.
+  Both spectra use identical `pofk_*` settings on the copy after halo finding. For zero/nonpositive control power
+  (e.g. empty bins or shot-noise subtraction), the ratio is 0 with valid=0 rather than an infinity/NaN.
+- `baryonification_zX.txt`: resolved settings and units, actual baryon fraction, rejection counts, and the selected
+  host catalogue (positions/radii in comoving Mpc/h, masses in Msun/h, concentration).
+- With `baryonification_output_particles = true`, separate `gadget_baryonified_zX.<task>` files, or HDF5 files
+  when `output_fileformat = "HDF5"`. This is independent of `output_particles`. IDs and masses are preserved;
+  velocities are the uncorrected physical output velocities (the normal Gadget velocity conversion still applies).
+
+The profiles have finite support and a uniform background, not the correlated two-halo term. The host catalogue
+and its prepared profiles are replicated on every MPI rank in this first integration. Support must be smaller than
+half the box; hosts whose support `baryonification_max_radius_over_r200 * R200c` reaches half the box are skipped
+(counted as `rejected_support_over_half_box`) rather than clipped. Hosts are also skipped if their SO sphere is
+truncated by the buffer, if they lie inside a more massive host, or if fewer than `baryonification_fof_min_particles`
+particles are inside R200c (`rejected_unresolved`). See `FML/Baryonification/README.md` for
+the memory cost and numerical assumptions. Check halo completeness, SO mass resolution, concentration and profile
+calibration, and cutoff/table convergence before interpreting the corrected spectra. This option does not correct
+lightcone maps, velocities, or redshift-space multipoles and makes no hydrodynamical accuracy claim.
+
+## Snapshots and lightcones
+
+The fiducial fileformat for the particles is GADGET. If you want the standard gadget format (pos+vel+id) your particle must have an ID field (get/set_id) otherwise it will only output positions and velocities. With `output_fileformat = "HDF5"` the particles are written as GADGET HDF5 files (`gadget_zX.<task>.hdf5`, readable by e.g. h5py, yt, pynbody and GADGET-4). This needs the HDF5 library: compile with `make clean && make USE_HDF5=true` (set `HDF5_INCLUDE` and `HDF5_LIB` in `../Makefile.local` if HDF5 is not in `$(HOME)/local`). Reading particles (`ic_reconstruct_gadgetfilepath`) works for both binary and HDF5 GADGET files; the format is detected from the file names. (The old `output_fileformat = "FML"`, a raw dump of the particles that could only be read back with the same particle type and number of tasks, has been removed.)
+
+The lightcone particles can be written as ascii (`plc_output_asciifile`), binary GADGET (`plc_output_gadgetfile`) or GADGET HDF5 files (`plc_output_hdf5file`, needs USE_HDF5): `lightcone_<name>/lightcone_cb_hdf5_step<N>[_batch<B>].<task>.hdf5`, one set per step. In all formats the positions are comoving in Mpc/h (not wrapped into the box) and the velocities are peculiar velocities in km/s; the header time is the middle of the step's crossing scale factors.
+
+With `plc_output_in_batches` a step whose particles may not fit in memory (more than the number of particles on a task) is written in batches of that size (`_batch<B>` in the GADGET and HDF5 filenames, appended to the same file for ascii); every task writes every batch (empty if it has fewer), so each batch has one file per task as `NumFiles` in the headers says. Without replicas the box covers the lightcone octant (the directions with all n_i >= 0, from the observer at `plc_pos_observer`) out to 1 - max(`plc_pos_observer`) boxsize: if r(`plc_z_init`) is larger the octant would have holes and the code stops (use replicas, a larger box or a lower `plc_z_init`).
+
+The onion density maps (`plc_make_onion_density_maps`, Healpix) `OnionMap_delta_cb_imap<N>` are delta = n/nbar - 1 in the pixels whose center (at the mid-radius of the shell) is inside the region covered by the box and its replicas (with the default octant: n_x, n_y, n_z > 0; the pixels cut by the boundary are left out), with the mean over these pixels subtracted, and delta = 0 in all the other pixels. The C_ell (`Cell_delta_cb_imap<N>.txt`) are the pseudo-C_ell of this map divided by the observed fraction of the sky (`fsky` in the header), and the shot noise is 4 pi fsky / N with N the number of particles in the observed pixels. The convergence maps `OnionMap_kappa_cb_imap<N>` are likewise zero outside the region observed at their distance, and their C_ell divided by its fsky. With the full sky (replicas in all directions) nothing changes.
+
+With `plc_relativistic_effects = true` the HDF5 files also have `PartType1/Potential` (Phi/c^2 at the particle),
+`RadialVelocity` (km/s), `CosmologicalRedshift` and `ObservedRedshift`, 1 + z_obs = (1 + z)(1 + v_r/c - Phi/c^2): the
+Doppler and gravitational redshift to first order, for an observer at rest with Phi = 0 (the observer's terms only
+add a monopole and dipole). The ascii files get the same as extra columns. Phi is the GR potential from the density
+used for the force at the start of the step (one extra FFT per step while recording; for modified gravity it is still
+the GR potential). With `plc_make_onion_density_maps` there are also Healpix maps of Phi/c^2 at the mid-radius of
+every shell (`OnionMap_phi_cb_imap<N>`, sampled from the potential grid, and their C_ell). Not included (yet): the
+integrated terms (ISW, Shapiro time delay), lensing deflection of the positions, and the transformation of the
+N-body-gauge positions to the Poisson gauge on near-horizon scales. Checked against an independent Poisson solve of
+the z = 0 snapshot: correlation 1.0000 for the particles and maps, with the expected D/a evolution of Phi.

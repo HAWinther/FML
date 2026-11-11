@@ -1,0 +1,108 @@
+# Options: nonlinear power, tensor and isocurvature modes, precision
+
+The options of the solver beyond the standard ΛCDM run. Every parameter is listed with its description in
+[params/default.ini](params/default.ini) (`./cmb --write-defaults`).
+
+## Nonlinear power and helium
+
+`nonlinear = halofit` adds the Halofit P_NL(k) (Takahashi et al. 2012, as CLASS's
+`halofit` without its massive-neutrino correction (Bird et al. 2012): with m_nu > 0 up to ~2% lower than
+CLASS, and the run warns) as a 4th column of `matter_power*.txt` and uses it for the lensing
+potential (the Weyl potential of the Limber part scaled by √(P_NL/P_L)), so the lensed spectra include nonlinear
+lensing. Against CLASS: P_NL to < 1e-3 at z = 0 and 1 for k ≤ 1 h/Mpc (`python/compare_class_halofit.py`, with
+`pert_k_max = 1`), C_ℓ^φφ to 0.1% up to L = 2500, lensed TT 0.3%, EE 0.6% and BB 1% for ℓ ≤ 1500 (BB near ℓ_max needs
+`lensing_delta_ell` ≳ 1500). `Yp_bbn = true` takes Y_p from standard BBN for the run's ω_b and N_eff (PArthENoPE 3.0
+table, the CLASS default; 2e-5 from CLASS, which uses ΔN = N_eff − 3.046 with this table).
+
+`nonlinear = halofit_bird` adds the updated Bird massive-neutrino correction; `nonlinear = hmcode2020`
+selects gravity-only HMcode-2020 with cold-matter variances, neutrinos and BAO damping. Both use the same
+nonlinear output and lensing paths. HMcode-2020 supports `lcdm` and smooth `w0wa` backgrounds (with curvature)
+and rejects other models. `nonlinear = hmcode2016` selects HMcode-2016 (as CAMB `mead2016`, same backgrounds;
+the general halo model in `FML/HaloModel`). The original Halofit option remains unchanged. See
+[nonlinear methods, library API and validation](../Spectra/NONLINEAR.md) for units, limits and reference tests.
+
+`nonlinear = react` adds the official ReACT reaction multiplied by an HMcode-2020 matched GR pseudo spectrum.
+It requires an enabled optional backend (`USE_REACT=true`) and supports flat `lcdm`, `fr` with n=1, `w0wa`,
+and normal-branch `dgp` with `dgp_lcdm_background=1`, including massive neutrinos. Reactions are restricted to
+z<=2.5; above `react_z_max` the solver uses the matched pseudo baseline with R=1 and reports this approximation.
+See [ReACT setup, conventions, reference tests and limits](../../ReACT/README.md).
+
+## Tensor modes
+
+`r = 0.05` (tensor-to-scalar ratio at `k_pivot`) adds gravitational waves; the tilt is
+n_t = −r/8 (2 − r/8 − n_s) (CLASS's `scc`) unless `n_t_consistency = false` and `n_t = ...`. The tensor TT, EE, TE
+are added to the scalar spectra, BB is the tensor one, and all are lensed together. `cells_tensor.txt` holds the
+tensor contributions alone (ℓ ≤ `tensor_ell_max`, default 600). The equations are those of CLASS (Pitrou et al.
+hierarchy, flat), with the friction (2 + α_M)ℋh′ and the stress divided by M*² from the theory of gravity
+(Horndeski α_M, Brans–Dicke φ, f(R) 1 + f_R; GR otherwise). Massive neutrinos are evolved with the massless
+hierarchy and weighted by 3 p_ncdm in the anisotropic stress (equal to ρ_ncdm while they are relativistic; CLASS's
+`tensor_method = massless` approximation). About 10 s on 2 cores (`[Tensors]` timing); settings `tensor_*` in
+`params/default.ini`. Flat universes only.
+
+| Check (tests/test_tensors, python/compare_class_tensors.py) | Result |
+|---|---|
+| Against CLASS, r = 0.1, unlensed tensor TT, EE, BB | 0.1–0.5% for ℓ ≤ 300; EE, BB 0.5% and TT 3% for 300–600 (where tensor TT is < 10⁻³ of the scalar) |
+| Lensed total BB (scalar + tensor) against CLASS | 0.1% at ℓ = 50–300, 0.7% at ℓ = 10 |
+| Neutrino free streaming (modes entering in the radiation era) | amplitude × 0.8026 (Weinberg 2004: 0.8026) |
+| Matter era without anisotropic stress | h = 3 j₁(kη)/(kη)/√6 to 0.2% |
+| Horndeski c_M = 0.5 | subhorizon h ∝ 1/(a M*) (WKB) to 1e-3 |
+
+## Isocurvature modes
+
+`f_cdi`, `f_bi`, `f_nid`, `f_niv` (CDM, baryon, neutrino density, neutrino velocity)
+switch on isocurvature modes with P_II = f² A_s (k/k_pivot)^(n_I − 1) (`n_cdi`, ...) and correlation
+P_RI = c √(P_RR P_II) (`c_ad_cdi`, ...; CLASS's parameters and sign convention, Σc² < 1; the isocurvature modes are
+uncorrelated with each other). The correlation matrix is Cholesky-factored into independent components, each a
+perturbation solve with a mix of adiabatic and isocurvature initial conditions (CLASS's superhorizon series,
+Bucher, Moodley & Turok 2000), and the C_ℓ, C_ℓ^φφ and P(k) are summed over components; each active mode adds one
+perturbation solve and line-of-sight pass. GR only (`model = lcdm`, `w0wa`, the dark-energy models; in
+`dark_scattering`, `ide` and `coupled_quintessence` the dark energy starts adiabatic in the isocurvature modes); `python/params.py` passes the
+modes to CLASS (`ic = ad,cdi,...`) so `python/compare_class_spectra.py` compares them directly (`--precise` for NIV).
+Example: `params/isocurvature.ini`.
+
+| Check (tests/test_isocurvature) | Result |
+|---|---|
+| Pure modes against CLASS (fine sampling, `l_max_scalars` = 1500), 10 ≤ ℓ ≤ 600 | CDI, NID < 5e-4 in TT and EE; NIV ~1e-3 (CLASS's NIV at ℓ = 2 is not converged) |
+| f = 1, n = 1.1, c_ad = 0.3 with the adiabatic mode, `precision = fast` | TT, EE, TE < 3e-3 (CDI, NIV); NID with massive neutrinos at the adiabatic level |
+| Decomposition, initial entropy, independence of x_start | exact; S_c = −1; < 1e-6 (CDI), < 1e-3 (NID, NIV) |
+| CDI in `dark_scattering`/`ide` (zero coupling) and `coupled_quintessence` (β = 0) | ds = ide (identical); cq = ΛCDM to 2e-6 |
+
+## Fast precision preset for parameter fits
+
+`precision = fast` (in a file or on the command line) sets the
+precision parameters to values tuned for CMB likelihoods: lensed TT, EE, TE to ℓ = 2500 in ~13–16 s instead of
+~70 s (2 cores), with Δχ² ≈ 0.2 relative to a high-precision run for Planck-like noise (f_sky = 0.6,
+33 μK·arcmin, 7′ beam; the defaults give 0.02). The main saving is a log-linear k-grid (`pert_dk_max`: the CMB
+sources oscillate in k with period ~2π/r_s, so above k ≈ 0.03/Mpc a linear spacing of 0.004/Mpc is enough;
+112 modes instead of 400); the rest are a coarser stored x-grid, `lmax_nu = 16`, `ode_abserr = 1e-6` and a
+coarser line-of-sight grid. Explicit precision parameters override the preset. `python/precision_scan.py`
+computes Δχ² of any run against a reference (see its header for the reference settings used).
+
+| Setting (Planck 2018 ΛCDM) | Time | Δχ² (Planck noise) | Δχ² (cosmic variance) |
+|---|---|---|---|
+| default | 70 s | 0.02 | 5.4 |
+| `precision = fast` | 13–16 s | 0.22 | 5.8 |
+
+## Comparing the models
+
+Models beyond ΛCDM: `./cmb params/musigma.ini`, or `model=<name>` plus its parameters on the command line. To
+compare all models with ΛCDM (H(z), C_ℓ^TT, C_ℓ^φφ, P(k); ~70 s per model on 2 cores):
+
+```
+for m in "lcdm" "musigma model=musigma mu0=0.3 Sigma0=0.1" "ndgp model=dgp dgp_lcdm_background=1" \
+         "sdgp model=dgp Omega_rc=0 dgp_branch=1" "quintessence model=quintessence quint_lambda=1" \
+         "jbd model=jbd bd_omega=100" "fr model=fr fR0=1e-5 pert_k_max=1" \
+         "coupled_quintessence model=coupled_quintessence" "dark_scattering model=dark_scattering" \
+         "cubic_galileon model=cubic_galileon" "horndeski model=horndeski hd_cK=1 hd_cB=0.6 hd_cM=0.3" \
+         "ede model=ede ede_fEDE=0.12 ede_log10zc=3.56 ede_theta_i=2.83" "ide model=ide"; do
+  set -- $m; name=$1; shift
+  ./cmb lensing=true transfer_ells= output_dir=data/models/$name "$@" > data/models/$name.log; done
+python3 python/plot_models.py                # data/models/models.png
+```
+
+## The k-range of the line of sight
+
+The line-of-sight integration runs over the perturbation k-range unless `los_k_max` is set. When `pert_k_max` is
+raised only for P(k) (f(R) above: 1/Mpc), `los_k_max = 0.3` keeps the C_ℓ cost of the default run (as in
+`params/fr.ini`). Do not set it much lower than the default for the C_ℓ: the check k_max r_* > ℓ is only a minimum
+(ℓ ≤ 500 needs 0.1/Mpc for 2% in TT, and 0.045/Mpc gives 47%).

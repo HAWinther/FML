@@ -312,7 +312,7 @@ namespace SIMCODE {
                               "Divide the force by W(k)^2 where W is the window function of "
                               "force_density_assignment_method (corrects for the smoothing of the assignment and the "
                               "interpolation). Unstable unless the aliasing is suppressed (force_interlacing_order "
-                              "> 1, see README)");
+                              "> 1, see EVOLUTION.md)");
             f.always_optional("force_early_method",
                               early_method,
                               "none",
@@ -516,7 +516,7 @@ namespace SIMCODE {
                 "Offset of the initial particle lattice from the nodes of the force grid. fiducial: half a "
                 "force grid cell if force_nmesh > particle_Npart_1D, otherwise none. With particles "
                 "exactly on the nodes of a finer grid, CIC responds to the size of the displacement and gives large "
-                "spurious forces (see the force grid section of README.md)",
+                "spurious forces (see the force grid section of EVOLUTION.md)",
                 {"fiducial", "none", "half_force_cell"});
             f.choice(Need::Required,
                      "ic_type_of_input",
@@ -532,7 +532,7 @@ namespace SIMCODE {
                      "Einstein-Boltzmann solver run with the cosmology of the simulation, cosmology_model included; "
                      "the old name internal_transfer is also accepted) or tables (the tables of the internal solver "
                      "in one file, made with ./nbody --write-transfers parameterfile.lua file; checked against the "
-                     "cosmology of the simulation). See FML/TransferProviders and README.md",
+                     "cosmology of the simulation). See FML/TransferProviders and INITIAL_CONDITIONS.md",
                      {{"powerspectrum", ICInputType::PowerSpectrum},
                       {"transferfunction", ICInputType::TransferFunction},
                       {"camb", ICInputType::CambFiles},
@@ -568,7 +568,7 @@ namespace SIMCODE {
                            "The cosmology (h, OmegaB, ..., model and its parameters, A_s, n_s, k_pivot, the "
                            "neutrino masses, preset), alpha_s and the k-grid (pert_k_min, pert_k_max, pert_n_k, "
                            "pert_dk_max) are set by the simulation and are an error here and in the .ini file. "
-                           "See README.md");
+                           "See INITIAL_CONDITIONS.md");
                    });
             f.required("ic_input_redshift", input_redshift, 0.0, "The redshift of the input P(k) / T(k)");
             f.optional("ic_fix_amplitude",
@@ -1320,27 +1320,27 @@ namespace SIMCODE {
                 std::cout
                     << "WARNING: force_density_method / force_deconvolve_window / force_early_method are meant for "
                        "force_nmesh = particle_Npart_1D. With a finer force grid they amplify the discreteness of the "
-                       "particles (see README)\n";
+                       "particles (see EVOLUTION.md)\n";
 
             // Starting from the Big Bang the force at early times (particles close to the lattice) has to be accurate:
-            // the CIC and interlaced forces make the modes with k > ~k_Ny/8 grow wrongly there (see README)
+            // the CIC and interlaced forces make the modes with k > ~k_Ny/8 grow wrongly there (see EVOLUTION.md)
             if (ic.initial_redshift > 100.0 and force.early_method == "none" and
                 force.density_method == "assignment" and force.interpolation_method != "nufft" and FML::ThisTask == 0)
                 std::cout
                     << "WARNING: starting at z = " << ic.initial_redshift
                     << " without force_early_method: use force_early_method = nufft (force_early_until_redshift ~ 10) "
-                       "for an accurate force while the particles are close to the lattice (see README)\n";
+                       "for an accurate force while the particles are close to the lattice (see EVOLUTION.md)\n";
 
             // The baryon-CDM relative mode in the displacements of the particles (a ~50 kpc/h CDM-baryon offset per
             // pair) gets a spurious discrete-mode growth once the force grid resolves it, and is partly lost in
-            // collapsed regions (P(delta_c - delta_b) ~ 0.5 of linear theory at z = 0 on large scales). See README
+            // collapsed regions (P(delta_c - delta_b) ~ 0.5 of linear theory at z = 0 on large scales). See SPECIES.md
             // (also the part of it that grows after zini with mass_ini)
             if (particle.baryons and particle.baryon_relative_mode != "mass" and force.nmesh > 2 * particle.Npart_1D and
                 FML::ThisTask == 0)
                 std::cout
                     << "WARNING: particle_baryon_relative_mode = " << particle.baryon_relative_mode
                     << " with force_nmesh > 2 particle_Npart_1D: the baryon-CDM relative mode is not reliable (use "
-                       "particle_baryon_relative_mode = mass, see README)\n";
+                       "particle_baryon_relative_mode = mass, see SPECIES.md)\n";
         }
 
         /// Check that the parameters are consistent. Throws if not

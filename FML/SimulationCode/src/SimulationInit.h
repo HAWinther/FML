@@ -37,7 +37,7 @@ void NBodySimulation<NDIM, T>::read_parameters(const ParameterMap & param, const
     // The finite difference kernels (which vanish at the Nyquist frequency) suppress this. Together with the
     // half-cell lattice offset (ic_lattice_offset = fiducial) the four-point kernel gives the most accurate
     // nonlinear P(k) for force grids up to 3 times the particle grid and the two-point kernel for finer grids
-    // (see the README)
+    // (see EVOLUTION.md)
     std::string gradient_kernel = params.force.gradient_kernel;
     if ((gradient_kernel == "fiducial" or gradient_kernel == "") and params.force.nmesh > params.particle.Npart_1D) {
         gradient_kernel = params.force.nmesh <= 3 * params.particle.Npart_1D ? "discrete_4pt" : "discrete_2pt";
@@ -617,7 +617,7 @@ void NBodySimulation<NDIM, T>::apply_lattice_offset() {
 /// CDM.
 /// NB: interleaved (offset) lattices give a large spurious growth of the baryon-CDM difference on scales k > k_Ny/8
 /// of the particles (and a few % too little CDM+baryon power at k ~ k_Ny/2) in this PM code; with the same lattice the
-/// difference follows linear theory on all scales and the CDM+baryon P(k) is that of one species (see the README)
+/// difference follows linear theory on all scales and the CDM+baryon P(k) is that of one species (see SPECIES.md)
 template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFTWGrid<NDIM> & delta_cb_fourier) {
     const auto & ic = params.ic;

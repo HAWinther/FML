@@ -5,6 +5,14 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Documentation: SimulationCode and Einstein–Boltzmann solver READMEs
+- `SimulationCode/README.md` is now an overview (features, building, running, output, a map of the documentation);
+  the details moved, unchanged, to `MODELS.md`, `INITIAL_CONDITIONS.md`, `EVOLUTION.md`, `SPECIES.md`, `ANALYSIS.md`
+  and `DEVELOPING.md`. The "see README" pointers in the parameter descriptions, warnings and `parameterfile.lua` now
+  name the right file (`PARAMETERS.md` regenerated).
+- `Cosmology/EinsteinBoltzmannSolver/README.md` likewise, with the details in `OPTIONS.md` (nonlinear spectra, tensor
+  and isocurvature modes, precision) and `DEVELOPING.md` (code layout, models, validation, the report).
+
 ### Cosmology: one copy of the Eisenstein & Hu fits
 - `Cosmology/Spectra/EisensteinHu.h` (header only): the Eisenstein & Hu (1998) transfer functions with and without
   the baryon wiggles and the power spectrum shapes k^n_s T^2 (k in h/Mpc). Replaces the four copies of the no-wiggle
