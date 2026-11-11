@@ -134,6 +134,7 @@ There is also a [SWIG wrapper tutorial](FML/MakePythonWrapper) and a pybind11 wr
 
 - [Capability matrix](FML/CAPABILITIES.md): every module, with its scope, dependencies, parallel behaviour and tests.
 - [Build and API guide](FML/BUILDING.md): compiling, linking, MPI and FFTW conventions.
+- [References](FML/REFERENCES.md): the papers and external codes behind each module.
 - [SimulationCode](FML/SimulationCode/README.md): the N-body code, its [parameters](FML/SimulationCode/PARAMETERS.md)
   and [tests](FML/SimulationCode/tests/README.md).
 - [Changelog](FML/CHANGELOG.md) and [development backlog](FML/DEVELOPMENT_BACKLOG.md).
