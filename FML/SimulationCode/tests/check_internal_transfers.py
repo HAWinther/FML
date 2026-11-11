@@ -115,3 +115,32 @@ run("tables_not_a_file", dict(from_file, ic_input_filename=str(root / "converted
 run("write_transfers_not_internal", {"ic_type_of_input": "powerspectrum",
                                      "ic_input_filename": cases.INPUT + "/example_power_spectrum_cb_z0.000.txt"},
     args=["--write-transfers", "params.lua", str(root / "x.txt")], error="needs ic_type_of_input = internal")
+
+# Ultralight axions in the IC only (ic_axion_fraction): the solver's model axion, the particles start from CDM + axion.
+# A small box resolves the suppression of the power by an axion of 1e-24 eV (Jeans scale ~1 h/Mpc at zini)
+small = {"simulation_boxsize": 32.0, "particle_Npart_1D": 16, "ic_nmesh": 16, "force_nmesh": 16, "pofk_nmesh": 16}
+run("axion_lcdm_reference", small)
+log = run("axion_ic", dict(small, ic_axion_fraction=0.3, ic_axion_log10_m=-24.0))
+assert "ultralight axion in the IC only" in log and "Model: axion" in log, "axion_ic: see its log.txt"
+pk = [np.loadtxt(root / n / "output" / "snapshot_Reg_z49.000" / "pofk_z49.000.txt") for n in
+      ["axion_lcdm_reference", "axion_ic"]]
+ratio = pk[1][:, 1] / pk[0][:, 1]
+assert abs(ratio[0] - 1) < 0.02 and ratio[-1] < 0.9 and np.all(np.diff(ratio) < 0.01), \
+    f"axion_ic: P/P_LCDM = {ratio} (1 on large scales, suppressed on small)"
+print(f"[PASS] axion_ic: P/P_LCDM from {ratio[0]:.3f} to {ratio[-1]:.3f}", flush=True)
+run("axion_ic_too_light", dict(small, ic_axion_fraction=0.1, ic_axion_log10_m=-28.0),
+    error="the axion is a matter-like fluid only from")
+run("axion_ic_w0wa", dict(small, ic_axion_fraction=0.1, cosmology_model="w0waCDM", cosmology_w0=-0.9,
+                          cosmology_wa=0.1), error="ic_axion_fraction > 0 needs cosmology_model = LCDM")
+run("axion_ic_nbody_gauge", dict(small, ic_axion_fraction=0.1, force_nbody_gauge=True),
+    error="not implemented with force_nbody_gauge")
+axtables = str(root / "tables_axion.txt")
+axion = dict(small, ic_axion_fraction=0.3, ic_axion_log10_m=-24.0)
+run("write_transfers_axion", axion, args=["--write-transfers", "params.lua", axtables])
+assert "# cosmology_model = axion" in open(axtables).read(3000), "write_transfers_axion: the header"
+run("tables_axion", dict(axion, ic_type_of_input="tables", ic_input_filename=axtables))
+pk = [np.loadtxt(root / n / "output" / "snapshot_Reg_z49.000" / "pofk_z49.000.txt") for n in ["axion_ic", "tables_axion"]]
+assert np.allclose(pk[0], pk[1], rtol=1e-8, atol=0), "tables_axion: P(k) differs from the run with the solver"
+print("[PASS] tables_axion: P(k) = that of the run with the solver", flush=True)
+run("tables_axion_other_mass", dict(axion, ic_type_of_input="tables", ic_input_filename=axtables, ic_axion_log10_m=-23.0),
+    error="Made for cosmology_model_ax_log10_m")

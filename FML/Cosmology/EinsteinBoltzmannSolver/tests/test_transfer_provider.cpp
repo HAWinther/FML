@@ -124,5 +124,37 @@ int main(int argc, char ** argv) {
         rejected = true;
     }
     check_local(rejected, "running alpha_s (not in the primordial power) fails before solving");
+
+    // axion_as_cdm (model axion): CDM = CDM + axion, weighted by the densities; without it the axion is in no species
+    {
+        auto ax = settings;
+        ax.cosmo.alpha_s = 0.0;
+        ax.cosmo.model = "axion";
+        ax.cosmo.model_params = {{"ax_log10_m", -26.0}, {"ax_fraction", 0.3}};
+        ax.pert.k_max = 1.0 / FML::COSMOLOGY::Constants::Mpc;
+        ax.pert.n_k = 60;
+        const InternalTransferProvider folded(ax, Gauge::SynchronousCDM, true), plain(ax);
+        FML::COSMOLOGY::BackgroundCosmology b(ax.cosmo);
+        b.solve();
+        const auto A = FML::COSMOLOGY::BACKGROUND::Component::Axions;
+        bool ok = true;
+        for (double a : {1. / 50, 1.})
+            for (double k : {.01, .5}) {
+                const double x = std::log(a), rc = b.rhoCDM(x), ra = b.rho_of(A, x);
+                // the axion in the CDM-synchronous gauge: (folded rho - rho_c delta_c) / rho_ax
+                const double dc = plain.density_transfer(Species::CDM, k, a), df = folded.density_transfer(Species::CDM, k, a);
+                const double dax = (df * (rc + ra) - rc * dc) / ra;
+                ok = ok and std::isfinite(dax) and (k > .1 ? dax < 0.9 * dc : std::abs(dax / dc - 1) < 1e-3);
+            }
+        check_local(ok, "axion_as_cdm: CDM + axion (the axion like CDM on large scales, suppressed at 0.5 h/Mpc)");
+        check_local(folded.axion_fluid_scale_factor() < 1e-3, "an axion of 1e-26 eV is a fluid from a < 1e-3");
+        bool thrown = false;
+        try {
+            InternalTransferProvider bad(settings, Gauge::SynchronousCDM, true);
+        } catch (const std::invalid_argument &) {
+            thrown = true;
+        }
+        check_local(thrown, "axion_as_cdm without model axion is an error");
+    }
     return FML::TESTS::summary("EBS transfer provider");
 }

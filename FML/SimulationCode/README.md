@@ -24,6 +24,8 @@ snapshots from other simulations. There is more documentation on [the website](h
   - Random fields compatible with N-GenIC and L-PICOLA, or independent of the number of MPI tasks (Philox).
   - Input from a power spectrum, CAMB, CLASS, or FML's own Einstein–Boltzmann solver run at start-up; or particles
     from GADGET snapshots.
+  - Ultralight-axion dark matter in the initial conditions (`ic_axion_fraction`: the solver's mixed axion + CDM
+    model, the particles all the dark matter).
 - **[Forces, time stepping and COLA](EVOLUTION.md)**
   - PM forces with NGP to PQS mass assignment and a choice of kernels; interlaced and NUFFT forces.
   - COLA, also with scale-dependent growth.

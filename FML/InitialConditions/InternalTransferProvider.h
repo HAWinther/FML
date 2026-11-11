@@ -1,6 +1,7 @@
 #ifndef FML_INTERNAL_TRANSFER_PROVIDER_H
 #define FML_INTERNAL_TRANSFER_PROVIDER_H
 #include <FML/InitialConditions/TransferProvider.h>
+#include <FML/Cosmology/Background/BackgroundModel_Axion.h>
 #include <FML/Cosmology/EinsteinBoltzmannSolver/ParameterFile.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
@@ -29,6 +30,10 @@ namespace FML::INITIALCONDITIONS {
     /// (deg_ncdm degenerate species of mass m_nu, or m_nu_list): MassiveNeutrino (all of them) is then available and
     /// TotalMatter includes it. The weights of
     /// the combinations are the background densities rho_i(a) of the model (e.g. a coupled CDM).
+    /// axion_as_cdm (model = axion): the CDM species is CDM + the ultralight axion (density and momentum weighted, the
+    /// axion in the CDM-synchronous gauge with its own w), so CDM, CDMBaryon and TotalMatter include it: the initial
+    /// conditions of a simulation whose particles are all the dark matter (the axion's effect only in the IC). Without
+    /// it the axion is in none of the species. Not with Gauge::NBody.
     class InternalTransferProvider final : public TransferProvider {
         struct State {
             FML::COSMOLOGY::RunSettings settings;
@@ -47,6 +52,7 @@ namespace FML::INITIALCONDITIONS {
         };
         std::shared_ptr<const State> state;
         Gauge gauge;
+        bool axion_cdm{false};
         /// The N-body gauge source delta_extra(x, log k [1/m]) (Gauge::NBody)
         std::shared_ptr<const FML::INTERPOLATION::SPLINE::Spline2D> nbody_source;
         double primordial_scale{1.0};
@@ -61,6 +67,17 @@ namespace FML::INITIALCONDITIONS {
             if (gauge == Gauge::SynchronousCDM)
                 delta -= 3.0 * (1.0 + w_of(species, x)) * state->background.Hp_of_x(x) /
                          (FML::COSMOLOGY::Constants::c * k_si) * pert.get_v_cdm(x, k_si);
+            if (species == Species::CDM and axion_cdm) {
+                // + the axion (CDM-synchronous with its own w; Gauge::NBody is rejected)
+                const auto & bg = state->background;
+                const auto A = FML::COSMOLOGY::BACKGROUND::Component::Axions;
+                const double rc = bg.rhoCDM(x), ra = bg.rho_of(A, x), wa = bg.p_of(A, x) / ra;
+                double da = pert.get("delta_axion", x, k_si);
+                if (gauge == Gauge::SynchronousCDM)
+                    da -= 3.0 * (1.0 + wa) * bg.Hp_of_x(x) / (FML::COSMOLOGY::Constants::c * k_si) *
+                          pert.get_v_cdm(x, k_si);
+                delta = (rc * delta + ra * da) / (rc + ra);
+            }
             else if (gauge == Gauge::NBody)
                 delta += (1.0 + w_of(species, x)) * nbody_shift(x, k_si);
             return delta;
@@ -187,9 +204,11 @@ namespace FML::INITIALCONDITIONS {
         /// rho_s a^3 in units of rho_c0 (the weights of the combinations; Omega for CDM and baryons in LCDM)
         double rho_a3_of(Species species, double x) const {
             const auto & bg = state->background;
-            const double rho = species == Species::CDM    ? bg.rhoCDM(x) :
-                               species == Species::Baryon ? bg.rhoB(x) :
-                                                            bg.rhoNcdm(x);
+            const double rho =
+                species == Species::CDM ?
+                    bg.rhoCDM(x) + (axion_cdm ? bg.rho_of(FML::COSMOLOGY::BACKGROUND::Component::Axions, x) : 0.0) :
+                species == Species::Baryon ? bg.rhoB(x) :
+                                             bg.rhoNcdm(x);
             return rho * std::exp(3.0 * x);
         }
         /// The species a combination is made of
@@ -206,8 +225,10 @@ namespace FML::INITIALCONDITIONS {
         static double k_si_of(double k_hmpc, double h) { return k_hmpc * h / FML::COSMOLOGY::Constants::Mpc; }
 
       public:
-        explicit InternalTransferProvider(FML::COSMOLOGY::RunSettings settings, Gauge gauge = Gauge::SynchronousCDM)
-            : gauge(gauge) {
+        explicit InternalTransferProvider(FML::COSMOLOGY::RunSettings settings,
+                                          Gauge gauge = Gauge::SynchronousCDM,
+                                          bool axion_as_cdm = false)
+            : gauge(gauge), axion_cdm(axion_as_cdm) {
             const auto & p = settings.cosmo;
             // alpha_s: primordial_power() and SimulationCode's primordial spectrum have no running
             if (p.alpha_s != 0.0 || settings.pert.ic_adiabatic != 1.0 ||
@@ -221,14 +242,27 @@ namespace FML::INITIALCONDITIONS {
                 !(p.m_nu >= 0) ||
                 (gauge != Gauge::Newtonian && gauge != Gauge::SynchronousCDM && gauge != Gauge::NBody))
                 throw std::invalid_argument("[InternalTransferProvider] Invalid species, h or gauge");
+            if (axion_cdm and (settings.cosmo.model != "axion" or gauge == Gauge::NBody))
+                throw std::invalid_argument("[InternalTransferProvider] axion_as_cdm needs model = axion and not the "
+                                            "N-body gauge");
             state = std::make_shared<State>(std::move(settings));
             if (gauge == Gauge::NBody)
                 nbody_source = make_nbody_source();
+        }
+        /// The scale factor from which the axion is a matter-like (w = 0) fluid (+infinity if not by the end; throws
+        /// without an axion)
+        double axion_fluid_scale_factor() const {
+            for (const auto & s : state->background.background().species())
+                if (const auto * a = dynamic_cast<const FML::COSMOLOGY::BACKGROUND::AxionSpecies *>(s.get()))
+                    return std::exp(a->x_fluid());
+            throw std::invalid_argument("[InternalTransferProvider] The model has no ultralight axion");
         }
         /// Share the solved state; changing the density view never changes velocity gauge.
         InternalTransferProvider with_density_gauge(Gauge requested) const {
             if (requested != Gauge::Newtonian && requested != Gauge::SynchronousCDM && requested != Gauge::NBody)
                 throw std::invalid_argument("[InternalTransferProvider] Unsupported density gauge");
+            if (requested == Gauge::NBody and axion_cdm)
+                throw std::invalid_argument("[InternalTransferProvider] axion_as_cdm is not for the N-body gauge");
             auto result = *this;
             result.gauge = requested;
             if (requested == Gauge::NBody and not result.nbody_source)
@@ -284,10 +318,19 @@ namespace FML::INITIALCONDITIONS {
             const auto & pert = *state->perturbations;
             double sum = 0.0, weight = 0.0;
             for (auto c : components(s)) {
-                const double v = c == Species::CDM    ? pert.get_v_cdm(x, k_si) :
-                                 c == Species::Baryon ? pert.get_v_b(x, k_si) :
-                                                        pert.get_v_ncdm(x, k_si);
-                const double rho_plus_p = rho_a3_of(c, x) * (1.0 + w_of(c, x));
+                double v = c == Species::CDM    ? pert.get_v_cdm(x, k_si) :
+                           c == Species::Baryon ? pert.get_v_b(x, k_si) :
+                                                  pert.get_v_ncdm(x, k_si);
+                double rho_plus_p = rho_a3_of(c, x) * (1.0 + w_of(c, x));
+                if (c == Species::CDM and axion_cdm) {
+                    // (rho + p) v = rho_c v_c + (rho + p)_ax v_ax, (rho + p)_ax v_ax = -rho_ax q_axion
+                    const auto & bg = state->background;
+                    const auto A = FML::COSMOLOGY::BACKGROUND::Component::Axions;
+                    const double a3 = std::exp(3.0 * x), rc = bg.rhoCDM(x), ra = bg.rho_of(A, x);
+                    const double wa = bg.p_of(A, x) / ra;
+                    rho_plus_p = (rc + ra * (1.0 + wa)) * a3;
+                    v = (rc * v - ra * pert.get("q_axion", x, k_si)) * a3 / rho_plus_p;
+                }
                 sum += rho_plus_p * v;
                 weight += rho_plus_p;
             }

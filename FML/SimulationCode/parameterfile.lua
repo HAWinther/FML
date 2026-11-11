@@ -456,6 +456,11 @@ ic_input_gauge = "synchronous" -- class: the gauge CLASS was run in (synchronous
 -- internal: settings of the solver as "name=value", e.g. {"Yp=0.245", "z_reion=8", "precision=fast"}
 -- (not the cosmology or the k-range, which are the simulation's; see INITIAL_CONDITIONS.md)
 ic_internal_solver_parameters = {}
+-- internal / tables: ultralight axions in the IC only (the share ic_axion_fraction of the dark matter is an axion of
+-- 10^ic_axion_log10_m eV in the transfer functions; the simulation is LCDM; 0 = off; see INITIAL_CONDITIONS.md)
+ic_axion_fraction = 0.0
+ic_axion_log10_m = -22.0
+ic_axion_switch_mH = 0.0
 -- Path to the input (NB: for using the example files update the path at the top of the file below;
 -- internal: an optional .ini file of the solver, "" for its defaults (internal_solver_default.ini lists the
 -- settings that are yours, with their defaults: copy it and change what you need); tables: the file)

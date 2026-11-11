@@ -172,7 +172,8 @@ namespace SIMCODE {
             using FML::COSMOLOGY::Constants::Mpc;
             const auto t0 = std::chrono::steady_clock::now();
             const auto settings = internal_settings(r);
-            const InternalTransferProvider solver(settings, r.nbody_gauge ? Gauge::NBody : Gauge::SynchronousCDM);
+            const InternalTransferProvider solver(
+                settings, r.nbody_gauge ? Gauge::NBody : Gauge::SynchronousCDM, r.axion_ic);
 
             // The k of the solver and the scale factors from half the earliest requested to the end
             // (with curvature the solver's k = sqrt(q^2 - K) differ from these q: the k inside its range)
@@ -192,6 +193,13 @@ namespace SIMCODE {
                 a[i] = std::exp(std::log(alow) + std::log(ahigh / alow) * i / double(na - 1));
             a.front() = alow;
             a.back() = ahigh;
+            // The axion of ic_axion_fraction must be dark matter (a w = 0 fluid) from the start of the tables
+            if (r.axion_ic and not(solver.axion_fluid_scale_factor() <= alow))
+                throw std::invalid_argument(
+                    "ic_axion_log10_m = " + std::to_string(r.model_parameters.at("ax_log10_m")) +
+                    ": the axion is a matter-like fluid only from a = " +
+                    std::to_string(solver.axion_fluid_scale_factor()) + ", after the start of the tables (a = " +
+                    std::to_string(alow) + ", half the initial scale factor): a heavier axion or a later start");
             auto tables = tabulate_transfers(solver,
                                              a,
                                              k_hmpc,
@@ -205,6 +213,11 @@ namespace SIMCODE {
             std::cout << "\n#=====================================================\n"
                       << "# Transfer functions from the internal Einstein-Boltzmann solver\n"
                       << "# Model: " << c.model << (r.filename.empty() ? "" : " (solver settings: " + r.filename + ")")
+                      << (r.axion_ic ? " (ultralight axion in the IC only: m = 10^" +
+                                           std::to_string(r.model_parameters.at("ax_log10_m")) +
+                                           " eV, ax_fraction = " + std::to_string(r.model_parameters.at("ax_fraction")) +
+                                           "; CDM = CDM + axion)" :
+                                       "")
                       << "\n"
                       << "# Density gauge: "
                       << (r.nbody_gauge ? "N-body (with the N-body gauge source)" : "CDM-synchronous") << "\n"

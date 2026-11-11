@@ -128,6 +128,28 @@ remains supported without a Boltzmann solve.
   digits). The tests use `input/transfer_tables` (LCDM with 0, 0.1, 0.2 and 0.4 eV and in the N-body gauge, written
   for zini = 20; `tests/make_transfer_tables.py` remakes them).
 
+### Ultralight axions in the initial conditions only
+
+With `ic_type_of_input = internal` (or `tables` written that way) `ic_axion_fraction > 0` makes the share
+`ic_axion_fraction` of the dark matter (`cosmology_OmegaCDM`) an ultralight axion of mass 10^`ic_axion_log10_m` eV in
+the initial conditions only: the solver runs its `model = axion` (mixed axion + CDM dark matter as axionCAMB;
+`ic_axion_switch_mH` is its `ax_switch_mH`) and the CDM of its tables is CDM + axion (density and momentum weighted,
+the axion in the CDM-synchronous gauge), so the particles, which are all the dark matter (+ baryons), start with the
+axion's suppression of the small-scale power and the matching velocities. The simulation itself is ΛCDM
+(`cosmology_model = LCDM`): its background is the same once the axion redshifts as matter (the solver's Ω_ax + Ω_c =
+`cosmology_OmegaCDM`, Λ from closure), and its dynamics neglect the axion's pressure (quantum pressure / Jeans scale)
+after the start. The axion must be a matter-like fluid before the start of the tables (half the initial scale factor;
+an error otherwise): with the default switch m ≳ 10⁻²⁶ eV for z_ini ~ 50. `cosmology_model = LCDM` only, and not with
+`force_nbody_gauge`. With `ic_input_redshift = ic_initial_redshift` the IC are those of the axion model at zini;
+with a later input redshift the scaling back uses the growth of the gravity model (ΛCDM), which keeps the axion's
+late-time suppression in the IC.
+
+```lua
+ic_type_of_input = "internal"
+ic_axion_fraction = 0.1
+ic_axion_log10_m = -22
+```
+
 The CAMB and CLASS tables are interpolated in (log a, log k) and extrapolated above their k_max as a power law, as
 before. Compared with the old reader (`LinearTransferData`, interpolation in z) the regression outputs of the runs with
 transfer tables change by up to 3e-4 in P(k) (5e-4 for P_nu).

@@ -456,6 +456,8 @@ namespace SIMCODE {
 
         // ic_type_of_input = internal: the settings of the Einstein-Boltzmann solver (read by TransferInput.h)
         std::vector<std::string> internal_solver_parameters;
+        // internal and tables: ultralight axions in the IC only (ic_axion_fraction > 0; read by TransferInput.h)
+        double axion_fraction{0.0}, axion_log10_m{-22.0}, axion_switch_mH{0.0};
 
         double a_initial() const { return 1.0 / (1.0 + initial_redshift); }
         /// The value of ic_type_of_input
@@ -569,6 +571,33 @@ namespace SIMCODE {
                            "neutrino masses, preset), alpha_s and the k-grid (pert_k_min, pert_k_max, pert_n_k, "
                            "pert_dk_max) are set by the simulation and are an error here and in the .ini file. "
                            "See INITIAL_CONDITIONS.md");
+                   });
+            f.when(is_one_of("ic_type_of_input", {"internal", "internal_transfer", "tables"}),
+                   "ic_type_of_input = internal or tables",
+                   [&]() {
+                       f.optional("ic_axion_fraction",
+                                  axion_fraction,
+                                  0.0,
+                                  "Ultralight axions in the IC only: the share of the dark matter (cosmology_OmegaCDM) "
+                                  "that is an axion of mass 10^ic_axion_log10_m eV (the Einstein-Boltzmann solver's "
+                                  "model axion, as axionCAMB). The particles are all the dark matter and start from "
+                                  "the CDM + axion transfer functions (the axion's suppression of the small-scale "
+                                  "power); the simulation itself is LCDM (cosmology_model = LCDM), so the axion's "
+                                  "pressure after the start is neglected. 0 = off. Needs an axion that is a w = 0 "
+                                  "fluid before the start (m >~ 1e-26 eV for z_ini ~ 50). See INITIAL_CONDITIONS.md",
+                                  check::in_range(0.0, 1.0));
+                       f.optional("ic_axion_log10_m",
+                                  axion_log10_m,
+                                  -22.0,
+                                  "log10 of the axion mass in eV (the solver's ax_log10_m; with ic_axion_fraction > 0)",
+                                  check::in_range(-30.0, -15.0));
+                       f.optional("ic_axion_switch_mH",
+                                  axion_switch_mH,
+                                  0.0,
+                                  "The switch of the axion to its oscillation-averaged fluid (the solver's "
+                                  "ax_switch_mH; with ic_axion_fraction > 0): 0 = once it oscillates fast (m/H ~ "
+                                  "125), 3 = at m = 3H as axionCAMB",
+                                  check::non_negative());
                    });
             f.required("ic_input_redshift", input_redshift, 0.0, "The redshift of the input P(k) / T(k)");
             f.optional("ic_fix_amplitude",

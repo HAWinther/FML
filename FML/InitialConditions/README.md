@@ -7,7 +7,9 @@ particle/LPT assignment routines remain in their owning modules.
 - `LinearInput.h`: preparation of a two-column P(k), a single transfer, or provider-based input,
   with caller-supplied growth rescaling and primordial power.
 - `SpeciesIC.h`: CDM/baryon transfer ratios, relative-mode velocities and mass contrasts.
-- `InternalTransferProvider.h`: owning FML Einstein–Boltzmann solver adapter and explicit density-gauge views.
+- `InternalTransferProvider.h`: owning FML Einstein–Boltzmann solver adapter and explicit density-gauge views
+  (`axion_as_cdm`: with the solver's `model = axion` the CDM species is CDM + the ultralight axion, for simulations whose
+  particles are all the dark matter).
 
 The providers for CAMB and CLASS files, and `make_transfer_provider` (CAMB, CLASS or the internal solver, with the
 gauge of the input declared), are in [TransferProviders](../TransferProviders/README.md).

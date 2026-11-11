@@ -51,6 +51,9 @@ namespace SIMCODE {
         FML::COSMOLOGY::BACKGROUND::BackgroundParameters background;
         std::string model;
         std::map<std::string, double> model_parameters;
+        /// internal and tables: ultralight axions in the IC only (ic_axion_fraction > 0): the solver runs model = axion
+        /// (the model above) and the CDM of the tables is CDM + axion (InternalTransferProvider axion_as_cdm)
+        bool axion_ic{false};
         /// internal and tables: the k-range (h/Mpc) and scale factors the tables must cover (the solver is run on a
         /// wider range; outside the tables the values are extrapolated as for CAMB and CLASS)
         FML::INITIALCONDITIONS::TransferRange required{0.0, 0.0, 0.0, 0.0};
@@ -109,6 +112,20 @@ namespace SIMCODE {
             r.background = cosmo.background().parameters();
             r.model = cosmo.get_registry_name();
             r.model_parameters = cosmo.get_model_parameters();
+            // Ultralight axions in the IC only: the dark matter of the simulation is CDM + axion
+            const double fax = SIMCODE::get_parameter<double>(param, "ic_axion_fraction");
+            if (fax > 0.0) {
+                if (r.model != "lcdm")
+                    throw std::invalid_argument("ic_axion_fraction > 0 needs cosmology_model = LCDM (the axion is "
+                                                "dark matter in the simulation, its effect only in the IC)");
+                if (r.nbody_gauge)
+                    throw std::invalid_argument("ic_axion_fraction > 0 is not implemented with force_nbody_gauge");
+                r.axion_ic = true;
+                r.model = "axion";
+                r.model_parameters = {{"ax_log10_m", SIMCODE::get_parameter<double>(param, "ic_axion_log10_m")},
+                                      {"ax_fraction", fax},
+                                      {"ax_switch_mH", SIMCODE::get_parameter<double>(param, "ic_axion_switch_mH")}};
+            }
             // The modes of the IC grid, the input and initial redshifts and today
             const double boxsize = param.get<double>("simulation_boxsize");
             const int nmesh = param.get<int>("ic_nmesh");
