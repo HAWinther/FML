@@ -99,6 +99,54 @@ particle/MPI helpers, accepts real strengths, and does not expose generic
 full-complex type 1/2 or type 3 transforms. Those routines will remain the
 compatibility layer while the independent core is developed.
 
+For repeated particle transforms, `NUFFT.h` also provides a reusable spatial
+ordering. It caches positions in spatial order and maps them back to original
+particle indices, so the particle array itself is left in place and type 2/force
+results are written in the caller's original order:
+
+```cpp
+auto order = FML::NUFFT::make_particle_ordering<3>(particles, num_particles);
+FML::NUFFT::nufft_type1<3>(particles, num_particles, weights, norm, modes, kernel, &order);
+FML::NUFFT::nufft_type2<3>(modes, particles, num_particles, values, kernel, &order);
+```
+
+The default ordering groups points into 32 blocks per dimension. Rebuild it
+after changing particle positions or the particle array order. Type 1 gathers
+new strengths into the cached order for each call. The ordering is most useful
+when reused across several transforms; building it has a cost.
+
+## ES and PSWF spreading kernels
+
+The particle/`FFTWGrid` NUFFT supports two kernel choices. `PSWFKernel<N>` is
+the fiducial native implementation of the order-zero prolate spheroidal wave
+function kernel, with width selection following the PSWF settings introduced in
+[FINUFFT 2.5](https://github.com/flatironinstitute/finufft/releases/tag/v2.5.0).
+It solves the angular PSWF eigenproblem in an even Legendre basis, fits the
+particle weights with Chebyshev polynomials, and evaluates the kernel Fourier
+transform by Gauss-Legendre quadrature. It does not depend on FINUFFT.
+
+The default convenience calls use PSWF. To use ES, construct an `ESKernel`
+explicitly and pass it to the same transform APIs. Construct and reuse either
+kernel across calls:
+
+```cpp
+FML::NUFFT::PSWFKernel<3> kernel(1e-6, 2.0); // Fiducial; ES is also supported.
+FML::NUFFT::nufft_type1<3>(particles, num_particles, weights, norm, modes, kernel, &order);
+FML::NUFFT::nufft_type2<3>(modes, particles, num_particles, values, kernel, &order);
+FML::NUFFT::compute_force_nufft_with_kernel<3>(
+    particles, num_particles, num_particles_total, nmesh, poisson_norm, force, kernel, nullptr, &order);
+```
+
+In a local 3D comparison (300,000 random particles, 64^3 modes, requested
+accuracy 1e-6, sigma 2, four OpenMP threads), PSWF reached about 1e-9 relative
+max error against FINUFFT 2.5.1 for both transform types. Spatially ordered
+PSWF was a few percent faster than spatially ordered ES in repeated runs on
+this host, and remained about 10--15% slower than FINUFFT. Timings varied
+substantially between runs, so this is an initial comparison rather than a
+portable performance claim. PSWF is the default based on its stronger observed
+accuracy and small observed speed advantage over ordered ES; ES remains
+available as an explicit alternative.
+
 `Core.h` now defines the standalone option, point, shape, and full-complex mode
 array types. Its canonical signed-mode mapping is implemented; transform
 backends and execution plans are the next implementation stages.

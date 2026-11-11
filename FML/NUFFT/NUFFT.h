@@ -6,8 +6,10 @@
 #include <array>
 #include <cmath>
 #include <complex>
+#include <limits>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #ifdef USE_MPI
@@ -37,10 +39,10 @@ namespace FML {
     ///
     /// Both are accurate to the requested tolerance \f$ \epsilon \f$ (in contrast to CIC/TSC/... which have
     /// aliasing and a window function). The spreading/deconvolution algorithm follows the FINUFFT method
-    /// (Barnett, Magland & af Klinteberg 2019, https://arxiv.org/abs/1808.06736):
-    /// spread with the "exponential of semicircle" kernel \f$ \phi(z) = e^{\beta(\sqrt{1-z^2}-1)} \f$ of width
-    /// \f$ w \f$ cells onto a grid \f$ \sigma \f$ times finer, FFT, divide by the Fourier transform of the
-    /// kernel and keep the modes of the coarse grid (and the reverse for type 2). The width is
+    /// (Barnett, Magland & af Klinteberg 2019, https://arxiv.org/abs/1808.06736): spread with a compact kernel
+    /// of width \f$ w \f$ cells onto a grid \f$ \sigma \f$ times finer, FFT, divide by the Fourier transform of
+    /// the kernel and keep the modes of the coarse grid (and the reverse for type 2). The default PSWF kernel
+    /// is described below; ESKernel is also available. The width is
     /// \f$ w \approx \log_{10}(1/\epsilon) + 1 \f$ for \f$ \sigma = 2 \f$, so the cost per particle is
     /// \f$ w^{\rm NDIM} \f$ (343 for \f$ \epsilon = 10^{-6} \f$ in 3D) and the fine grid has \f$ \sigma^{\rm NDIM} \f$
     /// times more cells than the output grid.
@@ -58,6 +60,77 @@ namespace FML {
         using FFTWGrid = FML::GRID::FFTWGrid<N>;
         using FloatType = FML::GRID::FloatType;
         using ComplexType = FML::GRID::ComplexType;
+
+        /// A reusable position snapshot and original-index map grouped by
+        /// spatial blocks. Build one with make_particle_ordering and reuse it
+        /// while particle positions and their array order stay unchanged.
+        /// Results from type 2 and force evaluation remain in the caller's
+        /// original particle order.
+        template <int N>
+        class ParticleOrdering {
+            static_assert(N >= 2 && N <= 3, "FFTWGrid-backed NUFFT supports dimensions 2 and 3");
+
+          public:
+            size_t size() const noexcept { return indices.size(); }
+            const std::vector<size_t> & get_indices() const noexcept { return indices; }
+            const std::vector<std::array<double, N>> & get_positions() const noexcept { return positions; }
+
+          private:
+            template <int M, class T>
+            friend ParticleOrdering<M> make_particle_ordering(const T *, size_t, int);
+
+            ParticleOrdering(std::vector<size_t> order, std::vector<std::array<double, N>> sorted_positions)
+                : indices(std::move(order)), positions(std::move(sorted_positions)) {}
+            std::vector<size_t> indices;
+            std::vector<std::array<double, N>> positions;
+        };
+
+        /// Build a stable x/y/z block ordering in O(N + B), where B is the
+        /// number of position blocks. The ordering is intended to be reused
+        /// across transforms on fixed points.
+        template <int N, class T>
+        ParticleOrdering<N> make_particle_ordering(const T * part, size_t NumPart, int nblocks_per_dim = 32) {
+            static_assert(N >= 2 && N <= 3, "FFTWGrid-backed NUFFT supports dimensions 2 and 3");
+            if (nblocks_per_dim < 1)
+                throw std::invalid_argument("[NUFFT::make_particle_ordering] nblocks_per_dim must be positive");
+            size_t nblocks_total = 1;
+            for (int idim = 0; idim < N; idim++) {
+                if (nblocks_total > (std::numeric_limits<size_t>::max() - 1) / size_t(nblocks_per_dim))
+                    throw std::length_error("[NUFFT::make_particle_ordering] number of blocks overflows size_t");
+                nblocks_total *= size_t(nblocks_per_dim);
+            }
+
+            std::vector<size_t> block_of(NumPart);
+            std::vector<std::array<double, N>> positions(NumPart);
+            for (size_t ip = 0; ip < NumPart; ip++) {
+                const double * pos = FML::PARTICLE::GetPos(const_cast<T *>(part)[ip]);
+                size_t block = 0;
+                for (int idim = 0; idim < N; idim++) {
+                    positions[ip][idim] = pos[idim];
+                    const int coordinate = int(pos[idim] * nblocks_per_dim);
+                    const size_t coordinate_clamped =
+                        size_t(std::min(std::max(coordinate, 0), nblocks_per_dim - 1));
+                    block = block * size_t(nblocks_per_dim) + coordinate_clamped;
+                }
+                block_of[ip] = block;
+            }
+
+            // Stable counting sort; iteration in input order preserves the
+            // order of particles that occupy the same spatial block.
+            std::vector<size_t> block_start(nblocks_total + 1, 0);
+            for (const size_t block : block_of)
+                block_start[block + 1]++;
+            for (size_t block = 0; block < nblocks_total; block++)
+                block_start[block + 1] += block_start[block];
+            std::vector<size_t> order(NumPart);
+            std::vector<std::array<double, N>> sorted_positions(NumPart);
+            for (size_t ip = 0; ip < NumPart; ip++) {
+                const size_t sorted_index = block_start[block_of[ip]]++;
+                order[sorted_index] = ip;
+                sorted_positions[sorted_index] = positions[ip];
+            }
+            return ParticleOrdering<N>(std::move(order), std::move(sorted_positions));
+        }
 
         //================================================================================
         /// The exponential of semicircle (ES) spreading kernel and its Fourier transform.
@@ -257,6 +330,283 @@ namespace FML {
         };
 
         //================================================================================
+        /// Zeroth-order prolate spheroidal wave-function (PSWF) kernel. The
+        /// angular PSWF is obtained from its Sturm--Liouville eigenproblem in
+        /// an even, orthonormal Legendre basis. Kernel weights are then fitted
+        /// with the same Chebyshev-in-delta strategy used by ESKernel.
+        ///
+        /// Width and shape choices follow the PSWF settings introduced by
+        /// FINUFFT 2.5 (https://github.com/flatironinstitute/finufft/releases/tag/v2.5.0).
+        //================================================================================
+        template <int N>
+        class PSWFKernel {
+            static_assert(N >= 2 && N <= 3, "FFTWGrid-backed NUFFT supports dimensions 2 and 3");
+
+          public:
+            double epsilon{1e-6}; ///< Requested relative accuracy
+            double sigma{2.0};    ///< Fine-grid upsampling factor
+            int width{7};         ///< Kernel width in fine-grid cells
+            double beta{16.4};    ///< PSWF frequency parameter
+
+            PSWFKernel() : PSWFKernel(1e-6, 2.0) {}
+            PSWFKernel(double _epsilon, double _sigma = 2.0) : epsilon(_epsilon), sigma(_sigma) {
+                assert_mpi(epsilon > 0.0 and epsilon < 1.0, "[NUFFT::PSWFKernel] epsilon must be in (0,1)\n");
+                assert_mpi(sigma >= 1.25, "[NUFFT::PSWFKernel] sigma must be >= 1.25\n");
+
+                const double tol_factor = 0.18 * std::pow(1.4, N - 1);
+                width = int(std::ceil(std::log(tol_factor / epsilon) /
+                                          (M_PI * std::sqrt(1.0 - 1.0 / sigma)) +
+                                      1.0));
+                width = std::max(2, std::min(16, width));
+                beta = M_PI * width * (1.0 - 1.0 / (2.0 * sigma)) - 0.05;
+
+                setup_legendre_expansion();
+                setup_quadrature();
+                setup_polynomials();
+            }
+
+            /// The normalized PSWF kernel as a function of distance in fine-grid cells.
+            double operator()(double x) const {
+                const double z = 2.0 * x / width;
+                if (std::fabs(z) > 1.0)
+                    return 0.0;
+                return pswf(z);
+            }
+
+            /// Fourier transform of the compact kernel, computed by Gauss-Legendre quadrature.
+            double fourier(double kappa) const {
+                double sum = 0.0;
+                for (size_t i = 0; i < quad_x.size(); i++)
+                    sum += quad_w[i] * quad_phi[i] * std::cos(kappa * quad_x[i]);
+                return 2.0 * sum;
+            }
+
+            int fine_nmesh(int nmesh) const {
+                int nf = int(std::ceil(sigma * nmesh - 1e-10));
+                while (nf % 2 != 0 or nf % FML::NTasks != 0)
+                    nf++;
+                return nf;
+            }
+
+            int extra_slices() const { return (width + 1) / 2 + 1; }
+
+            /// Kernel weights for one particle coordinate, evaluated using the fitted polynomial.
+            void weights(double delta, double * out) const {
+                if (cheb_degree < 0) {
+                    for (int j = 0; j < width; j++)
+                        out[j] = (*this)(delta + j - 0.5 * width);
+                    return;
+                }
+                switch (width) {
+                    case 2: return weights_impl<2>(delta, out);
+                    case 3: return weights_impl<3>(delta, out);
+                    case 4: return weights_impl<4>(delta, out);
+                    case 5: return weights_impl<5>(delta, out);
+                    case 6: return weights_impl<6>(delta, out);
+                    case 7: return weights_impl<7>(delta, out);
+                    case 8: return weights_impl<8>(delta, out);
+                    case 9: return weights_impl<9>(delta, out);
+                    case 10: return weights_impl<10>(delta, out);
+                    case 11: return weights_impl<11>(delta, out);
+                    case 12: return weights_impl<12>(delta, out);
+                    case 13: return weights_impl<13>(delta, out);
+                    case 14: return weights_impl<14>(delta, out);
+                    case 15: return weights_impl<15>(delta, out);
+                    default: return weights_impl<16>(delta, out);
+                }
+            }
+
+            int polynomial_degree() const { return cheb_degree; }
+
+          private:
+            std::vector<double> legendre_coeffs;
+            std::vector<double> quad_x, quad_w, quad_phi;
+            int cheb_degree{-1};
+            std::vector<double> cheb_coeffs; // [degree * width + stencil index]
+
+            template <int W>
+            void weights_impl(double delta, double * out) const {
+                const double u = 2.0 * delta - 1.0, u2 = 2.0 * u;
+                double b1[W]{}, b2[W]{};
+                for (int k = cheb_degree; k >= 1; k--) {
+                    const double * c = &cheb_coeffs[size_t(k) * width];
+                    for (int j = 0; j < W; j++) {
+                        const double b0 = u2 * b1[j] - b2[j] + c[j];
+                        b2[j] = b1[j];
+                        b1[j] = b0;
+                    }
+                }
+                for (int j = 0; j < W; j++)
+                    out[j] = u * b1[j] - b2[j] + 0.5 * cheb_coeffs[j];
+            }
+
+            double pswf(double z) const {
+                const int max_degree = 2 * int(legendre_coeffs.size() - 1);
+                double p0 = 1.0;
+                double value = legendre_coeffs[0];
+                if (max_degree == 0)
+                    return value;
+                double p1 = z;
+                for (int ell = 1; ell < max_degree; ell++) {
+                    const double p2 = ((2.0 * ell + 1.0) * z * p1 - ell * p0) / (ell + 1.0);
+                    if ((ell + 1) % 2 == 0)
+                        value += legendre_coeffs[(ell + 1) / 2] * p2;
+                    p0 = p1;
+                    p1 = p2;
+                }
+                return value;
+            }
+
+            void setup_legendre_expansion() {
+                // In the orthonormal even-Legendre basis, the angular PSWF
+                // operator is the symmetric matrix L + beta^2 x^2. Its lowest
+                // eigenvector is the positive order-zero prolate function.
+                const int ncoeff = std::max(48, int(std::ceil(beta)) + 24);
+                const size_t matrix_size = size_t(ncoeff) * ncoeff;
+                std::vector<double> matrix(matrix_size, 0.0), eigenvectors(matrix_size, 0.0);
+                auto a = [ncoeff](std::vector<double> & m, int i, int j) -> double & {
+                    return m[size_t(i) * ncoeff + j];
+                };
+                auto x_coefficient = [](int ell) {
+                    return (ell + 1.0) / std::sqrt((2.0 * ell + 1.0) * (2.0 * ell + 3.0));
+                };
+                for (int i = 0; i < ncoeff; i++) {
+                    const int ell = 2 * i;
+                    const double x_up = x_coefficient(ell);
+                    const double x_down = ell == 0 ? 0.0 : x_coefficient(ell - 1);
+                    a(eigenvectors, i, i) = 1.0;
+                    a(matrix, i, i) = double(ell * (ell + 1)) + beta * beta * (x_up * x_up + x_down * x_down);
+                    if (i + 1 < ncoeff) {
+                        const double offdiag = beta * beta * x_up * x_coefficient(ell + 1);
+                        a(matrix, i, i + 1) = offdiag;
+                        a(matrix, i + 1, i) = offdiag;
+                    }
+                }
+
+                // Symmetric Jacobi diagonalization; this runs once per kernel setup.
+                for (int sweep = 0; sweep < 80; sweep++) {
+                    double max_offdiag = 0.0;
+                    for (int p = 0; p < ncoeff - 1; p++) {
+                        for (int q = p + 1; q < ncoeff; q++) {
+                            const double apq = a(matrix, p, q);
+                            max_offdiag = std::max(max_offdiag, std::fabs(apq));
+                            if (std::fabs(apq) < 1e-15)
+                                continue;
+                            const double tau = (a(matrix, q, q) - a(matrix, p, p)) / (2.0 * apq);
+                            const double t = std::copysign(1.0, tau) / (std::fabs(tau) + std::sqrt(1.0 + tau * tau));
+                            const double cosine = 1.0 / std::sqrt(1.0 + t * t);
+                            const double sine = t * cosine;
+                            const double app = a(matrix, p, p), aqq = a(matrix, q, q);
+                            a(matrix, p, p) = app - t * apq;
+                            a(matrix, q, q) = aqq + t * apq;
+                            a(matrix, p, q) = a(matrix, q, p) = 0.0;
+                            for (int r = 0; r < ncoeff; r++) {
+                                if (r != p and r != q) {
+                                    const double arp = a(matrix, r, p), arq = a(matrix, r, q);
+                                    a(matrix, r, p) = a(matrix, p, r) = cosine * arp - sine * arq;
+                                    a(matrix, r, q) = a(matrix, q, r) = sine * arp + cosine * arq;
+                                }
+                                const double vrp = a(eigenvectors, r, p), vrq = a(eigenvectors, r, q);
+                                a(eigenvectors, r, p) = cosine * vrp - sine * vrq;
+                                a(eigenvectors, r, q) = sine * vrp + cosine * vrq;
+                            }
+                        }
+                    }
+                    if (max_offdiag < 1e-13)
+                        break;
+                }
+
+                int ground = 0;
+                for (int i = 1; i < ncoeff; i++)
+                    if (a(matrix, i, i) < a(matrix, ground, ground))
+                        ground = i;
+                legendre_coeffs.resize(ncoeff);
+                for (int i = 0; i < ncoeff; i++)
+                    legendre_coeffs[i] = a(eigenvectors, i, ground) * std::sqrt((4.0 * i + 1.0) / 2.0);
+                double center = 0.0;
+                double p0 = 1.0, p1 = 0.0;
+                center += legendre_coeffs[0];
+                for (int ell = 1; ell < 2 * ncoeff - 1; ell++) {
+                    const double p2 = -ell * p0 / (ell + 1.0);
+                    if ((ell + 1) % 2 == 0)
+                        center += legendre_coeffs[(ell + 1) / 2] * p2;
+                    p0 = p1;
+                    p1 = p2;
+                }
+                assert_mpi(std::fabs(center) > 1e-100, "[NUFFT::PSWFKernel] PSWF eigenfunction normalization failed\n");
+                for (auto & coefficient : legendre_coeffs)
+                    coefficient /= center;
+            }
+
+            void setup_quadrature() {
+                const int nq = std::max(80, 8 * width);
+                std::vector<double> nodes(nq), weights(nq);
+                for (int i = 0; i < nq; i++) {
+                    double z = std::cos(M_PI * (i + 0.75) / (nq + 0.5));
+                    double derivative = 1.0;
+                    for (int iteration = 0; iteration < 100; iteration++) {
+                        double p0 = 1.0, p1 = z;
+                        for (int ell = 2; ell <= nq; ell++) {
+                            const double p2 = ((2 * ell - 1) * z * p1 - (ell - 1) * p0) / ell;
+                            p0 = p1;
+                            p1 = p2;
+                        }
+                        derivative = nq * (z * p1 - p0) / (z * z - 1.0);
+                        const double dz = p1 / derivative;
+                        z -= dz;
+                        if (std::fabs(dz) < 1e-15)
+                            break;
+                    }
+                    nodes[i] = z;
+                    weights[i] = 2.0 / ((1.0 - z * z) * derivative * derivative);
+                }
+                const double half = 0.5 * width;
+                quad_x.resize(nq);
+                quad_w.resize(nq);
+                quad_phi.resize(nq);
+                for (int i = 0; i < nq; i++) {
+                    quad_x[i] = 0.5 * half * (nodes[i] + 1.0);
+                    quad_w[i] = 0.5 * half * weights[i];
+                    quad_phi[i] = (*this)(quad_x[i]);
+                }
+            }
+
+            void setup_polynomials() {
+                for (int degree = width + 2; degree <= 30; degree += 2) {
+                    const int n = degree + 1;
+                    std::vector<double> coeffs(size_t(n) * width, 0.0);
+                    for (int j = 0; j < width; j++) {
+                        std::vector<double> f(n);
+                        for (int i = 0; i < n; i++) {
+                            const double u = std::cos(M_PI * (i + 0.5) / n);
+                            f[i] = (*this)(0.5 * (u + 1.0) + j - 0.5 * width);
+                        }
+                        for (int k = 0; k < n; k++) {
+                            double sum = 0.0;
+                            for (int i = 0; i < n; i++)
+                                sum += f[i] * std::cos(M_PI * k * (i + 0.5) / n);
+                            coeffs[size_t(k) * width + j] = 2.0 * sum / n;
+                        }
+                    }
+                    cheb_degree = degree;
+                    cheb_coeffs = std::move(coeffs);
+                    double max_error = 0.0;
+                    double out[16];
+                    for (int i = 0; i <= 1000; i++) {
+                        const double delta = i / 1000.0;
+                        weights(delta, out);
+                        for (int j = 0; j < width; j++)
+                            max_error = std::max(max_error,
+                                                 std::fabs(out[j] - (*this)(delta + j - 0.5 * width)));
+                    }
+                    if (max_error < 0.01 * epsilon)
+                        return;
+                }
+                cheb_degree = -1;
+            }
+        };
+
+        //================================================================================
         // Internal helpers
         //================================================================================
 
@@ -328,8 +678,8 @@ namespace FML {
 
         /// @brief Compute the kernel weights and the first cell index for a particle (fine grid units).
         /// For the x-direction the index is relative to the local slab.
-        template <int N>
-        inline void kernel_weights(const ESKernel & kernel,
+        template <int N, class Kernel>
+        inline void kernel_weights(const Kernel & kernel,
                                    const double * pos,
                                    int nfine,
                                    ptrdiff_t local_x_start,
@@ -345,13 +695,14 @@ namespace FML {
             }
         }
 
-        /// @brief Spread values c_p onto the (zeroed) fine grid with the ES kernel
-        template <int N, class T>
+        /// @brief Spread values c_p onto the (zeroed) fine grid with the selected kernel
+        template <int N, class T, class Kernel = PSWFKernel<N>>
         void spread_to_fine_grid(const T * part,
                                  size_t NumPart,
                                  const std::vector<double> & values,
-                                 const ESKernel & kernel,
-                                 FFTWGrid<N> & fine) {
+                                 const Kernel & kernel,
+                                 FFTWGrid<N> & fine,
+                                 const ParticleOrdering<N> * ordering = nullptr) {
             const int nf = fine.get_nmesh();
             const int w = kernel.width;
             const int wtondim = FML::power(w, N);
@@ -361,10 +712,26 @@ namespace FML {
             const int nright = fine.get_n_extra_slices_right();
             FloatType * grid = fine.get_real_grid();
             fine.fill_real_grid(0.0);
+            if (ordering)
+                assert_mpi(ordering->size() == NumPart,
+                           "[NUFFT::spread_to_fine_grid] Particle ordering has the wrong size\n");
+            std::vector<double> ordered_values;
+            const auto * particle_values = &values;
+            if (ordering) {
+                ordered_values.resize(NumPart);
+                const auto & particle_indices = ordering->get_indices();
+                for (size_t i = 0; i < NumPart; i++)
+                    ordered_values[i] = values[particle_indices[i]];
+                particle_values = &ordered_values;
+            }
+            auto particle_pos = [&](size_t i) {
+                return ordering ? ordering->get_positions()[i].data()
+                                : FML::PARTICLE::GetPos(const_cast<T *>(part)[i]);
+            };
 
             // Spread one particle (no atomics: see the scheduling below)
-            auto spread_one = [&](size_t ip) -> int {
-                const double * pos = FML::PARTICLE::GetPos(const_cast<T *>(part)[ip]);
+            auto spread_one = [&](size_t slot) -> int {
+                const double * pos = particle_pos(slot);
                 std::array<int, N> istart;
                 std::array<double, N * 16> weights;
                 kernel_weights<N>(kernel, pos, nf, Local_x_start, istart, weights);
@@ -381,7 +748,7 @@ namespace FML {
                         c2[j] = ((istart[2] + j) % nf + nf) % nf;
                     }
                     for (int a = 0; a < w; a++) {
-                        const double wa = values[ip] * weights[a];
+                        const double wa = (*particle_values)[slot] * weights[a];
                         for (int b = 0; b < w; b++) {
                             const double wab = wa * weights[w + b];
                             const auto base = fine.get_index_real({c0[a], c1[b], 0});
@@ -391,11 +758,11 @@ namespace FML {
                     }
                     return 0;
                 }
-                for (int i = 0; i < wtondim; i++) {
+                for (int istencil = 0; istencil < wtondim; istencil++) {
                     std::array<int, N> coord;
-                    double weight = values[ip];
+                    double weight = (*particle_values)[slot];
                     for (int idim = 0, n = 1; idim < N; idim++, n *= w) {
-                        const int j = (i / n) % w;
+                        const int j = (istencil / n) % w;
                         weight *= weights[idim * w + j];
                         int c = istart[idim] + j;
                         if (idim > 0 or FML::NTasks == 1) {
@@ -416,20 +783,20 @@ namespace FML {
             const int nthreads = 1;
 #endif
             if (nthreads == 1) {
-                for (size_t ip = 0; ip < NumPart; ip++)
-                    out_of_bounds = std::max(out_of_bounds, spread_one(ip));
+                for (size_t i = 0; i < NumPart; i++)
+                    out_of_bounds = std::max(out_of_bounds, spread_one(i));
             } else {
                 // Without atomics: bin the particles in x-slabs of width w (the kernel width) by the first cell
                 // they touch. A particle in slab s only touches slabs s and s+1, so all even slabs can be done
                 // in parallel and then all odd ones. Particles that wrap around the box (one task) are done last
                 const int nslabs = int((Local_nx + nleft + nright) / w) + 1;
                 std::vector<std::vector<size_t>> slabs(nslabs + 1);
-                for (size_t ip = 0; ip < NumPart; ip++) {
-                    const double x = FML::PARTICLE::GetPos(const_cast<T *>(part)[ip])[0] * nf;
+                for (size_t i = 0; i < NumPart; i++) {
+                    const double x = particle_pos(i)[0] * nf;
                     const int i0 = int(std::ceil(x - 0.5 * w)) - int(Local_x_start);
                     const bool wraps = FML::NTasks == 1 and (i0 < 0 or i0 + w > Local_nx);
                     const int slab = std::min(std::max((i0 + nleft) / w, 0), nslabs - 1);
-                    slabs[wraps ? nslabs : slab].push_back(ip);
+                    slabs[wraps ? nslabs : slab].push_back(i);
                 }
                 for (int color = 0; color < 2; color++) {
 #ifdef USE_OMP
@@ -452,12 +819,13 @@ namespace FML {
         }
 
         /// @brief Interpolate the fine (real space, with boundaries communicated) grid to the particle positions
-        template <int N, class T>
+        template <int N, class T, class Kernel = PSWFKernel<N>>
         void interpolate_from_fine_grid(const FFTWGrid<N> & fine,
                                         const T * part,
                                         size_t NumPart,
-                                        const ESKernel & kernel,
-                                        std::vector<FloatType> & result) {
+                                        const Kernel & kernel,
+                                        std::vector<FloatType> & result,
+                                        const ParticleOrdering<N> * ordering = nullptr) {
             const int nf = fine.get_nmesh();
             const int w = kernel.width;
             const int wtondim = FML::power(w, N);
@@ -466,13 +834,22 @@ namespace FML {
             const int nleft = fine.get_n_extra_slices_left();
             const int nright = fine.get_n_extra_slices_right();
             result.resize(NumPart);
+            if (ordering)
+                assert_mpi(ordering->size() == NumPart,
+                           "[NUFFT::interpolate_from_fine_grid] Particle ordering has the wrong size\n");
+            const auto * particle_indices = ordering ? &ordering->get_indices() : nullptr;
+            auto particle_pos = [&](size_t i) {
+                return ordering ? ordering->get_positions()[i].data()
+                                : FML::PARTICLE::GetPos(const_cast<T *>(part)[i]);
+            };
 
             int out_of_bounds = 0;
 #ifdef USE_OMP
 #pragma omp parallel for reduction(max : out_of_bounds)
 #endif
-            for (size_t ip = 0; ip < NumPart; ip++) {
-                const double * pos = FML::PARTICLE::GetPos(const_cast<T *>(part)[ip]);
+            for (size_t i = 0; i < NumPart; i++) {
+                const size_t ip = particle_indices ? (*particle_indices)[i] : i;
+                const double * pos = particle_pos(i);
                 std::array<int, N> istart;
                 std::array<double, N * 16> weights;
                 kernel_weights<N>(kernel, pos, nf, Local_x_start, istart, weights);
@@ -525,7 +902,8 @@ namespace FML {
         }
 
         /// @brief The 1D table of 1/phi_hat for the integer wavenumbers m = -nf/2,...,nf/2 of the fine grid
-        inline std::vector<double> inverse_kernel_fourier_table(const ESKernel & kernel, int nf) {
+        template <class Kernel>
+        inline std::vector<double> inverse_kernel_fourier_table(const Kernel & kernel, int nf) {
             std::vector<double> table(nf + 1);
             for (int m = -nf / 2; m <= nf / 2; m++)
                 table[m + nf / 2] = 1.0 / kernel.fourier(2.0 * M_PI * m / double(nf));
@@ -601,13 +979,14 @@ namespace FML {
         /// @param[out] out The output grid (Nmesh must be set). Fourier space on output.
         /// @param[in] kernel The spreading kernel (sets the accuracy)
         //================================================================================
-        template <int N, class T>
+        template <int N, class T, class Kernel = PSWFKernel<N>>
         void nufft_type1(const T * part,
                          size_t NumPart,
                          const std::vector<double> & values,
                          double norm,
                          FFTWGrid<N> & out,
-                         const ESKernel & kernel = ESKernel()) {
+                         const Kernel & kernel = Kernel(),
+                         const ParticleOrdering<N> * ordering = nullptr) {
             const int nmesh = out.get_nmesh();
             assert_mpi(nmesh > 0, "[NUFFT::nufft_type1] Output grid must be allocated\n");
             assert_mpi(values.size() >= NumPart, "[NUFFT::nufft_type1] Too few values\n");
@@ -616,7 +995,7 @@ namespace FML {
 
             FFTWGrid<N> fine(nf, nextra, nextra);
             fine.add_memory_label("FFTWGrid::NUFFT::nufft_type1::fine");
-            spread_to_fine_grid<N, T>(part, NumPart, values, kernel, fine);
+            spread_to_fine_grid<N, T>(part, NumPart, values, kernel, fine, ordering);
             fine.fftw_r2c();
 
             // r2c includes 1/nf^N, the kernel gives phi_hat(m) per dimension
@@ -640,12 +1019,13 @@ namespace FML {
         /// @param[out] result The values at the particle positions
         /// @param[in] kernel The spreading kernel (sets the accuracy)
         //================================================================================
-        template <int N, class T>
+        template <int N, class T, class Kernel = PSWFKernel<N>>
         void nufft_type2(const FFTWGrid<N> & in,
                          const T * part,
                          size_t NumPart,
                          std::vector<FloatType> & result,
-                         const ESKernel & kernel = ESKernel()) {
+                         const Kernel & kernel = Kernel(),
+                         const ParticleOrdering<N> * ordering = nullptr) {
             const int nmesh = in.get_nmesh();
             assert_mpi(nmesh > 0, "[NUFFT::nufft_type2] Input grid must be allocated\n");
             const int nf = kernel.fine_nmesh(nmesh);
@@ -662,7 +1042,7 @@ namespace FML {
             });
             fine.fftw_c2r();
             fine.communicate_boundaries();
-            interpolate_from_fine_grid<N, T>(fine, part, NumPart, kernel, result);
+            interpolate_from_fine_grid<N, T>(fine, part, NumPart, kernel, result, ordering);
         }
 
         /// @brief The particle weights c_p = mass / mean mass (or 1 if the particles have no mass)
@@ -702,10 +1082,33 @@ namespace FML {
                                              size_t NumPartTot,
                                              FFTWGrid<N> & density_fourier,
                                              double epsilon = 1e-6,
-                                             double sigma = 2.0) {
-            ESKernel kernel(epsilon, sigma);
+                                             double sigma = 2.0,
+                                             const ParticleOrdering<N> * ordering = nullptr) {
+            PSWFKernel<N> kernel(epsilon, sigma);
             auto values = particle_weights(part, NumPart, NumPartTot);
-            nufft_type1<N, T>(part, NumPart, values, 1.0 / double(NumPartTot), density_fourier, kernel);
+            nufft_type1<N, T>(part, NumPart, values, 1.0 / double(NumPartTot), density_fourier, kernel, ordering);
+            if (density_fourier.get_local_x_start() == 0)
+                density_fourier.set_fourier_from_index(0, 0.0);
+        }
+
+        /// Density assignment using an explicitly selected kernel, for example
+        /// PSWFKernel<N>. This overload keeps kernel choice separate from the
+        /// tolerance/sigma convenience interface above.
+        template <int N, class T, class Kernel>
+        void particles_to_fourier_grid_nufft(const T * part,
+                                             size_t NumPart,
+                                             size_t NumPartTot,
+                                             FFTWGrid<N> & density_fourier,
+                                             const Kernel & kernel,
+                                             const ParticleOrdering<N> * ordering = nullptr) {
+            auto values = particle_weights(part, NumPart, NumPartTot);
+            nufft_type1<N, T>(part,
+                              NumPart,
+                              values,
+                              1.0 / double(NumPartTot),
+                              density_fourier,
+                              kernel,
+                              ordering);
             if (density_fourier.get_local_x_start() == 0)
                 density_fourier.set_fourier_from_index(0, 0.0);
         }
@@ -730,17 +1133,16 @@ namespace FML {
         /// @param[in] filter Optional filter W(k) (k in units of 1/boxsize) multiplying the potential, e.g. a
         /// long-range split. Default none.
         //================================================================================
-        template <int N, class T>
-        void compute_force_nufft(const T * part,
-                                 size_t NumPart,
-                                 size_t NumPartTot,
-                                 int nmesh,
-                                 double norm_poisson_equation,
-                                 std::array<std::vector<FloatType>, N> & force,
-                                 double epsilon = 1e-6,
-                                 double sigma = 2.0,
-                                 std::function<double(double)> filter = nullptr) {
-            ESKernel kernel(epsilon, sigma);
+        template <int N, class T, class Kernel>
+        void compute_force_nufft_with_kernel(const T * part,
+                                             size_t NumPart,
+                                             size_t NumPartTot,
+                                             int nmesh,
+                                             double norm_poisson_equation,
+                                             std::array<std::vector<FloatType>, N> & force,
+                                             const Kernel & kernel,
+                                             std::function<double(double)> filter = nullptr,
+                                             const ParticleOrdering<N> * ordering = nullptr) {
             const int nf = kernel.fine_nmesh(nmesh);
             const int nextra = kernel.extra_slices();
             const int mmax = nmesh / 2;
@@ -749,7 +1151,7 @@ namespace FML {
             FFTWGrid<N> potential(nf, nextra, nextra);
             potential.add_memory_label("FFTWGrid::NUFFT::compute_force_nufft::potential");
             auto values = particle_weights(part, NumPart, NumPartTot);
-            spread_to_fine_grid<N, T>(part, NumPart, values, kernel, potential);
+            spread_to_fine_grid<N, T>(part, NumPart, values, kernel, potential, ordering);
             potential.fftw_r2c();
 
             // delta(k) = nf^N / NumPartTot * B(k) / phi_hat(k) -> Phi(k) = -norm delta / k^2 and divide by
@@ -798,8 +1200,24 @@ namespace FML {
                 }
                 grad.fftw_c2r();
                 grad.communicate_boundaries();
-                interpolate_from_fine_grid<N, T>(grad, part, NumPart, kernel, force[idim]);
+                interpolate_from_fine_grid<N, T>(grad, part, NumPart, kernel, force[idim], ordering);
             }
+        }
+
+        template <int N, class T>
+        void compute_force_nufft(const T * part,
+                                 size_t NumPart,
+                                 size_t NumPartTot,
+                                 int nmesh,
+                                 double norm_poisson_equation,
+                                 std::array<std::vector<FloatType>, N> & force,
+                                 double epsilon = 1e-6,
+                                 double sigma = 2.0,
+                                 std::function<double(double)> filter = nullptr,
+                                 const ParticleOrdering<N> * ordering = nullptr) {
+            PSWFKernel<N> kernel(epsilon, sigma);
+            compute_force_nufft_with_kernel<N, T>(
+                part, NumPart, NumPartTot, nmesh, norm_poisson_equation, force, kernel, filter, ordering);
         }
 
     } // namespace NUFFT
