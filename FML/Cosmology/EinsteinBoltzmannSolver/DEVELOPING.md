@@ -97,6 +97,8 @@ Early dark energy: the shooting reproduces f_EDE and z_c (1e-10), the stored fie
 equation, the oscillation-averaged dilution a^(−6n/(n+1)), the unused Einstein constraints with the field (5e-6),
 and f_EDE → 0 is ΛCDM; against CLASS_EDE (`python/compare_class_ede.py`) the potential parameters agree (f to
 1e-3) and the ratios to ΛCDM agree to 3e-5 in P(k) for k ≤ 0.05 h/Mpc (7e-4 at 0.1) and 1e-3 in C_ℓ^TT.
+Brans–Dicke nonlinear P(k) (`nonlinear = jbd_boost`, `test_brans_dicke`): the mapped GR universe and the boost
+against `bd.py` of Sletmoen & Winther (2024) (2e-4), and ω → ∞ is EuclidEmulator2 for ΛCDM.
 Ultralight axions (`test_axion`): the shooting reproduces Ω_ax (1e-9) for m = 10⁻³³–10⁻¹⁸ eV, the frozen start and
 the w = 0 fluid after the switch, the unused Einstein constraints with the axion before and after the switch (5e-6),
 and the limits (a tiny fraction is ΛCDM, a heavy axion is CDM); against axionCAMB with its switch at m = 3H

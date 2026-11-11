@@ -97,7 +97,8 @@ namespace FML::COSMOLOGY {
             static const std::map<std::string, N> m = {{"none", N::None}, {"halofit", N::Halofit},
                                                        {"halofit_bird", N::HalofitBird}, {"hmcode2016", N::HMcode2016},
                                                        {"hmcode2020", N::HMcode2020},
-                                                       {"react", N::ReACT}, {"axionhmcode", N::AxionHMcode}};
+                                                       {"react", N::ReACT}, {"axionhmcode", N::AxionHMcode},
+                                                       {"ee2", N::EE2}, {"jbd_boost", N::JBDBoost}};
             return m;
         }
         const std::map<std::string, Perturbations::SourceTerm> & source_terms() {
@@ -556,13 +557,21 @@ namespace FML::COSMOLOGY {
                 {"PowerSpectrum",
                  "nonlinear",
                  "nonlinear matter power for lensing and P(k): none, halofit, halofit_bird, hmcode2016, hmcode2020, react, "
-                 "axionhmcode (mixed axion dark matter, model axion)",
+                 "axionhmcode (mixed axion dark matter, model axion), ee2 (EuclidEmulator2), jbd_boost (model jbd: "
+                 "Sletmoen & Winther 2024, the BD boost from GR with jbd_boost_gr)",
                  [](S & s, const std::string & v) { s.ps.nonlinear = enum_value(nonlinear_methods(), v); },
                  [](const S & s) { return enum_name(nonlinear_methods(), s.ps.nonlinear); }},
                 I("PowerSpectrum", "react_n_z", "ReACT redshift samples (>=4)", REF(int, ps.react_n_z)),
                 I("PowerSpectrum", "react_n_k", "ReACT logarithmic k samples, 1e-5 to 100 h/Mpc (>=32)", REF(int, ps.react_n_k)),
                 I("PowerSpectrum", "react_mass_loop", "ReACT spherical-collapse mass samples (10..1000)", REF(int, ps.react_mass_loop)),
                 D("PowerSpectrum", "react_z_max", "maximum ReACT redshift (<=2.5); above it use the matched pseudo baseline with R=1", REF(double, ps.react_z_max)),
+                {"PowerSpectrum",
+                 "jbd_boost_gr",
+                 "jbd_boost: the GR nonlinear method of the mapped GR universe: ee2 (as the paper), hmcode2020, "
+                 "hmcode2016, halofit, halofit_bird",
+                 [](S & s, const std::string & v) { s.ps.jbd_boost_gr = enum_value(nonlinear_methods(), v); },
+                 [](const S & s) { return enum_name(nonlinear_methods(), s.ps.jbd_boost_gr); }},
+                I("PowerSpectrum", "ee2_n_z", "EuclidEmulator2: redshifts of its table in [0, 10] (uniform in ln a)", REF(int, ps.ee2_n_z)),
                 B("PowerSpectrum",
                   "axionhmcode_basic",
                   "AxionHMcode: the basic model of Vogt et al. 2022 instead of the Dome et al. 2024 calibration",

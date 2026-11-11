@@ -27,6 +27,21 @@ and normal-branch `dgp` with `dgp_lcdm_background=1`, including massive neutrino
 z<=2.5; above `react_z_max` the solver uses the matched pseudo baseline with R=1 and reports this approximation.
 See [ReACT setup, conventions, reference tests and limits](../../ReACT/README.md).
 
+`nonlinear = ee2` uses the EuclidEmulator2 boost (Euclid Collaboration: Knabenhans et al. 2021; `FML/Emulator`) for
+flat `lcdm` and `w0wa` within its parameter ranges (an error outside them), tabulated at `ee2_n_z` redshifts up to
+z = 10 (linear above) on its k-range (0.0087–9.4 h/Mpc; held above, 1 below). Its N_eff is 3.046.
+
+`nonlinear = jbd_boost` (with `model = jbd`) is the prescription of Sletmoen & Winther (2024, arXiv:2403.03786; their
+`bd.py`): P_BD(k) = P_BD^lin(k) · P_GR(k)/P_GR^lin(k) with the GR (ΛCDM) universe of the same physical densities
+(ω_b, ω_c), n_s and σ₈ today and h_GR = h_BD √φ_ini, compared at the same k in h/Mpc of each universe; P_GR/P_GR^lin
+from `jbd_boost_gr` (`ee2` as the paper, or `hmcode2020`, `hmcode2016`, `halofit`, `halofit_bird`). In the paper it is
+1% accurate against N-body simulations for ω ≥ 100, z ≤ 3, k ≤ 1 h/Mpc (2% to 5 h/Mpc). Flat, with
+`bd_density_parameter_definition = 0` (hi_class's, as the paper). The GR universe is solved too: with `ee2` only for
+σ₈ (k ≤ 0.5/Mpc, ~6 s), with the other methods on the k-range of the run (a second perturbation solve). Against
+`bd.py` (hi_class + EuclidEmulator2; ω = 100, ω_m = 0.15, ω_b = 0.02, h = 0.7, A_s = 2e-9, n_s = 1): h_GR to 1e-7,
+A_s,GR to 2e-4 and the boost to 2e-4 at z = 0–3 for 0.009 ≤ k ≤ 9 h/Mpc (`tests/test_brans_dicke`; FML's emulator
+agrees with `ee2.exe` to 1e-5). For ω → ∞ it is `ee2` for ΛCDM.
+
 `nonlinear = axionhmcode` (with `model = axion`) uses the mixed cold/ultralight-axion halo model of
 [AxionHMcode](../../AxionHMcode/README.md) (Vogt et al. 2022; the Dome et al. 2024 calibration, or the basic model with
 `axionhmcode_basic = true`) on the solver's P_cb and P_axion, extrapolated to 1e-5 – 1e3 h/Mpc (P_cb with the

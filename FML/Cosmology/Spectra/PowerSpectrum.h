@@ -37,7 +37,7 @@
 //   C_ell^phiphi   = 4 pi int dk/k P_R(k) phi_ell(k)^2
 // (Phi_ell^nu and sin_K in a curved universe), followed by the lensed spectra from Lensing::lens.
 //
-// Nonlinear (Halofit, HalofitBird, HMcode2016, HMcode2020, AxionHMcode): P_NL = P_L * ratio(x, k); the
+// Nonlinear (Halofit, HalofitBird, HMcode2016, HMcode2020, AxionHMcode, EE2, JBDBoost): P_NL = P_L * ratio(x, k); the
 // Weyl potential in the Limber part of C_ell^phiphi is scaled by sqrt(P_NL/P_L) (as CLASS), so the lensed
 // spectra include nonlinear lensing.
 //
@@ -109,8 +109,17 @@ namespace FML::COSMOLOGY {
         int lensing_limber_ell = 30;
         // Nonlinear matter power for the lensing potential and P_NL(k) (Halofit.h, FML/HaloModel/HMcode2016.h, HMcode2020.h,
         // FML/AxionHMcode/AxionHMcode.h for the mixed axion dark matter of model axion)
-        enum class Nonlinear { None, Halofit, HalofitBird, HMcode2016, HMcode2020, ReACT, AxionHMcode };
+        enum class Nonlinear { None, Halofit, HalofitBird, HMcode2016, HMcode2020, ReACT, AxionHMcode, EE2, JBDBoost };
         Nonlinear nonlinear = Nonlinear::None;
+        // EE2: the EuclidEmulator2 boost (Euclid Collaboration: Knabenhans et al. 2021; lcdm and w0wa, flat; its
+        // parameter ranges), tabulated at ee2_n_z redshifts in [0, 10] (uniform in ln a); linear above z = 10.
+        int ee2_n_z = 40;
+        // JBDBoost (model jbd; Sletmoen & Winther 2024, arXiv:2403.03786, their bd.py): P_BD = P_BD^lin
+        // P_GR / P_GR^lin, with the GR (lcdm) universe of the same physical densities, n_s and sigma_8 today and
+        // h_GR = h_BD sqrt(phi_ini), compared at the same k / (h/Mpc); P_GR / P_GR^lin from the method jbd_boost_gr
+        // (EE2 as the paper, HMcode2020, HMcode2016, Halofit or HalofitBird). 1% for omega >= 100, z <= 3, k <= 1 h/Mpc
+        // (2% to 5 h/Mpc) against N-body simulations.
+        Nonlinear jbd_boost_gr = Nonlinear::EE2;
         // AxionHMcode (Vogt et al. 2022; Dome et al. 2024 with axionhmcode_basic = false): P_NL/P_L tabulated at
         // axionhmcode_n_z redshifts in [0, axionhmcode_z_max] (uniform in ln a) and 1e-3 to 100 h/Mpc. Its Dome
         // calibration covers z = 1 - 8, axion fractions of the matter 0.01 - 0.3 and m = 10^-24.5 eV: elsewhere it is an
@@ -294,9 +303,13 @@ namespace FML::COSMOLOGY {
         std::unique_ptr<HALOMODEL::HMcode2020> hmcode;
         std::unique_ptr<HALOMODEL::HMcode2016> hmcode2016;
         std::unique_ptr<ReACT> react;
-        std::unique_ptr<struct AxionHMcodeTable> axionhm;
+        std::unique_ptr<struct NonlinearRatioTable> axionhm, ee2;
+        std::unique_ptr<struct JBDBoostState> jbd;
         void solve_react();
         void solve_axionhmcode();
+        void solve_ee2();
+        void solve_jbd_boost();
+        std::string jbd_name;
         double nonlinear_ratio(double x, double k) const;
         const char * nonlinear_name() const;
         // tensor D_ell [muK^2] at (non-integer) ell: 0 = TT, 1 = EE, 2 = BB, 3 = TE; linear between integers

@@ -2,6 +2,8 @@
 #include <FML/Cosmology/Spectra/Halofit.h>
 #include <FML/Cosmology/Background/BackgroundModel_Axion.h>
 #include <FML/AxionHMcode/AxionHMcode.h>
+#include <FML/Cosmology/Background/FieldEquation_BransDicke.h>
+#include <FML/Emulator/EuclidEmulator2.h>
 #include <FML/Spline/Spline.h>
 #include <FML/HaloModel/HMcode2016.h>
 #include <FML/HaloModel/HMcode2020.h>
@@ -21,9 +23,9 @@
 
 namespace FML::COSMOLOGY {
 
-    // AxionHMcode: ln(P_NL / P_L) of the total matter on a grid of (x, ln k [h/Mpc]); the cold spectrum when the
-    // axion is not part of P_m (m < 1e-25 eV)
-    struct AxionHMcodeTable {
+    // ln(P_NL / P_L) on a grid of (x, ln k [h/Mpc]), 1 before x_min and below lnk_min, held above lnk_max
+    // (AxionHMcode: of the total matter, or of the cold spectrum when the axion is not part of P_m; EE2)
+    struct NonlinearRatioTable {
         FML::INTERPOLATION::SPLINE::Spline2D log_ratio;
         double x_min, lnk_min, lnk_max, h;
         double ratio(double x, double k) const {
@@ -34,6 +36,14 @@ namespace FML::COSMOLOGY {
         }
     };
 
+    // JBDBoost: the GR universe of Sletmoen & Winther (2024) with its linear solution and nonlinear method
+    struct JBDBoostState {
+        std::unique_ptr<BackgroundCosmology> cosmo_trial, cosmo; // GR with the A_s of BD, and with the sigma_8 of BD
+        std::unique_ptr<RecombinationHistory> rec;
+        std::unique_ptr<Perturbations> pert;
+        std::unique_ptr<PowerSpectrum> ps;
+        double phi_ini = 1.0, h_ratio = 1.0, sigma8 = 0.0; // h_GR / h_BD = sqrt(phi_ini)
+    };
 
     using namespace Constants;
 
@@ -709,6 +719,10 @@ namespace FML::COSMOLOGY {
             solve_react();
         } else if (options.nonlinear == N::AxionHMcode) {
             solve_axionhmcode();
+        } else if (options.nonlinear == N::EE2) {
+            solve_ee2();
+        } else if (options.nonlinear == N::JBDBoost) {
+            solve_jbd_boost();
         }
         matter_solved = true;
     }
@@ -724,6 +738,8 @@ namespace FML::COSMOLOGY {
                             hmcode       ? hmcode->ratio(x, k) :
                             hmcode2016   ? hmcode2016->ratio(x, k) :
                             axionhm      ? axionhm->ratio(x, k) :
+                            ee2          ? ee2->ratio(x, k) :
+                            jbd          ? jbd->ps->nonlinear_ratio(x, k * jbd->h_ratio) :
                                            1.0;
         return react && x >= react->x_min() ? base * react->reaction(std::min(x, react->x_max()),
                                                                     k * Mpc / cosmo.get_params().h) : base;
@@ -738,6 +754,8 @@ namespace FML::COSMOLOGY {
             case N::HMcode2020: return "HMcode-2020";
             case N::ReACT: return "ReACT x HMcode-2020 matched pseudo";
             case N::AxionHMcode: return options.axionhmcode_basic ? "AxionHMcode (basic)" : "AxionHMcode (Dome 2024)";
+            case N::EE2: return "EuclidEmulator2";
+            case N::JBDBoost: return jbd_name.c_str();
             default: return "linear";
         }
     }
@@ -949,6 +967,130 @@ namespace FML::COSMOLOGY {
         return get_matter_power_spectrum_cb_extrapolated(x, k) * D2 / D2cb;
     }
 
+    void PowerSpectrum::solve_ee2() {
+        namespace EE2 = FML::EMULATOR::EUCLIDEMULATOR2;
+        const auto & p = cosmo.get_params();
+        const std::string msg = "PowerSpectrum: nonlinear = ee2 ";
+        if ((p.model != "lcdm" && p.model != "w0wa") || p.OmegaK != 0.0)
+            throw std::invalid_argument(msg + "supports flat lcdm and w0wa only (model jbd: nonlinear = jbd_boost)");
+        if (!(options.ee2_n_z >= 4))
+            throw std::invalid_argument(msg + "needs ee2_n_z >= 4");
+        double Mnu = 0.0;
+        for (double m : p.neutrino_masses())
+            Mnu += m;
+        const double w0 = p.model == "w0wa" ? p.model_param("w0") : -1.0, wa = p.model == "w0wa" ? p.model_param("wa") : 0.0;
+        const double Om = cosmo.rhoB(0.0) + cosmo.rhoCDM(0.0) + cosmo.rhoNcdm(0.0);
+        EE2::Cosmology c(cosmo.rhoB(0.0), Om, Mnu, p.n_s, p.h, w0, wa, p.A_s);
+        if (!c.good_parameter_ranges()) {
+            std::ostringstream o;
+            o << msg << "outside the parameter ranges of EuclidEmulator2:";
+            const double v[8] = {cosmo.rhoB(0.0), Om, Mnu, p.n_s, p.h, w0, wa, p.A_s};
+            for (int i = 0; i < 8; i++)
+                o << " " << c.names[i] << " = " << v[i] << " in [" << c.minima[i] << ", " << c.maxima[i] << "]"
+                  << (v[i] < c.minima[i] || v[i] > c.maxima[i] ? " (out)" : "") << ";";
+            throw std::invalid_argument(o.str());
+        }
+        EE2::EuclidEmulator em(c);
+        auto t = std::make_unique<NonlinearRatioTable>();
+        t->h = p.h;
+        t->x_min = -std::log1p(10.0);
+        const auto xs = Utils::linspace(t->x_min, 0.0, options.ee2_n_z);
+        std::vector<double> lk;
+        std::vector<std::vector<double>> ratios;
+        for (double x : xs) {
+            const auto b = em.compute_boost(std::clamp(std::expm1(-x), 0.0, 10.0));
+            if (lk.empty())
+                for (double k : b.first)
+                    lk.push_back(std::log(k));
+            std::vector<double> r;
+            for (double B : b.second)
+                r.push_back(std::log(B));
+            ratios.push_back(std::move(r));
+        }
+        t->lnk_min = lk.front();
+        t->lnk_max = lk.back();
+        t->log_ratio.create(xs, lk, ratios, "EuclidEmulator2 ln(P_NL/P_L)");
+        ee2 = std::move(t);
+    }
+
+    // Sletmoen & Winther (2024): P_BD(k) = P_BD^lin(k) P_GR(k') / P_GR^lin(k') with k' / h_GR = k / h_BD in the GR
+    // universe with the physical densities, n_s and sigma_8 (today) of BD and h_GR = h_BD sqrt(phi_ini)
+    void PowerSpectrum::solve_jbd_boost() {
+        using N = PowerSpectrumOptions::Nonlinear;
+        const auto & p = cosmo.get_params();
+        const std::string msg = "PowerSpectrum: nonlinear = jbd_boost ";
+        const auto * bd = cosmo.background().field_equations_as<BACKGROUND::BransDickeFieldEquations>();
+        if (p.model != "jbd" || bd == nullptr)
+            throw std::invalid_argument(msg + "needs model = jbd");
+        if (p.OmegaK != 0.0)
+            throw std::invalid_argument(msg + "needs a flat universe");
+        if (p.model_param("bd_density_parameter_definition") != 0.0)
+            throw std::invalid_argument(msg + "needs bd_density_parameter_definition = 0 (hi-class, as the paper)");
+        const N gr = options.jbd_boost_gr;
+        if (gr != N::EE2 && gr != N::HMcode2020 && gr != N::HMcode2016 && gr != N::Halofit && gr != N::HalofitBird)
+            throw std::invalid_argument(msg + "jbd_boost_gr must be ee2, hmcode2020, hmcode2016, halofit or halofit_bird");
+        auto s = std::make_unique<JBDBoostState>();
+        s->phi_ini = bd->phi_initial();
+        s->h_ratio = std::sqrt(s->phi_ini);
+
+        // The GR universe (the same physical densities: Omega h^2 of the baryons and CDM; the rest as BD)
+        CosmologyParameters g = p;
+        g.model = "lcdm";
+        g.model_params.clear();
+        g.h = p.h * s->h_ratio;
+        g.OmegaB = p.OmegaB * (p.h * p.h) / (g.h * g.h);
+        g.OmegaCDM = p.OmegaCDM * (p.h * p.h) / (g.h * g.h);
+        g.iso_f.fill(0.0);
+        g.r = 0.0;
+        s->cosmo_trial = std::make_unique<BackgroundCosmology>(g);
+        s->cosmo_trial->solve();
+        s->rec = std::make_unique<RecombinationHistory>(*s->cosmo_trial, rec.get_options());
+        s->rec->solve();
+        PerturbationOptions po = pert.get_options();
+        po.ic_adiabatic = 1.0;
+        po.iso_amplitude.fill(0.0);
+        po.iso_tilt.fill(0.0);
+        for (double & k : po.k_values)
+            k *= s->h_ratio;
+        po.k_min *= s->h_ratio;
+        po.k_max *= s->h_ratio;
+        if (gr == N::EE2) {
+            // The emulator needs only the parameters: the GR solution is only for sigma_8, which k <= 0.5/Mpc (80
+            // modes) and the extrapolation above give to 1e-5 (~6 s instead of a solve to the k_max of BD)
+            po.k_values.clear();
+            po.k_max = std::min(po.k_max, 0.5 / Mpc);
+            po.k_min = std::min(po.k_min, 0.1 * po.k_max);
+            po.n_k = 80;
+            po.dk_max = 0.0;
+        }
+        s->pert = std::make_unique<Perturbations>(*s->cosmo_trial, *s->rec, po);
+        s->pert->solve();
+        // sigma_8 of GR = that of BD: A_s ~ sigma_8^2 (the transfer functions do not depend on it)
+        PowerSpectrumOptions lin = options;
+        lin.nonlinear = N::None;
+        lin.lensing = false;
+        const double s8_trial = PowerSpectrum(*s->cosmo_trial, *s->rec, *s->pert, lin).get_sigma8(0.0);
+        s->sigma8 = get_sigma8(0.0);
+        g.A_s *= std::pow(s->sigma8 / s8_trial, 2);
+        s->cosmo = std::make_unique<BackgroundCosmology>(g);
+        s->cosmo->solve();
+        PowerSpectrumOptions nl = lin;
+        nl.nonlinear = gr;
+        s->ps = std::make_unique<PowerSpectrum>(*s->cosmo, *s->rec, *s->pert, nl);
+        try {
+            s->ps->solve_matter();
+        } catch (const std::exception & e) {
+            std::ostringstream o;
+            o << msg << "(GR universe h = " << g.h << ", A_s = " << g.A_s << "): " << e.what();
+            throw std::runtime_error(o.str());
+        }
+        jbd_name = std::string("Brans-Dicke from GR (Sletmoen & Winther 2024; ") + s->ps->nonlinear_name() + ")";
+        if (Utils::verbose)
+            std::cout << "[PowerSpectrum] jbd_boost: GR universe with h = " << g.h << " (phi_ini = " << s->phi_ini
+                      << "), A_s = " << g.A_s << " (sigma_8 = " << s->sigma8 << ")\n";
+        jbd = std::move(s);
+    }
+
     void PowerSpectrum::solve_axionhmcode() {
         using A = FML::COSMOLOGY::AxionHMcode;
         const auto & p = cosmo.get_params();
@@ -975,7 +1117,7 @@ namespace FML::COSMOLOGY {
         o.allow_extrapolation = options.axionhmcode_allow_extrapolation;
 
         // The linear input (1e-5 to 1e3 h/Mpc, as AxionHMcode's reference input) and the output k
-        auto t = std::make_unique<AxionHMcodeTable>();
+        auto t = std::make_unique<NonlinearRatioTable>();
         t->h = p.h;
         t->x_min = -std::log1p(options.axionhmcode_z_max);
         t->lnk_min = std::log(1e-3);
@@ -1145,7 +1287,7 @@ namespace FML::COSMOLOGY {
         fp << "# x = " << x
            << ". k [h/Mpc]  P_m(k) [(Mpc/h)^3] (CDM + baryons + massive neutrinos" << (axions_in_matter() ? " + axion" : "")
            << ")  P_cb(k) (CDM + baryons)"
-           << ((halofit || hmcode || hmcode2016 || axionhm) ? std::string("  P_m nonlinear (") + nonlinear_name() + ")" : "")
+           << ((halofit || hmcode || hmcode2016 || axionhm || ee2 || jbd) ? std::string("  P_m nonlinear (") + nonlinear_name() + ")" : "")
            << (has_axions() ? "  P_axion(k)" : "")
            << "\n";
         fp << std::scientific << std::setprecision(10);
@@ -1154,7 +1296,7 @@ namespace FML::COSMOLOGY {
         for (double k : Utils::logspace(kp.front(), kp.back(), 500)) {
             fp << k * Mpc_h << " " << get_matter_power_spectrum(x, k) / V << " "
                << get_matter_power_spectrum_cb(x, k) / V;
-            if (halofit || hmcode || hmcode2016 || axionhm)
+            if (halofit || hmcode || hmcode2016 || axionhm || ee2 || jbd)
                 fp << " " << get_matter_power_spectrum_nonlinear(x, k) / V;
             if (has_axions())
                 fp << " " << get_matter_power_spectrum_axion(x, k) / V;

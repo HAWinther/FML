@@ -8,6 +8,8 @@
 //   * Perturbations: the momentum constraint (0i Einstein equation), which is not used in the evolution,
 //     holds; it involves all terms of the derived equations (python/derive_brans_dicke.py)
 //   * Growth on small scales follows G_eff = G (4 + 2 omega)/((3 + 2 omega) phi)
+//   * nonlinear = jbd_boost (Sletmoen & Winther 2024): the GR universe (h_GR = h sqrt(phi_ini), the sigma_8 of BD)
+//     and the boost against their bd.py (hi_class + EuclidEmulator2), omega -> infinity is EuclidEmulator2 for LCDM
 // =============================================================================
 
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
@@ -16,9 +18,11 @@
 #include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
 #include <FML/Cosmology/Background/FieldEquation_BransDicke.h>
+#include <FML/Cosmology/EinsteinBoltzmannSolver/EinsteinBoltzmannSolver.h>
 
 #include <cmath>
 #include <functional>
+#include <memory>
 
 using namespace FML::COSMOLOGY;
 
@@ -164,5 +168,65 @@ int main() {
         check_close(ratio / ref, 1.0, 1e-3, "growth = growth equation with G_eff = G phi_0/phi");
     }
 
+    std::cout << "nonlinear = jbd_boost (omega = 100, omega_m = 0.15, omega_b = 0.02, h = 0.7, A_s = 2e-9, n_s = 1)\n";
+    {
+        // bd.py (github.com/hersle/jbd, with hi_class 16ae0f6 and EuclidEmulator2; its GR universe with A_s from
+        // sigma_8 by A_s ~ sigma_8^2): h_GR = 0.67416, A_s,GR = 2.21973e-9 and the boost at z = 0 and 3 at three k of
+        // the emulator [h/Mpc]
+        const std::vector<std::string> base{"h=0.7",
+                                            "OmegaB=" + std::to_string(0.02 / 0.49),
+                                            "OmegaCDM=" + std::to_string(0.13 / 0.49),
+                                            "A_s=2e-9",
+                                            "n_s=1",
+                                            "Neff=3.046",
+                                            "Yp_bbn=true",
+                                            "compute_cells=false",
+                                            "precision=fast"};
+        auto run = [&](std::vector<std::string> extra) {
+            auto o = base;
+            o.insert(o.end(), extra.begin(), extra.end());
+            auto e = std::make_unique<EinsteinBoltzmannSolver>(EinsteinBoltzmannSolver::from_file("", o));
+            e->set_verbose(false);
+            e->solve();
+            return e;
+        };
+        const auto bd = run({"model=jbd", "bd_omega=100", "nonlinear=jbd_boost"});
+        const auto & ps = bd->power_spectrum();
+        const double h = 0.7;
+        const double kref[3] = {0.097191, 1.00213, 4.99514}, B0[3] = {0.991797, 5.665705, 25.172904},
+                     B3[3] = {1.000984, 1.689274, 8.960708};
+        double e = 0.0;
+        for (int i = 0; i < 3; i++) {
+            const double k = kref[i] * h / Mpc;
+            for (int j = 0; j < 2; j++) {
+                const double x = j == 0 ? 0.0 : -std::log(4.0);
+                const double B = ps.get_matter_power_spectrum_nonlinear(x, k) / ps.get_matter_power_spectrum_extrapolated(x, k);
+                e = std::max(e, std::fabs(B / (j == 0 ? B0[i] : B3[i]) - 1.0));
+            }
+        }
+        check_close(e, 0.0, 1e-3, "the boost P_NL/P_L at z = 0, 3 and k = 0.1, 1, 5 h/Mpc = that of bd.py (1e-3)");
+        const auto * fe = bd->background().background().field_equations_as<BACKGROUND::BransDickeFieldEquations>();
+        check_rel(h * std::sqrt(fe->phi_initial()), 0.67416, 1e-4, "h_GR = h sqrt(phi_ini) = that of bd.py");
+        // omega -> infinity: the GR universe is the universe itself
+        const auto big = run({"model=jbd", "bd_omega=1e7", "nonlinear=jbd_boost"});
+        const auto gr = run({"nonlinear=ee2"});
+        double el = 0.0;
+        for (double kh : {0.1, 1.0, 5.0}) {
+            const double k = kh * h / Mpc;
+            const auto & a = big->power_spectrum();
+            const auto & b = gr->power_spectrum();
+            el = std::max(el, std::fabs(a.get_matter_power_spectrum_nonlinear(0.0, k) / a.get_matter_power_spectrum_extrapolated(0.0, k) /
+                                            (b.get_matter_power_spectrum_nonlinear(0.0, k) / b.get_matter_power_spectrum_extrapolated(0.0, k)) -
+                                        1.0));
+        }
+        check_close(el, 0.0, 1e-4, "omega = 1e7: the boost = EuclidEmulator2 for LCDM");
+        bool thrown = false;
+        try {
+            run({"nonlinear=jbd_boost"});
+        } catch (const std::exception &) {
+            thrown = true;
+        }
+        check(thrown, "jbd_boost needs model = jbd");
+    }
     return FML::TESTS::summary("EBS brans dicke");
 }

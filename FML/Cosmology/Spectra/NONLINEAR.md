@@ -10,6 +10,8 @@ The Einstein--Boltzmann solver accepts:
 | `hmcode2016` | HMcode-2016 (as CAMB `mead2016`), including massive neutrinos |
 | `hmcode2020` | Gravity-only HMcode-2020, including massive neutrinos |
 | `react` | Optional official ReACT reaction times an HMcode-2020 matched GR pseudo spectrum |
+| `ee2` | EuclidEmulator2 boost (flat `lcdm`, `w0wa`, within its parameter ranges) |
+| `jbd_boost` | `model = jbd`: Sletmoen & Winther (2024), the Brans–Dicke boost from the mapped GR universe with `jbd_boost_gr` (`ee2` by default) |
 | `axionhmcode` | Mixed cold/ultralight-axion halo model ([AxionHMcode](../../AxionHMcode/README.md), Vogt et al. 2022, Dome et al. 2024) for `model = axion` |
 
 For example, from `FML/Cosmology/EinsteinBoltzmannSolver`:
