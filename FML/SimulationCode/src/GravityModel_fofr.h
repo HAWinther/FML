@@ -10,6 +10,7 @@
 #include <FML/Spline/Spline.h>
 
 #include <FML/Cosmology/Perturbations/QuasiStaticGravity_HuSawicky.h>
+#include <FML/Emulator/FofrFittingFunction.h>
 #include <FML/MultigridSolver/FofrSolver.h>
 
 /// Hu-Sawicky f(R): mu(k, a), f_R(a) and the scalaron mass from the shared quasi-static theory
@@ -76,6 +77,30 @@ class GravityModelFofR final : public GravityModelScreened<NDIM> {
     }
 
     std::string fifth_force_label() const override { return "f(R)"; }
+
+    /// The nonlinear P_f(R)/P_GR of Winther et al. 2019 (FML/Emulator/FofrFittingFunction.h): Hu-Sawicky n = 1 only,
+    /// fitted for 1e-7 <= |fR0| <= 1e-4, z <= 3 and k <= 10 h/Mpc (the closest value outside)
+    std::function<double(double)> nonlinear_boost_over_GR(double redshift) const override {
+        if (nfofr != 1.0)
+            return {};
+        return [fR0 = fofr0, redshift](double k) {
+            return FML::EMULATOR::FOFRFITTINGFUNCTION::nonlinear_boost(redshift, fR0, k);
+        };
+    }
+    void info_model() const override {
+        GravityModelScreened<NDIM>::info_model();
+        if (FML::ThisTask != 0)
+            return;
+        namespace FIT = FML::EMULATOR::FOFRFITTINGFUNCTION;
+        if (nfofr != 1.0)
+            std::cout << "# Nonlinear P(k) prediction: none (the f(R) fitting function is for n = 1)\n";
+        else
+            std::cout << "# Nonlinear P(k) prediction: f(R) fitting function (Winther et al. 2019)"
+                      << (std::abs(fofr0) < FIT::nonlinear_fR0min or std::abs(fofr0) > FIT::nonlinear_fR0max ?
+                              " [|fR0| outside the fitted 1e-7 - 1e-4: the closest value is used]" :
+                              "")
+                      << "\n";
+    }
 
     //========================================================================
     // Read the parameters we need

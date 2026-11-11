@@ -55,7 +55,6 @@ void output_pofk_for_every_step(const NBodySimulation<NDIM, T> & sim) {
     const auto & pofk_cb_every_step = sim.get_pofk_cb_every_step();
     const auto & pofk_total_every_step = sim.get_pofk_total_every_step();
     const auto grav = sim.get_gravity_model();
-    const auto & cosmo = grav->get_cosmo();
     const auto grav_ic = sim.get_gravity_model_ic();
     const auto transfers = sim.get_transfers();
     const auto ic_use_gravity_model_GR = params.ic.use_gravity_model_GR;
@@ -69,10 +68,9 @@ void output_pofk_for_every_step(const NBodySimulation<NDIM, T> & sim) {
         auto binning = p.second;
         auto pofk_cb = [&](double k) { return sim.linear_pofk_cb(k, 1.0 / (1.0 + redshift)); };
 
-        // Get non-linear boost (if this is implemented for the model)
-        // Currently we only have EuclidEmulator2 predictions for LCDM and w0waCDM
-        FML::INTERPOLATION::SPLINE::Spline non_linear_boost_of_k =
-            cosmo->get_nonlinear_matter_power_spectrum_boost(redshift);
+        // The nonlinear prediction P_NL / P_linear (if there is one for the model): the EuclidEmulator2 boost for LCDM
+        // and w0waCDM, with the fitted boost over GR for f(R) (n = 1)
+        const auto non_linear_boost_of_k = sim.nonlinear_over_linear_prediction(redshift);
 
         std::string filename =
             params.output.path("pofk_" + params.simulation.name + "_cb_z" + redshift_to_string(redshift) + ".txt");
@@ -144,10 +142,9 @@ void output_pofk_for_every_step(const NBodySimulation<NDIM, T> & sim) {
         std::string filename =
             params.output.path("pofk_" + params.simulation.name + "_total_z" + redshift_to_string(redshift) + ".txt");
 
-        // Get non-linear boost (if this is implemented for the model)
-        // Currently we only have EuclidEmulator2 predictions for LCDM and w0waCDM
-        FML::INTERPOLATION::SPLINE::Spline non_linear_boost_of_k =
-            cosmo->get_nonlinear_matter_power_spectrum_boost(redshift);
+        // The nonlinear prediction P_NL / P_linear (if there is one for the model): the EuclidEmulator2 boost for LCDM
+        // and w0waCDM, with the fitted boost over GR for f(R) (n = 1)
+        const auto non_linear_boost_of_k = sim.nonlinear_over_linear_prediction(redshift);
 
         std::ofstream fp(filename.c_str());
         fp << "# k  (h/Mpc)    P(k)  (Mpc/h)^3    P_linear(k)  (Mpc/h)^3     P_NL(k)  ShotnoiseSubtracted = "
@@ -985,7 +982,6 @@ void write_power_spectra(NBodySimulation<NDIM, T> & sim,
     const std::string redshiftstring = redshift_to_string(redshift);
     const double simulation_boxsize = sim.get_parameters().simulation.boxsize;
     const bool pofk_subtract_shotnoise = sim.get_parameters().pofk.subtract_shotnoise;
-    const auto & cosmo = sim.get_gravity_model()->get_cosmo();
     //=============================================================
     // Compute linear predictions
     //=============================================================
@@ -1010,10 +1006,9 @@ void write_power_spectra(NBodySimulation<NDIM, T> & sim,
     // Output to file
     if (FML::ThisTask == 0) {
 
-        // Get non-linear boost (if this is implemented for the model)
-        // Currently we only have EuclidEmulator2 predictions for LCDM and w0waCDM
-        FML::INTERPOLATION::SPLINE::Spline non_linear_boost_of_k =
-            cosmo->get_nonlinear_matter_power_spectrum_boost(redshift);
+        // The nonlinear prediction P_NL / P_linear (if there is one for the model): the EuclidEmulator2 boost for LCDM
+        // and w0waCDM, with the fitted boost over GR for f(R) (n = 1)
+        const auto non_linear_boost_of_k = sim.nonlinear_over_linear_prediction(redshift);
 
         std::string filename = snapshot_folder + "/pofk_z" + redshiftstring + ".txt";
         std::ofstream fp(filename.c_str());

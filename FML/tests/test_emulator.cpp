@@ -3,10 +3,13 @@
 //   - the boost for a reference cosmology at z = 0 and 1 (values of the original code; ~1 on large scales)
 //   - a missing data file and too many redshifts throw (segfault / stack overflow before)
 //   - copies of the Cosmology class own their GSL objects (double free before) and the emulator cannot be copied
-// The header is also included in test_emulator_odr.cpp (it must be usable from several translation units)
+//   - the f(R) fitting function (Emulator/FofrFittingFunction.h): the values of the original code (C/fit.c and
+//     Python/fit_lin.py of github.com/HAWinther/FofrFittingFunction), the limits and the clamping
+// The headers are also included in test_emulator_odr.cpp (they must be usable from several translation units)
 // Run with: make run (in this folder) or make test (from the top folder)
 //==========================================================
 #include <FML/Emulator/EuclidEmulator2.h>
+#include <FML/Emulator/FofrFittingFunction.h>
 #include <FML/Global/Global.h>
 
 #include <cmath>
@@ -83,6 +86,38 @@ int main() {
                     "copies of Cosmology own their GSL objects (double free before)");
         check_local(not std::is_copy_constructible_v<EuclidEmulator>,
                     "EuclidEmulator cannot be copied (double free before)");
+    }
+
+    // The f(R) fitting function (Winther et al. 2019) against the original code
+    {
+        namespace FIT = FML::EMULATOR::FOFRFITTINGFUNCTION;
+        // z, |fR0|, k [h/Mpc], P_f(R)/P_LCDM (C/fit.c and Python/fit_lin.py)
+        const double nonlinear_ref[][4] = {{0, 1e-05, 1, 1.17205501084086},
+                                           {0.5, 1e-06, 3, 1.02219466187104},
+                                           {1, 5e-05, 0.3, 1.10079964711245},
+                                           {2, 2e-05, 5, 1.11997793795586},
+                                           {0, 7e-06, 10, 1.21708492505093},
+                                           {0, 0.0001, 0.1, 1.17918622867476}};
+        const double linear_ref[][4] = {
+            {0, 1e-05, 0.1, 1.07750324211026}, {1, 1e-06, 1, 1.09700603286284}, {2, 0.0001, 0.05, 1.01266220331046}};
+        double err = 0.0, err_lin = 0.0;
+        for (const auto & r : nonlinear_ref)
+            err = std::max(err, std::fabs(FIT::nonlinear_boost(r[0], r[1], r[2]) / r[3] - 1));
+        for (const auto & r : linear_ref)
+            err_lin = std::max(err_lin, std::fabs(FIT::linear_boost(r[0], r[1], r[2]) / r[3] - 1));
+        check_local(err < 1e-13, "f(R) nonlinear fitting function = the original code");
+        check_local(err_lin < 1e-13, "f(R) linear fitting function = the original (Python) code");
+        check_local(std::fabs(FIT::nonlinear_boost(0.0, 1e-5, 1e-4) - 1) < 1e-3 and
+                        std::fabs(FIT::linear_boost(0.0, 1e-5, 1e-4) - 1) < 1e-3,
+                    "f(R) fitting functions -> 1 on large scales");
+        check_local(FIT::nonlinear_boost(0.0, 1e-5, 30.0) == FIT::nonlinear_boost(0.0, 1e-5, 10.0) and
+                        FIT::nonlinear_boost(5.0, 1e-5, 1.0) == FIT::nonlinear_boost(3.0, 1e-5, 1.0) and
+                        FIT::nonlinear_boost(0.0, 1e-3, 1.0) == FIT::nonlinear_boost(0.0, 1e-4, 1.0) and
+                        FIT::nonlinear_boost(0.0, -1e-5, 1.0) == FIT::nonlinear_boost(0.0, 1e-5, 1.0),
+                    "f(R) fitting function: the closest value outside the fitted range; the sign of fR0 is ignored");
+        // The linear fit for effective k < 2 (C/fit_lin.c set k = 1 there with the integer abs)
+        check_local(FIT::linear_boost(0.0, 1e-5, 0.5) < FIT::linear_boost(0.0, 1e-5, 1.5),
+                    "f(R) linear fitting function increases with k (also for effective k < 2)");
     }
 
     return FML::TESTS::summary("emulator");

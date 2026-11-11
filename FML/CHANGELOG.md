@@ -5,6 +5,19 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: a nonlinear P(k) prediction for f(R)
+- `FML/Emulator/FofrFittingFunction.h`: the fitting functions of Winther et al. 2019 (arXiv:1903.08798) for
+  P_f(R)/P_LCDM in Hu-Sawicky f(R) with n = 1, nonlinear (`nonlinear_boost`, 1e-7 <= |fR0| <= 1e-4, z <= 3,
+  k <= 10 h/Mpc) and linear (`linear_boost`), ported from github.com/HAWinther/FofrFittingFunction (identical to C/fit.c
+  on 4e5 points; the linear one follows Python/fit_lin.py: C/fit_lin.c used the integer abs, which set k = 1 for all
+  effective k < 2). Tests in `tests/test_emulator`.
+- SimulationCode: `GravityModel::nonlinear_boost_over_GR` (f(R) with n = 1 uses the fit) and
+  `NBodySimulation::nonlinear_over_linear_prediction`. The P_NL column of the P(k) outputs for f(R) (n = 1) is now
+  P_linear,GR x EuclidEmulator2 boost x the f(R) boost (was the f(R) linear P(k) times the LCDM EuclidEmulator2 boost);
+  a GR gravity model is set up for the linear GR growth unless `ic_use_gravity_model_GR` already gives one. GR and the
+  other models are unchanged. A 128^3, 256 Mpc/h COLA run (screening approximation, |fR0| = 1e-5, same IC as GR) has
+  P_f(R)/P_GR within ~2% of the fit for k < 1.5 h/Mpc at z = 0 (COLA at this resolution is a bit low).
+
 ### HaloModel: one module for the halo models (HMcode-2016, HMcode-2020, shared building blocks)
 - HMcode-2020 moved from `Cosmology/Spectra/HMcode.h` to `FML/HaloModel/HMcode2020.h`
   (`FML::COSMOLOGY::HALOMODEL::HMcode2020`); `Cosmology/Spectra/HMcode.h` forwards to it (`FML::COSMOLOGY::HMcode`)

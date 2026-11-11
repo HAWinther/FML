@@ -95,6 +95,8 @@ class NBodySimulation {
     std::shared_ptr<GravityModel<NDIM>> grav;
     /// The gravity model used to make the IC (GR if ic_use_gravity_model_GR, otherwise grav)
     std::shared_ptr<GravityModel<NDIM>> grav_ic;
+    /// GR, for the nonlinear predictions of a gravity model with a fitted nonlinear boost over GR (else empty)
+    std::shared_ptr<GravityModel<NDIM>> grav_gr;
 
     /// The transfer functions (ic_type_of_input = camb, class, internal or tables; see TransferInput.h).
     /// The same object as in the gravity model (grav)
@@ -278,6 +280,26 @@ class NBodySimulation {
         if (transfers)
             return transfers->power(SIMCODE::TransferSpecies::CDMBaryon, k, a);
         return 0.0;
+    }
+    /// P_NL(k) / P_linear(k) of the nonlinear predictions in the P(k) outputs at a redshift (k in h/Mpc): the
+    /// EuclidEmulator2 boost of the cosmology (LCDM, w0waCDM) and, for a gravity model with a fitted nonlinear boost
+    /// over GR (f(R) with n = 1), also that boost times the ratio of the linear P(k) of GR and of the model
+    /// ((D_GR(k, a) / D_GR(k, aini))^2 / (D(k, a) / D(k, aini))^2), i.e. P_NL = P_lin,GR B_EE2 B_model. Empty (no
+    /// prediction: the outputs repeat linear theory) without the EuclidEmulator2 boost
+    std::function<double(double)> nonlinear_over_linear_prediction(double redshift) const {
+        auto ee2 = std::make_shared<Spline>(cosmo->get_nonlinear_matter_power_spectrum_boost(redshift));
+        if (not *ee2)
+            return {};
+        auto boost = grav->nonlinear_boost_over_GR(redshift);
+        if (not boost or not grav_gr)
+            return [ee2](double k) { return (*ee2)(k); };
+        const double a = 1.0 / (1.0 + redshift), aini = 1.0 / (1.0 + params.ic.initial_redshift);
+        return [ee2, boost, a, aini, model = grav, gr = grav_gr](double k) {
+            const double q = k / model->H0_hmpc;
+            const double ratio = (gr->get_D_1LPT(a, q) / gr->get_D_1LPT(aini, q)) /
+                                 (model->get_D_1LPT(a, q) / model->get_D_1LPT(aini, q));
+            return (*ee2)(k) * boost(k) * ratio * ratio;
+        };
     }
     /// (T_species(k, a) / T_cb(k, a))^2 from the transfer functions (1 without them): P_species = P_cb times this
     double species_linear_ratio(SIMCODE::TransferSpecies species, double k, double a) const {

@@ -131,6 +131,19 @@ void NBodySimulation<NDIM, T>::init() {
         grav_ic = grav;
     }
 
+    // A modified gravity model with a fitted nonlinear boost over GR (f(R)) also needs the linear growth of GR for the
+    // nonlinear predictions in the P(k) outputs (nonlinear_over_linear_prediction)
+    if (grav->nonlinear_boost_over_GR(0.0)) {
+        if (params.ic.use_gravity_model_GR) {
+            grav_gr = grav_ic;
+        } else {
+            grav_gr = std::make_shared<GravityModelGR<NDIM>>(cosmo);
+            grav_gr->set_transfers(grav->get_transfers());
+            grav_gr->read_parameters(*parameters);
+            grav_gr->init();
+        }
+    }
+
     setup_initial_power_spectrum();
 
     generate_initial_conditions();
