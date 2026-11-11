@@ -73,6 +73,7 @@ its parameter file in `params/` and in `./cmb --write-defaults`.
 | `cubic_galileon` | – | Cubic Galileon on its tracker (no Λ): E² = [ρ + √(ρ² + 4Ω_φ)]/2, w₀ ≈ −1.19, with the full (braided) scalar perturbations; flat |
 | `horndeski` | `hd_parametrization`, `hd_cK`, `hd_cB`, `hd_cM`, `hd_M2_ini`, `hd_w0`, `hd_wa`, `hd_stability_check` | Horndeski in the α parameterization of hi_class (α_T = 0): α_X = c_X f(a) with f = Ω_DE(a), a or 1, M*² from α_M; ΛCDM or w₀w_a expansion; full scalar perturbations; ghost, gradient and stiffness (c_s² ≤ 1e5) checks; α_K = α_B = 0 with α_M ≠ 0 is rejected; flat |
 | `ede` | `ede_fEDE`, `ede_log10zc`, `ede_theta_i`, `ede_n` | Axion-like early dark energy V = m²f²(1 − cos φ/f)ⁿ (n > 1) + Λ: m and f found from the peak fraction f_EDE at z_c; full Klein–Gordon background and perturbations through the oscillations, until the field oscillates so fast (m/H > ~125; for n ≳ 2.5 not before today) that background and perturbations switch to the cycle-averaged fluid (w = (n−1)/(n+1), effective sound speed) |
+| `axion` | `ax_log10_m`, `ax_fraction`, `ax_switch_mH`, `ax_log10_Hinf` | Mixed dark matter as axionCAMB: the share `ax_fraction` of the dark matter is an ultralight axion field (V = m²φ²/2, m = 10⁻³³–10⁻¹⁸ eV), the rest CDM, + Λ; φ_i found from Ω_ax; Klein–Gordon background and perturbations until the field oscillates fast (m/H ~ 125), then the oscillation-averaged fluid (w = 0, c_s² = k²/(k² + 4m²a²)); `ax_switch_mH = 3` switches at m = 3H as axionCAMB. P_cb, P_axion (and the axion in P_m for m ≥ 10⁻²⁵ eV); axion isocurvature from H_inf (`ax_log10_Hinf`) or `f_axi` |
 | `ide` | `ide_xi`, `ide_w`, `ide_cs2`, `ide_stability_check` | Interacting dark energy: fluid (w, ĉ_s²) exchanging energy with CDM, Q = ξHρ_DE along the CDM velocity; analytic background; doom-factor stability check |
 | `fr` | `fR0`, `fR_n` | Hu–Sawicky f(R): ΛCDM background (to O(f_R0)), quasi-static μ(k,a) = (1+4Q)/((1+3Q)(1+f_R)), Σ = 1/(1+f_R), Q = (k/a)² f_RR/(1+f_R) = (k/a)²λ_C²/3; flat |
 
@@ -104,12 +105,13 @@ Each run writes `<output_dir>/params_used.ini` (re-readable) and `params.txt` (r
 | `params/twopoint.ini` | All two-point functions (perturbations to k = 1/Mpc), as in the report |
 | `params/isocurvature.ini` | Planck 2018 with a correlated CDM isocurvature mode (f = 0.3, c_ad = −0.2) |
 | `params/tensors.ini` | Planck 2018 with tensor modes, r = 0.05: lensed BB with the primordial B modes |
-| `params/musigma.ini`, `dgp.ini`, `quintessence.ini`, `jbd.ini`, `fr.ini`, `coupled_quintessence.ini`, `dark_scattering.ini`, `cubic_galileon.ini`, `horndeski.ini`, `ede.ini`, `ide.ini` | The models beyond ΛCDM, with their parameters |
+| `params/musigma.ini`, `dgp.ini`, `quintessence.ini`, `jbd.ini`, `fr.ini`, `coupled_quintessence.ini`, `dark_scattering.ini`, `cubic_galileon.ini`, `horndeski.ini`, `ede.ini`, `axion.ini`, `ide.ini` | The models beyond ΛCDM, with their parameters |
 
 ## Output
 
 Outputs (in `output_dir`): `background.txt`, `recombination.txt`, `perturbations_k<k>.txt`, `cells.txt`
-(D_ℓ^TT, EE, TE in μK²), `cells_lensed.txt`, `matter_power.txt` (k [h/Mpc], P_m, P_cb), `transfer.txt`, and
+(D_ℓ^TT, EE, TE in μK²), `cells_lensed.txt`, `matter_power.txt` (k [h/Mpc], P_m, P_cb, P_NL if nonlinear,
+P_axion with axions), `transfer.txt`, and
 optionally `cmb_correlation_*.txt`, `matter_correlation.txt`, `angular_cl_z<z>.txt`, `angular_w_z<z>.txt`.
 
 ## Using the solver from code

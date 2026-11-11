@@ -41,7 +41,8 @@
 // Weyl potential in the Limber part of C_ell^phiphi is scaled by sqrt(P_NL/P_L) (as CLASS), so the lensed
 // spectra include nonlinear lensing.
 //
-// Matter power spectrum of the comoving-gauge density contrast of CDM + baryons (+ massive neutrinos):
+// Matter power spectrum of the comoving-gauge density contrast of CDM + baryons (+ massive neutrinos, + an ultralight
+// axion with m >= 1e-25 eV):
 //   Delta_M(k,x) = sum_i rho_i [delta_i - 3 (1 + w_i) Hp v_i/(ck)] / sum_i rho_i,   P(k,x) = 2 pi^2 / k^3 P_R(k)
 //   Delta_M^2
 //
@@ -209,6 +210,13 @@ namespace FML::COSMOLOGY {
         double get_matter_power_spectrum_cb(double x, double k) const;
         double get_Delta_M(double x, double k, int comp = 0) const;
         double get_Delta_cb(double x, double k, int comp = 0) const;
+        // Ultralight axion (PerturbationModel_Axion.h): its comoving-gauge density contrast and power spectrum [m^3].
+        // It is part of the total matter (Delta_M, P_m) when it is dark matter, m >= 1e-25 eV (axionCAMB's
+        // convention; lighter axions are dark-energy like); P_cb is the cold (CDM + baryon) spectrum either way.
+        bool has_axions() const;
+        bool axions_in_matter() const;
+        double get_Delta_axion(double x, double k, int comp = 0) const;
+        double get_matter_power_spectrum_axion(double x, double k) const;
         // Nonlinear total-matter power (= linear, extrapolated, if options.nonlinear = None) [m^3]
         double get_matter_power_spectrum_nonlinear(double x, double k) const;
 

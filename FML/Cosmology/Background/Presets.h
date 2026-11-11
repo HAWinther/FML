@@ -11,6 +11,7 @@
 //   dgp                                    BackgroundModel_DGP.h                   make_dgp
 //   quintessence(_inverse_power_law, ...)  BackgroundModel_Quintessence.h          make_quintessence
 //   ede, ede_zc                            BackgroundModel_EDE.h                   make_ede
+//   axion                                  BackgroundModel_Axion.h                 make_axion
 //   jbd                                    BackgroundModel_BransDicke.h            make_jbd
 //   coupled_quintessence                   BackgroundModel_CoupledQuintessence.h   make_coupled_quintessence
 //   cubic_galileon                         BackgroundModel_CubicGalileon.h         make_cubic_galileon
@@ -29,6 +30,7 @@
 // and an entry in registry() (and its perturbations in Cosmology/Perturbations).
 // =====================================================================================================================
 
+#include <FML/Cosmology/Background/BackgroundModel_Axion.h>
 #include <FML/Cosmology/Background/BackgroundModel_BransDicke.h>
 #include <FML/Cosmology/Background/BackgroundModel_CoupledQuintessence.h>
 #include <FML/Cosmology/Background/BackgroundModel_CubicGalileon.h>
@@ -198,6 +200,19 @@ namespace FML::COSMOLOGY::BACKGROUND {
                                  m.at("ede_theta_i"),
                                  m.at("ede_n"),
                                  r);
+             }},
+            {"axion",
+             "Mixed dark matter: an ultralight axion (V = m^2 phi^2 / 2) with the share ax_fraction of the dark matter "
+             "Omega_cdm (the rest CDM), from rest, as axionCAMB; + Lambda from E(0) = 1; GR",
+             {{"ax_log10_m", -25.0, "log10 of the axion mass in eV (-33 to -15; light axions are dark-energy like)"},
+              {"ax_fraction", 0.1, "axion share of the dark matter: Omega_ax = ax_fraction Omega_cdm (0 < f <= 1)"},
+              {"ax_switch_mH",
+               0.0,
+               "the switch to the oscillation-averaged fluid: 0 = once the field oscillates fast (m/H ~ 125); <= 4: at "
+               "m/H = ax_switch_mH, before the first oscillation (axionCAMB: 3); > 4: at the first crossing after m/H "
+               "= ax_switch_mH"}},
+             [](const BackgroundParameters & p, const ModelParameters & m, BackgroundRange r) {
+                 return make_axion(p, m.at("ax_log10_m"), m.at("ax_fraction"), m.at("ax_switch_mH"), r);
              }},
             {"jbd",
              "Jordan-Brans-Dicke with Lambda; phi today from bd_GeffG_today, Omega_Lambda from E(0) = 1",

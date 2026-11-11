@@ -56,7 +56,12 @@ namespace FML::COSMOLOGY {
         }
         if (n_solved == 2 and int(last) >= int(Stage::Perturbations)) {
             // With isocurvature modes: one solution per independent component (Isocurvature.h)
-            const auto comp_opts = Isocurvature::components(s.cosmo, s.pert);
+            // Axion isocurvature from H_inf: needs the initial field of the background
+            const auto comp_opts = Isocurvature::components(
+                s.cosmo.model == "axion" and s.cosmo.model_param("ax_log10_Hinf") > 0.0 ?
+                    Isocurvature::with_axion_isocurvature(s.cosmo, *cosmo, s.cosmo.model_param("ax_log10_Hinf")) :
+                    s.cosmo,
+                s.pert);
             for (size_t i = 0; i < comp_opts.size(); i++) {
                 pert.push_back(std::make_unique<Perturbations>(*cosmo, *rec, comp_opts[i]));
                 pert.back()->solve();

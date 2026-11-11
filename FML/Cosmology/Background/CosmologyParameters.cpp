@@ -4,6 +4,7 @@
 #include <FML/Cosmology/Common.h>
 #include <FML/Cosmology/Perturbations/Presets.h>
 
+#include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <iomanip>
@@ -86,11 +87,11 @@ namespace FML::COSMOLOGY {
         require(A_s > 0.0, "A_s must be > 0");
         require(k_pivot > 0.0, "k_pivot must be > 0");
         require(r >= 0.0, "r must be >= 0");
-        require(alpha_s == 0.0 || (iso_f[0] == 0.0 && iso_f[1] == 0.0 && iso_f[2] == 0.0 && iso_f[3] == 0.0),
+        require(alpha_s == 0.0 || std::all_of(iso_f.begin(), iso_f.end(), [](double f) { return f == 0.0; }),
                 "alpha_s (running) is only implemented for the adiabatic mode, not with isocurvature modes");
         {
             double c2 = 0.0;
-            for (int m = 0; m < 4; m++) {
+            for (int m = 0; m < n_iso_modes; m++) {
                 require(std::fabs(iso_c[m]) <= 1.0, "isocurvature correlations c_ad_* must be in [-1, 1]");
                 if (iso_f[m] != 0.0)
                     c2 += iso_c[m] * iso_c[m];
@@ -98,6 +99,7 @@ namespace FML::COSMOLOGY {
             require(c2 < 1.0, "isocurvature: the correlations must satisfy sum c_ad^2 < 1");
             require(iso_f[0] == 0.0 || OmegaCDM > 0.0, "CDM isocurvature needs OmegaCDM > 0");
             require((iso_f[2] == 0.0 && iso_f[3] == 0.0) || Neff > 0.0, "neutrino isocurvature needs Neff > 0");
+            require(iso_f[4] == 0.0 || model == "axion", "axion isocurvature (f_axi) needs model = axion");
         }
         require(r == 0.0 || OmegaK == 0.0, "tensor modes (r > 0) are only implemented for a flat universe");
         require(delta_z_reion > 0.0 && delta_z_He_reion > 0.0, "reionization widths must be > 0");
@@ -157,13 +159,14 @@ namespace FML::COSMOLOGY {
         if (alpha_s != 0.0)
             os << "  alpha_s      = " << alpha_s << "\n";
         os << "  k_pivot      = " << k_pivot << " /Mpc\n";
-        for (int m = 0; m < 4; m++)
+        for (int m = 0; m < n_iso_modes; m++)
             if (iso_f[m] != 0.0)
                 os << "  isocurvature "
                    << (m == 0 ? "cdi" :
                        m == 1 ? "bi " :
                        m == 2 ? "nid" :
-                                "niv")
+                       m == 3 ? "niv" :
+                                "axi")
                    << ": f = " << iso_f[m] << ", n = " << iso_n[m] << ", c_ad = " << iso_c[m] << "\n";
         if (r > 0.0)
             os << "  r            = " << r << "\n"
@@ -195,7 +198,8 @@ namespace FML::COSMOLOGY {
            << "\nn_cdi = " << iso_n[0] << "\nc_ad_cdi = " << iso_c[0] << "\nf_bi = " << iso_f[1]
            << "\nn_bi = " << iso_n[1] << "\nc_ad_bi = " << iso_c[1] << "\nf_nid = " << iso_f[2]
            << "\nn_nid = " << iso_n[2] << "\nc_ad_nid = " << iso_c[2] << "\nf_niv = " << iso_f[3]
-           << "\nn_niv = " << iso_n[3] << "\nc_ad_niv = " << iso_c[3] << "\nr = " << r << "\nn_t = " << tensor_tilt()
+           << "\nn_niv = " << iso_n[3] << "\nc_ad_niv = " << iso_c[3] << "\nf_axi = " << iso_f[4]
+           << "\nn_axi = " << iso_n[4] << "\nc_ad_axi = " << iso_c[4] << "\nr = " << r << "\nn_t = " << tensor_tilt()
            << "\nmodel = " << model << "\n";
         for (const auto & p : PERTURBATIONS::model_parameters(model))
             fp << p.name << " = " << model_param(p.name) << "\n";

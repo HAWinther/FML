@@ -212,6 +212,11 @@ namespace FML::COSMOLOGY::BACKGROUND {
             const double lnV0 = glo == 0.0 ? lo : (ghi == 0.0 ? hi : FML::MATH::find_root(g, lo, hi, 1e-15, 1e-15));
             if (not(std::abs(g(lnV0)) < 1e-10))
                 throw std::runtime_error(nosol + " (rho_phi(0) jumps with V0 at the switch to the oscillating fluid)");
+            // A field that oscillates fast before today is matter (w = 0), not dark energy (the root exists since
+            // the switch is at the exact crossing, which makes rho_phi(0) continuous in V0)
+            if (x_fluid() < 0.0)
+                throw std::runtime_error(nosol + " (with it the field oscillates fast from a = " +
+                                         std::to_string(std::exp(x_fluid())) + ": matter, not dark energy)");
         }
         std::string name() const override { return "quintessence"; }
         std::string info() const override {

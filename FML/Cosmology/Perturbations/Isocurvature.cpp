@@ -1,12 +1,14 @@
 #include <FML/Cosmology/Perturbations/Isocurvature.h>
 
+#include <FML/Cosmology/Background/BackgroundModel_Axion.h>
+
 #include <cmath>
 #include <stdexcept>
 
 namespace FML::COSMOLOGY {
 
     namespace Isocurvature {
-        const char * const mode_names[4] = {"cdi", "bi", "nid", "niv"};
+        const char * const mode_names[CosmologyParameters::n_iso_modes] = {"cdi", "bi", "nid", "niv", "axi"};
 
         bool active(const CosmologyParameters & p) {
             for (double f : p.iso_f)
@@ -17,7 +19,7 @@ namespace FML::COSMOLOGY {
 
         std::vector<PerturbationOptions> components(const CosmologyParameters & p, const PerturbationOptions & base) {
             std::vector<int> on; // active modes
-            for (int m = 0; m < 4; m++)
+            for (int m = 0; m < CosmologyParameters::n_iso_modes; m++)
                 if (p.iso_f[m] != 0.0)
                     on.push_back(m);
             const size_t n = on.size() + 1;
@@ -45,8 +47,8 @@ namespace FML::COSMOLOGY {
             for (size_t j = 0; j < n; j++) {
                 PerturbationOptions o = base;
                 o.ic_adiabatic = L[0][j];
-                o.iso_amplitude = {{0.0, 0.0, 0.0, 0.0}};
-                o.iso_tilt = {{0.0, 0.0, 0.0, 0.0}};
+                o.iso_amplitude.fill(0.0);
+                o.iso_tilt.fill(0.0);
                 for (size_t i = 1; i < n; i++) {
                     const int m = on[i - 1];
                     o.iso_amplitude[m] = L[i][j] * p.iso_f[m];
@@ -55,6 +57,26 @@ namespace FML::COSMOLOGY {
                 out.push_back(o);
             }
             return out;
+        }
+
+        CosmologyParameters with_axion_isocurvature(const CosmologyParameters & p,
+                                                    const BackgroundCosmology & bg,
+                                                    double log10_Hinf_GeV) {
+            const BACKGROUND::AxionSpecies * ax = nullptr;
+            for (const auto & s : bg.background().species())
+                if ((ax = dynamic_cast<const BACKGROUND::AxionSpecies *>(s.get())))
+                    break;
+            if (ax == nullptr)
+                throw std::invalid_argument("axion isocurvature: the background has no ultralight axion");
+            if (p.iso_f[4] != 0.0)
+                throw std::invalid_argument("axion isocurvature: give either ax_log10_Hinf or f_axi");
+            constexpr double M_pl_GeV = 2.435e18; // reduced Planck mass (axionCAMB's mplanck)
+            const double H = std::pow(10.0, log10_Hinf_GeV) / M_pl_GeV;
+            CosmologyParameters q = p;
+            q.iso_f[4] = H / (M_PI * ax->phi_initial() * std::sqrt(p.A_s));
+            q.iso_n[4] = 1.0 - 2.0 * H * H / (M_PI * M_PI * p.A_s) / 8.0;
+            q.iso_c[4] = 0.0;
+            return q;
         }
     } // namespace Isocurvature
 

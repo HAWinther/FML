@@ -60,6 +60,13 @@ perturbation solve and line-of-sight pass. GR only (`model = lcdm`, `w0wa`, the 
 modes to CLASS (`ic = ad,cdi,...`) so `python/compare_class_spectra.py` compares them directly (`--precise` for NIV).
 Example: `params/isocurvature.ini`.
 
+`f_axi` (`n_axi`, `c_ad_axi`) is the density isocurvature of the ultralight axion of `model = axion` (axionCAMB's
+axion isocurvature): the frozen field starts with δρ_ax/ρ_ax = S and the rest unperturbed. Or `ax_log10_Hinf`, the
+Hubble rate of inflation in GeV, which sets it from the field fluctuation δφ = H_inf/2π: f_axi² A_s = H_inf²/(π²φ_i²)
+(φ_i the initial field in reduced Planck masses), n_axi = 1 − r/8 with r = 2H_inf²/(π²A_s M_pl²), uncorrelated.
+Against axionCAMB (m = 10⁻²⁵ eV, 10% of the dark matter, `ax_switch_mH = 3`): the transfer functions of the mode to
+3e-3, the C_ℓ to 3e-3 in shape; axionCAMB's amplitude is larger by 1/h² (its `phiinit` is h times the field).
+
 | Check (tests/test_isocurvature) | Result |
 |---|---|
 | Pure modes against CLASS (fine sampling, `l_max_scalars` = 1500), 10 ≤ ℓ ≤ 600 | CDI, NID < 5e-4 in TT and EE; NIV ~1e-3 (CLASS's NIV at ℓ = 2 is not converged) |

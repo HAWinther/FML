@@ -198,7 +198,7 @@ namespace FML::COSMOLOGY {
             v *= options.ic_adiabatic;
 
         // Isocurvature modes: linear superposition with the k-dependent amplitudes
-        for (int m = 0; m < 4; m++) {
+        for (int m = 0; m < int(options.iso_amplitude.size()); m++) {
             if (options.iso_amplitude[m] == 0.0)
                 continue;
             const double amp = options.iso_amplitude[m] *
@@ -246,6 +246,16 @@ namespace FML::COSMOLOGY {
             throw std::invalid_argument("Perturbations: neutrino isocurvature needs neutrinos");
         if (m == 0 && rc <= 0.0)
             throw std::invalid_argument("Perturbations: CDM isocurvature needs CDM");
+        if (m == 4) {
+            // AXI: the frozen field's density fluctuation (a scalar-field species sets dphi from it); its share of
+            // the density is negligible at the start, so the metric and the other species are unperturbed
+            if (cosmo.rho_of(BACKGROUND::Component::Axions, x) <= 0.0)
+                throw std::invalid_argument("Perturbations: axion isocurvature needs an ultralight axion");
+            IsoValues v;
+            v.delta_field = E;
+            Phi_out = Psi_out = 0.0;
+            return v;
+        }
         double dg = 0, tg = 0, db = 0, tb = 0, dc = 0, tc = 0, dur = 0, tur = 0, sur = 0, eta = 0;
         double ddc = 0, deta = 0; // d delta_cdm/dtau and d eta/dtau of the same series (for alpha, see below)
         if (m == 0 || m == 1) {   // CDI, BI
@@ -382,12 +392,23 @@ namespace FML::COSMOLOGY {
             for (int i = to.Theta; i < to.ThetaP + to.n_ThetaP; i++)
                 y[i] = y_old[i];
         }
+        // The switches see the CDM velocity (ModeAtX::v_cdm)
+        ModeAtX bs = st.b;
+        for (size_t i = 0; i < species.size(); i++) {
+            const auto names = species[i]->output_names();
+            const auto it = std::find(names.begin(), names.end(), "v_cdm");
+            if (it == names.end())
+                continue;
+            std::vector<double> o(names.size());
+            species[i]->outputs(st.b, st.cache[i].data(), from.mode[i], y_old.data() + from.offset[i], o.data());
+            bs.v_cdm = o[it - names.begin()];
+        }
         for (size_t i = 0; i < species.size(); i++) {
             std::vector<double> yi(y_old.begin() + from.offset[i],
                                    y_old.begin() + from.offset[i] + species[i]->n_vars(from.mode[i]));
             for (int m = from.mode[i] + 1; m <= to.mode[i]; m++) {
                 std::vector<double> yn(species[i]->n_vars(m));
-                species[i]->switch_mode(st.b, st.cache[i].data(), m, yi.data(), yn.data());
+                species[i]->switch_mode(bs, st.cache[i].data(), m, yi.data(), yn.data());
                 yi = yn;
             }
             std::copy(yi.begin(), yi.end(), y.begin() + to.offset[i]);

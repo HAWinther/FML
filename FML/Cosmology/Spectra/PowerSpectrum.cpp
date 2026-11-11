@@ -1,5 +1,6 @@
 #include <FML/Cosmology/Spectra/PowerSpectrum.h>
 #include <FML/Cosmology/Spectra/Halofit.h>
+#include <FML/Cosmology/Background/BackgroundModel_Axion.h>
 #include <FML/HaloModel/HMcode2016.h>
 #include <FML/HaloModel/HMcode2020.h>
 #include <FML/ReACT/ReACT.h>
@@ -861,7 +862,7 @@ namespace FML::COSMOLOGY {
     }
 
     // Comoving-gauge (synchronous for CDM) density contrast of the total matter, CDM + baryons + massive
-    // neutrinos, as in CLASS's P_m:
+    // neutrinos (+ an ultralight axion that is dark matter, see axions_in_matter), as in CLASS's P_m:
     //   Delta_M = sum_i rho_i [delta_i + (d ln rho_i/dx) Hp v_i / (ck)] / sum_i rho_i
     // with d ln rho_i/dx = -3 (1 + w_i) for a non-interacting species (for the CDM it is taken from the
     // background, so that it also holds when the CDM exchanges energy, e.g. in coupled quintessence).
@@ -869,27 +870,59 @@ namespace FML::COSMOLOGY {
     // terms, which are 2e-3 at k = 1e-4 h/Mpc today.)
     double PowerSpectrum::get_Delta_M(double x, double k, int comp) const {
         const Perturbations & pert = *comps.at(comp);
-        const double Hp = cosmo.Hp_of_x(x);
-        if (!pert.has_massive_nu())
+        const bool ax = axions_in_matter();
+        if (!pert.has_massive_nu() && !ax)
             return get_Delta_cb(x, k, comp);
-        const double f = 3.0 * Hp / (c * k);
-        const double rc = cosmo.rhoCDM(x), rb = cosmo.rhoB(x), rn = cosmo.rhoNcdm(x), pn = cosmo.pNcdm(x);
-        const double fc = -cosmo.drhoCDMdx(x) / rc * Hp / (c * k);
-        const double num = rc * (pert.get_delta_cdm(x, k) - fc * pert.get_v_cdm(x, k)) +
-                           rb * (pert.get_delta_b(x, k) - f * pert.get_v_b(x, k)) + rn * pert.get_delta_ncdm(x, k) -
-                           f * (rn + pn) * pert.get_v_ncdm(x, k);
-        return num / (rc + rb + rn);
+        const double rc = cosmo.rhoCDM(x), rb = cosmo.rhoB(x);
+        double num = (rc + rb) * get_Delta_cb(x, k, comp), den = rc + rb;
+        if (pert.has_massive_nu()) {
+            const double f = 3.0 * cosmo.Hp_of_x(x) / (c * k);
+            const double rn = cosmo.rhoNcdm(x), pn = cosmo.pNcdm(x);
+            num += rn * pert.get_delta_ncdm(x, k) - f * (rn + pn) * pert.get_v_ncdm(x, k);
+            den += rn;
+        }
+        if (ax) {
+            const double ra = cosmo.rho_of(BACKGROUND::Component::Axions, x);
+            num += ra * get_Delta_axion(x, k, comp);
+            den += ra;
+        }
+        return num / den;
     }
 
-    // CDM + baryons only (the "cb" spectrum), comoving gauge
+    // CDM + baryons only (the "cb" or cold spectrum), comoving gauge. (No CDM: an axion-only dark matter)
     double PowerSpectrum::get_Delta_cb(double x, double k, int comp) const {
         const Perturbations & pert = *comps.at(comp);
         const double f = 3.0 * cosmo.Hp_of_x(x) / (c * k);
         const double rc = cosmo.rhoCDM(x), rb = cosmo.rhoB(x);
+        const double Db = pert.get_delta_b(x, k) - f * pert.get_v_b(x, k);
+        if (!(rc > 0.0))
+            return Db;
         const double fc = -cosmo.drhoCDMdx(x) / rc * cosmo.Hp_of_x(x) / (c * k);
-        return (rc * (pert.get_delta_cdm(x, k) - fc * pert.get_v_cdm(x, k)) +
-                rb * (pert.get_delta_b(x, k) - f * pert.get_v_b(x, k))) /
-               (rc + rb);
+        return (rc * (pert.get_delta_cdm(x, k) - fc * pert.get_v_cdm(x, k)) + rb * Db) / (rc + rb);
+    }
+
+    // Ultralight axion (PerturbationModel_Axion.h), comoving gauge: rho Delta = delta rho + 3 flux / (ck/Hp)
+    // (q_axion = flux / rho)
+    bool PowerSpectrum::has_axions() const { return comps.front()->has("delta_axion"); }
+    bool PowerSpectrum::axions_in_matter() const {
+        if (!has_axions())
+            return false;
+        for (const auto & s : cosmo.background().species())
+            if (const auto * a = dynamic_cast<const BACKGROUND::AxionSpecies *>(s.get()))
+                return a->is_dark_matter();
+        return false;
+    }
+    double PowerSpectrum::get_Delta_axion(double x, double k, int comp) const {
+        const Perturbations & pert = *comps.at(comp);
+        if (!has_axions())
+            throw std::runtime_error("PowerSpectrum::get_Delta_axion: the perturbations have no axion");
+        return pert.get("delta_axion", x, k) + 3.0 * cosmo.Hp_of_x(x) / (c * k) * pert.get("q_axion", x, k);
+    }
+    double PowerSpectrum::get_matter_power_spectrum_axion(double x, double k) const {
+        double D2 = 0.0;
+        for (size_t cc = 0; cc < comps.size(); cc++)
+            D2 += std::pow(get_Delta_axion(x, k, int(cc)), 2);
+        return 2.0 * M_PI * M_PI / (k * k * k) * primordial_power_spectrum(k) * D2;
     }
 
     double PowerSpectrum::get_matter_power_spectrum(double x, double k) const {
@@ -998,8 +1031,11 @@ namespace FML::COSMOLOGY {
         const double h = cosmo.get_params().h;
         const double Mpc_h = Mpc / h;
         fp << "# x = " << x
-           << ". k [h/Mpc]  P_m(k) [(Mpc/h)^3] (CDM + baryons + massive neutrinos)  P_cb(k) (CDM + baryons)"
-           << ((halofit || hmcode || hmcode2016) ? std::string("  P_m nonlinear (") + nonlinear_name() + ")" : "") << "\n";
+           << ". k [h/Mpc]  P_m(k) [(Mpc/h)^3] (CDM + baryons + massive neutrinos" << (axions_in_matter() ? " + axion" : "")
+           << ")  P_cb(k) (CDM + baryons)"
+           << ((halofit || hmcode || hmcode2016) ? std::string("  P_m nonlinear (") + nonlinear_name() + ")" : "")
+           << (has_axions() ? "  P_axion(k)" : "")
+           << "\n";
         fp << std::scientific << std::setprecision(10);
         const auto & kp = pert.get_k_array();
         const double V = Mpc_h * Mpc_h * Mpc_h;
@@ -1008,6 +1044,8 @@ namespace FML::COSMOLOGY {
                << get_matter_power_spectrum_cb(x, k) / V;
             if (halofit || hmcode || hmcode2016)
                 fp << " " << get_matter_power_spectrum_nonlinear(x, k) / V;
+            if (has_axions())
+                fp << " " << get_matter_power_spectrum_axion(x, k) / V;
             fp << "\n";
         }
     }

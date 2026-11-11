@@ -43,6 +43,9 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
         double cotK_H;           ///< c cot_K(eta) / Hp: free-streaming truncation rate (= c / (Hp eta) when flat)
         double H0a2;             ///< H0^2 a^2 [1/s^2]
         double H0a2_rho_b, H0a2_rho_gamma;
+        /// The CDM velocity (v_cdm), set only for SpeciesPerturbation::switch_mode (NaN without CDM): the frame of the
+        /// synchronous gauge
+        double v_cdm = std::numeric_limits<double>::quiet_NaN();
     };
 
     /// Contributions to the Einstein equations, all times H0^2 a^2 / rho_c0 (summed over species):
@@ -70,6 +73,7 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
     /// Theta_0, Theta_1, baryon and CDM delta, v, free-streaming neutrino N_0, N_1, N_2
     struct IsoValues {
         double Theta0 = 0, Theta1 = 0, delta_b = 0, v_b = 0, delta_c = 0, v_c = 0, N0 = 0, N1 = 0, N2 = 0;
+        double delta_field = 0; ///< delta rho / rho of a frozen scalar field (axion isocurvature)
     };
 
     /// Initial conditions (superhorizon, radiation domination): adiabatic with curvature perturbation R = 1, or, if

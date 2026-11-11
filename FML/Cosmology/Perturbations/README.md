@@ -16,7 +16,7 @@ SpeciesPerturbation.h        the base: one species' block of the ODE state (mode
                              conditions, moments, rhs, outputs, free_streaming_density)
 PerturbedFieldEquation.h     the base: the metric (Phi, Psi, Phi') from the summed moments; G_eff_initial, tensor(x)
 SpeciesPerturbation_<name>.h CDM, MasslessNeutrinos (Boltzmann hierarchy), MassiveNeutrinos (momentum-resolved
-                             hierarchy, then the CLASS fluid approximation), ScalarField (quintessence, EDE: Klein-Gordon,
+                             hierarchy, then the CLASS fluid approximation), ScalarField (quintessence, EDE, axion: Klein-Gordon,
                              then the effective fluid of the oscillating field), DarkEnergyFluid (DarkScattering: CDM +
                              dark-energy fluid with momentum exchange; InteractingDarkEnergy: CDM + fluid with energy
                              exchange), CoupledQuintessence (coupled CDM + field)
@@ -39,7 +39,7 @@ PerturbationModel.h          the base: which background species get which pertur
                              sum of their densities; several masses: outputs delta_ncdm_<i>, v_ncdm_<i>, and
                              Perturbations adds delta_ncdm, v_ncdm of all of them)
                              for the models to reuse; PerturbationModel_Assembled (a model from given parts)
-PerturbationModel_<name>.h   LCDM, w0wa, MuSigma, DGP, HuSawicky, Horndeski, Quintessence, EDE, BransDicke,
+PerturbationModel_<name>.h   LCDM, w0wa, MuSigma, DGP, HuSawicky, Horndeski, Quintessence, EDE, Axion, BransDicke,
                              CoupledQuintessence, CubicGalileon, DarkScattering, IDE, each with its make_..._perturbations
 Presets.h                    the model registry (built on the background registry: name, description, the parameters
                              of the perturbations; model_parameters(name) = background's + perturbations'), and
@@ -84,7 +84,12 @@ of the oscillation phase (see the header). A field that is a fluid already at x_
 Einstein-Boltzmann solver used to integrate the field (and its perturbations) through the oscillations: for early dark
 energy with n >= 2.5 and the usual z_c the field never oscillates fast enough to switch, so nothing changes; it does
 switch for n close to 2 (n = 2.2, z_c = 1e6: at z ~ 1e4) or 1 < n <= 2 (which the old solver rejected), and the
-quintessence potentials with a minimum switch only after today with the default parameters.
+quintessence potentials with a minimum switch only after today with the default parameters. The ultralight axion
+(model axion) switches like this by default, or with ax_switch_mH = s at m / H = s: s <= 4 before the first crossing,
+as axionCAMB (s = 3), keeping axionCAMB's synchronous-gauge delta and (1 + w) v continuous (ModeAtX::v_cdm, the CDM
+velocity, is set for the switch); s > 4 at the first crossing after m / H = s. Both background and perturbations
+switch at the exact crossing (or m / H), found between the nodes of the field's grid, so the results are smooth in the
+parameters.
 
 ## Tests
 

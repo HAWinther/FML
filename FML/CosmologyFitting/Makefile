@@ -29,7 +29,8 @@ FML_MODULES := $(COSMO_MODULES) $(COSMO_FML_MODULES) MCMC Global CosmologyFittin
 MCMC_OBJS   := Posterior.o Sampler.o Minimizer.o Parallel.o Global.o
 FIT_OBJS    := Theory.o Likelihoods.o SampledParameterMap.o
 
-mcmc: Main.o $(FIT_OBJS) $(MCMC_OBJS) $(COSMO_OBJS)
+# (this folder's Main.o by its full path: the vpath of Cosmology.mk would otherwise find ./cmb's Main.o)
+mcmc: $(CURDIR)/Main.o $(FIT_OBJS) $(MCMC_OBJS) $(COSMO_OBJS)
 	$(LINK_EXE)
 
 .PHONY: test

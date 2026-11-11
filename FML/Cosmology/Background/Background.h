@@ -44,16 +44,29 @@
 namespace FML::COSMOLOGY::BACKGROUND {
 
     /// The components of a background. Curvature is Omega_k e^{-2x} / E^2. Other: anything that is not one of the
-    /// named kinds (a scalar field that is neither matter nor dark energy, ...)
-    enum class Component { Baryons, Photons, CDM, MasslessNeutrinos, MassiveNeutrinos, DarkEnergy, Curvature, Other };
-    inline constexpr std::array<Component, 8> all_components{Component::Baryons,
+    /// named kinds (a scalar field that is neither matter nor dark energy, ...). Axions: an ultralight axion field
+    /// (BackgroundModel_Axion.h), dark-energy like while frozen and dark-matter like once it oscillates; it is not in
+    /// Omega_m (see Omega_m_axion)
+    enum class Component {
+        Baryons,
+        Photons,
+        CDM,
+        MasslessNeutrinos,
+        MassiveNeutrinos,
+        DarkEnergy,
+        Curvature,
+        Other,
+        Axions
+    };
+    inline constexpr std::array<Component, 9> all_components{Component::Baryons,
                                                              Component::Photons,
                                                              Component::CDM,
                                                              Component::MasslessNeutrinos,
                                                              Component::MassiveNeutrinos,
                                                              Component::DarkEnergy,
                                                              Component::Curvature,
-                                                             Component::Other};
+                                                             Component::Other,
+                                                             Component::Axions};
     inline std::string component_name(Component c) {
         switch (c) {
             case Component::Baryons:
@@ -70,6 +83,8 @@ namespace FML::COSMOLOGY::BACKGROUND {
                 return "dark_energy";
             case Component::Curvature:
                 return "curvature";
+            case Component::Axions:
+                return "axions";
             default:
                 return "other";
         }
@@ -119,6 +134,8 @@ namespace FML::COSMOLOGY::BACKGROUND {
         double Omega_m(double x) const {
             return Omega(Component::Baryons, x) + Omega(Component::CDM, x) + Omega(Component::MassiveNeutrinos, x);
         }
+        /// Matter including an ultralight axion (whether or not it oscillates yet)
+        double Omega_m_axion(double x) const { return Omega_m(x) + Omega(Component::Axions, x); }
         /// Radiation: photons + massless neutrinos
         double Omega_r(double x) const { return Omega(Component::Photons, x) + Omega(Component::MasslessNeutrinos, x); }
         /// The effective equation of state of the total: -1 - (2/3) dlnH/dx (curvature counted as a fluid w = -1/3)

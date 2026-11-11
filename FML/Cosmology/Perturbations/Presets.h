@@ -18,6 +18,7 @@
 //                                                                                    hd_stability_check
 //   quintessence(_inverse_power_law, ...)  PerturbationModel_Quintessence.h
 //   ede, ede_zc                            PerturbationModel_EDE.h
+//   axion                                  PerturbationModel_Axion.h
 //   jbd                                    PerturbationModel_BransDicke.h
 //   coupled_quintessence                   PerturbationModel_CoupledQuintessence.h
 //   cubic_galileon                         PerturbationModel_CubicGalileon.h
@@ -33,6 +34,7 @@
 #include <FML/Cosmology/Background/ComponentBackground.h>
 #include <FML/Cosmology/Background/Presets.h>
 #include <FML/Cosmology/Perturbations/PerturbationModel.h>
+#include <FML/Cosmology/Perturbations/PerturbationModel_Axion.h>
 #include <FML/Cosmology/Perturbations/PerturbationModel_BransDicke.h>
 #include <FML/Cosmology/Perturbations/PerturbationModel_CoupledQuintessence.h>
 #include <FML/Cosmology/Perturbations/PerturbationModel_CubicGalileon.h>
@@ -149,6 +151,14 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
              quintessence},
             {"ede", "axion-like early dark energy V ~ (1 - cos(phi/f))^n " + EDE, {}, ede},
             {"ede_zc", "as ede with the redshift ede_zc of the maximum instead of its log10, " + EDE, {}, ede},
+            {"axion",
+             "mixed dark matter: CDM + an ultralight axion field (Klein-Gordon, then the WKB fluid with c_s^2 = k^2 / "
+             "(k^2 + 4 m^2 a^2)), + Lambda (closure); GR",
+             {{"ax_log10_Hinf",
+               0.0,
+               "log10 of the Hubble rate of inflation [GeV] for the axion isocurvature (axionCAMB's Hinf; sets f_axi, "
+               "n_axi from the initial field; <= 0: off)"}},
+             [](BG bg, M) { return std::make_shared<const PerturbationModel_Axion>(std::move(bg)); }},
             {"jbd",
              "Jordan-Brans-Dicke (flat) with Lambda; phi today gives G_eff = G bd_GeffG_today, Omega_Lambda from E(0) "
              "= 1",

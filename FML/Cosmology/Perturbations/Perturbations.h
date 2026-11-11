@@ -108,12 +108,12 @@ namespace FML::COSMOLOGY {
                                                         // explicit method (massive-neutrino hierarchy)
 
         // Initial conditions: ic_adiabatic times the adiabatic mode (curvature perturbation R = 1) plus, for each
-        // isocurvature mode m (0 = CDI, 1 = BI, 2 = NID, 3 = NIV; entropy S_m = 1), iso_amplitude[m]
+        // isocurvature mode m (0 = CDI, 1 = BI, 2 = NID, 3 = NIV, 4 = AXI; entropy S_m = 1), iso_amplitude[m]
         // (k/k_pivot)^iso_tilt[m] (a k-dependent mixture; see Isocurvature.h). Isocurvature modes need GR and the
         // standard species.
         double ic_adiabatic = 1.0;
-        std::array<double, 4> iso_amplitude{{0.0, 0.0, 0.0, 0.0}};
-        std::array<double, 4> iso_tilt{{0.0, 0.0, 0.0, 0.0}};
+        std::array<double, CosmologyParameters::n_iso_modes> iso_amplitude{{0.0, 0.0, 0.0, 0.0, 0.0}};
+        std::array<double, CosmologyParameters::n_iso_modes> iso_tilt{{0.0, 0.0, 0.0, 0.0, 0.0}};
 
         bool polarization = true;             // Photon polarization hierarchy
         bool store_source_components = false; // Also store the individual terms of S_T (SW, ISW, Doppler, quadrupole)

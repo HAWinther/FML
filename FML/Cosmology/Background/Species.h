@@ -40,7 +40,12 @@
 // shorter than 0.025 in x, i.e. m / H > ~125) it is replaced by a fluid with the cycle-averaged equation of state
 // w_oscillating(), rho = rho_switch e^{-3 (1 + w)(x - x_switch)} (as SimulationCode does; the Einstein-Boltzmann solver
 // integrates the oscillations to the end, which undersamples them on the stored grid when m >> H). The switch is at a
-// crossing of the minimum, where the instantaneous density is on its cycle-averaged trend.
+// crossing of the minimum (found between the nodes, so that the results vary smoothly with the parameters), where the
+// instantaneous density is on its cycle-averaged trend.
+// Alternatively (switch_at_mass_over_H = s > 0, the ultralight axion of BackgroundModel_Axion.h; mass_over_H0() gives
+// m / H0): s <= 4 (axionCAMB's convention, s = 3) replaces the field where m / H = s, before its first crossing of the
+// minimum (a quadratic potential first crosses at m / H ~ 5), with the instantaneous density there; s > 4 at the first
+// crossing after m / H >= s (as the default, at a chosen m / H: for convergence tests).
 //
 // Needs (besides Spline) the ODESolver and Math (find_root) modules of FML.
 // =====================================================================================================================
@@ -403,6 +408,16 @@ namespace FML::COSMOLOGY::BACKGROUND {
         virtual double phi_min() const { return 0.0; }
         virtual double w_oscillating() const { return 0.0; }
 
+        /// The mass of the field about its minimum in units of H0 (for the switch at m / H; 0 if not used)
+        virtual double mass_over_H0() const { return 0.0; }
+        /// The switch to the fluid is at m / H = this (> 0), not at a fast-oscillation crossing
+        double switch_mass_over_H() const { return switch_at_mass_over_H; }
+        /// axionCAMB's switch: at m / H = switch_mass_over_H() <= 4, before the field first crosses its minimum
+        bool switch_before_crossing() const {
+            return switch_at_mass_over_H > 0.0 and switch_at_mass_over_H <= max_switch_before_crossing;
+        }
+        static constexpr double max_switch_before_crossing = 4.0;
+
         /// The field [M_pl] and dphi/dx (phi_min and 0 once it is a fluid)
         double phi(double x) const {
             check(x);
@@ -438,6 +453,8 @@ namespace FML::COSMOLOGY::BACKGROUND {
       protected:
         SpeciesList others;
         double Omega_k, OmegaL;
+        /// > 0: switch to the fluid at m / H = switch_at_mass_over_H (set before solve)
+        double switch_at_mass_over_H = 0.0;
 
         /// Everything but the field: the other species, curvature and the bare Lambda, and the x-derivative
         double rho_others(double x) const {
@@ -513,12 +530,28 @@ namespace FML::COSMOLOGY::BACKGROUND {
                     if (not osc)
                         continue;
                     const double s0 = sol[j - 1][0] - fmin, s1 = sol[j][0] - fmin;
+                    if (switch_before_crossing()) {
+                        if (s0 * s1 < 0.0)
+                            throw std::runtime_error(msg + "The field crosses its minimum before m / H = " +
+                                                     std::to_string(switch_at_mass_over_H) + " (use a smaller value)");
+                        if (mass_over_H0() / std::sqrt(e2) >= switch_at_mass_over_H) {
+                            fluid = true;
+                            switch_to_fluid(bisect(xx[j - 1], xx[j], [&](double x) {
+                                return mass_over_H0() / std::sqrt(E2(x, phi_node(x), dphi_node(x))) -
+                                       switch_at_mass_over_H;
+                            }));
+                            break;
+                        }
+                        continue;
+                    }
                     if (s0 * s1 < 0.0) {
                         const double xc = xx[j - 1] + (xx[j] - xx[j - 1]) * s0 / (s0 - s1);
-                        if (++ncross >= 3 and xc - last_crossing < fluid_half_period) {
+                        const bool now = switch_at_mass_over_H > 0.0 ?
+                                             mass_over_H0() / std::sqrt(e2) >= switch_at_mass_over_H :
+                                             ++ncross >= 3 and xc - last_crossing < fluid_half_period;
+                        if (now) {
                             fluid = true;
-                            x_switch = xx[j];
-                            rho_switch = e2 * sol[j][1] * sol[j][1] / 6.0 + v(sol[j][0]);
+                            switch_to_fluid(bisect(xx[j - 1], xx[j], [&](double x) { return phi_node(x) - fmin; }));
                             break;
                         }
                         last_crossing = xc;
@@ -526,6 +559,33 @@ namespace FML::COSMOLOGY::BACKGROUND {
                 }
                 y = sol.back();
             }
+        }
+
+        /// The field and phi_x between the stored nodes during solve() (before x_switch is set)
+        double phi_node(double x) const { return interpolate(x, false); }
+        double dphi_node(double x) const { return interpolate(x, true); }
+        /// The root of g in [lo, hi] (g(lo) and g(hi) of opposite signs; bisection to 1e-12 in x). The switch to the
+        /// fluid is at the exact crossing (or m / H), not at the next node of the grid: the results then vary
+        /// smoothly with the parameters (a node gave steps of dx = 0.002 in x_switch, ~3e-4 in the C_ell)
+        template <class G>
+        static double bisect(double lo, double hi, G && g) {
+            double glo = g(lo);
+            for (int it = 0; it < 60 and hi - lo > 1e-12; it++) {
+                const double mid = 0.5 * (lo + hi), gm = g(mid);
+                if ((gm < 0.0) == (glo < 0.0)) {
+                    lo = mid;
+                    glo = gm;
+                } else {
+                    hi = mid;
+                }
+            }
+            return 0.5 * (lo + hi);
+        }
+        /// Replace the field by the fluid from x on, with the instantaneous density there
+        void switch_to_fluid(double x) {
+            const double fx = phi_node(x), dfx = dphi_node(x);
+            rho_switch = E2(x, fx, dfx) * dfx * dfx / 6.0 + v(fx);
+            x_switch = x;
         }
 
         /// The maximum of rho_phi / rho_tot on the stored grid and the x where it is (parabola through the three nodes

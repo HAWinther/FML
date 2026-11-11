@@ -31,6 +31,7 @@
 | `EinsteinBoltzmannSolver/python/derive_horndeski.py`, `derive_horndeski_alpha.py` | Horndeski (F(φ)R/2 + G2 − G3□φ) in Newtonian gauge, then the equations in terms of α_K, α_B, α_M (run in this order) |
 | `EinsteinBoltzmannSolver/python/compare_hiclass.py` | A `horndeski` run against hi_class (its `class` executable) |
 | `EinsteinBoltzmannSolver/python/compare_class_ede.py` | An `ede` run against CLASS_EDE (its `class` executable) |
+| `EinsteinBoltzmannSolver/python/compare_axioncamb.py` | An `axion` run against axionCAMB (its `camb` executable) |
 | `EinsteinBoltzmannSolver/python/compare_class_wcdm.py` | wCDM (`dark_scattering` with ξ = 0) against CLASS's fluid dark energy |
 | `EinsteinBoltzmannSolver/python/plot_models.py` | Ratios of H(z), C_ℓ^TT, C_ℓ^φφ and P(k) of all models to ΛCDM |
 | `EinsteinBoltzmannSolver/python/plot_*.py` | Quick-look plots of the outputs in `data/` (CLASS overlay if `classy` is installed) |
@@ -96,6 +97,17 @@ Early dark energy: the shooting reproduces f_EDE and z_c (1e-10), the stored fie
 equation, the oscillation-averaged dilution a^(−6n/(n+1)), the unused Einstein constraints with the field (5e-6),
 and f_EDE → 0 is ΛCDM; against CLASS_EDE (`python/compare_class_ede.py`) the potential parameters agree (f to
 1e-3) and the ratios to ΛCDM agree to 3e-5 in P(k) for k ≤ 0.05 h/Mpc (7e-4 at 0.1) and 1e-3 in C_ℓ^TT.
+Ultralight axions (`test_axion`): the shooting reproduces Ω_ax (1e-9) for m = 10⁻³³–10⁻¹⁸ eV, the frozen start and
+the w = 0 fluid after the switch, the unused Einstein constraints with the axion before and after the switch (5e-6),
+and the limits (a tiny fraction is ΛCDM, a heavy axion is CDM); against axionCAMB with its switch at m = 3H
+(`ax_switch_mH = 3`; `python/compare_axioncamb.py`): P_cb/P_cb(ΛCDM) to 7e-4 for k ≤ 1 h/Mpc (m = 10⁻²⁵ and 10⁻²⁷ eV,
+10% of the dark matter; 3e-3 for 10⁻³⁰, 10⁻³² eV), an all-axion dark matter through the Jeans cutoff to 1e-3,
+C_ℓ^TT/C_ℓ^TT(ΛCDM) to 6e-5, the axion isocurvature transfer functions to 3e-3. With the default switch (m/H ~ 125,
+which converges: switches at m/H = 10–300 agree to 0.5% at the cutoff) axionCAMB's m = 3H approximation shows: up to
+1.3% in P_cb (10%), 17% near the cutoff of an all-axion dark matter, 4-5% for the lightest axions (whose a⁻³ from
+m = 3H misses the rolling field). Two axionCAMB issues turned up: without massive neutrinos its axion background has
+no massless neutrinos (a_osc 12% early; patched for the comparison), and its axion isocurvature amplitude is 1/h²
+too large (`phiinit` is h times the field).
 Interacting dark energy: ρ_c against an independent integration, the constraints with energy exchange (2e-6;
 they test that the exchanged energy and momentum cancel), ξ = 0 against the separate wCDM implementation of
 `dark_scattering` (identical), and the rejection of unstable (d > 0) and negative-ρ_c models.

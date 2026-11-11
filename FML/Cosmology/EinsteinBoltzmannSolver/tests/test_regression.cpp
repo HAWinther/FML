@@ -160,6 +160,11 @@ int main(int argc, char ** argv) {
              p.model = "ede";
              p.model_params = {{"ede_fEDE", 0.1}, {"ede_log10zc", 3.5}};
          }},
+        {"axion",
+         [](CosmologyParameters & p, auto &, auto &) {
+             p.model = "axion";
+             p.model_params = {{"ax_log10_m", -26.0}, {"ax_fraction", 0.2}};
+         }},
         {"ide",
          [](CosmologyParameters & p, auto &, auto &) {
              p.model = "ide";

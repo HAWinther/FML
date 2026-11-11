@@ -46,8 +46,15 @@
 // for early dark energy with n >= 2.5 and the usual z_c the field never oscillates fast enough to switch (m / H stays
 // below ~125 as varpi ~ rho^((n-1)/2n) falls), so the two agree; see the README for the cases that switch.
 //
+// A background that switches at m / H = switch_mass_over_H() <= 4 (the ultralight axion with axionCAMB's
+// convention, m = 3H; switch_before_crossing()) switches before the first crossing of the minimum, at an arbitrary w.
+// There, as axionCAMB, the density contrast and the momentum (1 + w) v of the synchronous gauge (CDM frame,
+// ModeAtX::v_cdm) are continuous as w jumps to w_osc (the instantaneous density of the background is continuous too).
+// A switch at m / H > 4 is at a crossing, as the default.
+//
 // Outputs delta_phi (dphi; 0 in the fluid), delta_de (delta rho / rho) and q_de (flux / rho = (1 + w) theta / (ck), the
-// momentum density). Cache: phi_x, v_phi, v_phiphi, 3/E^2, H0^2 a^2 rho, phi_xx, phi - phi_min and c_s^2 (fluid).
+// momentum density); other names with the output_names argument (the axion: delta_phi_axion, delta_axion, q_axion).
+// Cache: phi_x, v_phi, v_phiphi, 3/E^2, H0^2 a^2 rho, phi_xx, phi - phi_min and c_s^2 (fluid).
 // =====================================================================================================================
 
 #include <FML/Cosmology/Background/Species.h>
@@ -64,11 +71,15 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
 
     class SpeciesPerturbation_ScalarField : public SpeciesPerturbation {
       public:
-        /// name: the species' name in the solver ("quintessence", "early dark energy")
+        /// name: the species' name in the solver ("quintessence", "early dark energy"); outputs: the names of the
+        /// field perturbation, delta rho / rho and flux / rho
         SpeciesPerturbation_ScalarField(const BACKGROUND::ScalarFieldSpecies & field,
                                         std::string name,
-                                        const PerturbationContext & ctx)
-            : q(field), label(std::move(name)), x_fluid(field.x_fluid()) {
+                                        const PerturbationContext & ctx,
+                                        std::vector<std::string> outputs = {"delta_phi", "delta_de", "q_de"})
+            : q(field), label(std::move(name)), x_fluid(field.x_fluid()), out_names(std::move(outputs)) {
+            if (out_names.size() != 3)
+                throw std::invalid_argument("[" + label + "] Need three output names");
             switches = std::isfinite(x_fluid) and x_fluid < ctx.settings.x_end;
             fluid_start = switches and x_fluid <= ctx.settings.x_start;
             if (switches) {
@@ -112,21 +123,41 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
             }
         }
         void initial_conditions(const ModeAtX & b, const InitialData & ic, double * y) const override {
+            const double S = ic.iso ? ic.iso->delta_field : 0.0; // density isocurvature (axion)
             if (fluid_start) {
-                y[0] = -1.5 * (1.0 + w_osc) * ic.Psi;
-                y[1] = 0.5 * b.ckH * ic.Psi;
+                y[0] = S != 0.0 ? S : -1.5 * (1.0 + w_osc) * ic.Psi;
+                y[1] = S != 0.0 ? 0.0 : 0.5 * b.ckH * ic.Psi;
                 return;
             }
-            y[0] = y[1] = 0.0;
+            // Frozen field: dphi = 0 (adiabatic), or delta rho / rho = v_phi dphi / v = S
+            const double phi = q.phi(b.x);
+            y[0] = S != 0.0 ? S * q.v(phi) / q.v_phi(phi) : 0.0;
+            y[1] = 0.0;
         }
         void switch_mode(const ModeAtX & b, const double * cc, int, const double * yo, double * yn) const override {
             const double fx = cc[DPHI], fxx = cc[DDPHI], D = cc[DMIN];
+            const Moments m = moments(b, cc, 0, yo);
+            if (q.switch_before_crossing()) {
+                // axionCAMB's switch (m / H = 3, before the first crossing of the minimum): its fluid variables delta
+                // and (1 + w) v are continuous in the synchronous gauge (CDM frame) as w jumps to w_osc. In the
+                // Newtonian gauge, delta_sync = delta - 3 (1 + w) v_cdm / (ck/Hp) and v_sync = v - v_cdm, so
+                //   delta -> delta + 3 (w_osc - w) v_cdm / (ck/Hp),  (1 + w_osc)(v - v_cdm) -> (1 + w)(v - v_cdm)
+                // (u = -v; w the instantaneous equation of state of the field). On superhorizon scales this keeps the
+                // adiabatic mode adiabatic. (Continuity of the Newtonian-gauge delta instead would lose ~(1 - (1 + w) /
+                // (1 + w_osc)) of the adiabatic mode: 5% of the power on large scales for an all-axion dark matter.)
+                if (not std::isfinite(b.v_cdm))
+                    throw std::runtime_error("[" + label + "] The switch at m / H = " +
+                                             std::to_string(q.switch_mass_over_H()) + " needs CDM (its frame)");
+                const double opw = b.Hp * b.Hp * fx * fx / (3.0 * cc[RHO]); // 1 + w = 2 K / rho
+                yn[0] = m.drho / cc[RHO] + 3.0 * (w_osc + 1.0 - opw) * b.v_cdm / b.ckH;
+                yn[1] = -b.v_cdm + (m.flux / cc[RHO] + opw * b.v_cdm) / (1.0 + w_osc); // (1 + w) v = -flux / rho
+                return;
+            }
             const double det = n_pow * fx * fx - D * fxx;
             if (not(std::abs(det) > 0.0) or not std::isfinite(det))
                 throw std::runtime_error("[" + label + "] The switch to the oscillating fluid (x = " +
                                          std::to_string(x_fluid) + ") is too close to the start of the perturbations");
             const double eps = (yo[0] * n_pow * fx - D * yo[1]) / det;
-            const Moments m = moments(b, cc, 0, yo);
             yn[0] = (m.drho + 3.0 * m.flux / b.ckH) / cc[RHO] - 3.0 * (1.0 + w_osc) * eps;
             yn[1] = b.ckH * eps;
         }
@@ -159,7 +190,7 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
             dydx[1] = -(2.0 + b.dHpH) * w - (b.ckH * b.ckH + cc[E2INV3] * cc[VPP]) * dphi - 3.0 * cc[DPHI] * m.dPhi -
                       cc[E2INV3] * cc[VPHI] * m.Psi;
         }
-        std::vector<std::string> output_names() const override { return {"delta_phi", "delta_de", "q_de"}; }
+        std::vector<std::string> output_names() const override { return out_names; }
         void outputs(const ModeAtX & b, const double * cc, int mode, const double * y, double * out) const override {
             const Moments m = moments(b, cc, mode, y);
             out[0] = fluid(mode) ? 0.0 : y[0];
@@ -205,6 +236,7 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
         const BACKGROUND::ScalarFieldSpecies & q;
         std::string label;
         double x_fluid;
+        std::vector<std::string> out_names;
         bool switches = false, fluid_start = false;
         double w_osc = 0.0, n_pow = 1.0, rho_switch = 0.0, varpi_switch = 0.0;
 
