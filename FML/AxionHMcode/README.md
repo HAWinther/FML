@@ -9,7 +9,9 @@ solve, and has its own example and tests. It has no runtime Python, axionCAMB or
 Supply **separate linear cold and axion auto-spectra at the requested redshift**, for the same
 cosmology. Cold means CDM+baryons, defined relative to their own mean density. FML's Einstein-Boltzmann
 solver makes them with `model = axion` (`Cosmology/EinsteinBoltzmannSolver/params/axion.ini`): the columns
-`P_cb` and `P_axion` of its `matter_power.txt`; axionCAMB or another ULA Boltzmann solver work too. FML's
+`P_cb` and `P_axion` of its `matter_power.txt`, and runs this module itself with `nonlinear = axionhmcode` (P_NL/P_L
+tabulated in z and k, used for P_NL(k) and nonlinear lensing; `Cosmology/EinsteinBoltzmannSolver/OPTIONS.md`);
+axionCAMB or another ULA Boltzmann solver work too. FML's
 axion-like early-dark-energy model describes different physics and does not supply these spectra.
 
 ## Build and run

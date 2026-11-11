@@ -1,6 +1,8 @@
 #include <FML/Cosmology/Spectra/PowerSpectrum.h>
 #include <FML/Cosmology/Spectra/Halofit.h>
 #include <FML/Cosmology/Background/BackgroundModel_Axion.h>
+#include <FML/AxionHMcode/AxionHMcode.h>
+#include <FML/Spline/Spline.h>
 #include <FML/HaloModel/HMcode2016.h>
 #include <FML/HaloModel/HMcode2020.h>
 #include <FML/ReACT/ReACT.h>
@@ -18,6 +20,20 @@
 #include <stdexcept>
 
 namespace FML::COSMOLOGY {
+
+    // AxionHMcode: ln(P_NL / P_L) of the total matter on a grid of (x, ln k [h/Mpc]); the cold spectrum when the
+    // axion is not part of P_m (m < 1e-25 eV)
+    struct AxionHMcodeTable {
+        FML::INTERPOLATION::SPLINE::Spline2D log_ratio;
+        double x_min, lnk_min, lnk_max, h;
+        double ratio(double x, double k) const {
+            const double lnk = std::log(k * Constants::Mpc / h);
+            if (x < x_min || lnk < lnk_min)
+                return 1.0;
+            return std::exp(log_ratio(std::min(x, 0.0), std::min(lnk, lnk_max)));
+        }
+    };
+
 
     using namespace Constants;
 
@@ -691,6 +707,8 @@ namespace FML::COSMOLOGY {
                 [this](double x, double k) { return get_matter_power_spectrum_cb_extrapolated(x, k); });
         } else if (options.nonlinear == N::ReACT) {
             solve_react();
+        } else if (options.nonlinear == N::AxionHMcode) {
+            solve_axionhmcode();
         }
         matter_solved = true;
     }
@@ -705,6 +723,7 @@ namespace FML::COSMOLOGY {
         const double base = halofit      ? halofit->ratio(x, k) :
                             hmcode       ? hmcode->ratio(x, k) :
                             hmcode2016   ? hmcode2016->ratio(x, k) :
+                            axionhm      ? axionhm->ratio(x, k) :
                                            1.0;
         return react && x >= react->x_min() ? base * react->reaction(std::min(x, react->x_max()),
                                                                     k * Mpc / cosmo.get_params().h) : base;
@@ -718,6 +737,7 @@ namespace FML::COSMOLOGY {
             case N::HMcode2016: return "HMcode-2016";
             case N::HMcode2020: return "HMcode-2020";
             case N::ReACT: return "ReACT x HMcode-2020 matched pseudo";
+            case N::AxionHMcode: return options.axionhmcode_basic ? "AxionHMcode (basic)" : "AxionHMcode (Dome 2024)";
             default: return "linear";
         }
     }
@@ -918,6 +938,98 @@ namespace FML::COSMOLOGY {
             throw std::runtime_error("PowerSpectrum::get_Delta_axion: the perturbations have no axion");
         return pert.get("delta_axion", x, k) + 3.0 * cosmo.Hp_of_x(x) / (c * k) * pert.get("q_axion", x, k);
     }
+    double PowerSpectrum::get_matter_power_spectrum_axion_extrapolated(double x, double k) const {
+        const auto & kp = pert.get_k_array();
+        const double anchor = std::clamp(k, kp.front(), kp.back());
+        double D2 = 0.0, D2cb = 0.0;
+        for (size_t cc = 0; cc < comps.size(); cc++) {
+            D2 += std::pow(get_Delta_axion(x, anchor, int(cc)), 2);
+            D2cb += std::pow(get_Delta_cb(x, anchor, int(cc)), 2);
+        }
+        return get_matter_power_spectrum_cb_extrapolated(x, k) * D2 / D2cb;
+    }
+
+    void PowerSpectrum::solve_axionhmcode() {
+        using A = FML::COSMOLOGY::AxionHMcode;
+        const auto & p = cosmo.get_params();
+        const std::string msg = "PowerSpectrum: nonlinear = axionhmcode ";
+        if (!has_axions())
+            throw std::invalid_argument(msg + "needs model = axion (for CDM use hmcode2020)");
+        if (p.has_massive_nu() || p.OmegaK != 0.0)
+            throw std::invalid_argument(msg + "assumes a flat universe without massive neutrinos");
+        if (!(options.axionhmcode_z_max > 0.0 && options.axionhmcode_z_max < 100.0) || options.axionhmcode_n_z < 4)
+            throw std::invalid_argument(msg + "needs 0 < axionhmcode_z_max < 100 and axionhmcode_n_z >= 4");
+        double m_eV = 0.0;
+        for (const auto & s : cosmo.background().species())
+            if (const auto * a = dynamic_cast<const BACKGROUND::AxionSpecies *>(s.get()))
+                m_eV = a->mass_eV();
+        const bool total = axions_in_matter();
+        A::Cosmology c;
+        c.h = p.h;
+        c.Omega_b = cosmo.rhoB(0.0);
+        c.Omega_cdm = cosmo.rhoCDM(0.0);
+        c.Omega_axion = cosmo.rho_of(BACKGROUND::Component::Axions, 0.0);
+        c.mass_eV = m_eV;
+        A::Options o;
+        o.version = options.axionhmcode_basic ? A::Version::Basic : A::Version::Dome2024;
+        o.allow_extrapolation = options.axionhmcode_allow_extrapolation;
+
+        // The linear input (1e-5 to 1e3 h/Mpc, as AxionHMcode's reference input) and the output k
+        auto t = std::make_unique<AxionHMcodeTable>();
+        t->h = p.h;
+        t->x_min = -std::log1p(options.axionhmcode_z_max);
+        t->lnk_min = std::log(1e-3);
+        t->lnk_max = std::log(100.0);
+        const double V = std::pow(Mpc / p.h, 3), kSI = p.h / Mpc;
+        const auto xs = Utils::linspace(t->x_min, 0.0, options.axionhmcode_n_z);
+        const auto lk = Utils::linspace(t->lnk_min, t->lnk_max, 150);
+        std::vector<double> kout;
+        for (double l : lk)
+            kout.push_back(std::exp(l));
+        std::vector<A::Input> in(xs.size());
+        std::vector<std::vector<double>> Pl(xs.size());
+        for (size_t ix = 0; ix < xs.size(); ix++) {
+            for (double lnk = std::log(1e-5); lnk <= std::log(1e3) + 1e-9; lnk += std::log(10.0) / 125.0) {
+                const double k = std::exp(lnk);
+                in[ix].k.push_back(k);
+                in[ix].cold.push_back(get_matter_power_spectrum_cb_extrapolated(xs[ix], k * kSI) / V);
+                in[ix].axion.push_back(get_matter_power_spectrum_axion_extrapolated(xs[ix], k * kSI) / V);
+            }
+            for (double k : kout)
+                Pl[ix].push_back(get_matter_power_spectrum_cb_extrapolated(xs[ix], k * kSI) / V);
+        }
+        std::vector<std::vector<double>> ratios(xs.size());
+        std::string error;
+#ifdef USE_OMP
+#pragma omp parallel for schedule(dynamic)
+#endif
+        for (size_t ix = 0; ix < xs.size(); ix++) {
+            try {
+                A::Cosmology cz = c;
+                cz.z = std::expm1(-xs[ix]);
+                const auto s = A::spectrum(cz, in[ix], kout, o);
+                for (size_t i = 0; i < kout.size(); i++)
+                    ratios[ix].push_back(std::log(total ? s.total[i] / s.linear_total[i] : s.cold[i] / Pl[ix][i]));
+            } catch (const std::exception & e) {
+#ifdef USE_OMP
+#pragma omp critical
+#endif
+                error = e.what();
+            }
+        }
+        if (!error.empty()) {
+            const double fa = c.Omega_axion / (c.Omega_b + c.Omega_cdm + c.Omega_axion);
+            const bool outside = std::abs(std::log10(m_eV) + 24.5) > 1e-6 or fa < 0.01 or fa > 0.3;
+            throw std::runtime_error(msg + "(z = 0 - " + std::to_string(options.axionhmcode_z_max) + "): " + error +
+                                     (o.version == A::Version::Dome2024 and outside ?
+                                          " (the Dome et al. 2024 calibration is for m = 10^-24.5 eV and axion "
+                                          "fractions of the matter 0.01 - 0.3: try axionhmcode_basic = true)" :
+                                          ""));
+        }
+        t->log_ratio.create(xs, lk, ratios, "AxionHMcode ln(P_NL/P_L)");
+        axionhm = std::move(t);
+    }
+
     double PowerSpectrum::get_matter_power_spectrum_axion(double x, double k) const {
         double D2 = 0.0;
         for (size_t cc = 0; cc < comps.size(); cc++)
@@ -1033,7 +1145,7 @@ namespace FML::COSMOLOGY {
         fp << "# x = " << x
            << ". k [h/Mpc]  P_m(k) [(Mpc/h)^3] (CDM + baryons + massive neutrinos" << (axions_in_matter() ? " + axion" : "")
            << ")  P_cb(k) (CDM + baryons)"
-           << ((halofit || hmcode || hmcode2016) ? std::string("  P_m nonlinear (") + nonlinear_name() + ")" : "")
+           << ((halofit || hmcode || hmcode2016 || axionhm) ? std::string("  P_m nonlinear (") + nonlinear_name() + ")" : "")
            << (has_axions() ? "  P_axion(k)" : "")
            << "\n";
         fp << std::scientific << std::setprecision(10);
@@ -1042,7 +1154,7 @@ namespace FML::COSMOLOGY {
         for (double k : Utils::logspace(kp.front(), kp.back(), 500)) {
             fp << k * Mpc_h << " " << get_matter_power_spectrum(x, k) / V << " "
                << get_matter_power_spectrum_cb(x, k) / V;
-            if (halofit || hmcode || hmcode2016)
+            if (halofit || hmcode || hmcode2016 || axionhm)
                 fp << " " << get_matter_power_spectrum_nonlinear(x, k) / V;
             if (has_axions())
                 fp << " " << get_matter_power_spectrum_axion(x, k) / V;

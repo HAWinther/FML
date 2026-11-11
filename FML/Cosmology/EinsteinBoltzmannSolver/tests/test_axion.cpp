@@ -9,10 +9,12 @@
 //   * axionCAMB (with ax_switch_mH = 3; its massless-neutrino fix, see python/compare_axioncamb.py): P_cb / P_cb(LCDM)
 //     and delta_ax / delta_cdm for m = 1e-25 eV, f = 0.1; the axion transfer function of an all-axion dark matter
 //     (f = 1) through the Jeans cutoff; the axion isocurvature mode
+//   * nonlinear = axionhmcode: the P_NL/P_L table is AxionHMcode's total / linear total for the solver's P_cb, P_axion
 //   * Limits: a tiny fraction is LCDM; a heavy axion (1e-20 eV) is CDM on these scales; the axion is in P_m iff
 //     m >= 1e-25 eV
 // =============================================================================
 
+#include <FML/AxionHMcode/AxionHMcode.h>
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
 #include <FML/Cosmology/Background/BackgroundModel_Axion.h>
 #include <FML/Cosmology/Perturbations/Isocurvature.h>
@@ -302,6 +304,57 @@ int main() {
                   (rcb * p25.get_Delta_cb(0.0, k) + ra * p25.get_Delta_axion(0.0, k)) / (rcb + ra),
                   1e-12,
                   "Delta_M = (rho_cb Delta_cb + rho_ax Delta_ax) / (rho_cb + rho_ax)");
+    }
+    std::cout << "nonlinear = axionhmcode (m = 10^-24.5 eV, f = 0.1)\n";
+    {
+        PerturbationOptions o3;
+        o3.n_k = 60;
+        o3.k_max = 1.0 / Mpc;
+        const Run r(axion(-24.5, 0.1), o3);
+        PowerSpectrumOptions so;
+        so.nonlinear = PowerSpectrumOptions::Nonlinear::AxionHMcode;
+        so.axionhmcode_z_max = 3.0;
+        so.axionhmcode_n_z = 4;
+        PowerSpectrum ps(r.cosmo, r.rec, r.pert, so);
+        ps.solve_matter();
+        // the same input at z = 0 and k = 2.3 h/Mpc (nodes of the table), directly
+        using A = FML::COSMOLOGY::AxionHMcode;
+        const double h = r.cosmo.get_params().h, V = std::pow(Mpc / h, 3), kSI = h / Mpc;
+        A::Input in;
+        for (double lnk = std::log(1e-5); lnk <= std::log(1e3) + 1e-9; lnk += std::log(10.0) / 125.0) {
+            in.k.push_back(std::exp(lnk));
+            in.cold.push_back(ps.get_matter_power_spectrum_cb_extrapolated(0.0, in.k.back() * kSI) / V);
+            in.axion.push_back(ps.get_matter_power_spectrum_axion_extrapolated(0.0, in.k.back() * kSI) / V);
+        }
+        A::Cosmology c;
+        c.h = h;
+        c.Omega_b = r.cosmo.rhoB(0.0);
+        c.Omega_cdm = r.cosmo.rhoCDM(0.0);
+        c.Omega_axion = r.cosmo.rho_of(BACKGROUND::Component::Axions, 0.0);
+        c.mass_eV = std::pow(10.0, -24.5);
+        c.z = 0.0;
+        A::Options ao;
+        ao.allow_extrapolation = true;
+        const double lk = std::log(1e-3) + 100.0 * (std::log(100.0) - std::log(1e-3)) / 149.0; // node 100
+        const auto direct = A::spectrum(c, in, {std::exp(lk)}, ao);
+        const double k = std::exp(lk) * kSI;
+        const double ratio = ps.get_matter_power_spectrum_nonlinear(0.0, k) / ps.get_matter_power_spectrum_extrapolated(0.0, k);
+        std::cout << "  k = " << std::exp(lk) << " h/Mpc: P_NL/P_L = " << ratio << " (AxionHMcode "
+                  << direct.total[0] / direct.linear_total[0] << ")\n";
+        check_rel(ratio, direct.total[0] / direct.linear_total[0], 1e-6, "the table at a node = AxionHMcode");
+        check_rel(ps.get_matter_power_spectrum_nonlinear(0.0, 1e-3 * kSI),
+                  ps.get_matter_power_spectrum_extrapolated(0.0, 1e-3 * kSI), 1e-3, "linear at k = 1e-3 h/Mpc");
+        check_rel(ps.get_matter_power_spectrum_nonlinear(-std::log(5.0), k),
+                  ps.get_matter_power_spectrum_extrapolated(-std::log(5.0), k), 1e-12, "linear above axionhmcode_z_max");
+        bool thrown = false;
+        try {
+            const Run l(base(), o3);
+            PowerSpectrum pl(l.cosmo, l.rec, l.pert, so);
+            pl.solve_matter();
+        } catch (const std::exception &) {
+            thrown = true;
+        }
+        check(thrown, "axionhmcode without an axion is an error");
     }
     return FML::TESTS::summary("EBS axion");
 }

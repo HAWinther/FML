@@ -37,7 +37,7 @@
 //   C_ell^phiphi   = 4 pi int dk/k P_R(k) phi_ell(k)^2
 // (Phi_ell^nu and sin_K in a curved universe), followed by the lensed spectra from Lensing::lens.
 //
-// Nonlinear (Halofit, HalofitBird, HMcode2016, HMcode2020): P_NL = P_L * ratio(x, k); the
+// Nonlinear (Halofit, HalofitBird, HMcode2016, HMcode2020, AxionHMcode): P_NL = P_L * ratio(x, k); the
 // Weyl potential in the Limber part of C_ell^phiphi is scaled by sqrt(P_NL/P_L) (as CLASS), so the lensed
 // spectra include nonlinear lensing.
 //
@@ -107,9 +107,18 @@ namespace FML::COSMOLOGY {
         // there it is extrapolated with the asymptotic CDM shape Phi ~ ln(beta k)/k^2 (beta from the
         // logarithmic slope at k_max).
         int lensing_limber_ell = 30;
-        // Nonlinear matter power for the lensing potential and P_NL(k) (Halofit.h, FML/HaloModel/HMcode2016.h, HMcode2020.h)
-        enum class Nonlinear { None, Halofit, HalofitBird, HMcode2016, HMcode2020, ReACT };
+        // Nonlinear matter power for the lensing potential and P_NL(k) (Halofit.h, FML/HaloModel/HMcode2016.h, HMcode2020.h,
+        // FML/AxionHMcode/AxionHMcode.h for the mixed axion dark matter of model axion)
+        enum class Nonlinear { None, Halofit, HalofitBird, HMcode2016, HMcode2020, ReACT, AxionHMcode };
         Nonlinear nonlinear = Nonlinear::None;
+        // AxionHMcode (Vogt et al. 2022; Dome et al. 2024 with axionhmcode_basic = false): P_NL/P_L tabulated at
+        // axionhmcode_n_z redshifts in [0, axionhmcode_z_max] (uniform in ln a) and 1e-3 to 100 h/Mpc. Its Dome
+        // calibration covers z = 1 - 8, axion fractions of the matter 0.01 - 0.3 and m = 10^-24.5 eV: elsewhere it is an
+        // extrapolation, which axionhmcode_allow_extrapolation = false turns into an error
+        bool axionhmcode_basic = false;
+        bool axionhmcode_allow_extrapolation = true;
+        double axionhmcode_z_max = 10.0;
+        int axionhmcode_n_z = 24;
         // ReACT reactions are computed only up to z <= 2.5. Above that, use the matched GR pseudo baseline.
         int react_n_z = 12, react_n_k = 256, react_mass_loop = 30;
         double react_z_max = 2.5;
@@ -217,6 +226,8 @@ namespace FML::COSMOLOGY {
         bool axions_in_matter() const;
         double get_Delta_axion(double x, double k, int comp = 0) const;
         double get_matter_power_spectrum_axion(double x, double k) const;
+        // ... for any k > 0 (Delta_axion / Delta_cb held at the ends of the k-range, P_cb extrapolated as below)
+        double get_matter_power_spectrum_axion_extrapolated(double x, double k) const;
         // Nonlinear total-matter power (= linear, extrapolated, if options.nonlinear = None) [m^3]
         double get_matter_power_spectrum_nonlinear(double x, double k) const;
 
@@ -283,7 +294,9 @@ namespace FML::COSMOLOGY {
         std::unique_ptr<HALOMODEL::HMcode2020> hmcode;
         std::unique_ptr<HALOMODEL::HMcode2016> hmcode2016;
         std::unique_ptr<ReACT> react;
+        std::unique_ptr<struct AxionHMcodeTable> axionhm;
         void solve_react();
+        void solve_axionhmcode();
         double nonlinear_ratio(double x, double k) const;
         const char * nonlinear_name() const;
         // tensor D_ell [muK^2] at (non-integer) ell: 0 = TT, 1 = EE, 2 = BB, 3 = TE; linear between integers

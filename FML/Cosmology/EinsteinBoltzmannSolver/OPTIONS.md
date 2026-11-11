@@ -27,6 +27,18 @@ and normal-branch `dgp` with `dgp_lcdm_background=1`, including massive neutrino
 z<=2.5; above `react_z_max` the solver uses the matched pseudo baseline with R=1 and reports this approximation.
 See [ReACT setup, conventions, reference tests and limits](../../ReACT/README.md).
 
+`nonlinear = axionhmcode` (with `model = axion`) uses the mixed cold/ultralight-axion halo model of
+[AxionHMcode](../../AxionHMcode/README.md) (Vogt et al. 2022; the Dome et al. 2024 calibration, or the basic model with
+`axionhmcode_basic = true`) on the solver's P_cb and P_axion, extrapolated to 1e-5 – 1e3 h/Mpc (P_cb with the
+Eisenstein & Hu shape, P_axion/P_cb held beyond the k-range: set `pert_k_max` past the axion's Jeans scale). P_NL/P_L
+of the total (of P_cb when the axion is not in P_m, m < 1e-25 eV) is tabulated at `axionhmcode_n_z` redshifts up to
+`axionhmcode_z_max` (~1.5 s each) and 1e-3 – 100 h/Mpc; linear outside. Flat, no massive neutrinos. The Dome
+calibration covers z = 1–8, axion fractions of the matter 0.01–0.3 and m = 10^-24.5 eV; elsewhere it is an
+extrapolation (`axionhmcode_allow_extrapolation = false` makes it an error; the table always starts at z = 0), and far
+from the pivot mass (10⁻²⁶ eV) it can fail (the run then suggests the basic model). Check (`tests/test_axion`): the
+table equals AxionHMcode's total/linear total for the same input; for m = 10⁻²² eV (CDM-like) P_NL/P_L is within ~5%
+of HMcode-2020 for ΛCDM up to k = 0.6 h/Mpc.
+
 ## Tensor modes
 
 `r = 0.05` (tensor-to-scalar ratio at `k_pivot`) adds gravitational waves; the tilt is

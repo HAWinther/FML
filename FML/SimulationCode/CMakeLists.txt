@@ -223,6 +223,7 @@ list(APPEND FML_COSMO_SOURCES
   ${FML_ROOT}/HaloModel/HMcode2016.cpp
   ${FML_ROOT}/HaloModel/Halomodel.cpp
   ${FML_ROOT}/HaloModel/HaloModelTools.cpp
+  ${FML_ROOT}/AxionHMcode/AxionHMcode.cpp
   ${FML_ROOT}/SphericalCollapse/SphericalCollapse.cpp
   ${FML_ROOT}/SphericalCollapse/SphericalCollapseModel.cpp
   ${FML_ROOT}/Cosmology/EinsteinBoltzmannSolver/ParameterFile.cpp
