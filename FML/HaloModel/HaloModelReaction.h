@@ -35,7 +35,8 @@
 ///
 /// E = (1 - f_nu)^2 P_1h,real(k_E) / P_1h,pseudo(k_E) (k_E = 0.01 h/Mpc) and k* (matching R at k0 = 0.06 h/Mpc to
 /// one-loop perturbation theory: set_one_loop) are only used for modified gravity (a fifth force given); otherwise
-/// E = 1 and k* is irrelevant.
+/// E = 1 and k* is irrelevant. The one-loop P(k0): PerturbationTheory/MGOneLoop.h (mg_one_loop with the model's
+/// kernels and P_cb for the real, mg_lcdm and P for the pseudo cosmology), for all redshifts in one call.
 ///
 /// As in ReACT: sigma(M) integrates P(k) over 1e-4 <= k <= 50 h/Mpc, the masses are 1e5 - 1e20 Msun/h (n_mass
 /// collapses), R = 1 below k = 0.01 h/Mpc. Units: k [h/Mpc], P [(Mpc/h)^3], M [Msun/h], R [Mpc/h].

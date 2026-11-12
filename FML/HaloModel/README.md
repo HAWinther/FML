@@ -97,8 +97,9 @@ double R = hm.reaction(k);                             // P_NL = R P_NL,pseudo
 
 The real halos collapse in the target background with the fifth force (mass and environment dependent); delta_c(M)
 is extrapolated with the LCDM growth and nu = delta_c / sigma uses the LCDM cold spectrum, as in ReACT. The pseudo
-halos are GR halos of the target P(k) in an LCDM background. The one-loop term for k* is not computed here yet.
-About 1 s per redshift for f(R) (30 collapses), 0.1 s for GR or dark energy.
+halos are GR halos of the target P(k) in an LCDM background. The one-loop P(k0) for k* comes from
+`PerturbationTheory/MGOneLoop.h` (kernels solved in time with the model's mu, gamma2, gamma3; all redshifts in one
+call, ~1 s). About 1 s per redshift for f(R) (30 collapses), 0.1 s for GR or dark energy.
 
 ## Validation
 
@@ -110,8 +111,10 @@ About 1 s per redshift for f(R) (30 collapses), 0.1 s for GR or dark energy.
 - `tests/test_halomodel_reaction`: `HaloModelReaction` against ReACT (ACTio-ReACTio a36dda02, `HALO.cpp` through
   `ReACT/tests/halomodel_oracle.cpp`) for GR, f(R) (|fR0| = 1e-5), nDGP (Omega_rc = 0.1) and CPL with 0.3 eV
   neutrinos at z = 0 - 2: delta_c(M) and sigma(M) to 5e-5, E to 3e-5, k* to 3e-3 (with ReACT's one-loop values), the
-  one-halo terms to 2e-3 and R to 1e-3 (k = 0.01 - 10 h/Mpc). With identical real and pseudo cosmologies R = 1
-  exactly (ReACT: within its numerical noise).
+  one-halo terms to 2e-3 and R to 1e-3 (k = 0.01 - 10 h/Mpc). Fully native (k* from `MGOneLoop.h`, with ReACT's
+  f(R) gamma3): R to 2e-4 (f(R)) and 6e-4 (nDGP), k* to 3%. ReACT's f(R) gamma3 is 1/3 of the correct one; with the
+  correct one R changes by up to 3e-3. With identical real and pseudo cosmologies R = 1 exactly (ReACT: within its
+  numerical noise).
 - `tests/test_screened_collapse`: the screened spherical collapse against ReACT (`SCOL.cpp`).
 - `tests/test_halomodel`: the HMcode output in `example/`, the mass function against a direct computation, the
   profile transforms, the building blocks, and the error handling.

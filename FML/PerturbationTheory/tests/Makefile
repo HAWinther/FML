@@ -1,13 +1,17 @@
 USE_MPI ?= true
 USE_OMP ?= true
 USE_FFTW ?= true
-TARGETS := test_direct
+TARGETS := test_direct test_mg_oneloop
 include ../../Makefile.config
 ifeq ($(USE_FFTW),true)
 TARGETS += test_perturbation test_lptrsd test_rept test_nowiggle test_tns test_eftoflss
 all: test_perturbation test_lptrsd test_rept test_nowiggle test_tns test_eftoflss
 endif
 test_direct: test_direct.o Global.o
+	$(LINK_EXE)
+
+# One-loop SPT with modified-gravity kernels (compared with ReACT; reads ../../ReACT/tests/reference)
+test_mg_oneloop: test_mg_oneloop.o Global.o
 	$(LINK_EXE)
 FML_MODULES := Global FFTLog
 test_perturbation: test_perturbation.o Global.o FFTLog.o
@@ -44,6 +48,7 @@ endif
 run: $(TARGETS)
 	@set -e; for np in $(NP_LIST); do \
 	  OMP_NUM_THREADS=2 OMP_WAIT_POLICY=passive $(RUN) ./test_direct; \
+	  OMP_NUM_THREADS=2 OMP_WAIT_POLICY=passive ./test_mg_oneloop; \
 	  $(if $(filter true,$(USE_FFTW)),OMP_NUM_THREADS=2 OMP_WAIT_POLICY=passive $(RUN) ./test_perturbation,:); \
 	  $(if $(filter true,$(USE_FFTW)),OMP_NUM_THREADS=2 OMP_WAIT_POLICY=passive ./test_lptrsd,:); \
 	  $(if $(filter true,$(USE_FFTW)),OMP_NUM_THREADS=2 OMP_WAIT_POLICY=passive ./test_rept,:); \

@@ -314,3 +314,28 @@ Validation (`tests/test_eftoflss.cpp`, CLASS-PT fixture from `python/generate_cl
 monomial in l = 0, 2, 4 against CLASS-PT's pk_gg_l0/2/4 for k = 0.005 - 0.3 h/Mpc, with and without IR resummation, to
 better than 1.3e-3 of the column's largest value (most to 1e-4); the counterterm templates and b4 to 2e-4; the
 Kaiser limit; the bias combination; a given P_nw; convergence against a refined quadrature (5e-5 of P_0).
+
+## One loop with modified-gravity kernels
+
+`MGOneLoop.h`: the one-loop P(k) with the SPT kernels F1, F2, F3 solved numerically in time (Taruya et al. 2014;
+Bose & Koyama 2016) for a background E(a), a linear modification mu(k, a) and the screening sources gamma2, gamma3:
+GR on any background (`mg_lcdm`), Hu-Sawicki f(R) n = 1 (`mg_hu_sawicki`) and normal-branch DGP (`mg_ndgp`), or any
+`MGKernelModel`. Used for k* of the halo-model reaction (`HaloModel/HaloModelReaction.h`).
+
+```cpp
+#include <FML/PerturbationTheory/MGOneLoop.h>
+using namespace FML::PERTURBATION;
+auto model = mg_hu_sawicki(1e-5, OmegaM, Omega_cb);          // or mg_ndgp(Omega_rc, ...), mg_lcdm(OmegaM, Omega_cb)
+std::vector<double> a = {1.0 / 3.0, 0.5, 1.0};                // increasing
+auto P = [&](double k, size_t i) { return P_lin_at_a_i(k); }; // the linear spectrum at a[i] (h/Mpc, (Mpc/h)^3)
+auto Ploop = mg_one_loop(model, 0.06, a, P);                  // P_L + P22 + P13 at each a
+```
+
+The kernels are evolved for every loop node (P22 over q and p = |k - q|, P13 over q and the cosine; RK4 in log a
+from a = 1e-5), so P0 = P_L / F1^2 with the model's own F1. ~1 s for one k at four redshifts on 4 threads.
+
+Validation (`tests/test_mg_oneloop.cpp`): EdS = `OneLoop.h` (6e-4 of the loop); |fR0| = 1e-10 and Omega_rc = 1e-8
+give the GR loop; the f(R) gamma2 and gamma3 reproduce the exact expansion of the field perturbation in the
+homogeneous limit; against ReACT's one-loop P(k0 = 0.06) for its fixtures (z = 0 - 2): 4e-3 (ReACT's angular
+quadrature misses ~4% of the loop at k0) and the real - pseudo difference to 0.7% (nDGP) and 3% (f(R), with ReACT's
+gamma3, which is 1/3 of the correct one).

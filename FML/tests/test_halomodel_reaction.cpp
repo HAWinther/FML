@@ -5,12 +5,15 @@
 //     f(R) |fR0| = 1e-5, nDGP Omega_rc = 0.1, CPL w0 = -0.9, wa = 0.1 with sum m_nu = 0.3 eV; z = 0, 0.5, 1, 2):
 //     delta_c(M) and sigma(M) of the real and pseudo halos, g_de, E, k* (from ReACT's one-loop P(k0)), the
 //     one-halo terms and the reaction
+//   - fully native: k* from the one-loop P(k0) of PerturbationTheory/MGOneLoop.h; for f(R) with ReACT's gamma3 (1/3
+//     of the correct one) to compare with ReACT, and the effect of the correct gamma3 on R
 //   - identical real and pseudo cosmologies (massless GR) give R = 1 exactly
 //   - modified gravity needs k*; inconsistent one-loop input falls back to E = k* = 1 (as ReACT); invalid input
 // Run with: make run (in this folder)
 //==========================================================
 #include <FML/Global/Global.h>
 #include <FML/HaloModel/HaloModelReaction.h>
+#include <FML/PerturbationTheory/MGOneLoop.h>
 #include <FML/tests/TestHelpers.h>
 
 #include <cmath>
@@ -142,6 +145,68 @@ int main() {
         check_local(eg < 1e-6 and eE < 2e-4 and ek < 5e-3, c.name + ": g_de, E, k* = ReACT");
         check_local(e1h < 3e-3, c.name + ": one-halo terms (real and pseudo) = ReACT to " + fmt(e1h));
         check_local(eR < 2e-3, c.name + ": reaction = ReACT to " + fmt(eR) + " (k = 0.01 - 10 h/Mpc)");
+    }
+
+    std::cout << "Fully native: k* from MGOneLoop.h\n";
+    for (const Case & c : {Case{"fr", 2, 1e-5, 0}, Case{"dgp", 3, 0.1, 0}}) {
+        namespace PT = FML::PERTURBATION;
+        const auto lin = read(refdir + c.name + "_linear.txt");
+        const auto ref = read(refdir + "halomodel_" + c.name + ".txt");
+        const double Om = Ocb;
+        HaloModelReaction::Cosmology cosmo;
+        cosmo.OmegaM = Om;
+        HaloModelReaction::FifthForceOfRadius F;
+        if (c.model == 2)
+            F = [=](double R) { return fifth_force_hu_sawicki(c.p0, 1.0, Om, R); };
+        else {
+            SphericalCollapseModel m;
+            m.OmegaM = Om;
+            m.set_model_lcdm();
+            F = [=](double) { return fifth_force_ndgp(c.p0, m); };
+        }
+        // The one-loop P(k0) of the real (P_cb, model kernels) and pseudo (P, GR LCDM kernels) spectra at z = 2, 1, 0.5, 0
+        const std::vector<double> a = {1.0 / 3.0, 0.5, 2.0 / 3.0, 1.0};
+        const int col[4] = {3, 2, 1, 0};
+        std::vector<HaloModelReaction::LinearSpectra> S;
+        for (int i = 0; i < 4; i++)
+            S.push_back(spectra(lin, col[i]));
+        auto real = c.model == 2 ? PT::mg_hu_sawicki(c.p0, Om, Om) : PT::mg_ndgp(c.p0, Om, Om);
+        auto real_react = real;
+        if (c.model == 2) {
+            const auto g3 = real.gamma3;
+            real_react.gamma3 = [g3](double aa, const FML::PERTURBATION::SPT::Vec3 & x,
+                                     const FML::PERTURBATION::SPT::Vec3 & y, const FML::PERTURBATION::SPT::Vec3 & z) {
+                return g3(aa, x, y, z) / 3.0;
+            };
+        }
+        auto Pcb = [&](double q, size_t i) { return S[i].Pcb(q); };
+        const auto pr = PT::mg_one_loop(real_react, 0.06, a, Pcb);
+        const auto pr_correct = c.model == 2 ? PT::mg_one_loop(real, 0.06, a, Pcb) : pr;
+        const auto pp = PT::mg_one_loop(PT::mg_lcdm(Om, Om), 0.06, a, [&](double q, size_t i) { return S[i].P(q); });
+        double ek = 0, eR = 0, dR = 0;
+        size_t row = 0;
+        for (int i = 0; i < 4; i++) { // the reference starts at z = 2 (a[0])
+            const auto & Z = ref[row++];
+            HaloModelReaction hm(cosmo, a[i], S[i], F);
+            HaloModelReaction hc = hm;
+            hm.set_one_loop(pr[i], pp[i]);
+            hc.set_one_loop(pr_correct[i], pp[i]);
+            ek = std::max(ek, std::abs(hm.kstar() / std::stod(Z[11]) - 1));
+            while (row < ref.size() and ref[row][0] != "Z") {
+                const auto & r = ref[row++];
+                if (r[0] != "K")
+                    continue;
+                const double k = std::stod(r[1]);
+                eR = std::max(eR, std::abs(hm.reaction(k) - std::stod(r[4])));
+                dR = std::max(dR, std::abs(hc.reaction(k) - hm.reaction(k)));
+            }
+        }
+        std::cout << "  " << c.name << ": k* " << ek << ", |R - R_ReACT| " << eR;
+        if (c.model == 2)
+            std::cout << "; the correct gamma3 changes R by up to " << dR;
+        std::cout << "\n";
+        check_local(ek < 0.05, c.name + ": native k* = ReACT's to " + fmt(ek));
+        check_local(eR < 3e-3, c.name + ": native reaction = ReACT to " + fmt(eR));
     }
 
     std::cout << "Identical real and pseudo cosmologies\n";
