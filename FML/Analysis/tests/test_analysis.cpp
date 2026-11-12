@@ -17,6 +17,7 @@
 #include <cmath>
 #include <cstdio>
 #include <fstream>
+#include <sstream>
 #include <random>
 #include <string>
 #include <vector>
@@ -358,6 +359,104 @@ int main() {
         FML::SumOverTasks(&cells);
         check(std::abs(vmean / cells - 20.0) < 1e-6, "DTFE velocity in km/s (" + num(vmean / cells) + ")");
 #endif
+    }
+
+    //=========================================================================
+    // Relaxed FoF (fof_relaxed): the catalogue equals RelaxedFriendsOfFriends run directly, a hot clump (far too
+    // fast to be bound) is rejected while standard FoF keeps it, the extra catalogue columns, the settings checks
+    //=========================================================================
+    {
+        const std::array<double, 3> hot{0.8, 0.8, 0.8};
+        const std::vector<std::array<double, 3>> centers{{0.3, 0.3, 0.3}, {0.7, 0.6, 0.2}, hot};
+        auto parts = make_particles(32768, centers, {0.004, 0.003, 0.0006}, {4000, 2000, 150});
+        for (auto & p : parts) {
+            double r2 = 0.0;
+            for (int d = 0; d < 3; d++)
+                r2 += (p.pos[d] - hot[d]) * (p.pos[d] - hot[d]);
+            if (r2 < 0.005 * 0.005)
+                for (auto & v : p.vel)
+                    v *= 200.0; // sigma_3D ~ 17000 km/s, V_std(1.5e12 Msun/h) ~ 125 km/s
+        }
+        const auto context = make_context(100.0, 1.0);
+        AN::HaloSettings settings;
+        settings.buffer_length_mpch = 6.0;
+        settings.relaxed = true;
+        auto copy = parts;
+        const auto cat = AN::find_halos<3>(parts.data(), parts.size(), settings, context);
+        const auto direct = FML::FOF::RelaxedFriendsOfFriends<Particle, 3>(
+            copy.data(), copy.size(), settings.relaxed_parameters(), 0.0, 1.0, 1e10, 1.0, true, 0.06);
+
+        long long n_cat = cat.halos.size(), n_direct = direct.size(), np_cat = 0, np_direct = 0, bad = 0, near_hot = 0;
+        for (auto & h : cat.halos) {
+            np_cat += h.np;
+            bad += (h.rfof_bin < 1 or h.rfof_bin > 6 or h.rfof_pass != h.rfof_bin - 1 or
+                    not(h.rfof_vdisp_ratio < 7.02) or not(h.rfof_linking_length >= 0.2 and h.rfof_linking_length <= 0.238 + 1e-12));
+            double r2 = 0.0;
+            for (int d = 0; d < 3; d++) {
+                double dx = h.pos[d] / 100.0 - hot[d];
+                r2 += dx * dx;
+            }
+            near_hot += r2 < 0.01 * 0.01;
+        }
+        for (auto & h : direct)
+            np_direct += h.np;
+        for (auto * v : {&n_cat, &n_direct, &np_cat, &np_direct, &bad, &near_hot})
+            FML::SumOverTasks(v);
+        check(n_cat == n_direct and np_cat == np_direct and n_cat >= 2,
+              "relaxed FoF: the catalogue equals RelaxedFriendsOfFriends (" + num(n_cat) + " halos)");
+        check(bad == 0, "relaxed FoF: pass, bin, linking length and sigma_v/V_std of every halo");
+        check(near_hot == 0, "relaxed FoF: the hot clump is rejected");
+        check(cat.relaxed and cat.nmin_per_halo == 8, "relaxed FoF: the catalogue records the settings");
+
+        AN::HaloSettings standard;
+        standard.buffer_length_mpch = 6.0;
+        standard.nmin_per_halo = 20;
+        auto copy2 = parts;
+        const auto cat_std = AN::find_halos<3>(copy2.data(), copy2.size(), standard, context);
+        long long hot_std = 0;
+        for (auto & h : cat_std.halos) {
+            double r2 = 0.0;
+            for (int d = 0; d < 3; d++) {
+                double dx = h.pos[d] / 100.0 - hot[d];
+                r2 += dx * dx;
+            }
+            hot_std += r2 < 0.01 * 0.01;
+        }
+        FML::SumOverTasks(&hot_std);
+        check(hot_std == 1, "standard FoF keeps the hot clump");
+
+        // The text catalogue: 4 more columns
+        const std::string file = "test_analysis_rfof_halos.txt";
+        AN::write_halo_catalogue_ascii<3>(file, cat);
+        if (FML::ThisTask == 0) {
+            std::ifstream in(file);
+            std::string header, row;
+            std::getline(in, header);
+            std::getline(in, row);
+            std::stringstream ss(row);
+            int ncols = 0;
+            std::string word;
+            while (ss >> word)
+                ncols++;
+            check_local(header.find("rfof: pass  bin  linking_length  sigma_v/V_std") != std::string::npos and
+                            ncols == 11 + 4,
+                        "relaxed FoF: the catalogue has the 4 rfof columns (" + num(ncols) + " columns)");
+            std::remove(file.c_str());
+        }
+
+        AN::HaloSettings bad_mode;
+        bad_mode.relaxed = true;
+        bad_mode.relaxed_mode = "fast";
+        AN::HaloSettings bad_edges;
+        bad_edges.relaxed = true;
+        bad_edges.relaxed_bin_edges = {20, 10};
+        check_local(FML::TESTS::throws<std::runtime_error>([&] { bad_mode.validate(); }) and
+                        FML::TESTS::throws<std::runtime_error>([&] { bad_edges.validate(); }),
+                    "relaxed FoF: invalid fof_relaxed_mode and bin edges are rejected");
+        check_local(FML::TESTS::throws<std::runtime_error>([&] {
+                        AN::find_fof_halos<3, Particle>(copy.data(), copy.size(), settings, 100.0, 0.2, 20);
+                    }),
+                    "relaxed FoF without the context is rejected");
     }
 
     return FML::TESTS::summary("Analysis");

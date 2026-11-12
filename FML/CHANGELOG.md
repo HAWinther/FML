@@ -16,6 +16,10 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
   separation of the whole simulation); tasks without particles are now allowed (before: an error); `FoF_verbose`.
 - SimulationCode: `fof_relaxed = true` and the `fof_relaxed_*` parameters; the halo catalogue then has the pass,
   bin, linking length and sigma_v / V_std of each halo (text columns, HDF5 group `RelaxedFoF`).
+- SnapshotAnalyzer and FML/Analysis (`HaloSettings`, `find_halos`): the same `fof_relaxed*` parameters, defaults and
+  catalogue columns; the redshift, E(z) and units come from the AnalysisContext. Tests: `Analysis/tests` (the
+  catalogue equals RelaxedFriendsOfFriends, a hot clump is rejected) and `SnapshotAnalyzer/tests` (both modes on
+  1/2/4 tasks; with scipy the halos of the independent implementation).
 - Tests (`FriendsOfFriends/tests`, 1/2/4 MPI tasks): the halos equal those of an independent scipy implementation
   (`make_rfof_reference.py`) for both modes at three redshifts; standard FoF; subsets with empty tasks.
 

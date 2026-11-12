@@ -9,7 +9,7 @@ Everything is in `FML::ANALYSIS` and header-only (C++17).
 |---|---|
 | `AnalysisContext.h` | `AnalysisContext`: box size, scale factor, expansion history (`Background`), particle unit conversions |
 | `PowerSpectrum.h` | P(k) and redshift-space multipoles P_ell(k) and their output files |
-| `Halos.h` | FoF halos, spherical overdensity (SO) masses, overlap flags, halo catalogue (text/HDF5), mass functions |
+| `Halos.h` | FoF (or relaxed FoF, `fof_relaxed`) halos, spherical overdensity (SO) masses, overlap flags, halo catalogue (text/HDF5), mass functions |
 | `Baryonification.h` | Position-only baryonification (FoF/M200c hosts + FML/Baryonification profiles) |
 | `Voids.h` | Void catalogues: voxel watershed, spherical underdensities, ZOBOV (CGAL) |
 | `DTFE.h` | DTFE density and velocity fields and their power spectra (CGAL) |
@@ -53,6 +53,9 @@ SimulationCode does not have: `pofk_nbins`, `pofk_log_binning` (and the multipol
   a more massive halo are flagged (`so_overlap`). `write_halo_outputs` writes `halos_z<z>.txt` or `.hdf5` and
   `massfunc_z<z>.txt`, `massfunc_so<def>_z<z>.txt` (SimulationCode's names and columns; fits can be added as extra
   columns by the caller).
+  With `fof_relaxed = true` the halos are found with relaxed FoF (`FriendsOfFriends/RelaxedFoF.h`, Dai et al. 2019
+  as FastPM's RFOF; the redshift, E(z) and the mass and velocity units come from the context, so the velocities must
+  be peculiar velocities); the catalogue then has the pass, bin, linking length and sigma_v / V_std of each halo.
 - `find_voxel_voids`, `find_spherical_voids`, `find_zobov_voids` (FML/VoidFinders; settings `void_*`,
   `spherical_void_*`, `zobov_*`) and `write_void_catalogue`: `voids_z<z>.txt`, `voids_spherical_z<z>.txt`,
   `voids_zobov_z<z>.txt` (positions and radii in Mpc/h).

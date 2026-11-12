@@ -9,6 +9,8 @@ a spherical hole of radius 15 Mpc/h (a void). Checks:
   - every analysis writes its files, and the results do not depend on the number of MPI tasks or on the read mode
     (files_per_task / all_tasks);
   - the three largest FoF halos are the blobs, with the right number of particles; the mass functions hold all halos;
+  - relaxed FoF (fastpm and paper mode): the blobs, the rfof columns, independent of the number of tasks, and (with
+    scipy) the same halos as the independent implementation in FriendsOfFriends/tests/make_rfof_reference.py;
   - baryonification: the hosts are blobs, the corrected snapshot has the same particles (IDs, velocities, masses)
     and only moved positions near the hosts;
   - the largest void (voxel and spherical finders, and ZOBOV with CGAL) is the hole;
@@ -296,6 +298,59 @@ def main():
                 print(out[-3000:])
         except ImportError:
             print('h5py not available: skipping the HDF5 input check')
+
+    # Relaxed FoF (fof_relaxed): the blobs, the rfof columns, independent of the number of tasks, and (with scipy)
+    # the same halos as the independent implementation in FriendsOfFriends/tests/make_rfof_reference.py
+    rfof_base = {'snapshot_input': 'snap', 'pofk': False, 'fof': True, 'fof_relaxed': True,
+                 'fof_buffer_length_mpch': 5.0}
+    rfof_results = {}
+    for mode in ['fastpm', 'paper']:
+        for n in tasks:
+            name = f'rfof_{mode}_np{n}'
+            code, out = r.run(name, {**rfof_base, 'fof_relaxed_mode': mode, 'output_folder': name}, n)
+            if check(code == 0, f'{name}: runs ({code})'):
+                rfof_results[(mode, n)] = table(workdir / name / 'halos_z0.000.txt')
+            else:
+                print(out[-3000:])
+    for (mode, n), h in rfof_results.items():
+        check(h.shape[1] == 11 + 4, f'relaxed FoF {mode}, {n} tasks: the 4 rfof columns ({h.shape[1]} columns)')
+        ref_h = rfof_results.get((mode, tasks[0]))
+        if n != tasks[0] and ref_h is not None:
+            a, b = ref_h[np.lexsort(ref_h.T[::-1])], h[np.lexsort(h.T[::-1])]
+            check(a.shape == b.shape and np.array_equal(a[:, [0, 11, 12]], b[:, [0, 11, 12]]) and same(a, b, 1e-6),
+                  f'relaxed FoF {mode}: {n} tasks give the catalogue of {tasks[0]} task(s)')
+    for mode in ['fastpm', 'paper']:
+        h = rfof_results.get((mode, tasks[0]))
+        if h is None:
+            continue
+        h = h[np.argsort(-h[:, 0])]
+        ok = True
+        for i, (center, nb) in enumerate(BLOBS):
+            d = (h[i, 2:5] - np.array(center) + BOX / 2) % BOX - BOX / 2
+            ok = ok and np.linalg.norm(d) < 0.2 and 0.97 * nb <= h[i, 0] <= 1.05 * nb and h[i, 12] == 6
+        check(ok, f'relaxed FoF {mode}: the three largest halos are the blobs (in the last bin)')
+        check(np.all((h[:, 12] >= 0) & (h[:, 12] <= 6)) and np.all(h[:, 14] < 7.02),
+              f'relaxed FoF {mode}: bins in 0-6 and sigma_v/V_std < r0 = 7.02')
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'FriendsOfFriends' / 'tests'))
+        import make_rfof_reference as rfof_ref
+        rfof_ref.MASS_UNIT = mass * 1e10
+        p64, v64 = pos.astype(np.float64) / BOX, vel.astype(np.float64)
+        for mode in ['fastpm', 'paper']:
+            h = rfof_results.get((mode, tasks[0]))
+            if h is None:
+                continue
+            try:
+                expected = rfof_ref.relaxed_fof(p64 % 1.0, v64, mode, 0.0, 1.0)
+            except rfof_ref.Tight:
+                print(f'relaxed FoF {mode}: a pair or halo is within 1e-10 of a threshold; skipping the reference')
+                continue
+            ref_rows = sorted((len(m), p, b) for p, b, m in expected)
+            got_rows = sorted((int(r[0]), int(r[11]), int(r[12])) for r in h)
+            check(ref_rows == got_rows, f'relaxed FoF {mode}: the halos (size, pass, bin) of the independent '
+                                        f'implementation ({len(got_rows)} vs {len(ref_rows)} halos)')
+    except ImportError:
+        print('scipy not available: skipping the comparison with the independent relaxed FoF')
 
     # Errors stop every task with a clear message
     n = max(tasks)

@@ -25,8 +25,9 @@ auto halos = FML::FOF::RelaxedFriendsOfFriends<Particle, 3>(
 // mass_msunh, vdisp_kms, vdisp_ratio
 ```
 
-In SimulationCode, set `fof = true` and `fof_relaxed = true`; the parameters are the `fof_relaxed_*` entries in
-[PARAMETERS.md](../SimulationCode/PARAMETERS.md). The halo catalogue then also has the pass, bin, linking length
+In SimulationCode and SnapshotAnalyzer (through `FML/Analysis`, `find_halos`), set `fof = true` and
+`fof_relaxed = true`; the parameters are the `fof_relaxed_*` entries in
+[PARAMETERS.md](../SimulationCode/PARAMETERS.md), with the same names and defaults in both. The halo catalogue then also has the pass, bin, linking length
 and σ_v/V_std of each halo: extra text columns, or the `RelaxedFoF` group of the HDF5 file.
 
 ## The algorithm

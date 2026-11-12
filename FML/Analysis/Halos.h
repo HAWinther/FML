@@ -4,6 +4,7 @@
 #include <FML/Analysis/AnalysisContext.h>
 #include <FML/Analysis/Output.h>
 #include <FML/FriendsOfFriends/FoF.h>
+#include <FML/FriendsOfFriends/RelaxedFoF.h>
 #include <FML/FriendsOfFriends/SphericalOverdensity.h>
 #include <FML/Global/Global.h>
 #include <FML/Global/MPICounts.h>
@@ -31,6 +32,10 @@
 // Particles: positions in box units [0,1); masses (get_mass, 1 if absent) and velocities in the units given by the
 // AnalysisContext. "m" (and "b") definitions are relative to the mean density of the particles analysed, "c" to the
 // critical density: the density parameter of the particles is taken from their total mass.
+//
+// With fof_relaxed = true the halos are found with relaxed FoF instead (FriendsOfFriends/RelaxedFoF.h; Dai et al.
+// 2019 as FastPM's RFOF): a linking length that is longer for small halos and rejection of fake halos by their
+// velocity dispersion. The catalogue then also has the pass, bin, linking length and sigma_v / V_std of each halo.
 //=============================================================================
 
 namespace FML {
@@ -51,6 +56,14 @@ namespace FML {
             double massfunction_Mmax;
             std::vector<std::string> so_definitions;
             int so_nmin_center;
+            // Relaxed FoF (fof_relaxed; the same names and defaults as SimulationCode's)
+            bool relaxed;
+            std::string relaxed_mode;
+            double relaxed_l1, relaxed_a1, relaxed_l6, relaxed_a2, relaxed_linking_length_min;
+            std::vector<int> relaxed_bin_edges;
+            int relaxed_nmin;
+            bool relaxed_velocity_rejection;
+            double relaxed_b1, relaxed_b2, relaxed_r0_min;
 
             HaloSettings() {
                 parameters([](const char *, auto & value, const auto & default_value, const char *) {
@@ -84,6 +97,56 @@ namespace FML {
                   so_nmin_center,
                   20,
                   "Stop the shrinking sphere when fewer particles than this are left");
+                f("relaxed",
+                  relaxed,
+                  false,
+                  "Relaxed FoF instead of standard FoF (Dai et al. 2019; FastPM's RFOF; FriendsOfFriends/RelaxedFoF.md); "
+                  "fof_linking_length and fof_nmin_per_halo are then not used");
+                f("relaxed_mode",
+                  relaxed_mode,
+                  std::string("fastpm"),
+                  "fastpm: the halo bins only (as FastPM); paper: then shorter linking lengths for rejected halos");
+                f("relaxed_l1", relaxed_l1, 0.25, "Linking length of the smallest halos: l1 - a1 / (1 + z)");
+                f("relaxed_a1", relaxed_a1, 0.012, "See relaxed_l1");
+                f("relaxed_l6",
+                  relaxed_l6,
+                  0.24,
+                  "Linking length of the largest halos: max(l6 - a2 / (1 + z), relaxed_linking_length_min)");
+                f("relaxed_a2", relaxed_a2, 0.06, "See relaxed_l6");
+                f("relaxed_linking_length_min", relaxed_linking_length_min, 0.2, "See relaxed_l6");
+                f("relaxed_bin_edges",
+                  relaxed_bin_edges,
+                  std::vector<int>{20, 40, 80, 160, 320},
+                  "Upper edges (particles) of the halo bins; the last bin has no upper edge");
+                f("relaxed_nmin", relaxed_nmin, 8, "Minimum number of particles per halo");
+                f("relaxed_velocity_rejection",
+                  relaxed_velocity_rejection,
+                  true,
+                  "Reject halos with sigma_v(3D) > r0(z) 1100 km/s (E(z) M / 1e15 Msun/h)^(1/3)");
+                f("relaxed_b1", relaxed_b1, 7.02, "r0 = b1 - b2 ln(1 + z)");
+                f("relaxed_b2", relaxed_b2, 6.025, "See relaxed_b1 (with the defaults r0 <= 0 for z > 2.2)");
+                f("relaxed_r0_min", relaxed_r0_min, 0.0, "Floor of r0 (0: none, as FastPM)");
+            }
+
+            /// The relaxed FoF parameters (RelaxedFoF.h) of these settings
+            FML::FOF::RelaxedFoFParameters relaxed_parameters() const {
+                FML::FOF::RelaxedFoFParameters p;
+                p.mode = relaxed_mode == "paper" ? FML::FOF::RelaxedFoFParameters::Mode::paper
+                                                 : FML::FOF::RelaxedFoFParameters::Mode::fastpm;
+                p.l1 = relaxed_l1;
+                p.a1 = relaxed_a1;
+                p.l6 = relaxed_l6;
+                p.a2 = relaxed_a2;
+                p.linking_length_min = relaxed_linking_length_min;
+                p.bin_edges.clear();
+                for (int e : relaxed_bin_edges)
+                    p.bin_edges.push_back(size_t(std::max(e, 0)));
+                p.nmin = relaxed_nmin;
+                p.velocity_rejection = relaxed_velocity_rejection;
+                p.b1 = relaxed_b1;
+                p.b2 = relaxed_b2;
+                p.r0_min = relaxed_r0_min;
+                return p;
             }
 
             void validate() const;
@@ -141,6 +204,18 @@ namespace FML {
                 throw std::runtime_error("fof_so_nmin_center must be >= 0");
             for (auto & def : so_definitions)
                 parse_so_definition(def);
+            if (relaxed) {
+                if (relaxed_mode != "fastpm" and relaxed_mode != "paper")
+                    throw std::runtime_error("fof_relaxed_mode must be fastpm or paper");
+                for (int e : relaxed_bin_edges)
+                    if (e < 1)
+                        throw std::runtime_error("fof_relaxed_bin_edges must be >= 1");
+                try {
+                    relaxed_parameters().validate();
+                } catch (const std::exception & e) {
+                    throw std::runtime_error(std::string("Invalid fof_relaxed settings: ") + e.what());
+                }
+            }
         }
 
         /// The overdensity of an SO definition in units of the mean density of the particles at the scale factor of
@@ -175,12 +250,18 @@ namespace FML {
             std::vector<long long int> so_npart;
             bool so_truncated{false}; // The sphere reached the search radius (the buffer)
             bool so_overlap{false};   // The SO center is inside the radius (first definition) of a more massive halo
+            // Relaxed FoF (fof_relaxed): the pass and bin (0: the shrinking passes of paper mode) that found the halo,
+            // its linking length (units of the mean separation) and sigma_v / V_std(M, z)
+            int rfof_pass{-1}, rfof_bin{-1};
+            double rfof_linking_length{0.0}, rfof_vdisp_ratio{0.0};
         };
 
         /// Run FoF (and SO around the FoF halos if so_thresholds is not empty) and return the halos found on this task
         /// (box/particle units). linking_length (mean separations) and nmin_per_halo are arguments (not taken from
         /// settings) so a caller can rescale them, e.g. for several particle species. total_mass: the total mass of
-        /// all the particles (the mean density for SO, thresholds in units of it)
+        /// all the particles (the mean density for SO, thresholds in units of it). With settings.relaxed: relaxed
+        /// FoF (the units, redshift and E(z) from the context, which is then required; linking_length and
+        /// nmin_per_halo are not used)
         template <int NDIM, class P>
         std::vector<HaloRecord<NDIM>> find_fof_halos(P * part,
                                                      size_t npart,
@@ -189,19 +270,10 @@ namespace FML {
                                                      double linking_length,
                                                      int nmin_per_halo,
                                                      const std::vector<double> & so_thresholds = {},
-                                                     double total_mass = 0.0) {
-            std::vector<FML::FOF::FoFHalo<P, NDIM>> groups;
-            FML::FOF::FriendsOfFriends<P, NDIM>(part,
-                                                npart,
-                                                linking_length,
-                                                nmin_per_halo,
-                                                true,
-                                                settings.buffer_length_mpch / boxsize,
-                                                groups,
-                                                settings.nmesh_max);
+                                                     double total_mass = 0.0,
+                                                     const AnalysisContext * context = nullptr) {
             std::vector<HaloRecord<NDIM>> halos;
-            halos.reserve(groups.size());
-            for (auto & g : groups) {
+            auto add = [&](const auto & g) {
                 HaloRecord<NDIM> h;
                 h.id = (long long int)g.id;
                 h.np = (long long int)g.np;
@@ -212,6 +284,46 @@ namespace FML {
                     h.vel_rms[idim] = g.vel_rms[idim];
                 }
                 halos.push_back(h);
+            };
+            if (settings.relaxed) {
+                if (context == nullptr)
+                    throw std::runtime_error("find_fof_halos: relaxed FoF needs the AnalysisContext");
+                // NB: does not reorder the particles (standard FoF sorts them)
+                const auto groups = FML::FOF::RelaxedFriendsOfFriends<P, NDIM>(
+                    part,
+                    npart,
+                    settings.relaxed_parameters(),
+                    context->redshift(),
+                    context->background.E(context->scale_factor),
+                    context->mass_to_msunh,
+                    context->velocity_to_kms,
+                    true,
+                    settings.buffer_length_mpch / boxsize,
+                    nullptr,
+                    nullptr,
+                    0.0,
+                    settings.nmesh_max);
+                halos.reserve(groups.size());
+                for (auto & g : groups) {
+                    add(g);
+                    halos.back().rfof_pass = g.pass;
+                    halos.back().rfof_bin = g.bin;
+                    halos.back().rfof_linking_length = g.linking_length;
+                    halos.back().rfof_vdisp_ratio = g.vdisp_ratio;
+                }
+            } else {
+                std::vector<FML::FOF::FoFHalo<P, NDIM>> groups;
+                FML::FOF::FriendsOfFriends<P, NDIM>(part,
+                                                    npart,
+                                                    linking_length,
+                                                    nmin_per_halo,
+                                                    true,
+                                                    settings.buffer_length_mpch / boxsize,
+                                                    groups,
+                                                    settings.nmesh_max);
+                halos.reserve(groups.size());
+                for (auto & g : groups)
+                    add(g);
             }
 
             // Spherical overdensity around the FoF halos. The first shrinking sphere has 1.5 times the radius of a
@@ -364,6 +476,8 @@ namespace FML {
             long long int npart_total{0};
             double linking_length{0.0};
             int nmin_per_halo{0};
+            bool relaxed{false};                     // Found with relaxed FoF (then also the settings below)
+            FML::FOF::RelaxedFoFParameters relaxed_parameters{};
         };
 
         /// FoF + SO + overlap flags of a particle set, in physical units. Collective
@@ -389,7 +503,10 @@ namespace FML {
             for (auto & def : settings.so_definitions)
                 cat.so_thresholds.push_back(so_overdensity(def, context, cat.Omega_particles));
             cat.linking_length = settings.linking_length;
-            cat.nmin_per_halo = settings.nmin_per_halo;
+            cat.nmin_per_halo = settings.relaxed ? settings.relaxed_nmin : settings.nmin_per_halo;
+            cat.relaxed = settings.relaxed;
+            if (settings.relaxed)
+                cat.relaxed_parameters = settings.relaxed_parameters();
             cat.halos = find_fof_halos<NDIM, P>(part,
                                                 npart,
                                                 settings,
@@ -397,7 +514,8 @@ namespace FML {
                                                 settings.linking_length,
                                                 settings.nmin_per_halo,
                                                 cat.so_thresholds,
-                                                total_mass);
+                                                total_mass,
+                                                &context);
             if (not cat.so_thresholds.empty())
                 flag_overlapping_so_halos<NDIM>(cat.halos);
             halos_to_physical_units<NDIM>(cat.halos, context);
@@ -470,9 +588,12 @@ namespace FML {
         namespace detail {
             /// All the halos as rows of doubles, gathered on task 0 (task order). Collective
             template <int NDIM>
-            std::vector<double> gather_halo_rows(const std::vector<HaloRecord<NDIM>> & halos, int nso, int & stride) {
+            std::vector<double> gather_halo_rows(const std::vector<HaloRecord<NDIM>> & halos,
+                                                 int nso,
+                                                 int & stride,
+                                                 bool relaxed = false) {
                 const bool do_so = nso > 0;
-                stride = 3 + 3 * NDIM + (do_so ? 3 * NDIM + 2 + 3 * nso : 0);
+                stride = 3 + 3 * NDIM + (do_so ? 3 * NDIM + 2 + 3 * nso : 0) + (relaxed ? 4 : 0);
                 std::vector<double> local;
                 local.reserve(halos.size() * size_t(stride));
                 for (auto & g : halos) {
@@ -500,6 +621,12 @@ namespace FML {
                             local.push_back(double(g.so_npart[id]));
                         }
                     }
+                    if (relaxed) {
+                        local.push_back(double(g.rfof_pass));
+                        local.push_back(double(g.rfof_bin));
+                        local.push_back(g.rfof_linking_length);
+                        local.push_back(g.rfof_vdisp_ratio);
+                    }
                 }
 #ifdef USE_MPI
                 return FML::COMMUNICATION::gather_records_checked(local);
@@ -514,7 +641,8 @@ namespace FML {
         void write_halo_catalogue_ascii(const std::string & filename, const HaloCatalogue<NDIM> & cat) {
             const int nso = int(cat.so_definitions.size());
             int stride = 0;
-            const auto all = detail::gather_halo_rows<NDIM>(cat.halos, nso, stride);
+            const auto all = detail::gather_halo_rows<NDIM>(cat.halos, nso, stride, cat.relaxed);
+            const int c_rfof = stride - 4; // the relaxed FoF columns (if cat.relaxed)
             write_on_root(filename, [&](std::ostream & fp) {
                 fp << "#            np     ";
                 fp << "mass (Msun/h)       ";
@@ -526,6 +654,8 @@ namespace FML {
                     for (auto & def : cat.so_definitions)
                         fp << "  M_" << def << " (Msun/h)  R_" << def << " (Mpc/h)  N_" << def;
                 }
+                if (cat.relaxed)
+                    fp << "  rfof: pass  bin  linking_length  sigma_v/V_std";
                 fp << "\n";
                 const size_t nhalos = all.size() / size_t(stride);
                 for (size_t i = 0; i < nhalos; i++) {
@@ -545,6 +675,10 @@ namespace FML {
                                << (long long int)so[2] << " ";
                         }
                     }
+                    if (cat.relaxed)
+                        fp << std::setw(4) << (long long int)row[c_rfof] << " " << std::setw(3)
+                           << (long long int)row[c_rfof + 1] << " " << std::setw(15) << row[c_rfof + 2] << " "
+                           << std::setw(15) << row[c_rfof + 3] << " ";
                     fp << "\n";
                 }
             });
@@ -557,7 +691,8 @@ namespace FML {
                                        double boxsize) {
             const int nso = int(cat.so_definitions.size());
             int stride = 0;
-            const auto all = detail::gather_halo_rows<NDIM>(cat.halos, nso, stride);
+            const auto all = detail::gather_halo_rows<NDIM>(cat.halos, nso, stride, cat.relaxed);
+            const int c_rfof = stride - 4; // the relaxed FoF columns (if cat.relaxed)
             int failed = 0;
             std::string error;
             if (FML::ThisTask == 0) {
@@ -590,6 +725,27 @@ namespace FML {
                     const long long int nh = (long long int)nhalos, nmin = cat.nmin_per_halo;
                     H5::write_attribute(header, "NumHalos", H5T_NATIVE_LLONG, H5T_NATIVE_LLONG, &nh, 1);
                     H5::write_attribute(header, "MinParticlesPerHalo", H5T_NATIVE_LLONG, H5T_NATIVE_LLONG, &nmin, 1);
+                    if (cat.relaxed) {
+                        // Relaxed FoF settings (LinkingLength above is that of standard FoF, not used)
+                        const auto & rp = cat.relaxed_parameters;
+                        const long long int paper = rp.mode == FML::FOF::RelaxedFoFParameters::Mode::paper;
+                        H5::write_attribute(header, "RelaxedFoFPaperMode", H5T_NATIVE_LLONG, H5T_NATIVE_LLONG, &paper, 1);
+                        const double rd[] = {rp.l1, rp.a1, rp.l6, rp.a2, rp.linking_length_min, rp.b1, rp.b2, rp.r0_min};
+                        H5::write_attribute(header,
+                                            "RelaxedFoF_l1_a1_l6_a2_lmin_b1_b2_r0min",
+                                            H5T_NATIVE_DOUBLE,
+                                            H5T_NATIVE_DOUBLE,
+                                            rd,
+                                            8);
+                        std::vector<long long int> edges(rp.bin_edges.begin(), rp.bin_edges.end());
+                        if (not edges.empty())
+                            H5::write_attribute(header,
+                                                "RelaxedFoFBinEdges",
+                                                H5T_NATIVE_LLONG,
+                                                H5T_NATIVE_LLONG,
+                                                edges.data(),
+                                                edges.size());
+                    }
                     auto write_d = [&](hid_t loc, const std::string & name, int c, int ncols) {
                         auto v = column(c, ncols);
                         H5::write_dataset(loc, name, H5T_NATIVE_DOUBLE, H5T_NATIVE_DOUBLE, v.data(), nhalos, ncols);
@@ -631,6 +787,15 @@ namespace FML {
                             write_d(g, "Radius", c + 1, 1);
                             write_ll(g, "NumParticles", c + 2);
                         }
+                    }
+                    if (cat.relaxed) {
+                        H5::Handle rg(H5Gcreate2(file, "RelaxedFoF", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT),
+                                      H5Gclose,
+                                      "RelaxedFoF");
+                        write_ll(rg, "Pass", c_rfof);
+                        write_ll(rg, "Bin", c_rfof + 1);
+                        write_d(rg, "LinkingLength", c_rfof + 2, 1);
+                        write_d(rg, "VelocityDispersionRatio", c_rfof + 3, 1);
                     }
                 } catch (const std::exception & e) {
                     error = e.what();

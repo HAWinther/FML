@@ -39,6 +39,14 @@ SimulationCode, so the two give the same result for the same particles.
   (`fof_so_definitions = {"200m", "500c", "vir"}`), overlap flags, the halo catalogue (`halos_z<z>.txt`, or `.hdf5`
   with `fof_output_fileformat = "HDF5"` and `USE_HDF5=true`) and mass functions (`massfunc_z<z>.txt`,
   `massfunc_so<def>_z<z>.txt`).
+- Relaxed FoF (`fof_relaxed = true`; [FriendsOfFriends/RelaxedFoF.md](../FriendsOfFriends/RelaxedFoF.md)) instead of
+  standard FoF, for low-resolution simulations (Dai et al. 2019, as FastPM's RFOF): a linking length per halo-size
+  bin (longer for small halos) and rejection of fake halos by their velocity dispersion. The `fof_relaxed_*`
+  parameters and defaults are SimulationCode's (FastPM's fit for a 0.3 Mpc/h mean separation and 40 FastPM steps:
+  refit for other simulations); the catalogue gets the pass, bin, linking length and sigma_v / V_std of each halo
+  (text columns, HDF5 group `RelaxedFoF`). The velocities must be peculiar velocities (km/s after the Gadget
+  sqrt(a) convention) and the redshift that of the snapshot: r0(z) <= 0 (every halo rejected) for z > 2.2 with the
+  defaults.
 - Voxel watershed void catalogues from a smoothed density field, with grid, smoothing, density cut, and
   zone-merging controls (`voids_z<z>.txt`).
 - Spherical underdensity voids with configurable density threshold, radius cuts, recentering, and overlap removal
@@ -99,6 +107,19 @@ fof_massfunction_Mmin = 1e10
 fof_massfunction_Mmax = 1e16
 fof_so_definitions = {} -- e.g. {"200m", "500c", "vir"}
 fof_so_nmin_center = 20
+fof_relaxed = false -- relaxed FoF instead (then fof_linking_length and fof_nmin_per_halo are not used)
+fof_relaxed_mode = "fastpm" -- or "paper" (shorter linking lengths for the particles of rejected halos)
+fof_relaxed_l1 = 0.25 -- linking length of the smallest halos: l1 - a1 / (1 + z)
+fof_relaxed_a1 = 0.012
+fof_relaxed_l6 = 0.24 -- of the largest halos: max(l6 - a2 / (1 + z), fof_relaxed_linking_length_min)
+fof_relaxed_a2 = 0.06
+fof_relaxed_linking_length_min = 0.2
+fof_relaxed_bin_edges = {20, 40, 80, 160, 320} -- upper edges (particles) of the halo bins
+fof_relaxed_nmin = 8
+fof_relaxed_velocity_rejection = true -- reject sigma_v(3D) > r0 1100 km/s (E(z) M / 1e15 Msun/h)^(1/3)
+fof_relaxed_b1 = 7.02 -- r0 = b1 - b2 ln(1 + z)
+fof_relaxed_b2 = 6.025
+fof_relaxed_r0_min = 0.0 -- floor of r0 (0: none)
 
 voids = false
 spherical_voids = false
@@ -188,7 +209,8 @@ analysis code has its own unit tests in [FML/Analysis/tests](../Analysis/tests).
    add the void finders and DTFE to its outputs).
 
 FoF uses the algorithm of Davis et al. (1985), [doi:10.1086/163168](https://doi.org/10.1086/163168),
-through FML's standalone `FriendsOfFriends` module.
+through FML's standalone `FriendsOfFriends` module. Relaxed FoF is that of Dai, Feng, Seljak & Singh (2019),
+[arXiv:1908.05276](https://arxiv.org/abs/1908.05276), as implemented in FastPM.
 
 Voxel void finding follows Revolver ([Nadathur et al. 2019](https://github.com/seshnadathur/Revolver)); the watershed
 can also merge zones using the VIDE threshold convention ([Sutter et al. 2015](https://arxiv.org/abs/1406.1191)).
