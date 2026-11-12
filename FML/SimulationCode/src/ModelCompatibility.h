@@ -36,6 +36,11 @@ namespace SIMCODE {
             params.baryonification.profile_model(cosmo.get_Omegab() / cosmo.get_OmegaM()).validate();
         }
 
+        // Velocity friction (Cosmology::velocity_friction) acts on the CDM+baryon fluid: one step (velocity_scale) for
+        // all the species, so only with CDM+baryons as one species and no neutrino particles for now
+        if (cosmo.has_velocity_friction() and (params.particle.neutrinos or params.particle.baryons))
+            fail("a cosmology with velocity friction needs particle_baryons = false and particle_neutrinos = false (one CDM+baryon species)");
+
         // The particle species (CDM+baryons as one, or CDM and baryons, and massive neutrinos)
         if (params.particle.neutrinos and not(cosmo.get_OmegaMNu() > 0.0 and cosmo.get_Mnu_eV() > 0.0))
             fail("particle_neutrinos = true needs massive neutrinos (cosmology_OmegaMNu > 0 or "

@@ -26,6 +26,7 @@ all the main code paths of the solver:
 | `hdf5_output` | As `cola_quinn_all` but with GADGET HDF5 output (only run if compiled with `USE_HDF5=true`) |
 | `read_particles_hdf5` | Reading the HDF5 particles from `hdf5_output` (only run if compiled with `USE_HDF5=true`) |
 | `nongaussian` | Non-gaussian (local fNL) IC |
+| `dark_scattering_cola`, `dark_scattering_fastpm` | Dark matter - dark energy scattering: the velocity friction in the growth factors and the kick/drift factors (COLA + Quinn; FastPM without COLA) |
 
 The cases are defined in `cases.py`. The transfer functions of the cases with massive neutrinos, two species and the
 N-body gauge are the tables in `input/transfer_tables` (made by `tests/make_transfer_tables.py` with the internal

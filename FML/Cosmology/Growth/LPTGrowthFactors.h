@@ -15,6 +15,11 @@
 // normalized to D1 = 1 at a_normalize (D2 by D1^2, D3 by D1^3 at the same time), so in EdS D2 = -3/7 D1^2,
 // D3a = -1/3 D1^3, D3b = 5/21 D1^3.
 //
+// With a velocity friction Gamma(x) (friction, default 0: the equation of motion of the clustering matter is
+// dv/dx = -Gamma v + force in the code velocity v = a^3 E dx/da, e.g. dark matter - dark energy scattering) the
+// damping (2 + dlnE/dx) is (2 + dlnE/dx + Gamma) at every order (the friction is linear in the velocity). The initial
+// conditions below assume that Gamma is negligible at a_min.
+//
 // Initial conditions at a_min: the growing mode of a matter + radiation universe, a power series in y = a/a_eq
 // (radiation_matter_growing_mode: D1 = 1 + 3y/2 and the higher orders that vanish for y -> 0), with
 // y = r/(1 - r), r = rho_m/E^2 at a_min; the EdS values for y >= 0.5 (or with eds_initial_conditions). With
@@ -60,6 +65,7 @@ namespace FML::COSMOLOGY::GROWTH {
         FunctionK second_order_source; ///< N(x, koverH0) of the 2LPT source; default 1
         FunctionK source_1, source_2, source_3a, source_3b; ///< per-order source factors; default 1
         FunctionK initial_rate_1; ///< dlnD1/dx at (x_min, koverH0) for koverH0 > 0; default the growing mode
+        Function friction;        ///< velocity friction Gamma(x) (dv/dx = -Gamma v + force); default 0
 
         /// E, dlnE/dx and rho_m = Omega_m(x) E^2 from a background (it must outlive the equations)
         static LPTGrowthEquations from_background(const BACKGROUND::Background & bg) {
@@ -325,14 +331,15 @@ namespace FML::COSMOLOGY::GROWTH {
                 const double N2 = call(eq.second_order_source, x, koverH0);
                 const double D1 = y[0], dD1dx = y[1], D2 = y[2], dD2dx = y[3];
                 const double D3a = y[4], dD3adx = y[5], D3b = y[6], dD3bdx = y[7];
+                const double damping = eq.friction ? 2.0 + dlogHdx + eq.friction(x) : 2.0 + dlogHdx;
                 dydx[0] = dD1dx;
-                dydx[1] = rhs_1LPT * D1 - (2.0 + dlogHdx) * dD1dx;
+                dydx[1] = rhs_1LPT * D1 - damping * dD1dx;
                 dydx[2] = dD2dx;
-                dydx[3] = rhs_2LPT * (D2 - N2 * D1 * D1) - (2.0 + dlogHdx) * dD2dx;
+                dydx[3] = rhs_2LPT * (D2 - N2 * D1 * D1) - damping * dD2dx;
                 dydx[4] = dD3adx;
-                dydx[5] = rhs_3LPTa * (D3a - 2.0 * D1 * D1 * D1) - (2.0 + dlogHdx) * dD3adx;
+                dydx[5] = rhs_3LPTa * (D3a - 2.0 * D1 * D1 * D1) - damping * dD3adx;
                 dydx[6] = dD3bdx;
-                dydx[7] = rhs_3LPTb * (D3b + D1 * D1 * D1 - D2 * D1) - (2.0 + dlogHdx) * dD3bdx;
+                dydx[7] = rhs_3LPTb * (D3b + D1 * D1 * D1 - D2 * D1) - damping * dD3bdx;
                 return GSL_SUCCESS;
             };
 

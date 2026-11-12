@@ -11,6 +11,7 @@
 #include <FML/Cosmology/Background/TabulatedBackground.h>
 #include <FML/FileUtils/FileUtils.h>
 #include <FML/Global/Global.h>
+#include <FML/ODESolver/ODESolver.h>
 #include <FML/ParameterMap/ParameterMap.h>
 #include <FML/Spline/Spline.h>
 #include <FML/Units/Units.h>
@@ -18,6 +19,7 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <map>
@@ -38,6 +40,10 @@
 ///   JBD           -> jbd (cosmology_JBD_wBD, _GeffG_today, _density_parameter_definition)
 ///   Quintessence  -> quintessence[_inverse_power_law|_pngb|_hilltop] (cosmology_quintessence_potential, ...)
 ///   EDE           -> ede_zc (cosmology_ede_fEDE, _zc, _theta_ini, _n)
+///   DarkScattering -> dark_scattering (cosmology_ds_w, _xi, _cs2): wCDM with elastic dark matter - dark energy
+///                    scattering (Simpson 2010; Baldi & Simpson 2015). The scattering is a velocity friction of the
+///                    dark matter (velocity_friction(a)); cs2 (the sound speed of the dark energy) is only used by the
+///                    internal Einstein-Boltzmann solver for the IC
 ///   Tabulated     -> a tabulated dark energy (BackgroundModel_Tabulated.h; cosmology_tabulated_filename, _format
 ///                    = H (z, H/H0), CLASS (a CLASS background file) or w (a, w))
 ///
@@ -99,6 +105,7 @@ class Cosmology {
         double ede_fEDE, ede_zc, ede_theta_ini, ede_n;
         std::string tabulated_filename, tabulated_format;
         double dgp_OmegaRC;
+        double ds_w, ds_xi, ds_cs2;
         double As, ns, kpivot_mpc; // The primordial power-spectrum
 
         /// The parameters of the background and of the models
@@ -199,6 +206,22 @@ class Cosmology {
                            "H: columns z, H/H0. CLASS: a CLASS background file. w: columns a, w(a) of the dark energy",
                            {"H", "CLASS", "w"});
             });
+            f.for_cosmology({"DarkScattering"}, [&]() {
+                f.required("cosmology_ds_w",
+                           ds_w,
+                           -0.9,
+                           "Dark scattering: the (constant) equation of state w of the dark energy (!= -1)");
+                f.required("cosmology_ds_xi",
+                           ds_xi,
+                           10.0,
+                           "Dark scattering: xi = sigma_D / m_c in barn/GeV (0: wCDM). The dark matter feels the drag "
+                           "(1 + w) c xi rho_DE / H per ln a (the CDM+baryon particles f_c = OmegaCDM / OmegaCB of it)");
+                f.optional("cosmology_ds_cs2",
+                           ds_cs2,
+                           1.0,
+                           "Dark scattering: the rest-frame sound speed squared of the dark energy (only for the IC "
+                           "from the internal Einstein-Boltzmann solver)");
+            });
             f.for_cosmology({"DGP"}, [&]() {
                 f.required("cosmology_dgp_OmegaRC",
                            dgp_OmegaRC,
@@ -287,8 +310,15 @@ class Cosmology {
         }
         if (model_info(name).tabulated)
             bg = make_tabulated(p, range);
-        else
-            bg = BG::make_background(registry_name, p, model_parameters, range);
+        else {
+            // Only the parameters of the background (model_parameters can also have those of the perturbations, for
+            // the internal Einstein-Boltzmann solver)
+            BG::ModelParameters background_parameters;
+            for (const auto & q : BG::find_model(registry_name).parameters)
+                if (model_parameters.count(q.name))
+                    background_parameters[q.name] = model_parameters.at(q.name);
+            bg = BG::make_background(registry_name, p, background_parameters, range);
+        }
         massive_neutrinos.clear();
         for (double m : params().m_nu_eV)
             massive_neutrinos.emplace_back(m, params());
@@ -335,6 +365,9 @@ class Cosmology {
                           << ")\n";
             if (bg)
                 std::cout << "# Background              : " << bg->description() << "\n";
+            if (bg and has_velocity_friction())
+                std::cout << "# Velocity friction       : Gamma = " << velocity_friction(1.0) << " (a = 1), "
+                          << velocity_friction(0.5) << " (a = 0.5) per ln a, of the CDM+baryon particles\n";
             std::cout << "#=====================================================\n";
             std::cout << "\n";
         }
@@ -427,6 +460,41 @@ class Cosmology {
     double f_nu(double a) const {
         namespace BG = FML::COSMOLOGY::BACKGROUND;
         return params().m_nu_eV.empty() ? 0.0 : Omega(BG::Component::MassiveNeutrinos, a) / Omega_m(a);
+    }
+
+    /// Velocity friction of the clustering matter (CDM+baryons): its equation of motion is dv/dlna = -Gamma(a) v +
+    /// force in the code velocity v = a^3 E dx/da (e.g. dark matter - dark energy scattering). It enters the growth
+    /// equations (GravityModel::compute_growth_factors) and the kick and drift factors (TimeStepping.h). No model
+    /// has friction yet: Gamma = 0 and has_velocity_friction() is false (then nothing changes)
+    /// DarkScattering: the drag of the dark matter (BACKGROUND::dark_scattering_cdm_drag, the rate of the
+    /// Einstein-Boltzmann solver) on the CDM+baryon particles as one fluid: f_c = OmegaCDM / OmegaCB of it (the baryons
+    /// do not scatter; momentum conservation of the fluid with v_b = v_c)
+    bool has_velocity_friction() const { return registry_name == "dark_scattering" and ds_xi_SI != 0.0; }
+    double velocity_friction(double a) const {
+        if (not has_velocity_friction())
+            return 0.0;
+        const double f_c = get_OmegaCDM() / (get_OmegaCDM() + get_Omegab());
+        return f_c * FML::COSMOLOGY::BACKGROUND::dark_scattering_cdm_drag(*bg, ds_xi_SI, std::log(a));
+    }
+    /// The friction integral I(a) = int_amin^a Gamma dlna (a spline in log a on [amin, amax], constant outside), for
+    /// the time stepping. An empty function without friction
+    std::function<double(double)> velocity_friction_integral(double amin = 1e-6, double amax = 100.0) const {
+        if (not has_velocity_friction())
+            return {};
+        const int n = 4000;
+        std::vector<double> x(n);
+        for (int i = 0; i < n; i++)
+            x[i] = std::log(amin) + std::log(amax / amin) * i / double(n - 1);
+        FML::SOLVERS::ODESOLVER::ODEFunction deriv = [&](double xx, [[maybe_unused]] const double * y, double * dydx) {
+            dydx[0] = velocity_friction(std::exp(xx));
+            return GSL_SUCCESS;
+        };
+        FML::SOLVERS::ODESOLVER::ODESolver ode;
+        std::vector<double> ini{0.0};
+        ode.solve(deriv, x, ini);
+        auto spline = std::make_shared<const FML::INTERPOLATION::SPLINE::Spline>(
+            x, ode.get_data_by_component(0), "Friction integral I(log(a))");
+        return [spline](double a) { return (*spline)(std::log(a)); };
     }
 
     /// The growth suppression of the large-scale potential today, g = D(a = 1) / D_EdS(a = 1) with D normalized to a in
@@ -533,6 +601,7 @@ class Cosmology {
             {"JBD", &Cosmology::read_jbd},
             {"Quintessence", &Cosmology::read_quintessence, true},
             {"EDE", &Cosmology::read_ede, true},
+            {"DarkScattering", &Cosmology::read_dark_scattering},
             {"Tabulated", &Cosmology::read_tabulated, true, false, true},
         };
         return list;
@@ -554,6 +623,18 @@ class Cosmology {
         w0 = settings.w0;
         wa = settings.wa;
         model_parameters = {{"w0", w0}, {"wa", wa}};
+    }
+    void read_dark_scattering() {
+        registry_name = "dark_scattering";
+        const double w = settings.ds_w, xi = settings.ds_xi, cs2 = settings.ds_cs2;
+        if (std::fabs(1.0 + w) < 1e-6)
+            throw std::runtime_error("DarkScattering: need cosmology_ds_w != -1 (w = -1 has no scattering: use LCDM)");
+        if (not(xi >= 0.0))
+            throw std::runtime_error("DarkScattering: need cosmology_ds_xi >= 0");
+        if (not(cs2 > 0.0))
+            throw std::runtime_error("DarkScattering: need cosmology_ds_cs2 > 0");
+        ds_xi_SI = FML::COSMOLOGY::BACKGROUND::dark_scattering_xi_SI(xi);
+        model_parameters = {{"ds_w", w}, {"ds_xi", xi}, {"ds_cs2", cs2}};
     }
     void read_dgp() {
         registry_name = "dgp";
@@ -659,6 +740,7 @@ class Cosmology {
     FML::COSMOLOGY::BACKGROUND::BackgroundParameters input_parameters;
     const double N_nu{3};     // Number of neutrinos (3)
     double w0{-1.0}, wa{0.0}; // w0waCDM (for the nonlinear boost)
+    double ds_xi_SI{0.0};     // DarkScattering: xi = sigma_D / m_c in m^2/kg
     std::string tabulated_filename, tabulated_format;
 
     // zeta(3), zeta(4), zeta(5): the non-relativistic neutrino mass relation and the sound speed

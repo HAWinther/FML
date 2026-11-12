@@ -60,8 +60,8 @@ remains supported without a Boltzmann solve.
     has them: N_nu = 3 degenerate species of mass Mnu/3 (the solver's `deg_ncdm`; the degenerate species are solved as
     one), the primordial spectrum (As, ns, kpivot; rescaled with `ic_sigma8_normalization`);
   - `cosmology_model` with its parameters: the solver has the same models (LCDM, w0waCDM, DGP, JBD, Quintessence,
-    EDE), with their perturbations (smooth dark energy for w0waCDM, the scalar field of quintessence and EDE, the
-    modified gravity of DGP and JBD). Not `Tabulated` (no perturbations). The gravity model of the simulation
+    EDE, DarkScattering), with their perturbations (smooth dark energy for w0waCDM, the scalar field of quintessence
+    and EDE, the modified gravity of DGP and JBD, the dark-energy fluid and the scattering of DarkScattering). Not `Tabulated` (no perturbations). The gravity model of the simulation
     (`gravity_model`) is separate: the IC are those of the cosmology model at zini.
   - The other settings of the solver are its defaults unless given in a solver .ini file (`ic_input_filename`,
     optional) or as `ic_internal_solver_parameters = {"name=value", ...}` in the parameter file (applied after the

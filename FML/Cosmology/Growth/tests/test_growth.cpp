@@ -4,6 +4,7 @@
 //   - LCDM background: history() = D1, D2; a QuasiStaticGravity with mu = 1 gives GR
 //   - Hu-Sawicky f(R) (scale dependent): GR on large scales, 4/3 G on small scales (more growth)
 //   - DGP: the second-order source N < 1 makes |D2| smaller
+//   - EdS with a constant velocity friction Gamma: power-law growing modes D1 = a^p, D2 = c2 D1^2, D3 = c3 D1^3
 #include <FML/Cosmology/Background/BackgroundModel_LCDM.h>
 #include <FML/Cosmology/Growth/LPTGrowthFactors.h>
 #include <FML/Cosmology/Perturbations/QuasiStaticGravity_DGP.h>
@@ -129,6 +130,47 @@ int main() {
         std::printf("       DGP (rcH0 = 1) D2 with / without the second-order source today = %.5f\n", r);
         check(r < 1.0 and r > 0.95 ? 0.0 : 1.0, 0.0, "DGP: the second-order source makes |D2| smaller");
     }
+    // EdS with a constant velocity friction Gamma (dv/dlna = -Gamma v + force): the growing mode is D1 = a^p with
+    // p^2 + (1/2 + Gamma) p = 3/2, and with Q_n = (n p)^2 + (1/2 + Gamma) n p:
+    // D2 = c2 D1^2, c2 (Q_2 - 3/2) = -3/2; D3a = c3a D1^3, c3a (Q_3 - 3/2) = -3; D3b = c3b D1^3, c3b (Q_3 - 3/2) =
+    // 3/2 (1 - c2). (Gamma = 0: p = 1, -3/7, -1/3, 5/21.) The EdS initial conditions are not those of these modes: the
+    // start is early enough for what they excite (in D2, D3 the homogeneous a^p, relative to a^2p, a^3p) to have died
+    // out by a = 0.01
+    for (double Gamma : {0.0, 0.7, -0.3}) {
+        GROWTH::LPTGrowthEquations eq;
+        eq.E = [](double x) { return std::exp(-1.5 * x); };
+        eq.dlogEdx = [](double) { return -1.5; };
+        eq.matter_density = [](double x) { return std::exp(-3.0 * x); };
+        if (Gamma != 0.0)
+            eq.friction = [Gamma](double) { return Gamma; };
+        GROWTH::LPTGrowthSettings s;
+        s.a_min = 1e-12;
+        s.a_max = 2.0;
+        s.n_a = 4000;
+        s.a_normalize = 1.0;
+        GROWTH::LPTGrowthFactors g(eq, s);
+        const double b = 0.5 + Gamma;
+        const double p = 0.5 * (-b + std::sqrt(b * b + 6.0));
+        const double Q2 = 4 * p * p + 2 * b * p, Q3 = 9 * p * p + 3 * b * p;
+        const double c2 = -1.5 / (Q2 - 1.5), c3a = -3.0 / (Q3 - 1.5), c3b = 1.5 * (1 - c2) / (Q3 - 1.5);
+        double e1 = 0, e2 = 0, e3 = 0, ef = 0;
+        for (double a : {0.01, 0.1, 0.5, 1.0, 1.5}) {
+            const double x = std::log(a), D1 = g.D1(x);
+            e1 = std::max(e1, std::fabs(D1 / std::pow(a, p) - 1));
+            e2 = std::max(e2, std::fabs(g.D2(x) / (D1 * D1) / c2 - 1));
+            e3 = std::max({e3,
+                           std::fabs(g.D3a(x) / (D1 * D1 * D1) / c3a - 1),
+                           std::fabs(g.D3b(x) / (D1 * D1 * D1) / c3b - 1)});
+            ef = std::max({ef, std::fabs(g.f1(x) / p - 1), std::fabs(g.f2(x) / (2 * p) - 1)});
+        }
+        char G[64];
+        std::snprintf(G, sizeof G, "EdS + friction %+.1f: ", Gamma);
+        check(e1, 1e-6, std::string(G) + "D1 = a^p");
+        check(e2, 1e-6, std::string(G) + "D2 / D1^2 = c2");
+        check(e3, 1e-6, std::string(G) + "D3a, D3b / D1^3 = c3a, c3b");
+        check(ef, 1e-5, std::string(G) + "f1 = p, f2 = 2p");
+    }
+
     if (nfail == 0)
         std::cout << "All growth tests passed (" << ncheck << " checks)\n";
     else

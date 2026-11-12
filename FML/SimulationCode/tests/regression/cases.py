@@ -390,6 +390,22 @@ CASES = {
         cosmology_tabulated_filename=INPUT + "/class_background_w0wa.dat",
         cosmology_tabulated_format="CLASS",
     ),
+    # Dark matter - dark energy scattering: the velocity friction in the growth (COLA frame, IC) and in the time
+    # stepping (COLA + Quinn; no COLA + FastPM)
+    "dark_scattering_cola": dict(
+        cosmology_model="DarkScattering",
+        cosmology_ds_w=-0.9,
+        cosmology_ds_xi=50.0,
+        cosmology_ds_cs2=1.0,
+    ),
+    "dark_scattering_fastpm": dict(
+        cosmology_model="DarkScattering",
+        cosmology_ds_w=-0.9,
+        cosmology_ds_xi=50.0,
+        cosmology_ds_cs2=1.0,
+        simulation_use_cola=False,
+        timestep_method="FastPM",
+    ),
     # CDM and baryons as separate particles (same lattice), BullFrog, IC from the transfer functions at zini
     "two_species_bullfrog": dict(
         particle_baryons=True,
@@ -680,6 +696,11 @@ def lua_value(v):
 def write_case(outdir, name):
     params = dict(BASE)
     params.update(CASES[name])
+    # The IC-only axion parameters (read with ic_type_of_input = internal or tables; all parameters must be in the file)
+    if params.get("ic_type_of_input") in ("internal", "internal_transfer", "tables"):
+        params.setdefault("ic_axion_fraction", 0.0)
+        params.setdefault("ic_axion_log10_m", -22.0)
+        params.setdefault("ic_axion_switch_mH", 0.0)
     d = os.path.join(outdir, name)
     os.makedirs(d, exist_ok=True)
 

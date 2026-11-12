@@ -53,7 +53,7 @@ end
 ------------------------------------------------------------
 -- Choose the cosmology 
 ------------------------------------------------------------
--- Cosmology: LCDM, w0waCDM, DGP, JBD, Quintessence, EDE, Tabulated ... add your own ...
+-- Cosmology: LCDM, w0waCDM, DGP, JBD, Quintessence, EDE, DarkScattering, Tabulated ... add your own ...
 cosmology_model = "LCDM"
 --- CDM density
 cosmology_OmegaCDM = 0.2685
@@ -111,6 +111,13 @@ if cosmology_model == "EDE" then
   -- The initial angle phi_ini/f and the power n
   cosmology_ede_theta_ini = 2.8
   cosmology_ede_n = 3.0
+end
+if cosmology_model == "DarkScattering" then
+  -- Dark matter - dark energy scattering: wCDM with w = cosmology_ds_w and xi = sigma_D / m_c in barn/GeV
+  -- (a velocity friction of the dark matter); cs2 only for the IC from the internal solver
+  cosmology_ds_w = -0.9
+  cosmology_ds_xi = 10.0
+  cosmology_ds_cs2 = 1.0
 end
 if cosmology_model == "Tabulated" then
   -- The background from a file: H (columns z, H/H0), CLASS (a CLASS background file) or w (columns a, w(a))

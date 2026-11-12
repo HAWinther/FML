@@ -31,6 +31,18 @@ add a model is in [DEVELOPING.md](DEVELOPING.md#adding-a-model).
 
 * Tabulated: the background from a file (`cosmology_tabulated_filename`): `cosmology_tabulated_format = "H"` (columns z, H/H0, used as given), `"CLASS"` (a CLASS `_background.dat` file; the columns z and H [1/Mpc] are used, e.g. any hi_class background) or `"w"` (columns a, w(a) of the dark energy). Matter and radiation are those of the parameter file (they should agree with the table: the largest dark energy fraction above z = 10 is printed as a check). `input/class_background_w0wa.dat` is an example (CLASS, w0 = -0.9, wa = 0.1, the cosmology of the regression tests).
 
+* DarkScattering: elastic dark matter - dark energy scattering (Simpson 2010; Baldi & Simpson 2015), the
+  Einstein-Boltzmann solver's `dark_scattering`. The background is wCDM with a constant `cosmology_ds_w` (!= -1);
+  only momentum is exchanged, so the scattering is a velocity friction of the dark matter, dv/dlna = -Gamma v + force
+  with Gamma = (1 + w) c xi rho_DE / H per ln a (xi = `cosmology_ds_xi` = sigma_D / m_c in barn/GeV; the dark energy
+  is smooth on N-body scales, so it does not move). Gamma > 0 (w > -1) slows the growth down, w < -1 speeds it up. It
+  enters the growth equations (all LPT orders, the COLA frame and the IC velocities) and the kick and drift factors of
+  all the time-stepping methods (`Cosmology::velocity_friction`, see `FML/NBody/TimeStepping.h`). The baryons do not
+  scatter: with the CDM and baryons as one set of particles they feel f_c = OmegaCDM / OmegaCB of the drag (the
+  momentum of the fluid with v_b = v_c); `particle_baryons = true` and neutrino particles are not supported with it
+  yet. The IC from the internal solver (`ic_type_of_input = internal` or `tables`) include the scattering
+  (`cosmology_ds_cs2` is the sound speed of the dark-energy perturbations there).
+
 For Quintessence, EDE and Tabulated the dark energy is smooth (no perturbations) and the gravity model is GR (they can be combined with the other gravity models, but those use the background only through H(a)). The backgrounds were checked against an independent solution (scipy): H(a) agrees to < 1e-4 and w(a) to < 1e-5 for a < 1, and the EDE peak fraction and redshift to < 1e-3.
 
 ## Gravity models

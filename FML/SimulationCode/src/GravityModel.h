@@ -482,6 +482,8 @@ class GravityModel {
         eq.source_2 = [this](double x, double k) { return source_factor_2LPT(std::exp(x), k); };
         eq.source_3a = [this](double x, double k) { return source_factor_3LPTa(std::exp(x), k); };
         eq.source_3b = [this](double x, double k) { return source_factor_3LPTb(std::exp(x), k); };
+        if (cosmo->has_velocity_friction())
+            eq.friction = [this](double x) { return cosmo->velocity_friction(std::exp(x)); };
         if (use_neutrino_transfer)
             eq.initial_rate_1 = [this](double x, double k) {
                 return transfers->density_growth_rate(SIMCODE::TransferSpecies::CDMBaryon, k * H0_hmpc, std::exp(x));
