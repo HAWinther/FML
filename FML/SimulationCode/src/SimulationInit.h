@@ -340,6 +340,20 @@ FML::GRID::FFTWGrid<NDIM> NBodySimulation<NDIM, T>::make_initial_density_field()
         FML::NUFFT::copy_fourier_modes<NDIM>(delta_ini_fourier,
                                              hybridbias_linear_field_fourier,
                                              [](const std::array<int, NDIM> &) { return 1.0; });
+        // For SnapshotAnalyzer: delta_L(zini) at the lattice points (the particle with id (ix N + iy) N + iz starts
+        // at lattice point (ix, iy, iz))
+        if (params.hybridbias.output_linear_field) {
+            auto real_field = hybridbias_linear_field_fourier;
+            real_field.fftw_c2r();
+            const auto filename = params.output.path("hybridbias_linear_field_" + params.simulation.name + ".dat");
+            FML::CORRELATIONFUNCTIONS::HYBRIDBIAS::write_linear_field<NDIM>(filename,
+                                                                           real_field,
+                                                                           params.simulation.boxsize,
+                                                                           params.ic.initial_redshift);
+            if (FML::ThisTask == 0)
+                std::cout << "Wrote the linear field delta_L(z = " << params.ic.initial_redshift << ") on the "
+                          << params.particle.Npart_1D << "^" << NDIM << " lattice to " << filename << "\n";
+        }
     }
     return delta_ini_fourier;
 }

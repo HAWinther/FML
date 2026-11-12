@@ -1069,6 +1069,7 @@ namespace SIMCODE {
         double lpt_kmin;                       // Lower limit of the k-integrals of the LPT predictions (h/Mpc)
         double cv_beta_k0;                     // beta(k) of the control variate: [1 - tanh((k - k0) / dk)] / 2
         double cv_beta_dk;                     // (k0 <= 0: beta = 1)
+        bool output_linear_field{false};       // Write delta_L(zini) on the lattice (for SnapshotAnalyzer)
 
         /// The parameters (see ParameterFields.h)
         template <class F>
@@ -1082,6 +1083,13 @@ namespace SIMCODE {
                               "of the IC scaled to the output redshift with the growth factor of the gravity model");
             f.if_true("hybridbias", [&]() {
                 f.required("hybridbias_nmesh", nmesh, 0, "Grid size for the advected fields", check::positive());
+                f.always_optional("hybridbias_output_linear_field",
+                                  output_linear_field,
+                                  false,
+                                  "Write the linear field delta_L(z_ini) on the particle lattice to "
+                                  "hybridbias_linear_field_<name>.dat in output_folder (FML linear field file, "
+                                  "ComputePowerSpectra/HybridBiasLinearFieldIO.h): the input of the hybrid bias "
+                                  "spectra of SnapshotAnalyzer (hybridbias_linear_field_source = \"file\")");
                 f.optional("hybridbias_noperators",
                            noperators,
                            5,

@@ -334,6 +334,7 @@ Parameters marked *optional* take the default value if they are not in the param
 |---|---|---|---|---|
 | `hybridbias` | bool | `false` | always | Compute the hybrid bias (Lagrangian bias basis) spectra P_ab(k) at every output: the cross spectra of the operators 1, delta_L, delta_L^2, s^2, nabla^2 delta_L advected with the particles (Modi et al. 2020, Kokron et al. 2021). delta_L is the linear field of the IC scaled to the output redshift with the growth factor of the gravity model |
 | `hybridbias_nmesh` | int | *required* | hybridbias = true | Grid size for the advected fields |
+| `hybridbias_output_linear_field` | bool | `false` | hybridbias = true | Write the linear field delta_L(z_ini) on the particle lattice to hybridbias_linear_field_<name>.dat in output_folder (FML linear field file, ComputePowerSpectra/HybridBiasLinearFieldIO.h): the input of the hybrid bias spectra of SnapshotAnalyzer (hybridbias_linear_field_source = "file") |
 | `hybridbias_noperators` | int | `5` | hybridbias = true | Use the first noperators of (1, delta, delta^2, s^2, nabla^2 delta): 15 spectra for 5 |
 | `hybridbias_density_assignment_method` | string | `"CIC"` | hybridbias = true | Density assignment method. Options: `NGP`, `CIC`, `TSC`, `PCS`, `PQS` |
 | `hybridbias_interlacing` | bool | `true` | hybridbias = true | Use interlaced grids to reduce aliasing |

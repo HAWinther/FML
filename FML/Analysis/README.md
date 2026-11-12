@@ -9,6 +9,7 @@ Everything is in `FML::ANALYSIS` and header-only (C++17).
 |---|---|
 | `AnalysisContext.h` | `AnalysisContext`: box size, scale factor, expansion history (`Background`), particle unit conversions |
 | `DensityGrid.h` | The density contrast of particles on a grid and Gaussian smoothing |
+| `HybridBias.h` | Hybrid bias spectra of particles with the linear field from an IC snapshot (by ID) or a file; the growth ratio |
 | `CosmicWeb.h` | Cosmic-web classification (T-web): volume and mass fractions of voids, sheets, filaments, knots |
 | `Minkowski.h` | Minkowski functionals of excursion sets of the smoothed density, with the Gaussian-field predictions |
 | `PowerSpectrum.h` | P(k), redshift-space multipoles P_ell(k), the bispectrum B(k1,k2,k3) and their output files |
@@ -52,6 +53,12 @@ SimulationCode does not have: `pofk_nbins`, `pofk_log_binning` (and the multipol
   linear bins). The multipoles take the velocity-to-displacement factor from the context.
 - `measure_bispectrum` / `write_bispectrum` (settings `bispectrum_*`): as SimulationCode's (`bispectrum = true`):
   nbins linear bins in each k from 0 to the Nyquist frequency, and SimulationCode's file columns.
+- `measure_hybrid_bias` / `write_hybrid_bias` (settings `hybridbias_*`): FML/ComputePowerSpectra/HybridBiasSpectra.h
+  with the linear field from `linear_field_from_ic` (the lattice, its offset and delta_L = -div Psi with an optional
+  2LPT correction; (ID, lattice) pairs for the matching) or `linear_field_from_file`, the particles' lattice indices
+  from `lattice_index_by_id` (hashed all-to-all by ID) or `lattice_index_from_ids` (id - offset), and
+  `growth_ratio` (D(a)/D(a_L) of a `Background`). Tests: the growth ratio in EdS and LCDM, the file round trip,
+  the exact field of a Zel'dovich lattice, ID matching on any number of tasks.
 - `measure_cosmic_web` / `cosmic_web_from_delta` / `write_cosmic_web` (settings `cosmicweb_*`): the T-web
   (FML/CosmicWeb) of the Gaussian-smoothed density, the volume and mass fractions for each eigenvalue threshold.
 - `measure_minkowski_functionals` / `minkowski_from_delta` / `write_minkowski_functionals` (settings

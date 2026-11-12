@@ -839,6 +839,10 @@ bispectrum_density_assignment_method = "PCS"
 hybridbias = false
 -- Gridsize for the advected fields
 hybridbias_nmesh = 128
+-- Also write the linear field of the IC (real space, at ic_initial_redshift) to
+-- output_folder/hybridbias_linear_field_<simulation_name>.dat, so the SnapshotAnalyzer can
+-- measure the hybrid bias spectra of the snapshots later (hybridbias_linear_field_source = "file")
+hybridbias_output_linear_field = false
 -- Number of operators: 5 gives (1, delta, delta^2, s^2, nabla^2 delta) and 15 spectra
 hybridbias_noperators = 5
 -- Use interlaced grids for alias reduction?

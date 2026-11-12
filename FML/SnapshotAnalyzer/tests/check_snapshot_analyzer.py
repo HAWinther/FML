@@ -62,13 +62,13 @@ def make_particles():
     return pos.astype(np.float32), vel.astype(np.float32), ids, mass
 
 
-def write_gadget(prefix, pos, vel, ids, mass, nfiles=2):
+def write_gadget(prefix, pos, vel, ids, mass, nfiles=2, a=1.0, omega_m=OMEGA_M, box=BOX):
     parts = np.array_split(np.arange(len(pos)), nfiles)
     for i, idx in enumerate(parts):
         npart = [0, len(idx), 0, 0, 0, 0]
         nall = [0, len(pos), 0, 0, 0, 0]
-        header = struct.pack('<6I6dddii6Iiiddddii6Ii', *npart, 0.0, mass, 0, 0, 0, 0, 1.0, 0.0, 0, 0, *nall, 0,
-                             nfiles, BOX, OMEGA_M, 1.0 - OMEGA_M, 0.7, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+        header = struct.pack('<6I6dddii6Iiiddddii6Ii', *npart, 0.0, mass, 0, 0, 0, 0, a, 1.0 / a - 1.0, 0, 0, *nall,
+                             0, nfiles, box, omega_m, 1.0 - omega_m, 0.7, 0, 0, 0, 0, 0, 0, 0, 0, 0)
         header += b'\0' * (256 - len(header))
         with open(f'{prefix}.{i}', 'wb') as f:
             for block in (header, pos[idx].tobytes(), vel[idx].tobytes(), ids[idx].tobytes()):
@@ -91,6 +91,81 @@ def write_gadget_hdf5(prefix, pos, vel, ids, mass, nfiles=2):
             g = f.create_group('PartType1')
             g['Coordinates'], g['Velocities'], g['ParticleIDs'] = pos[idx], vel[idx], ids[idx]
             g['Masses'] = np.full(len(idx), mass)
+
+
+def hybrid_bias_check(r, tasks):
+    """Hybrid bias spectra from a linear field file (option C, lattice by ID) and from an IC snapshot (option A):
+    Zel'dovich IC and final snapshots of a Gaussian field on a 32^3 lattice in EdS (D = a)"""
+    N, box, a_ic = 32, 128.0, 1.0 / 21.0
+    rng = np.random.default_rng(42)
+    m = np.fft.fftfreq(N, 1.0 / N)
+    mz = np.fft.rfftfreq(N, 1.0 / N)
+    kx, ky, kz = np.meshgrid(2 * np.pi * m, 2 * np.pi * m, 2 * np.pi * mz, indexing='ij')  # 1/box
+    k2 = kx**2 + ky**2 + kz**2
+    k2[0, 0, 0] = 1.0
+    dk = np.fft.rfftn(rng.standard_normal((N, N, N))) * (np.sqrt(k2) / (2 * np.pi))**-1.2
+    dk[0, 0, 0] = 0.0
+    dk[N // 2, :, :] = dk[:, N // 2, :] = dk[:, :, N // 2] = 0.0  # no Nyquist modes
+    delta = np.fft.irfftn(dk, (N, N, N))
+    delta *= 0.02 / delta.std()  # delta_L at z = 20
+    dk = np.fft.rfftn(delta)
+    psi = np.stack([np.fft.irfftn(1j * kk / k2 * dk, (N, N, N)) for kk in (kx, ky, kz)], axis=-1)  # -div psi = delta
+    q = (np.stack(np.meshgrid(*[np.arange(N)] * 3, indexing='ij'), axis=-1) + 0.5) / N
+    lattice_ids = np.arange(N**3, dtype=np.uint32) + 7  # lattice index (ix N + iy) N + iz plus an offset
+    mass = RHO_CRIT * box**3 / N**3 / 1e10
+    workdir = r.workdir
+    for name, a in (('hb_ic', a_ic), ('hb_final', 1.0)):
+        pos = ((q + a / a_ic * psi) % 1.0).reshape(-1, 3) * box
+        order = rng.permutation(N**3)  # the files are not in lattice order
+        write_gadget(str(workdir / name), pos[order].astype(np.float32), np.zeros((N**3, 3), np.float32),
+                     lattice_ids[order], mass, nfiles=3, a=a, omega_m=1.0, box=box)
+    with open(workdir / 'hb_linear_field.dat', 'wb') as f:
+        f.write(b'FMLDLIN1' + struct.pack('<qqdd', N, 3, box, 1.0 / a_ic - 1.0))
+        f.write(delta.astype('<f8').tobytes())
+
+    base = {'snapshot_input': 'hb_final', 'pofk': False, 'hybridbias': True, 'hybridbias_nmesh': 32,
+            'hybridbias_id_offset': 7}
+    runs = {'C': {'hybridbias_linear_field_source': 'file', 'hybridbias_linear_field_file': 'hb_linear_field.dat'},
+            'A': {'hybridbias_ic_snapshot': 'hb_ic', 'hybridbias_ic_lpt_correction': 'none'},
+            'A2lpt': {'hybridbias_ic_snapshot': 'hb_ic'}}
+    res = {}
+    for key, extra in runs.items():
+        for n in tasks:
+            name = f'hb_{key}_np{n}'
+            code, out = r.run(name, {**base, **extra, 'output_folder': name}, n)
+            if not check(code == 0, f'hybrid bias {key} on {n} task(s): runs'):
+                print(out[-3000:])
+                return
+            res[(key, n)] = table(workdir / name / 'hybridbias_z0.000.txt')
+    for key in runs:
+        check(all(same(res[(key, tasks[0])], res[(key, n)], 1e-5) for n in tasks),
+              f'hybrid bias {key}: the same spectra on {tasks} tasks')
+    c, a0, a2 = res[('C', tasks[0])], res[('A', tasks[0])], res[('A2lpt', tasks[0])]
+    # Normalized differences |dP_ab| / sqrt(P_aa P_bb)
+    pairs = [(i, j) for i in range(5) for j in range(i, 5)]
+    diag = [pairs.index((i, i)) for i in range(5)]
+    norm = np.stack([np.sqrt(np.abs(c[:, 2 + diag[i]] * c[:, 2 + diag[j]])) for i, j in pairs], axis=1)
+    d0 = np.abs(a0[:, 2:17] - c[:, 2:17]) / norm
+    check(d0.max() < 1e-3, f'hybrid bias: the IC snapshot (Zel\'dovich, no correction) gives the file\'s spectra '
+                           f'(max {d0.max():.2e} of sqrt(P_aa P_bb))')
+    d2 = np.abs(a2[:, 2:17] - c[:, 2:17]) / norm
+    check(0 < d2.max() < 0.05, f'hybrid bias: the 2LPT correction of a Zel\'dovich IC is small ({d2.max():.2e})')
+    # Plinear: (D / D_L)^2 box^3 |delta_k / N^3|^2 averaged over the modes of each bin (bin = round(|m| - 1) for the
+    # wave number m in units of the fundamental mode; the Nyquist-free field has no modes cut below k_Ny)
+    mm = np.sqrt(np.add.outer(np.add.outer(m**2, m**2), m**2)).ravel()
+    pk = (np.abs(np.fft.fftn(delta) / N**3)**2).ravel() * box**3 / a_ic**2
+    idx = np.floor(mm - 1 + 0.5).astype(int)
+    expected = np.array([pk[(idx == b) & (mm > 0)].mean() for b in range(N // 2)])
+    inner = np.arange(N // 2) < N // 2 - 2
+    rel = np.abs(c[inner, 17] / expected[inner] - 1)
+    check(len(c) == N // 2 and rel.max() < 1e-6,
+          f'hybrid bias: Plinear is (D / D_L)^2 |delta_L(k)|^2 of the file in the same bins ({rel.max():.1e})')
+    # The advected delta_L correlates with the matter (1) on large scales: r = P_1d / sqrt(P_11 P_dd) close to 1
+    rcc = c[:, 3] / np.sqrt(c[:, 2] * c[:, 7])
+    check(np.all(rcc[c[:, 0] < 0.2] > 0.9), f'hybrid bias: r(1, delta_L) > 0.9 for k < 0.2 h/Mpc ({rcc[:3].round(3)})')
+    # Errors: a wrong ID offset; an IC snapshot of another box
+    code, out = r.run('hb_bad_offset', {**base, **runs['C'], 'hybridbias_id_offset': 8, 'output_folder': 'hb_bad'})
+    check(code not in (0, 'timeout') and 'outside' in out, 'hybrid bias: IDs outside the lattice are an error')
 
 
 def read_gadget(files):
@@ -386,6 +461,8 @@ def main():
                                         f'implementation ({len(got_rows)} vs {len(ref_rows)} halos)')
     except ImportError:
         print('scipy not available: skipping the comparison with the independent relaxed FoF')
+
+    hybrid_bias_check(r, tasks)
 
     # Errors stop every task with a clear message
     n = max(tasks)

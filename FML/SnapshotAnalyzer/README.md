@@ -45,6 +45,29 @@ and output files as SimulationCode, so the two give the same result for the same
   cells as voids, sheets, filaments or knots (0-3 eigenvalues above lambda_th). `cosmicweb_z<z>.txt`: the volume and
   mass fractions of the four types for each of `cosmicweb_lambda_thresholds` (the mass fractions weight the cells by
   the unsmoothed density on the same grid).
+- Hybrid bias spectra (Modi, Chen & White 2020; Kokron et al. 2021): the 15 cross spectra P_ab(k) of the Lagrangian
+  bias operators 1, delta_L, delta_L^2 - <delta_L^2>, s^2 - <s^2>, nabla^2 delta_L, evaluated on the particle lattice
+  and advected with the particles (`hybridbias_z<z>.txt`, SimulationCode's columns plus `Plinear(k)`, the linear
+  field of this realization scaled to the snapshot, in the same bins). Needs a simulation started from a lattice.
+  The linear field delta_L comes from
+  - an initial-conditions snapshot of the same particles (`hybridbias_ic_snapshot`, e.g. SimulationCode with the
+    initial redshift in `output_redshifts`): the lattice (and its offset) from the positions, delta_L = -div Psi of
+    the displacement Psi = x - q, minus the second order part (3/7) sum_{i<j} (phi_ii phi_jj - phi_ij^2) with
+    nabla^2 phi = -div Psi (`hybridbias_ic_lpt_correction = "2lpt"`; "none" for Zel'dovich IC). The particles are
+    matched to the lattice by ID, so any ID scheme works. The IC must be early enough that every particle is within half a cell of
+    its lattice point (checked: every lattice point must get exactly one particle);
+  - or a file (`hybridbias_linear_field_source = "file"`, `hybridbias_linear_field_file`): a real-space grid on the
+    lattice written by SimulationCode (`hybridbias_output_linear_field = true`) or by your own IC code (format and a
+    numpy writer in `FML/ComputePowerSpectra/HybridBiasLinearFieldIO.h`). The lattice index of a particle is
+    `id - hybridbias_id_offset` = (ix N + iy) N + iz (SimulationCode's IDs), or from `hybridbias_ic_snapshot` if
+    that is also given.
+
+  The field is scaled with D(z)/D(z_L) of the analysis cosmology (scale independent; `hybridbias_growth_ratio`
+  overrides it, e.g. for scale-dependent growth set it per run or use SimulationCode's in-run spectra). Set
+  `cosmology_Omega_r` to the radiation of the simulation: without it D(z)/D(z_L) is ~0.4% too large from z_L = 20.
+  On a SimulationCode run (64^3 in 256 Mpc/h) the spectra from the linear field file equal the in-run ones to 2e-5 of
+  sqrt(P_aa P_bb); from the IC snapshot (2LPT IC at z = 20) to < 0.3% for most pairs (0.8% for delta^2 delta^2,
+  s^2 s^2) with the 2LPT correction and up to 18% without it.
 - Minkowski functionals V0-V3 (volume, surface area, integrated mean curvature, Euler characteristic per volume) of
   the excursion sets delta >= delta_th of the Gaussian-smoothed density contrast ([FML/Morphology](../Morphology/README.md),
   exact counts of the voxel complex, the isotropic Crofton estimator). Thresholds in nu = delta / sigma_0
@@ -121,6 +144,22 @@ bispectrum_nbins = 16 -- linear bins from 0 to the Nyquist frequency
 bispectrum_density_assignment_method = "CIC"
 bispectrum_interlacing = true
 bispectrum_subtract_shotnoise = false
+
+hybridbias = false
+hybridbias_nmesh = 128
+hybridbias_noperators = 5 -- 1, delta, delta^2, s^2, nabla^2 delta: 15 spectra
+hybridbias_density_assignment_method = "CIC"
+hybridbias_interlacing = true
+hybridbias_subtract_shotnoise = false
+hybridbias_smoothing_scale = 0.0 -- Mpc/h, of the linear field; 0: none
+hybridbias_smoothing_filter = "gaussian" -- or tophat, sharpk
+hybridbias_kcut_over_nyquist = 1.0 -- spherical cut of the linear field at this times the lattice Nyquist; 0: none
+hybridbias_linear_field_source = "ic_snapshot" -- or "file"
+hybridbias_ic_snapshot = "" -- prefix of the IC snapshot (same snapshot_format)
+hybridbias_ic_lpt_correction = "2lpt" -- or "none" (Zel'dovich IC)
+hybridbias_linear_field_file = "" -- e.g. SimulationCode's hybridbias_linear_field_<name>.dat
+hybridbias_id_offset = 0 -- lattice index = id - offset (file source without an IC snapshot)
+hybridbias_growth_ratio = 0.0 -- D(z)/D(z_L); 0: from the cosmology
 
 cosmicweb = false
 cosmicweb_nmesh = 128
@@ -258,6 +297,8 @@ can also merge zones using the VIDE threshold convention ([Sutter et al. 2015](h
 Spherical underdensity finding follows Padilla, Ceccarelli & Lambas (2005),
 [doi:10.1111/j.1365-2966.2005.09500.x](https://doi.org/10.1111/j.1365-2966.2005.09500.x). ZOBOV follows
 Neyrinck (2008), [arXiv:0712.3049](https://arxiv.org/abs/0712.3049).
+The hybrid bias spectra follow Modi, Chen & White (2020), [arXiv:1910.07097](https://arxiv.org/abs/1910.07097),
+and Kokron et al. (2021), [arXiv:2101.11014](https://arxiv.org/abs/2101.11014).
 The T-web follows Hahn et al. (2007), [arXiv:astro-ph/0610280](https://arxiv.org/abs/astro-ph/0610280), and
 Forero-Romero et al. (2009), [arXiv:0809.4135](https://arxiv.org/abs/0809.4135). The Gaussian-field Minkowski
 functionals are those of Tomita (1986) and Schmalzing & Buchert (1997),

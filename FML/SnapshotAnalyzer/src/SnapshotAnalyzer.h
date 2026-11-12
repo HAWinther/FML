@@ -11,6 +11,7 @@
 #include <FML/Analysis/CosmicWeb.h>
 #include <FML/Analysis/DTFE.h>
 #include <FML/Analysis/Halos.h>
+#include <FML/Analysis/HybridBias.h>
 #include <FML/Analysis/Minkowski.h>
 #include <FML/Analysis/Output.h>
 #include <FML/Analysis/ParticleUtils.h>
@@ -174,6 +175,8 @@ namespace FML {
             FML::ANALYSIS::PowerSpectrumMultipoleSettings pofk_multipole_settings;
             bool bispectrum{false};
             FML::ANALYSIS::BispectrumSettings bispectrum_settings;
+            bool hybridbias{false};
+            FML::ANALYSIS::HybridBiasSettings hybridbias_settings;
             bool cosmicweb{false};
             FML::ANALYSIS::CosmicWebSettings cosmicweb_settings;
             bool minkowski{false};
@@ -211,6 +214,8 @@ namespace FML {
                 r.read(pofk_multipole_settings);
                 get("bispectrum", bispectrum);
                 r.read(bispectrum_settings);
+                get("hybridbias", hybridbias);
+                r.read(hybridbias_settings);
                 get("cosmicweb", cosmicweb);
                 r.read(cosmicweb_settings);
                 get("minkowski", minkowski);
@@ -254,18 +259,20 @@ namespace FML {
                     throw std::runtime_error("particle_allocation_factor must be >= 1");
                 if (not(cosmology_Omega_r >= 0.0))
                     throw std::runtime_error("cosmology_Omega_r must be >= 0");
-                if (not pofk and not pofk_multipole and not bispectrum and not cosmicweb and not minkowski and
-                    not fof and not voids and not spherical_voids and not zobov_voids and not dtfe and
+                if (not pofk and not pofk_multipole and not bispectrum and not hybridbias and not cosmicweb and
+                    not minkowski and not fof and not voids and not spherical_voids and not zobov_voids and not dtfe and
                     not baryonification)
                     throw std::runtime_error("Enable at least one analysis: pofk, pofk_multipole, bispectrum, "
-                                             "cosmicweb, minkowski, fof, baryonification, voids, spherical_voids, "
-                                             "zobov_voids or dtfe");
+                                             "hybridbias, cosmicweb, minkowski, fof, baryonification, voids, "
+                                             "spherical_voids, zobov_voids or dtfe");
                 if (pofk or baryonification)
                     pofk_settings.validate();
                 if (pofk_multipole)
                     pofk_multipole_settings.validate();
                 if (bispectrum)
                     bispectrum_settings.validate();
+                if (hybridbias)
+                    hybridbias_settings.validate();
                 if (cosmicweb)
                     cosmicweb_settings.validate();
                 if (minkowski)
@@ -309,6 +316,8 @@ namespace FML {
                     measure_multipoles();
                 if (options.bispectrum)
                     measure_bispectrum();
+                if (options.hybridbias)
+                    measure_hybrid_bias();
                 if (options.cosmicweb)
                     classify_cosmic_web();
                 if (options.minkowski)
@@ -339,10 +348,10 @@ namespace FML {
             std::string output_path(const std::string & name) const { return options.output_folder + "/" + name; }
             std::string redshift_label() const { return ANALYSIS::redshift_label(context.redshift()); }
 
-            /// The files of the snapshot. Every task reads the header of the first file
-            std::vector<std::string> snapshot_files() {
+            /// The files of a snapshot (prefix) and its header. Every task reads the header of the first file
+            std::vector<std::string> snapshot_files(const std::string & prefix,
+                                                    FML::FILEUTILS::GADGET::GadgetHeader & header) {
                 namespace G = FML::FILEUTILS::GADGET;
-                const auto & prefix = options.snapshot_input;
                 std::vector<std::string> files;
                 if (options.snapshot_format == "gadget_hdf5") {
 #ifdef USE_HDF5
@@ -394,10 +403,23 @@ namespace FML {
             /// owning their position (each file is read once). all_tasks: every task reads every file and keeps the
             /// particles in its domain
             void read_snapshot() {
-                const auto files = snapshot_files();
-                input_files = files;
+                input_files = read_particles(options.snapshot_input, mpiparticles, header);
+                family_count.fill(0);
+                for (const auto & p : mpiparticles)
+                    family_count[size_t(p.get_family())]++;
+                FML::SumArrayOverTasks(family_count.data(), family_count.size());
+                if (mpiparticles.get_npart_total() == 0)
+                    throw std::runtime_error("No particles selected (check particle_types)");
+            }
+
+            /// Read the particles of the selected types of a snapshot into mpiparticles (each task those in its
+            /// domain). Returns the files
+            std::vector<std::string> read_particles(const std::string & prefix,
+                                                    FML::PARTICLE::MPIParticles<SnapshotParticle> & mpiparticles,
+                                                    FML::FILEUTILS::GADGET::GadgetHeader & header) {
+                const auto files = snapshot_files(prefix, header);
                 if (not std::isfinite(header.BoxSize) or header.BoxSize <= 0.0)
-                    throw std::runtime_error("The snapshot has an invalid BoxSize");
+                    throw std::runtime_error("The snapshot " + prefix + " has an invalid BoxSize");
                 const bool per_task = options.snapshot_read_mode == "files_per_task";
 
                 std::vector<SnapshotParticle> particles;
@@ -440,13 +462,7 @@ namespace FML {
                     if (storage.size() < want)
                         storage.resize(want);
                 }
-
-                family_count.fill(0);
-                for (const auto & p : mpiparticles)
-                    family_count[size_t(p.get_family())]++;
-                FML::SumArrayOverTasks(family_count.data(), family_count.size());
-                if (mpiparticles.get_npart_total() == 0)
-                    throw std::runtime_error("No particles selected (check particle_types)");
+                return files;
             }
 
             void make_context() {
@@ -517,6 +533,45 @@ namespace FML {
                 ANALYSIS::write_bispectrum<3>(filename, bofk, "# Bispectrum of " + options.snapshot_input + "\n");
                 if (FML::ThisTask == 0)
                     std::cout << "Bispectrum written: " << filename << "\n";
+            }
+
+            /// Hybrid bias: the linear field from the initial-conditions snapshot or a file (see FML/Analysis/HybridBias.h)
+            void measure_hybrid_bias() {
+                const auto & s = options.hybridbias_settings;
+                if (FML::ThisTask == 0 and s.growth_ratio == 0.0 and options.cosmology_hubble_table.empty() and
+                    options.cosmology_Omega_r == 0.0)
+                    std::cout << "Hybrid bias: note that the growth factor D(z)/D(z_L) is computed without radiation "
+                                 "(set cosmology_Omega_r, e.g. 9.29e-5 for TCMB = 2.7255 K, Neff = 3.046 and h = "
+                                 "0.671, to match a simulation with radiation: else ~0.4% too large from z_L = 20)\n";
+                FML::PARTICLE::MPIParticles<SnapshotParticle> ic;
+                double ic_redshift = 0.0;
+                if (not s.ic_snapshot.empty()) {
+                    FML::FILEUTILS::GADGET::GadgetHeader ic_header{};
+                    if (FML::ThisTask == 0)
+                        std::cout << "Hybrid bias: reading the initial-conditions snapshot " << s.ic_snapshot << "\n";
+                    read_particles(s.ic_snapshot, ic, ic_header);
+                    if (std::abs(ic_header.BoxSize / header.BoxSize - 1.0) > 1e-6)
+                        throw std::runtime_error("hybridbias_ic_snapshot has another BoxSize than the snapshot");
+                    ic_redshift = 1.0 / ic_header.time - 1.0;
+                }
+                const auto r = ANALYSIS::measure_hybrid_bias(mpiparticles.get_particles_ptr(),
+                                                             mpiparticles.get_npart(),
+                                                             ic.get_particles_ptr(),
+                                                             ic.get_npart(),
+                                                             ic_redshift,
+                                                             s,
+                                                             context);
+                const auto filename = output_path("hybridbias_z" + redshift_label() + ".txt");
+                ANALYSIS::write_hybrid_bias(filename,
+                                            r,
+                                            s,
+                                            context.redshift(),
+                                            context.boxsize,
+                                            "# Hybrid bias spectra of " + options.snapshot_input + "\n");
+                if (FML::ThisTask == 0)
+                    std::cout << "Hybrid bias spectra written: " << filename << " (linear field: " << r.source
+                              << " at z = " << r.linear_field_redshift << ", D(z)/D(z_L) = " << r.growth_ratio
+                              << ")\n";
             }
 
             void classify_cosmic_web() {

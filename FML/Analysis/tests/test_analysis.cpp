@@ -8,6 +8,7 @@
 #include <FML/Analysis/Minkowski.h>
 #include <FML/Analysis/Baryonification.h>
 #include <FML/Analysis/Halos.h>
+#include <FML/Analysis/HybridBias.h>
 #include <FML/Analysis/ParticleUtils.h>
 #include <FML/Analysis/PowerSpectrum.h>
 #include <FML/Analysis/Voids.h>
@@ -80,6 +81,16 @@ namespace {
         c.velocity_to_kms = 1.0;
         return c;
     }
+
+    /// An IC particle with an ID (for the hybrid bias tests)
+    struct IDParticle {
+        double pos[3];
+        long long int id{0};
+        double * get_pos() { return pos; }
+        long long int get_id() const { return id; }
+        void set_id(long long int i) { id = i; }
+        int get_ndim() const { return 3; }
+    };
 } // namespace
 
 int main() {
@@ -124,6 +135,156 @@ int main() {
         check_local(std::abs(rho_crit / 2.775e11 - 1.0) < 1e-3, "rho_crit = 2.775e11 h^2 Msun/Mpc^3 (" + num(rho_crit, 8) + ")");
         const double total_mass = 0.3 * rho_crit * std::pow(500.0, 3) / 1e10;
         check_local(std::abs(c.Omega_of_particles(total_mass) - 0.3) < 1e-12, "Omega from the particle mass");
+    }
+
+
+    //=========================================================================
+    // Hybrid bias: growth ratio, the linear field file, the linear field from an IC snapshot, ID matching
+    //=========================================================================
+    {
+        namespace HB = FML::CORRELATIONFUNCTIONS::HYBRIDBIAS;
+        // EdS: D = a. Matter + Lambda: D ∝ E(a) int_0^a da' / (a' E)^3
+        const double g_eds = AN::growth_ratio(AN::Background::LCDM(1.0, 0.0), 1.0, 1.0 / 21.0);
+        check_local(std::abs(g_eds / 21.0 - 1.0) < 1e-6, "growth ratio in EdS is a / a_L (" + num(g_eds, 10) + ")");
+        const auto bl = AN::Background::LCDM(0.3, 0.7);
+        auto D_lcdm = [&](double a) {
+            double s = 0.0;
+            const int n = 200000;
+            for (int i = 0; i < n; i++) {
+                const double x = a * (i + 0.5) / n;
+                s += 1.0 / std::pow(x * bl.E(x), 3) * a / n;
+            }
+            return bl.E(a) * s;
+        };
+        const double g_l = AN::growth_ratio(bl, 1.0, 1.0 / 21.0), g_l_exact = D_lcdm(1.0) / D_lcdm(1.0 / 21.0);
+        check_local(std::abs(g_l / g_l_exact - 1.0) < 1e-5,
+                    "growth ratio in LCDM matches the integral solution (" + num(g_l / g_l_exact - 1.0) + ")");
+
+        // A field of known modes: delta(q) = sum A cos(2 pi m.q + phase) on the lattice q = (i + 1/2) / N
+        const int N = 16;
+        const std::vector<std::array<int, 3>> modes{{1, 0, 0}, {0, 2, 1}, {3, -1, 2}};
+        const std::vector<double> amps{0.02, 0.015, 0.01}, phases{0.3, 1.1, -0.7};
+        auto field = [&](double q[3], double grad_inv_lap[3]) {
+            double d = 0.0;
+            for (int c = 0; c < 3; c++)
+                grad_inv_lap[c] = 0.0;
+            for (size_t m = 0; m < modes.size(); m++) {
+                double kq = phases[m], m2 = 0.0;
+                for (int c = 0; c < 3; c++)
+                    kq += 2.0 * M_PI * modes[m][c] * q[c], m2 += modes[m][c] * modes[m][c];
+                d += amps[m] * std::cos(kq);
+                // The Zel'dovich displacement with delta = -div Psi: Psi = -A m sin(2 pi m.q + phase) / (2 pi m^2)
+                for (int c = 0; c < 3; c++)
+                    grad_inv_lap[c] += -amps[m] * modes[m][c] * std::sin(kq) / (2.0 * M_PI * m2);
+            }
+            return d;
+        };
+
+        // The linear field file: write the field, read it back
+        FML::GRID::FFTWGrid<3> grid(N);
+        for (int ix = 0; ix < grid.get_local_nx(); ix++)
+            for (int iy = 0; iy < N; iy++)
+                for (int iz = 0; iz < N; iz++) {
+                    double q[3] = {(grid.get_local_x_start() + ix) / double(N), iy / double(N), iz / double(N)}, g[3];
+                    grid.set_real({ix, iy, iz}, FML::GRID::FloatType(field(q, g)));
+                }
+        const std::string file = "test_analysis_linear_field.dat";
+        HB::write_linear_field<3>(file, grid, 300.0, 20.0);
+        HB::LinearFieldFileHeader header;
+        auto back = HB::read_linear_field<3>(file, header);
+        double maxdiff = 0.0;
+        for (int ix = 0; ix < grid.get_local_nx(); ix++)
+            for (int iy = 0; iy < N; iy++)
+                for (int iz = 0; iz < N; iz++)
+                    maxdiff = std::max(maxdiff, std::abs(double(back.get_real({ix, iy, iz}) - grid.get_real({ix, iy, iz}))));
+        FML::MaxOverTasks(&maxdiff);
+        check(header.nmesh == N and header.ndim == 3 and header.boxsize == 300.0 and header.redshift == 20.0 and
+                  maxdiff == 0.0,
+              "linear field file: write and read back exactly");
+        const auto lf = AN::linear_field_from_file(file, 300.0);
+        check(lf.nlattice == N and lf.redshift == 20.0, "linear field from a file");
+        check(FML::TESTS::throws<std::runtime_error>([&] { AN::linear_field_from_file(file, 301.0); }),
+              "a linear field file with another boxsize is an error");
+        if (FML::ThisTask == 0)
+            std::remove(file.c_str());
+
+        // An IC snapshot: the lattice (offset by half a cell) moved with the Zel'dovich displacement of the field.
+        // Every task makes all particles (IDs in a shuffled order) and keeps those in its domain
+        std::vector<IDParticle> all;
+        for (int ix = 0; ix < N; ix++)
+            for (int iy = 0; iy < N; iy++)
+                for (int iz = 0; iz < N; iz++) {
+                    double q[3] = {(ix + 0.5) / N, (iy + 0.5) / N, (iz + 0.5) / N}, psi[3];
+                    field(q, psi);
+                    IDParticle p;
+                    for (int c = 0; c < 3; c++) {
+                        p.pos[c] = q[c] + psi[c];
+                        p.pos[c] -= std::floor(p.pos[c]);
+                        if (p.pos[c] >= 1.0)
+                            p.pos[c] = 0.0;
+                    }
+                    p.id = 1000 + (((long long int)ix * N + iy) * N + iz) * 7 % (N * N * N); // a permutation (7 odd)
+                    all.push_back(p);
+                }
+        std::vector<IDParticle> ic;
+        for (auto & p : all)
+            if (p.pos[0] >= FML::xmin_domain and p.pos[0] < FML::xmax_domain)
+                ic.push_back(p);
+        for (bool correct : {false, true}) {
+            std::vector<AN::detail::IdLattice> id_lattice;
+            auto f = AN::linear_field_from_ic(ic.data(), ic.size(), 20.0, correct, id_lattice);
+            f.delta_fourier.fftw_c2r();
+            double err = 0.0, rms = 0.0;
+            for (int ix = 0; ix < f.delta_fourier.get_local_nx(); ix++)
+                for (int iy = 0; iy < N; iy++)
+                    for (int iz = 0; iz < N; iz++) {
+                        double q[3] = {(f.delta_fourier.get_local_x_start() + ix + 0.5) / N, (iy + 0.5) / N,
+                                       (iz + 0.5) / N},
+                               g[3];
+                        const double d = field(q, g);
+                        err = std::max(err, std::abs(f.delta_fourier.get_real({ix, iy, iz}) - d));
+                        rms = std::max(rms, std::abs(d));
+                    }
+            FML::MaxOverTasks(&err);
+            FML::MaxOverTasks(&rms);
+            // Without the correction exact (the field has only lattice modes); with it off by O(delta^2)
+            const double tol = correct ? 0.1 * rms * rms * 3 : 1e-5 * rms;
+            check(f.nlattice == N and std::abs(f.lattice_offset[0] - 0.5) < 1e-6 and err < tol,
+                  std::string("linear field from an IC snapshot") + (correct ? " (2LPT correction: O(delta^2))" : "") +
+                      " max error " + num(err / rms) + " of max |delta|");
+
+            // Final particles: the same IDs anywhere (here: the IC particles in reverse order on every task)
+            std::vector<IDParticle> fin(ic.rbegin(), ic.rend());
+            const auto lattice = AN::lattice_index_by_id(fin.data(), fin.size(), id_lattice);
+            long long int wrong = 0;
+            for (size_t i = 0; i < fin.size(); i++) {
+                // The expected lattice index: invert the ID permutation
+                long long int v = fin[i].id - 1000, l = -1;
+                for (long long int c = 0; c < (long long int)N * N * N; c++)
+                    if (c * 7 % (N * N * N) == v) {
+                        l = c;
+                        break;
+                    }
+                wrong += (lattice[i] != l);
+            }
+            FML::SumOverTasks(&wrong);
+            check(wrong == 0, "lattice index of the final particles by ID");
+        }
+        // Duplicated IDs and unmatched particles are errors
+        {
+            std::vector<AN::detail::IdLattice> id_lattice;
+            AN::linear_field_from_ic(ic.data(), ic.size(), 20.0, false, id_lattice);
+            std::vector<IDParticle> stranger(1);
+            stranger[0].id = -5;
+            check(FML::TESTS::throws<std::runtime_error>(
+                      [&] { AN::lattice_index_by_id(stranger.data(), FML::ThisTask == 0 ? 1 : 0, id_lattice); }),
+                  "a particle without a match in the IC is an error");
+            check(FML::TESTS::throws<std::runtime_error>(
+                      [&] { AN::lattice_index_from_ids(ic.data(), ic.size(), N, 1001); }),
+                  "IDs minus the offset outside the lattice are an error");
+            const auto idx = AN::lattice_index_from_ids(ic.data(), ic.size(), N, 1000);
+            check(idx.size() == ic.size(), "lattice index from IDs");
+        }
     }
 
     //=========================================================================
@@ -632,8 +793,20 @@ int main() {
         const auto dgrid = AN::density_contrast_grid(parts.data(), parts.size(), 32, "CIC");
         const auto web_g = AN::cosmic_web_from_delta(dgrid, pweb, 200.0);
         const auto mink_g = AN::minkowski_from_delta(dgrid, pmink, 200.0);
-        check(web_p.volume_fraction == web_g.volume_fraction and web_p.mass_fraction == web_g.mass_fraction and
-                  mink_p.measured == mink_g.measured and mink_p.euler_characteristic == mink_g.euler_characteristic,
+        // Equal up to the summation order of the threaded density assignment (a cell at a threshold may flip)
+        auto max_diff = [](const auto & x, const auto & y) {
+            double m = 0.0;
+            for (size_t i = 0; i < x.size(); i++)
+                for (size_t k = 0; k < x[i].size(); k++)
+                    m = std::max(m, std::abs(x[i][k] - y[i][k]) / std::max(1.0, std::abs(y[i][k])));
+            return m;
+        };
+        double euler_diff = 0.0;
+        for (size_t i = 0; i < mink_g.euler_characteristic.size(); i++)
+            euler_diff = std::max(euler_diff, std::abs(double(mink_p.euler_characteristic[i] - mink_g.euler_characteristic[i])));
+        check(max_diff(web_p.volume_fraction, web_g.volume_fraction) < 1e-3 and
+                  max_diff(web_p.mass_fraction, web_g.mass_fraction) < 1e-3 and
+                  max_diff(mink_p.measured, mink_g.measured) < 1e-3 and euler_diff <= 2.0,
               "measure_cosmic_web / measure_minkowski_functionals equal the grid functions on the particle density");
 
         const std::string f1 = "test_analysis_cosmicweb.txt", f2 = "test_analysis_minkowski.txt";

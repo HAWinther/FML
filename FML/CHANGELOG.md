@@ -5,6 +5,29 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SnapshotAnalyzer: hybrid bias spectra
+- `hybridbias = true` (`hybridbias_*`): the 15 cross spectra P_ab(k) of the Lagrangian bias operators
+  (1, delta_L, delta_L^2, s^2, nabla^2 delta_L) advected with the particles of a snapshot; `hybridbias_z<z>.txt` with
+  SimulationCode's columns plus Plinear(k), the linear field of this realization in the same bins. The linear field
+  comes from either
+  - an initial-conditions snapshot of the same particles (`hybridbias_ic_snapshot`): the lattice and its offset are
+    found from the positions, the displacement Psi = x - q gives delta_L = -div Psi with a 2LPT correction
+    (`hybridbias_ic_lpt_correction = "2lpt"`), and the particles are matched to the lattice by ID (any ID scheme);
+  - or a linear field file (`hybridbias_linear_field_source = "file"`), with the lattice index from the particle IDs
+    (`id - hybridbias_id_offset`, SimulationCode's convention) or, if also given, from the IC snapshot.
+  It is scaled to the snapshot with D(z)/D(z_L) of the analysis cosmology (or `hybridbias_growth_ratio`).
+- SimulationCode: `hybridbias_output_linear_field = true` writes the linear field of the IC
+  (`hybridbias_linear_field_<name>.dat`, format in `FML/ComputePowerSpectra/HybridBiasLinearFieldIO.h`, also
+  writable from numpy).
+- Shared code: `FML/Analysis/HybridBias.h`.
+- Validated against SimulationCode's in-run spectra (64^3 in 256 Mpc/h, z = 20 to 0): from the linear field file
+  equal to 2e-5 of sqrt(P_aa P_bb) (float32 positions), from the IC snapshot to < 0.3% for most pairs and 0.8% for
+  delta^2 delta^2 and s^2 s^2 with the 2LPT correction (up to 18% without it), identical on 1, 2 and 4 tasks; with
+  the same radiation content (`cosmology_Omega_r`), else D(z)/D(z_L) is 0.4% high from z = 20.
+- Tests: `Analysis/tests` (growth ratio in EdS and LCDM, the file round trip, the field of a Zel'dovich lattice, ID
+  matching, errors); `SnapshotAnalyzer/tests` (both sources agree, Plinear, independent of the number of tasks).
+- Fixed: the cosmic-web/Minkowski particle front-end test compared floats exactly and could fail with threads.
+
 ### SnapshotAnalyzer: cosmic web and Minkowski functionals
 - `cosmicweb = true` (`cosmicweb_*`): T-web classification of the Gaussian-smoothed density; `cosmicweb_z<z>.txt`
   with the volume and mass fractions of voids, sheets, filaments and knots for each eigenvalue threshold.

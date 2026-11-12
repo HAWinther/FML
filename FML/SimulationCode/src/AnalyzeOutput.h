@@ -2,6 +2,7 @@
 #define ANALYZEANDOUTPUT_HEADER
 
 #include <FML/ComputePowerSpectra/ComputePowerSpectrum.h>
+#include <FML/ComputePowerSpectra/HybridBiasLinearFieldIO.h>
 #include <FML/ComputePowerSpectra/HybridBiasSpectra.h>
 #include <FML/ComputePowerSpectra/HybridBiasOneLoop.h>
 #include <FML/ComputePowerSpectra/HybridBiasOneLoopMG.h>
