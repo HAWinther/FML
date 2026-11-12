@@ -6,8 +6,9 @@ Usage: check_snapshot_analyzer.py path/to/snapshot_analyzer [--mpirun "mpirun --
 
 The snapshot (100 Mpc/h, Omega_m = 0.3, two Gadget files) is a uniform background with three dense blobs (halos) and
 a spherical hole of radius 15 Mpc/h (a void). Checks:
-  - every analysis writes its files (the bispectrum: nbins^3 rows, symmetric, B > 0 on large scales), and the
-    results do not depend on the number of MPI tasks or on the read mode (files_per_task / all_tasks);
+  - every analysis writes its files (the bispectrum: nbins^3 rows, symmetric, B > 0 on large scales; the cosmic-web
+    fractions sum to 1; the Minkowski functionals: the excursion sets of the blobs have Euler characteristic 3), and
+    the results do not depend on the number of MPI tasks or on the read mode (files_per_task / all_tasks);
   - the three largest FoF halos are the blobs, with the right number of particles; the mass functions hold all halos;
   - relaxed FoF (fastpm and paper mode): the blobs, the rfof columns, independent of the number of tasks, and (with
     scipy) the same halos as the independent implementation in FriendsOfFriends/tests/make_rfof_reference.py;
@@ -185,6 +186,9 @@ def main():
         'pofk_nmesh': 64, 'pofk_interlacing': True, 'pofk_density_assignment_method': 'PCS',
         'pofk_multipole': True, 'pofk_multipole_nmesh': 64,
         'bispectrum': True, 'bispectrum_nmesh': 32, 'bispectrum_nbins': 8,
+        'cosmicweb': True, 'cosmicweb_nmesh': 64, 'cosmicweb_lambda_thresholds': [0.0, 0.2, 0.4],
+        'minkowski': True, 'minkowski_nmesh': 64, 'minkowski_threshold_variable': 'delta',
+        'minkowski_threshold_min': 0.0, 'minkowski_threshold_max': 11.0, 'minkowski_nthresholds': 12,
         'fof': True, 'fof_so_definitions': ['200m', '200c', 'vir'], 'fof_buffer_length_mpch': 5.0,
         'baryonification': True, 'baryonification_output_particles': True, 'baryonification_baryon_fraction': 0.16,
         'baryonification_fof_buffer_mpch': 5.0, 'baryonification_max_radius_over_r200': SUPPORT,
@@ -192,7 +196,8 @@ def main():
     }
     if have_cgal:
         base.update({'zobov_voids': True, 'dtfe': True, 'dtfe_nmesh': 32, 'dtfe_buffer_fraction': 1.0})
-    files = ['pofk_z0.000.txt', 'pofk_multipole_z0.000.txt', 'bispectrum_z0.000.txt', 'halos_z0.000.txt', 'massfunc_z0.000.txt',
+    files = ['pofk_z0.000.txt', 'pofk_multipole_z0.000.txt', 'bispectrum_z0.000.txt', 'cosmicweb_z0.000.txt',
+             'minkowski_z0.000.txt', 'halos_z0.000.txt', 'massfunc_z0.000.txt',
              'massfunc_so200m_z0.000.txt', 'massfunc_so200c_z0.000.txt', 'massfunc_sovir_z0.000.txt',
              'baryonification_z0.000.txt', 'pofk_baryonified_z0.000.txt', 'voids_z0.000.txt',
              'voids_spherical_z0.000.txt'] + (['voids_zobov_z0.000.txt', 'dtfe_spectra_z0.000.txt'] if have_cgal else [])
@@ -223,8 +228,8 @@ def main():
     for name, d in results.items():
         if name == ref_name:
             continue
-        for f in ['pofk_z0.000.txt', 'pofk_multipole_z0.000.txt', 'bispectrum_z0.000.txt',
-                  'pofk_baryonified_z0.000.txt', 'baryonification_z0.000.txt']:
+        for f in ['pofk_z0.000.txt', 'pofk_multipole_z0.000.txt', 'bispectrum_z0.000.txt', 'cosmicweb_z0.000.txt',
+                  'minkowski_z0.000.txt', 'pofk_baryonified_z0.000.txt', 'baryonification_z0.000.txt']:
             check(same(sorted_rows(ref / f), sorted_rows(d / f), 1e-6), f'{name}: {f} as {ref_name}')
         # Voids: the same voids; the barycenters (sums in a different order) to 0.01 Mpc/h, not the density ratio
         # (min/max density, ill conditioned when the minimum is ~0)
@@ -248,6 +253,24 @@ def main():
           np.allclose(B, B.transpose(1, 0, 2), rtol=1e-6, atol=1e-6 * np.abs(B).max()),
           'bispectrum: B and N symmetric under permutations of (k1, k2, k3)')
     check(B[1, 1, 1] > 0, f'bispectrum: positive equilateral B on large scales (clustered snapshot) ({B[1, 1, 1]:.4g})')
+
+    # Cosmic web: the fractions sum to 1, more voids and fewer knots for a higher threshold
+    w = table(ref / 'cosmicweb_z0.000.txt')
+    check(w.shape == (3, 9) and np.allclose(w[:, 1:5].sum(1), 1) and np.allclose(w[:, 5:9].sum(1), 1) and
+          np.all(np.diff(w[:, 1]) > 0) and np.all(np.diff(w[:, 4]) <= 0),
+          'cosmic web: volume and mass fractions sum to 1; more voids, not more knots for a higher lambda_th')
+    # For lambda_th >= 0.2 the knots are the cores of the blobs: their mass fraction is that of the blobs
+    blob_fraction = sum(n for _, n in BLOBS) / len(pos)
+    check(np.all(np.abs(w[1:, 8] - blob_fraction) < 0.01),
+          f'cosmic web: knots = the blobs (mass fraction {w[1:, 8].round(4).tolist()} vs {blob_fraction:.4f})')
+    # Minkowski functionals: for 3 <= delta_th <= 10 the excursion set is the three blobs (Euler characteristic 3,
+    # V3 = 3 / Box^3); V0 decreases with the threshold
+    m = table(ref / 'minkowski_z0.000.txt')
+    blobs_only = (m[:, 1] >= 3) & (m[:, 1] <= 10)
+    check(m.shape == (12, 13) and np.all(m[blobs_only, 10] == 3) and np.allclose(m[blobs_only, 5] * BOX**3, 3) and
+          np.all(np.diff(m[:, 2]) <= 0),
+          f'Minkowski functionals: Euler characteristic 3 (the blobs) for 3 <= delta_th <= 10 '
+          f'({m[blobs_only, 10].astype(int).tolist()}); V0 decreasing')
 
     # Halos: the three largest are the blobs
     halos = table(ref / 'halos_z0.000.txt')

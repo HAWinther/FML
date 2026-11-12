@@ -8,6 +8,9 @@ Everything is in `FML::ANALYSIS` and header-only (C++17).
 | Header | What |
 |---|---|
 | `AnalysisContext.h` | `AnalysisContext`: box size, scale factor, expansion history (`Background`), particle unit conversions |
+| `DensityGrid.h` | The density contrast of particles on a grid and Gaussian smoothing |
+| `CosmicWeb.h` | Cosmic-web classification (T-web): volume and mass fractions of voids, sheets, filaments, knots |
+| `Minkowski.h` | Minkowski functionals of excursion sets of the smoothed density, with the Gaussian-field predictions |
 | `PowerSpectrum.h` | P(k), redshift-space multipoles P_ell(k), the bispectrum B(k1,k2,k3) and their output files |
 | `Halos.h` | FoF (or relaxed FoF, `fof_relaxed`) halos, spherical overdensity (SO) masses, overlap flags, halo catalogue (text/HDF5), mass functions |
 | `Baryonification.h` | Position-only baryonification (FoF/M200c hosts + FML/Baryonification profiles) |
@@ -49,6 +52,12 @@ SimulationCode does not have: `pofk_nbins`, `pofk_log_binning` (and the multipol
   linear bins). The multipoles take the velocity-to-displacement factor from the context.
 - `measure_bispectrum` / `write_bispectrum` (settings `bispectrum_*`): as SimulationCode's (`bispectrum = true`):
   nbins linear bins in each k from 0 to the Nyquist frequency, and SimulationCode's file columns.
+- `measure_cosmic_web` / `cosmic_web_from_delta` / `write_cosmic_web` (settings `cosmicweb_*`): the T-web
+  (FML/CosmicWeb) of the Gaussian-smoothed density, the volume and mass fractions for each eigenvalue threshold.
+- `measure_minkowski_functionals` / `minkowski_from_delta` / `write_minkowski_functionals` (settings
+  `minkowski_*`): V0-V3 of the excursion sets of the smoothed density contrast (FML/Morphology, Crofton estimator)
+  and the Gaussian random field predictions for its sigma_0 and sigma_1. Tests: on a Gaussian random field the T-web
+  fractions at lambda_th = 0 are (0.08, 0.42, 0.42, 0.08) and the functionals follow the predictions.
 - `find_halos`: FoF (Davis et al. 1985), then for each `fof_so_definitions` entry (`200m`, `500c`, `vir`, ...) a
   shrinking-sphere center and the outermost radius where the mean enclosed density is Delta times the reference
   (m: mean density of the particles, c: critical density, vir: Bryan & Norman 1998); halos whose SO center is inside

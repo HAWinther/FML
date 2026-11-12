@@ -40,6 +40,20 @@ and output files as SimulationCode, so the two give the same result for the same
   linear bins from 0 to the Nyquist frequency). Memory and time grow as `bispectrum_nbins` grids of
   `bispectrum_nmesh`^3 and `bispectrum_nbins`^3 integrals. On a SimulationCode snapshot it equals SimulationCode's
   own bispectrum to the float32 precision of the Gadget positions (~2e-6).
+- Cosmic-web classification with the T-web (Hahn et al. 2007; [FML/CosmicWeb](../CosmicWeb/README.md)): the
+  eigenvalues of the tidal tensor of the Gaussian-smoothed density (`cosmicweb_smoothing_scale_mpch`) classify the
+  cells as voids, sheets, filaments or knots (0-3 eigenvalues above lambda_th). `cosmicweb_z<z>.txt`: the volume and
+  mass fractions of the four types for each of `cosmicweb_lambda_thresholds` (the mass fractions weight the cells by
+  the unsmoothed density on the same grid).
+- Minkowski functionals V0-V3 (volume, surface area, integrated mean curvature, Euler characteristic per volume) of
+  the excursion sets delta >= delta_th of the Gaussian-smoothed density contrast ([FML/Morphology](../Morphology/README.md),
+  exact counts of the voxel complex, the isotropic Crofton estimator). Thresholds in nu = delta / sigma_0
+  (`minkowski_threshold_variable = "nu"`) or in delta. `minkowski_z<z>.txt`: per threshold V0-V3 in (h/Mpc)^k, the
+  Gaussian random field predictions for the sigma_0 and sigma_1 of the same field (Tomita 1986; Schmalzing &
+  Buchert 1997; departures measure non-Gaussianity), the Euler characteristic of the excursion set and the exact
+  voxel-surface V1, V2. On a Gaussian random field the measured functionals agree with the predictions to ~1% (V0,
+  V1), ~5% (V2) and ~8% (V3) of their amplitude for one 96^3 realization. The density is not deconvolved by the
+  assignment window: use a smoothing scale of several cells.
 - Distributed periodic Friends-of-Friends halos with optional spherical overdensity masses
   (`fof_so_definitions = {"200m", "500c", "vir"}`), overlap flags, the halo catalogue (`halos_z<z>.txt`, or `.hdf5`
   with `fof_output_fileformat = "HDF5"` and `USE_HDF5=true`) and mass functions (`massfunc_z<z>.txt`,
@@ -107,6 +121,21 @@ bispectrum_nbins = 16 -- linear bins from 0 to the Nyquist frequency
 bispectrum_density_assignment_method = "CIC"
 bispectrum_interlacing = true
 bispectrum_subtract_shotnoise = false
+
+cosmicweb = false
+cosmicweb_nmesh = 128
+cosmicweb_smoothing_scale_mpch = 2.0 -- Gaussian, exp(-k^2 R^2 / 2); 0: none
+cosmicweb_lambda_thresholds = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5}
+cosmicweb_density_assignment_method = "CIC"
+
+minkowski = false
+minkowski_nmesh = 128
+minkowski_smoothing_scale_mpch = 5.0 -- Gaussian; several cells
+minkowski_density_assignment_method = "CIC"
+minkowski_threshold_variable = "nu" -- nu: delta_th = nu sigma_0 of the smoothed field; delta: delta_th itself
+minkowski_threshold_min = -3.0
+minkowski_threshold_max = 3.0
+minkowski_nthresholds = 25 -- linear from min to max
 
 fof = false
 fof_nmin_per_halo = 20
@@ -229,5 +258,9 @@ can also merge zones using the VIDE threshold convention ([Sutter et al. 2015](h
 Spherical underdensity finding follows Padilla, Ceccarelli & Lambas (2005),
 [doi:10.1111/j.1365-2966.2005.09500.x](https://doi.org/10.1111/j.1365-2966.2005.09500.x). ZOBOV follows
 Neyrinck (2008), [arXiv:0712.3049](https://arxiv.org/abs/0712.3049).
+The T-web follows Hahn et al. (2007), [arXiv:astro-ph/0610280](https://arxiv.org/abs/astro-ph/0610280), and
+Forero-Romero et al. (2009), [arXiv:0809.4135](https://arxiv.org/abs/0809.4135). The Gaussian-field Minkowski
+functionals are those of Tomita (1986) and Schmalzing & Buchert (1997),
+[arXiv:astro-ph/9508154](https://arxiv.org/abs/astro-ph/9508154).
 DTFE follows Schaap & van de Weygaert (2000), [arXiv:astro-ph/0011007](https://arxiv.org/abs/astro-ph/0011007),
 and Cautun & van de Weygaert (2011), [arXiv:1105.0370](https://arxiv.org/abs/1105.0370).

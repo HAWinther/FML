@@ -5,6 +5,19 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SnapshotAnalyzer: cosmic web and Minkowski functionals
+- `cosmicweb = true` (`cosmicweb_*`): T-web classification of the Gaussian-smoothed density; `cosmicweb_z<z>.txt`
+  with the volume and mass fractions of voids, sheets, filaments and knots for each eigenvalue threshold.
+- `minkowski = true` (`minkowski_*`): Minkowski functionals V0-V3 of the excursion sets of the smoothed density
+  contrast (thresholds in nu = delta / sigma_0 or delta; FML/Morphology, Crofton estimator) with the Gaussian random
+  field predictions for the sigma_0 and sigma_1 of the same field and the Euler characteristic; `minkowski_z<z>.txt`.
+- Shared code: `FML/Analysis/CosmicWeb.h`, `Minkowski.h` and `DensityGrid.h` (density contrast grid, Gaussian
+  smoothing). The SnapshotAnalyzer Lua reader also reads lists of numbers (`std::vector<double>`).
+- Tests: `Analysis/tests` on a Gaussian random field: T-web fractions at lambda_th = 0 of (0.08, 0.42, 0.42, 0.08)
+  (Doroshkevich 1970) and Minkowski functionals equal to the predictions (~1% for V0, V1, 5% V2, 8% V3 of their
+  amplitude), sigma_1/sigma_0 of smoothed white noise; `SnapshotAnalyzer/tests`: independent of the number of tasks,
+  the knots are the blobs (their mass fraction), the excursion sets of the blobs have Euler characteristic 3.
+
 ### SnapshotAnalyzer: bispectrum
 - `bispectrum = true` and the `bispectrum_*` parameters (SimulationCode's names; defaults nmesh 128, nbins 16, CIC,
   interlacing): `bispectrum_z<z>.txt` with SimulationCode's columns. Shared code: `FML/Analysis/PowerSpectrum.h`

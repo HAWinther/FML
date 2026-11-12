@@ -8,8 +8,10 @@
 
 #include <FML/Analysis/AnalysisContext.h>
 #include <FML/Analysis/Baryonification.h>
+#include <FML/Analysis/CosmicWeb.h>
 #include <FML/Analysis/DTFE.h>
 #include <FML/Analysis/Halos.h>
+#include <FML/Analysis/Minkowski.h>
 #include <FML/Analysis/Output.h>
 #include <FML/Analysis/ParticleUtils.h>
 #include <FML/Analysis/PowerSpectrum.h>
@@ -88,6 +90,8 @@ namespace FML {
                     return lua.read_string_array(name, default_value, false);
                 else if constexpr (std::is_same_v<T, std::vector<int>>)
                     return lua.read_number_array<int>(name, default_value, false);
+                else if constexpr (std::is_same_v<T, std::vector<double>>)
+                    return lua.read_number_array<double>(name, default_value, false);
                 else
                     static_assert(sizeof(T) == 0, "LuaReader: unsupported parameter type");
             }
@@ -170,6 +174,10 @@ namespace FML {
             FML::ANALYSIS::PowerSpectrumMultipoleSettings pofk_multipole_settings;
             bool bispectrum{false};
             FML::ANALYSIS::BispectrumSettings bispectrum_settings;
+            bool cosmicweb{false};
+            FML::ANALYSIS::CosmicWebSettings cosmicweb_settings;
+            bool minkowski{false};
+            FML::ANALYSIS::MinkowskiSettings minkowski_settings;
             bool fof{false};
             FML::ANALYSIS::HaloSettings fof_settings;
             bool baryonification{false};
@@ -203,6 +211,10 @@ namespace FML {
                 r.read(pofk_multipole_settings);
                 get("bispectrum", bispectrum);
                 r.read(bispectrum_settings);
+                get("cosmicweb", cosmicweb);
+                r.read(cosmicweb_settings);
+                get("minkowski", minkowski);
+                r.read(minkowski_settings);
                 get("fof", fof);
                 r.read(fof_settings);
                 get("baryonification", baryonification);
@@ -242,16 +254,22 @@ namespace FML {
                     throw std::runtime_error("particle_allocation_factor must be >= 1");
                 if (not(cosmology_Omega_r >= 0.0))
                     throw std::runtime_error("cosmology_Omega_r must be >= 0");
-                if (not pofk and not pofk_multipole and not bispectrum and not fof and not voids and
-                    not spherical_voids and not zobov_voids and not dtfe and not baryonification)
-                    throw std::runtime_error("Enable at least one analysis: pofk, pofk_multipole, bispectrum, fof, "
-                                             "baryonification, voids, spherical_voids, zobov_voids or dtfe");
+                if (not pofk and not pofk_multipole and not bispectrum and not cosmicweb and not minkowski and
+                    not fof and not voids and not spherical_voids and not zobov_voids and not dtfe and
+                    not baryonification)
+                    throw std::runtime_error("Enable at least one analysis: pofk, pofk_multipole, bispectrum, "
+                                             "cosmicweb, minkowski, fof, baryonification, voids, spherical_voids, "
+                                             "zobov_voids or dtfe");
                 if (pofk or baryonification)
                     pofk_settings.validate();
                 if (pofk_multipole)
                     pofk_multipole_settings.validate();
                 if (bispectrum)
                     bispectrum_settings.validate();
+                if (cosmicweb)
+                    cosmicweb_settings.validate();
+                if (minkowski)
+                    minkowski_settings.validate();
                 if (fof)
                     fof_settings.validate();
                 if (baryonification) {
@@ -291,6 +309,10 @@ namespace FML {
                     measure_multipoles();
                 if (options.bispectrum)
                     measure_bispectrum();
+                if (options.cosmicweb)
+                    classify_cosmic_web();
+                if (options.minkowski)
+                    measure_minkowski_functionals();
                 if (options.fof)
                     find_halos();
                 if (options.voids)
@@ -495,6 +517,30 @@ namespace FML {
                 ANALYSIS::write_bispectrum<3>(filename, bofk, "# Bispectrum of " + options.snapshot_input + "\n");
                 if (FML::ThisTask == 0)
                     std::cout << "Bispectrum written: " << filename << "\n";
+            }
+
+            void classify_cosmic_web() {
+                const auto web = ANALYSIS::measure_cosmic_web(mpiparticles.get_particles_ptr(),
+                                                              mpiparticles.get_npart(),
+                                                              options.cosmicweb_settings,
+                                                              context);
+                const auto filename = output_path("cosmicweb_z" + redshift_label() + ".txt");
+                ANALYSIS::write_cosmic_web(filename, web, "# Cosmic web (T-web) of " + options.snapshot_input + "\n");
+                if (FML::ThisTask == 0)
+                    std::cout << "Cosmic-web fractions written: " << filename << "\n";
+            }
+
+            void measure_minkowski_functionals() {
+                const auto mf = ANALYSIS::measure_minkowski_functionals(mpiparticles.get_particles_ptr(),
+                                                                        mpiparticles.get_npart(),
+                                                                        options.minkowski_settings,
+                                                                        context);
+                const auto filename = output_path("minkowski_z" + redshift_label() + ".txt");
+                ANALYSIS::write_minkowski_functionals(filename,
+                                                      mf,
+                                                      "# Minkowski functionals of " + options.snapshot_input + "\n");
+                if (FML::ThisTask == 0)
+                    std::cout << "Minkowski functionals written: " << filename << "\n";
             }
 
             void measure_multipoles() {

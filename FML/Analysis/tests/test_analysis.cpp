@@ -4,6 +4,8 @@
 // on the number of tasks.
 
 #include <FML/Analysis/AnalysisContext.h>
+#include <FML/Analysis/CosmicWeb.h>
+#include <FML/Analysis/Minkowski.h>
 #include <FML/Analysis/Baryonification.h>
 #include <FML/Analysis/Halos.h>
 #include <FML/Analysis/ParticleUtils.h>
@@ -531,6 +533,147 @@ int main() {
         check_local(FML::TESTS::throws<std::runtime_error>([&] { bad.validate(); }) and
                         FML::TESTS::throws<std::runtime_error>([&] { bad_method.validate(); }),
                     "bispectrum: invalid settings are rejected");
+    }
+
+    //=========================================================================
+    // Cosmic web (T-web) and Minkowski functionals on a Gaussian random field: the known fractions at lambda_th = 0
+    // (0.08, 0.42, 0.42, 0.08; Doroshkevich 1970) and the Gaussian-field Minkowski functionals; the particle front
+    // ends equal the grid functions; the files; the settings checks
+    //=========================================================================
+    {
+        // White noise on a 96^3 grid (box 96 Mpc/h: 1 Mpc/h cells), the same on any number of tasks
+        const int N = 96;
+        const double box = 96.0;
+        FML::GRID::FFTWGrid<3> noise(N);
+        auto hash = [](uint64_t x) {
+            x += 0x9e3779b97f4a7c15ULL;
+            x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ULL;
+            x = (x ^ (x >> 27)) * 0x94d049bb133111ebULL;
+            return x ^ (x >> 31);
+        };
+        for (int ix = 0; ix < noise.get_local_nx(); ix++)
+            for (int iy = 0; iy < N; iy++)
+                for (int iz = 0; iz < N; iz++) {
+                    const uint64_t i = (uint64_t(noise.get_local_x_start() + ix) * N + iy) * N + iz;
+                    const double u1 = (double(hash(2 * i) >> 11) + 0.5) * 0x1.0p-53;
+                    const double u2 = double(hash(2 * i + 1) >> 11) * 0x1.0p-53;
+                    noise.set_real({ix, iy, iz}, std::sqrt(-2.0 * std::log(u1)) * std::cos(2.0 * M_PI * u2));
+                }
+
+        AN::CosmicWebSettings web;
+        web.smoothing_scale_mpch = 3.0;
+        web.lambda_thresholds = {0.0, 0.005, 0.01}; // the smoothed field has sigma ~ 0.03
+        const auto fr = AN::cosmic_web_from_delta(noise, web, box);
+        const auto & v = fr.volume_fraction[0];
+        check(std::abs(v[0] - 0.08) < 0.012 and std::abs(v[1] - 0.42) < 0.02 and std::abs(v[2] - 0.42) < 0.02 and
+                  std::abs(v[3] - 0.08) < 0.012,
+              "T-web of a Gaussian field: fractions at lambda_th = 0 (" + num(v[0], 3) + ", " + num(v[1], 3) + ", " +
+                  num(v[2], 3) + ", " + num(v[3], 3) + ") vs (0.08, 0.42, 0.42, 0.08)");
+        bool sums = true, more_voids = true;
+        for (size_t i = 0; i < fr.volume_fraction.size(); i++) {
+            double sv = 0.0, sm = 0.0;
+            for (int k = 0; k < 4; k++) {
+                sv += fr.volume_fraction[i][k];
+                sm += fr.mass_fraction[i][k];
+            }
+            sums = sums and std::abs(sv - 1.0) < 1e-12 and std::abs(sm - 1.0) < 1e-9;
+            if (i > 0)
+                more_voids = more_voids and fr.volume_fraction[i][0] > fr.volume_fraction[i - 1][0] and
+                             fr.volume_fraction[i][3] < fr.volume_fraction[i - 1][3];
+        }
+        std::string info;
+        for (size_t i = 0; i < fr.volume_fraction.size(); i++) {
+            double sv = 0.0, sm = 0.0;
+            for (int k = 0; k < 4; k++) {
+                sv += fr.volume_fraction[i][k];
+                sm += fr.mass_fraction[i][k];
+            }
+            info += " [" + num(sv - 1.0, 3) + " " + num(sm - 1.0, 3) + " V " + num(fr.volume_fraction[i][0], 4) + " K " +
+                    num(fr.volume_fraction[i][3], 4) + "]";
+        }
+        check(sums and more_voids, "T-web: the volume and mass fractions sum to 1; more voids, fewer knots for a "
+                                   "higher threshold" + info);
+
+        AN::MinkowskiSettings mink;
+        mink.smoothing_scale_mpch = 4.0;
+        mink.threshold_min = -2.0;
+        mink.threshold_max = 2.0;
+        mink.nthresholds = 9;
+        const auto mf = AN::minkowski_from_delta(noise, mink, box);
+        // sigma_1^2 / sigma_0^2 of smoothed white noise: 3 / (2 R^2) (up to the grid)
+        const double ratio = mf.sigma1 * mf.sigma1 / (mf.sigma0 * mf.sigma0) * 2.0 * 16.0 / 3.0;
+        check(std::abs(ratio - 1.0) < 0.05, "Minkowski: sigma_1^2 / sigma_0^2 = 3 / (2 R^2) for smoothed white noise (" +
+                                                num(ratio, 4) + ")");
+        std::array<double, 4> worst{}, amp{};
+        for (size_t i = 0; i < mf.nu.size(); i++)
+            for (int k = 0; k < 4; k++) {
+                worst[k] = std::max(worst[k], std::abs(mf.measured[i][k] - mf.gaussian[i][k]));
+                amp[k] = std::max(amp[k], std::abs(mf.gaussian[i][k]));
+            }
+        check(worst[0] < 0.01 and worst[1] < 0.06 * amp[1] and worst[2] < 0.1 * amp[2] and worst[3] < 0.12 * amp[3],
+              "Minkowski functionals of a Gaussian field = the Gaussian predictions (max |diff| / max |G|: " +
+                  num(worst[0] / amp[0], 2) + ", " + num(worst[1] / amp[1], 2) + ", " + num(worst[2] / amp[2], 2) +
+                  ", " + num(worst[3] / amp[3], 2) + ")");
+        bool euler_ok = true;
+        for (size_t i = 0; i < mf.nu.size(); i++)
+            euler_ok = euler_ok and std::abs(mf.measured[i][3] * box * box * box - mf.euler_characteristic[i]) < 1e-6;
+        check(euler_ok, "Minkowski: V3 = Euler characteristic / volume");
+
+        // The particle front ends: the same as the grid functions on the density of the particles
+        auto parts = make_particles(20000, {{0.3, 0.3, 0.3}, {0.7, 0.6, 0.2}}, {0.03, 0.05}, {4000, 3000});
+        const auto context = make_context(200.0, 1.0);
+        AN::CosmicWebSettings pweb;
+        pweb.nmesh = 32;
+        AN::MinkowskiSettings pmink;
+        pmink.nmesh = 32;
+        pmink.smoothing_scale_mpch = 20.0;
+        const auto web_p = AN::measure_cosmic_web(parts.data(), parts.size(), pweb, context);
+        const auto mink_p = AN::measure_minkowski_functionals(parts.data(), parts.size(), pmink, context);
+        const auto dgrid = AN::density_contrast_grid(parts.data(), parts.size(), 32, "CIC");
+        const auto web_g = AN::cosmic_web_from_delta(dgrid, pweb, 200.0);
+        const auto mink_g = AN::minkowski_from_delta(dgrid, pmink, 200.0);
+        check(web_p.volume_fraction == web_g.volume_fraction and web_p.mass_fraction == web_g.mass_fraction and
+                  mink_p.measured == mink_g.measured and mink_p.euler_characteristic == mink_g.euler_characteristic,
+              "measure_cosmic_web / measure_minkowski_functionals equal the grid functions on the particle density");
+
+        const std::string f1 = "test_analysis_cosmicweb.txt", f2 = "test_analysis_minkowski.txt";
+        AN::write_cosmic_web(f1, fr);
+        AN::write_minkowski_functionals(f2, mf);
+        if (FML::ThisTask == 0) {
+            auto count_rows = [](const std::string & file, int & ncols) {
+                std::ifstream in(file);
+                std::string line;
+                int rows = 0;
+                while (std::getline(in, line)) {
+                    if (line.empty() or line[0] == '#')
+                        continue;
+                    std::stringstream ss(line);
+                    std::string w;
+                    ncols = 0;
+                    while (ss >> w)
+                        ncols++;
+                    rows++;
+                }
+                return rows;
+            };
+            int c1 = 0, c2 = 0;
+            const int r1 = count_rows(f1, c1), r2 = count_rows(f2, c2);
+            check_local(r1 == 3 and c1 == 9 and r2 == 9 and c2 == 13,
+                        "the cosmic-web (3 x 9) and Minkowski (9 x 13) files");
+            std::remove(f1.c_str());
+            std::remove(f2.c_str());
+        }
+
+        AN::CosmicWebSettings bad_web;
+        bad_web.lambda_thresholds = {};
+        AN::MinkowskiSettings bad_mink;
+        bad_mink.threshold_variable = "sigma";
+        AN::MinkowskiSettings bad_range;
+        bad_range.threshold_max = -5.0;
+        check_local(FML::TESTS::throws<std::runtime_error>([&] { bad_web.validate(); }) and
+                        FML::TESTS::throws<std::runtime_error>([&] { bad_mink.validate(); }) and
+                        FML::TESTS::throws<std::runtime_error>([&] { bad_range.validate(); }),
+                    "cosmic-web and Minkowski settings checks");
     }
 
     return FML::TESTS::summary("Analysis");
