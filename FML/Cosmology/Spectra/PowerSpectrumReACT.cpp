@@ -52,8 +52,6 @@ namespace FML::COSMOLOGY {
         ReACT::Input in;
         in.cosmology.h = p.h;
         in.cosmology.n_s = p.n_s;
-        in.cosmology.A_s = p.A_s;
-        in.cosmology.k_pivot = p.k_pivot;
         in.cosmology.Omega_b = cosmo.rhoB(0);
         in.cosmology.Omega_nu = cosmo.rhoNcdm(0);
         in.cosmology.Omega_m = cosmo.rhoCDM(0) + in.cosmology.Omega_b + in.cosmology.Omega_nu;

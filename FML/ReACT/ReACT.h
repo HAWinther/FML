@@ -15,7 +15,8 @@ namespace FML::COSMOLOGY {
         struct Cosmology {
             double h = 0.67, n_s = 0.965;
             double Omega_m = 0.317, Omega_b = 0.05, Omega_nu = 0.0;
-            double A_s = 2.1e-9, k_pivot = 0.05; // pivot in 1/Mpc
+            // No A_s or k_pivot: with power-spectrum input upstream uses them (and n_s) only to convert P to a transfer
+            // function and back, so they cancel. FML passes fixed values inside upstream's allowed range.
         };
         struct Options {
             Model model = Model::GR;

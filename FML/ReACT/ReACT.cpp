@@ -7,6 +7,7 @@
 #include <string>
 
 #ifdef USE_REACT
+#include <gsl/gsl_errno.h>
 // ABI of ACTio-ReACTio a36dda02db6b537a4ddcc7bf044c446c10a58373, pyreact/react_wrapper.cpp.
 // Keep upstream headers/types and globals out of FML's public interface.
 extern "C" {
@@ -30,6 +31,21 @@ namespace FML::COSMOLOGY {
             for (size_t i = 0; i < values.size(); ++i)
                 require(std::isfinite(values[i]) && (i == 0 || values[i] > values[i - 1]), message);
         }
+#ifdef USE_REACT
+        // Upstream (SCOL.cpp) calls gsl_set_error_handler(NULL) after its minimizations, which restores GSL's
+        // abort() handler for the whole process (libgsl is shared with FML, which switches the handler off and checks
+        // the status codes). Save the caller's handler and restore it after every backend call, also on exceptions.
+        struct GSLErrorHandlerGuard {
+            gsl_error_handler_t * saved = gsl_set_error_handler_off();
+            GSLErrorHandlerGuard() = default;
+            GSLErrorHandlerGuard(const GSLErrorHandlerGuard &) = delete;
+            GSLErrorHandlerGuard & operator=(const GSLErrorHandlerGuard &) = delete;
+            ~GSLErrorHandlerGuard() { gsl_set_error_handler(saved); }
+        };
+        // Upstream's power-spectrum input is converted with P = 2 pi^2 A_s k h^4 (k h / k_pivot)^(n_s - 1) T^2 and
+        // back (LinearPS.cpp), so A_s and k_pivot cancel; these values satisfy upstream's range check
+        constexpr double canonical_A_s = 2.1e-9, canonical_k_pivot = 0.05;
+#endif
         void grid(const ReACT::Grid & p, size_t nz, size_t nk) {
             require(p.size() == nz, "spectrum has wrong number of redshifts");
             for (const auto & row : p) {
@@ -55,8 +71,6 @@ namespace FML::COSMOLOGY {
                 std::isfinite(c.Omega_b) && c.Omega_b >= 0 && c.Omega_b < c.Omega_m &&
                 std::isfinite(c.Omega_nu) && c.Omega_nu >= 0 && c.Omega_nu < c.Omega_m - c.Omega_b,
                 "require 0 <= Omega_b, Omega_nu and Omega_b + Omega_nu < Omega_m < 1");
-        require(c.A_s >= 1.5e-9 && c.A_s <= 2.5e-9 && c.k_pivot >= 1e-3 && c.k_pivot <= 0.1,
-                "upstream target-spectrum interface requires 1.5e-9 <= A_s <= 2.5e-9 and 0.001 <= k_pivot <= 0.1 /Mpc");
         require(in.k.size() >= 32 && in.z.size() >= 4, "need at least 32 k points and 4 redshifts");
         require(in.k.size() <= size_t(std::numeric_limits<int>::max()) / in.z.size(), "input grid is too large");
         increasing(in.k, "k must be finite and strictly increasing");
@@ -88,6 +102,7 @@ namespace FML::COSMOLOGY {
         // including error retrieval. Completed results and FML interpolation tables have no backend state.
         static std::mutex backend_mutex;
         const std::lock_guard<std::mutex> lock(backend_mutex);
+        const GSLErrorHandlerGuard gsl_guard;
         auto flatten = [](const Grid & g) {
             std::vector<double> v;
             for (const auto & row : g)
@@ -98,6 +113,7 @@ namespace FML::COSMOLOGY {
         auto k = in.k, z = in.z;
         std::reverse(z.begin(), z.end()); // upstream z argument decreases; input spectra remain increasing-z
         auto c = in.cosmology;
+        double A_s = canonical_A_s, k_pivot = canonical_k_pivot;
         auto pars = options.parameters;
         int nk = int(k.size()), nz = int(z.size()), np = nk * nz, maxp = 20;
         int mass_loop = options.mass_loop, model = int(options.model), verbose = options.verbose ? 1 : 0;
@@ -107,7 +123,7 @@ namespace FML::COSMOLOGY {
         error_message[0] = '\0';
         const int status = compute_reaction_nu_ext(&np, total.data(), &nk, k.data(), &nz, z.data(),
             &np, cold.data(), &np, lcdm.data(), &nk, k.data(), &is_transfer,
-            &c.h, &c.n_s, &c.Omega_m, &c.Omega_b, &c.Omega_nu, &c.A_s, &c.k_pivot,
+            &c.h, &c.n_s, &c.Omega_m, &c.Omega_b, &c.Omega_nu, &A_s, &k_pivot,
             &maxp, pars.data(), &mass_loop, &model,
             &nk, &nz, react.data(), &nk, &nz, linear.data(), &nk, &nz, pseudo.data(),
             &sigma8, &compute_pseudo, &verbose);

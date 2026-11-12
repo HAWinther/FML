@@ -91,8 +91,9 @@ boundary discontinuity. The standalone table instead throws on redshift extrapol
 At k below the table it returns R=1; above the table it holds the endpoint reaction fixed.
 Neither the k=100 numerical endpoint nor the full table is a claim of physical calibration.
 
-The current upstream target-power interface additionally restricts 1.5e-9<=A_s<=2.5e-9 and
-0.001<=k_pivot<=0.1 /Mpc; FML checks these before calling it. Use sufficient linear-spectrum
+Upstream's target-power interface restricts 1.5e-9<=A_s<=2.5e-9 and 0.001<=k_pivot<=0.1 /Mpc, but with
+power-spectrum input it uses A_s, k_pivot and n_s only to convert P to a transfer function and back, so they cancel:
+FML always passes A_s = 2.1e-9 and k_pivot = 0.05/Mpc, and any A_s works. Use sufficient linear-spectrum
 coverage (`pert_k_max` at least 1/Mpc for precision work) and check convergence in both the
 Boltzmann settings and ReACT sampling. The small CLI examples used for implementation smoke
 tests are not precision cosmological predictions.
@@ -128,12 +129,29 @@ spectrum. Multiplying a generic same-primordial-parameters LCDM spectrum gives t
 normalization in general.
 
 Backend calls are serialized across FML ReACT instances because upstream uses process-global
-tables and error storage. Completed FML tables can be queried concurrently. The interface checks
+tables and error storage. Upstream also resets GSL's error handler to the default (abort) one; the wrapper
+restores the caller's handler after every call (FML switches it off and checks status codes). Completed FML tables can be queried concurrently. The interface checks
 shapes, ordering, ranges, parameters and finite positive values, propagates upstream error messages,
 and validates returned powers. Upstream internal fatal errors can still terminate the process;
 the wrapper does not change the upstream numerical engine or its fatal-error policy.
 
 ## Tests and references
+
+`FML/Cosmology/EinsteinBoltzmannSolver/tests/test_react_physics.cpp` tests the solver's `nonlinear=react` with
+non-trivial reactions (~8 min on 2 cores with the backend; trivial without it):
+
+- the solver's f(R) P_NL equals R from the library (on another k/z grid) times HMcode-2020 of the pseudo cosmology
+  evaluated directly (3e-5);
+- the f(R) enhancement P_f(R)/P_LCDM against the N-body fitting function of Winther et al. 2019
+  (`Emulator/FofrFittingFunction.h`, ELEPHANT cosmology): 2.3% (|fR0| = 1e-6) and 2.9% (1e-5) for k <= 1 h/Mpc,
+  z <= 1; up to 6.7% at k = 3 h/Mpc, z = 0 for 1e-5. At k = 0.05-0.1 h/Mpc ReACT x HMcode-2020 dips 1-2% below 1
+  for 1e-6, where the simulations give >= 1: HMcode-2020 responds to the non-LCDM shape of the pseudo spectrum
+  (the 1-halo/2-halo transition). Upstream's Halofit pseudo is worse (-6% at k = 0.1), which is why the solver
+  uses HMcode-2020;
+- R -> R_GR for |fR0| = 1e-8 and Omega_rc = 1e-6 (5e-4), and P_NL/P_L = LCDM's on large scales;
+- w0wa (w0 = -0.9, wa = 0.1) and LCDM with sum m_nu = 0.3 eV: ReACT x pseudo agrees with HMcode-2020 run directly
+  to 0.7% and 0.8% (k <= 3 h/Mpc, z <= 1);
+- A_s = 3.2e-9 runs (a smaller f(R) enhancement than at 2.43e-9: more screening).
 
 ```sh
 make -C FML/ReACT/tests run                         # no-backend contract/interpolation checks
@@ -147,7 +165,10 @@ Omega_rc=0.1, and CPL w0=-0.9, wa=0.1 with sum(mnu)=0.3 eV. The f(R)/nDGP target
 are generated using upstream modified growth from the LCDM seed. The comparison checks array
 ordering, units, linear-input preservation, reaction and upstream pseudo power. These are
 interface/reference checks, not independent N-body validation or a calibration claim for the
-HMcode-2020-composed solver prediction. The fixtures use 10 mass samples to keep runtime low;
+HMcode-2020-composed solver prediction. The pseudo spectra are reproduced to rounding on any platform, the reactions
+only to upstream's numerical reproducibility: rounding-level changes of the input change R by up to ~5e-4 (spherical
+collapse with CVODE and bisection) and Linux and macOS builds differ by up to 1.3e-3 (f(R), 10 mass samples);
+GR is reproduced to 1e-10. The test tolerances reflect this. The fixtures use 10 mass samples to keep runtime low;
 production defaults use 30. To regenerate:
 
 ```sh
