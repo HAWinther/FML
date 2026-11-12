@@ -34,6 +34,11 @@ namespace FML::HOD {
     struct OccupationMeans {
         double central_probability = 0, satellites_if_central = 0;
     };
+    /// Unconditional first moments: E[Ncentral] and E[Nsatellite].
+    /// Independent satellites may have nonzero mean even when central_probability is zero.
+    struct MarginalOccupationMeans {
+        double central_probability = 0, satellite_mean = 0;
+    };
     struct Zheng07 {
         double log10_mmin = 13, sigma_log_mass = .4, m0 = 1e12, m1 = 1e14, alpha = 1;
         OccupationMeans operator()(const Halo & halo) const {
@@ -154,6 +159,45 @@ namespace FML::HOD {
             throw std::length_error("HOD draw exceeds per-halo resource limit");
         return result;
     }
+    /// Explicit marginal-mean sampling, with the same separated Philox streams as sample_occupation.
+    /// Conditional satellites use rate satellite_mean/p_c and require a compatible finite rate.
+    inline OccupationDraw sample_marginal_occupation(std::uint64_t halo_id,
+                                                     const MarginalOccupationMeans & mean,
+                                                     const Options & options = {}) {
+        detail::require(std::isfinite(mean.central_probability) && mean.central_probability >= 0 &&
+                            mean.central_probability <= 1 && std::isfinite(mean.satellite_mean) &&
+                            mean.satellite_mean >= 0,
+                        "Invalid marginal HOD occupation means");
+        detail::require(!options.require_central || mean.central_probability > 0 || mean.satellite_mean == 0,
+                        "Positive marginal satellite mean is incompatible with zero central probability");
+        const double rate = options.require_central ?
+                                (mean.central_probability > 0 ? mean.satellite_mean / mean.central_probability : 0) :
+                                mean.satellite_mean;
+        // Validate the model before drawing a central: failure must not depend on the random outcome.
+        detail::require(std::isfinite(rate) && rate <= 1e8 && rate <= options.max_satellites_per_halo,
+                        "Marginal HOD Poisson rate exceeds the supported range or per-halo resource limit");
+        if (options.require_central)
+            return sample_occupation(halo_id, OccupationMeans{mean.central_probability, rate}, options);
+        Stream central(options.seed, halo_id, 0x43454E54, options.stream);
+        Stream satellite(options.seed, halo_id, 0x5341544E, options.stream);
+        OccupationDraw result;
+        result.halo_id = halo_id;
+        result.central = central.uniform() < mean.central_probability;
+        result.satellites = detail::poisson(rate, satellite);
+        if (result.satellites > options.max_satellites_per_halo)
+            throw std::length_error("HOD draw exceeds per-halo resource limit");
+        return result;
+    }
+    namespace detail {
+        inline OccupationDraw
+        sample_model_occupation(std::uint64_t id, const OccupationMeans & mean, const Options & options) {
+            return sample_occupation(id, mean, options);
+        }
+        inline OccupationDraw
+        sample_model_occupation(std::uint64_t id, const MarginalOccupationMeans & mean, const Options & options) {
+            return sample_marginal_occupation(id, mean, options);
+        }
+    } // namespace detail
     /// Inverse CDF of the NFW mass profile truncated at the supplied halo radius.
     inline double nfw_radius_fraction(double probability, double concentration) {
         detail::require(probability >= 0 && probability <= 1 && concentration > 0 && std::isfinite(concentration),
@@ -223,7 +267,7 @@ namespace FML::HOD {
         const std::vector<size_t> & ordered_members(size_t index) const { return member_order.at(index); }
     };
     /// Local operation: no hidden gathers/reductions. Global halo IDs must be unique across MPI ranks.
-    /// A custom occupation callable returns central probability and the conditional satellite mean.
+    /// A custom callable returns OccupationMeans (conditional rate) or MarginalOccupationMeans.
     template <class Occupation>
     Mock populate(const PreparedCatalog & prepared, const Occupation & occupation, const Options & options = {}) {
         detail::require(
@@ -241,7 +285,7 @@ namespace FML::HOD {
         for (size_t i = 0; i < halos.size(); ++i) {
             const auto & h = halos[i];
             const auto mean = occupation(h);
-            result.occupations[i] = sample_occupation(h.id, mean, options);
+            result.occupations[i] = detail::sample_model_occupation(h.id, mean, options);
             const auto & counts = result.occupations[i];
             const double c = h.concentration * options.satellite_concentration_factor;
             if (options.profile == SatelliteProfile::NFW && counts.satellites)
