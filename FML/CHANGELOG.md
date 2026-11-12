@@ -5,6 +5,17 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Emulator/NeuralNetwork: neural-network emulators (train and evaluate in C++)
+- `Emulator/NeuralNetwork/NeuralNetwork.h` (header only): `FML::EMULATOR::NEURALNETWORK::NeuralNetwork` (fully
+  connected, 9 activations, input/output standardization, `evaluate`, `jacobian`, text `save`/`load`) and `train()`
+  with the recipe of the Sesame pipeline's Emulator.py (PyTorch Lightning): Adam with L2 weight decay, gradient-norm
+  clipping, ReduceLROnPlateau, early stopping and stochastic weight averaging, with the same defaults except two:
+  standardized data and Glorot initialization (Emulator.py's N(0, 1e-3^2) starts on a ~50-epoch plateau, also in
+  PyTorch, where its schedule and early stopping end the training). Also `read_csv_columns`.
+- `export_lightning_emulator.py`: a trained Emulator.py checkpoint to the FML format.
+- Tests against PyTorch (outputs, losses, gradients, clipped Adam steps to ~1e-15; ReduceLROnPlateau; an exported
+  checkpoint) and finite differences; an example emulating a linear P(k) in (Omega_m, sigma8, n_s).
+
 ### LatinHyperCube: Latin hypercube sampling
 - `LatinHyperCube/LatinHyperCube.h` (header only): `FML::SAMPLING::LatinHyperCube`, after
   `scipy.stats.qmc.LatinHypercube` (scipy 1.18): strength 1 and orthogonal-array strength 2 (n = p^2, p prime),
