@@ -4,8 +4,8 @@ USE_FFTW ?= true
 TARGETS := test_direct test_mg_oneloop
 include ../../Makefile.config
 ifeq ($(USE_FFTW),true)
-TARGETS += test_perturbation test_lptrsd test_rept test_nowiggle test_tns test_eftoflss
-all: test_perturbation test_lptrsd test_rept test_nowiggle test_tns test_eftoflss
+TARGETS += test_perturbation test_lptrsd test_rept test_nowiggle test_tns test_eftoflss test_correlations test_correlation_models
+all: test_perturbation test_lptrsd test_rept test_nowiggle test_tns test_eftoflss test_correlations test_correlation_models
 endif
 test_direct: test_direct.o Global.o
 	$(LINK_EXE)
@@ -36,6 +36,12 @@ test_tns: test_tns.o Global.o
 # CLASS-PT style one-loop EFTofLSS multipoles (compared with CLASS-PT)
 test_eftoflss: test_eftoflss.o Global.o
 	$(LINK_EXE)
+test_correlations: test_correlations.o Global.o
+	$(LINK_EXE)
+
+test_correlation_models: test_correlation_models.o Global.o
+	$(LINK_EXE)
+
 MPIRUN ?= mpirun
 NP_LIST ?= 1 2 4
 ifeq ($(USE_MPI),true)
@@ -55,4 +61,6 @@ run: $(TARGETS)
 	  $(if $(filter true,$(USE_FFTW)),OMP_NUM_THREADS=2 OMP_WAIT_POLICY=passive ./test_nowiggle,:); \
 	  $(if $(filter true,$(USE_FFTW)),OMP_NUM_THREADS=2 OMP_WAIT_POLICY=passive ./test_tns,:); \
 	  $(if $(filter true,$(USE_FFTW)),OMP_NUM_THREADS=2 OMP_WAIT_POLICY=passive ./test_eftoflss,:); \
+	  $(if $(filter true,$(USE_FFTW)),OMP_NUM_THREADS=2 OMP_WAIT_POLICY=passive $(RUN) ./test_correlations,:); \
+	  $(if $(filter true,$(USE_FFTW)),OMP_NUM_THREADS=2 OMP_WAIT_POLICY=passive ./test_correlation_models,:); \
 	done

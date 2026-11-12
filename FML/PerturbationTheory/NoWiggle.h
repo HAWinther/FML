@@ -8,6 +8,8 @@
 #include <cmath>
 #include <fftw3.h>
 #include <functional>
+#include <memory>
+#include <type_traits>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -421,9 +423,13 @@ namespace FML::PERTURBATION {
         };
 
         // Forward: x[2i+1] = x[4N-2i-1] = (-1)^i ln(k_i P_i), a real even sequence of length 4N
-        std::vector<fftw_complex> in(N4), out(N4);
-        for (auto & c : in)
-            c[0] = c[1] = 0.0;
+        // fftw_complex is a C array type: vector<fftw_complex> is not portable C++.
+        using FFTBuffer = std::unique_ptr<fftw_complex[], decltype(&fftw_free)>;
+        FFTBuffer in(fftw_alloc_complex(N4), fftw_free), out(fftw_alloc_complex(N4), fftw_free);
+        if (!in || !out)
+            throw std::bad_alloc();
+        for (int i = 0; i < N4; ++i)
+            in[i][0] = in[i][1] = 0.0;
         DVector kgrid(N);
         for (int i = 0; i < N; i++) {
             kgrid[i] = kmin2 + i * (kmax2 - kmin2) / (N - 1.0);
@@ -431,8 +437,11 @@ namespace FML::PERTURBATION {
             in[2 * i + 1][0] = val;
             in[N4 - 2 * i - 1][0] = val;
         }
-        fftw_plan plan = fftw_plan_dft_1d(N4, in.data(), out.data(), FFTW_FORWARD, FFTW_ESTIMATE);
-        fftw_execute(plan);
+        using FFTPlan = std::unique_ptr<std::remove_pointer_t<fftw_plan>, decltype(&fftw_destroy_plan)>;
+        FFTPlan plan(fftw_plan_dft_1d(N4, in.get(), out.get(), FFTW_FORWARD, FFTW_ESTIMATE), fftw_destroy_plan);
+        if (!plan)
+            throw std::runtime_error("ClassPT no-wiggle split: FFTW plan creation failed");
+        fftw_execute(plan.get());
         DVector cmodd(N / 2), cmeven(N / 2);
         for (int i = 0; i < N / 2; i++) {
             cmodd[i] = out[N - 2 * i - 1][0];
@@ -455,8 +464,8 @@ namespace FML::PERTURBATION {
             cmnew[2 * i + 1] = spline_eval(inew, even_nw, d2e, i + 1.0);
         }
         // Inverse transform
-        for (auto & c : in)
-            c[0] = c[1] = 0.0;
+        for (int i = 0; i < N4; ++i)
+            in[i][0] = in[i][1] = 0.0;
         in[0][0] = 0.5 * cmnew[N - 1];
         in[2 * N][0] = -0.5 * cmnew[N - 1];
         for (int i = 1; i < N; i++) {
@@ -466,8 +475,7 @@ namespace FML::PERTURBATION {
             in[2 * N - i][0] = -half;
             in[2 * N + i][0] = -half;
         }
-        fftw_execute(plan);
-        fftw_destroy_plan(plan);
+        fftw_execute(plan.get());
         DVector Pnw(N);
         for (int i = 0; i < N; i++) {
             const double v = ((i % 2 == 0) ? 1.0 : -1.0) * out[2 * i + 1][0];

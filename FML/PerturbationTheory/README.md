@@ -156,8 +156,9 @@ and P_2 by 4% (1%) at k = 0.2 (0.3) h/Mpc, and ngauss = 3 gets P_4 only to ~1%. 
 nmax = 10, ngauss = 4 and N = 1024 (N = 256: 0.2-0.4% against the direct Zel'dovich integration). N must be even (odd N
 gives 1-10% errors, also in velocileptors) and log10_kmax at most 1 (at smaller q the series loses all precision).
 Valid for k >~ 0.005 h/Mpc with the default grid. Cost: ~0.8 s for the multipole tables at 50 k with the defaults
-(0.1 s with velocileptors' settings). Not thread safe: one object per thread. The correlation-function multipoles
-and the moment expansion of velocileptors are not ported.
+(0.1 s with velocileptors' settings). Not thread safe: one object per thread. Correlation-function multipoles are available through the shared finite-band
+[`CorrelationWorkspace`](CORRELATION_MULTIPOLES.md), which also consumes EPT/TNS/EFTofLSS results. The moment expansion
+of velocileptors is not ported.
 
 ## IR-resummed Eulerian perturbation theory in redshift space
 
@@ -339,3 +340,11 @@ give the GR loop; the f(R) gamma2 and gamma3 reproduce the exact expansion of th
 homogeneous limit; against ReACT's one-loop P(k0 = 0.06) for its fixtures (z = 0 - 2): 4e-3 (ReACT's angular
 quadrature misses ~4% of the loop at k0) and the real - pseudo difference to 0.7% (nDGP) and 3% (f(R), with ReACT's
 gamma3, which is 1/3 of the correct one).
+
+## Correlation-function multipoles
+
+[`CorrelationMultipoles.h`](CORRELATION_MULTIPOLES.md) converts the existing LPT/EPT, TNS and EFTofLSS power multipoles
+to xi_0, xi_2, xi_4 on a common requested separation grid with reusable FFTLog setup. It includes the +,-,+ phases,
+signed interpolation, explicit finite k support, endpoint taper and optional Gaussian regulator. No high-k
+extrapolation or automatic removal of stochastic contact terms is performed. See the [API/units guide](CORRELATION_MULTIPOLES.md),
+[validation results](CORRELATION_RESULTS.md) and runnable `example/Correlation.cpp`.
