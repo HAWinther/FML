@@ -110,7 +110,7 @@ The scientific implementations should be checked against independent analytic or
 | # | Task | Condition for proceeding |
 |---|---|---|
 | 39 | SIMD/SoA pair-count specialization | Standard weighted-count hot loops show a worthwhile bottleneck; preserve the generic callback path. |
-| 40 | Multigrid coarse-level rank agglomeration | Coarse levels are demonstrably dominated by communication or underused ranks. |
+| 40 | Multigrid coarse-level rank agglomeration (deferred) | Revisit when representative production profiles show coarse levels materially limit total solve time. The local experiment's ~12% full-solve gain did not justify its complexity; the slice-count heuristic was slower. |
 | 41 | Overlap multigrid interior work and halos | Profiles justify it; preserve color-sweep communication dependencies. |
 | 42 | Scoped mixed precision | Memory pressure justifies float field storage with double accumulation; validate forces, displacements, higher moments, thresholds and MG residuals. |
 | 43 | Pencil-decomposed or GPU FFT backend | Production runs are slab/FFT limited; plan for deposition, particles, ghosts and indexing changes too. |
@@ -132,6 +132,10 @@ Item 33 has an initial periodic isotropic implementation in `ThreePointCorrelati
 ## Weak-lensing workflow status
 
 Item 37 has an initial implementation in `WeakLensing/`: normalized source planes or sampled n(z)/n(chi), precomputed finite-shell Born weights and streamed local convergence maps; an optional `FFTWGrid<2>` periodic flat-sky shear adapter; extended-Limber auto/cross projections using explicitly bounded Pmm/Pgm providers; and finite-Pi projected galaxy–matter profiles, comoving excess surface density and thin-lens critical-density conversions. See [WeakLensing/README.md](WeakLensing/README.md) for units, input ownership, Nyquist/mass-sheet treatment and numerical tests. This does not change the existing SimulationCode onion-map or CMB-remapping pipelines. Full-sky/curved geometry, masks, non-Limber and observational corrections, realistic background/power/reference-code comparisons and application-specific radial/source/power convergence remain follow-up work. The runnable example is a labeled analytic toy, not a calibrated cosmological forecast.
+
+## Deferred multigrid rank agglomeration
+
+Item 40 was deferred at the user's request on 5 November 2026. The experimental periodic bottom-level backend improved a local 64³/eight-rank example from 146 ms to 129 ms with one coarse rank, while the automatic two-rank slice heuristic slowed it to 153 ms. The bottom represented roughly one-fifth of total runtime, so its communication-dominated profile alone was not sufficient justification for the added transport, communicator and duplicate-operator maintenance. The uncommitted implementation and measurements were archived separately and removed from the checkout; a profiling-only patch was retained separately as well. No agglomeration backend is shipped. Reconsider after representative production measurements establish a substantial end-to-end opportunity, rather than merely a high communication fraction within a small coarse level.
 
 ## Short-range gravity extension
 

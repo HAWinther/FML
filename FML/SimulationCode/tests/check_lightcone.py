@@ -25,8 +25,8 @@
 #
 # Usage: python3 check_lightcone.py <path/to/nbody> <outdir> [test ...]
 #   MPIRUN   : how to launch (default "mpirun -np 2"; MPIRUN="" for a serial build)
-#   MPIRUN4  : how to launch with 4 tasks for the batches test (default "mpirun --oversubscribe -np 4";
-#              MPIRUN4="" to skip)
+#   MPIRUN4  : how to launch with 4 tasks for the batches test (default "mpirun -np 4", with --oversubscribe for
+#              Open MPI, which needs it on fewer than 4 cores; MPICH rejects the option); MPIRUN4="" to skip
 # Needs numpy and scipy (and healpy for the healpix test)
 #==========================================================================
 import glob
@@ -46,7 +46,19 @@ import cases  # noqa: E402
 exe, outdir = os.path.abspath(sys.argv[1]), os.path.abspath(sys.argv[2])
 tests = sys.argv[3:] or ["cola", "batches", "zfinish", "coverage", "healpix"]
 mpirun = os.environ.get("MPIRUN", "mpirun -np 2").split()
-mpirun4 = os.environ.get("MPIRUN4", "mpirun --oversubscribe -np 4").split()
+
+
+def default_mpirun4():
+    """mpirun -np 4, with --oversubscribe for Open MPI (MPICH oversubscribes by itself and rejects the option)"""
+    try:
+        version = subprocess.run(["mpirun", "--version"], capture_output=True, text=True).stdout
+    except OSError:
+        version = ""
+    oversubscribe = ["--oversubscribe"] if ("Open MPI" in version or "OpenRTE" in version) else []
+    return ["mpirun"] + oversubscribe + ["-np", "4"]
+
+
+mpirun4 = os.environ["MPIRUN4"].split() if "MPIRUN4" in os.environ else default_mpirun4()
 env = dict(os.environ, OMP_NUM_THREADS="1")
 
 BOX, N = 256.0, 32
