@@ -27,11 +27,24 @@ MPI/OpenMP execution and workspace alternatives; its implementation and measured
 validation are summarized below. Empty slabs remain unsupported by the current
 `FFTWGrid` layout contract.
 
+Stage 5 is now complete for the small band-limited validation milestone. Nonzero
+sixth-order fields, original-equation/Cauchy residuals, translations/reflections/axis
+permutations, amplitude/time scaling, plane-parallel exactness, mesh/input-support
+sensitivity and truncation/Jacobian diagnostics are checked in `test_science.py`.
+Float/double reference ranges now reach order 6. MPI/OpenMP is checked in double,
+and serial/OpenMP in float; float MPI remains untested. A real plane-parallel
+cancellation failure was fixed by grouping the cubic determinant into minors.
+The example is `example/ArbitraryOrder.cpp`; the full measured scope and remaining
+production limitations are in [`SCIENCE_RESULTS.md`](SCIENCE_RESULTS.md). CI already
+discovered this module; it now runs these additional scientific checks and a
+separate float build. This does not claim convergence for arbitrary cosmological
+fields or validation beyond the recorded order/support/precision fixtures.
+
 ## Scope and conventions
 
 Implement a standalone 3D periodic, pressureless, single-fluid, growing-mode
-Einstein-de Sitter solver parameterized by a finite requested order P. The first
-validated milestone reaches order 5, with order 6 as a further reference check.
+Einstein-de Sitter solver parameterized by a finite requested order P. The current small-field
+validated milestone reaches order 6; higher requests remain explicitly flagged.
 The recursion itself must accept P rather than contain a separate formula for
 each order. Resource and integer limits bound accepted requests.
 
@@ -219,7 +232,7 @@ standalone example, and documentation of conventions, validated orders, support
 policies and measured resource costs. Run existing LPT regressions as well as
 the new order-4/5 checks. Add the focused tests to the appropriate CI target.
 
-## Suggested sequence and effort
+## Original suggested sequence and effort
 
 1. Derivation, normalization and independent order-4 check: 3-5 working days.
 2. Conservative serial recursion and order-5 reference: 4-7 working days.

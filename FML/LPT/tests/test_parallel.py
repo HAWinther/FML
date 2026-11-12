@@ -34,10 +34,12 @@ def run(command, threads):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--precision", choices=("double", "float"), default="double")
     parser.add_argument("--launcher", default="mpirun")
     parser.add_argument("--np-list", default="1 2 4")
     parser.add_argument("--exe", default="./test_parallel")
     args = parser.parse_args()
+    tolerance = 3e-5 if args.precision == "float" else 3e-12
     launcher = shlex.split(args.launcher)
     ranks = [int(value) for value in args.np_list.split()]
     if not ranks or any(value not in (1, 2, 4) for value in ranks):
@@ -84,10 +86,10 @@ def main():
                             raise AssertionError("Incomplete MPI output ownership")
                         for n in range(1, 6):
                             difference = error(actual[n],expected[n])
-                            if difference > 3e-12*norm(expected[n])+1e-18:
+                            if difference > tolerance*norm(expected[n])+1e-18:
                                 raise AssertionError(f"Order {n} disagrees with sparse oracle")
                             worst = max(worst, difference/max(norm(expected[n]),1e-300))
-                            if baseline and error(actual[n],baseline[n]) > 3e-12*norm(baseline[n])+1e-18:
+                            if baseline and error(actual[n],baseline[n]) > tolerance*norm(baseline[n])+1e-18:
                                 raise AssertionError("Rank/thread/workspace comparison failed")
                         if baseline is None:
                             baseline = actual

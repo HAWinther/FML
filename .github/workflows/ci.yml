@@ -33,6 +33,11 @@ jobs:
       - name: Module tests (1, 2 and 4 MPI tasks)
         run: .github/ci/run_module_tests.sh Cosmology/EinsteinBoltzmannSolver/tests
 
+      - name: Single-precision arbitrary-order LPT references
+        run: |
+          make -C FML/LPT/tests clean
+          make -C FML/LPT/tests -j4 run USE_MPI=false USE_OMP=true LPT_PRECISION=float FFTW_LINK=-lfftw3f
+
       # The module tests above build without CGAL and HDF5: the shared analysis code and the snapshot analyzer again
       # with ZOBOV and DTFE (CGAL) and Gadget HDF5 input
       - name: Analysis and SnapshotAnalyzer with CGAL and HDF5 (1, 2 and 4 MPI tasks)

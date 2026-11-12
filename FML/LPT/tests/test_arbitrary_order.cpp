@@ -9,6 +9,8 @@ using Grid = FML::GRID::FFTWGrid<3>;
 using Complex = FML::GRID::ComplexType;
 using Real = FML::GRID::FloatType;
 using FML::TESTS::check_local;
+constexpr bool single_precision = sizeof(Real) == sizeof(float);
+constexpr double epsilon = std::numeric_limits<Real>::epsilon();
 
 template <class Function> bool throws(Function function) {
     try { function(); } catch (const std::exception &) { return true; }
@@ -45,6 +47,11 @@ double difference(const EdSLPTVector & left, const EdSLPTVector & right) {
 }
 
 void contract_tests() {
+    std::array<Real, 9> rank_one;
+    rank_one.fill(Real(.137));
+    Real envelope;
+    check_local(eds_detail::cubic(rank_one, rank_one, rank_one, envelope) == 0 && envelope > 0,
+                "Mixed determinant cancels aligned rank-one minors exactly");
     auto input = fixture();
     std::vector<Real> saved(input.get_real_grid_left(), input.get_real_grid_left() + 2 * input.get_ntot_fourier_alloc());
     auto options = settings();
@@ -65,7 +72,7 @@ void contract_tests() {
         throw;
     }
     FML::GRID::set_fftw_planner_flag(planner_flag);
-    check_local(difference(measured.orders_fourier[2], result.orders_fourier[2]) < 1e-14 &&
+    check_local(difference(measured.orders_fourier[2], result.orders_fourier[2]) < (single_precision ? 2e-9 : 1e-14) &&
                 measured.report.accounted_owned_peak_bytes <= measured.report.owned_peak_bound_bytes,
                 "Non-ESTIMATE FFT planning preserves fields within the owned bound");
     int delivered = 0;
@@ -85,7 +92,7 @@ void contract_tests() {
     check_local(difference(result.orders_fourier[4], budget_result.orders_fourier[4]) == 0, "Exact preflight budget is accepted");
     --exact_budget.max_owned_bytes_per_rank;
     check_local(throws([&] { compute_eds_lpt(input, exact_budget); }), "Budget below preflight bound is rejected");
-    const double g = .7, step = 1e-5;
+    const double g = .7, step = single_precision ? .01 : 1e-5;
     auto evaluated = result.evaluate(g, options.max_owned_bytes_per_rank);
     auto plus = result.evaluate(g + step, options.max_owned_bytes_per_rank);
     auto minus = result.evaluate(g - step, options.max_owned_bytes_per_rank);
@@ -105,8 +112,8 @@ void contract_tests() {
             derivative_error = std::max(derivative_error, double(std::abs(numerical - slope)));
             amplitude = std::max(amplitude, double(std::abs(slope)));
         }
-    check_local(error < 1e-15, "EdS evaluation uses g^n and n g^n weights");
-    check_local(derivative_error < 1e-8 * amplitude, "EdS time derivative agrees with finite differences");
+    check_local(error < 32 * epsilon * amplitude, "EdS evaluation uses g^n and n g^n weights");
+    check_local(derivative_error < (single_precision ? 2e-4 : 1e-8) * amplitude, "EdS time derivative agrees with finite differences");
     const size_t retained_bytes = result.orders_fourier.capacity() * sizeof(EdSLPTVector) + 15 * plan.output_grid_bytes;
     const size_t evaluation_budget = retained_bytes + 6 * plan.output_grid_bytes;
     check_local(!throws([&] { result.evaluate(g, evaluation_budget); }) &&
@@ -147,10 +154,11 @@ void invalid_input_tests() {
     rejected("Nyquist input is rejected", [](Grid & g, EdSLPTOptions &) { g.set_fourier({8,0,0}, Complex(.01)); });
     rejected("Non-Hermitian boundary is rejected", [](Grid & g, EdSLPTOptions &) { g.set_fourier({15,0,0}, Complex(.12,.03)); });
     rejected("NaN input is rejected", [](Grid & g, EdSLPTOptions &) { g.set_fourier({1,0,0}, Complex(std::numeric_limits<Real>::quiet_NaN())); });
+    const double perturbation = single_precision ? 1e-8 : 1e-17;
     auto small = input;
-    small.set_fourier({0,0,0}, Complex(1e-17));
-    small.set_fourier({3,0,1}, Complex(1e-17));
-    small.set_fourier({1,0,0}, small.get_fourier({1,0,0}) + Complex(0,1e-17));
+    small.set_fourier({0,0,0}, Complex(Real(perturbation)));
+    small.set_fourier({3,0,1}, Complex(Real(perturbation)));
+    small.set_fourier({1,0,0}, small.get_fourier({1,0,0}) + Complex(0,Real(perturbation)));
     auto corrected = compute_eds_lpt(small, options);
     check_local(corrected.report.max_mean_correction > 0 && corrected.report.max_offband_correction > 0 &&
                 corrected.report.max_hermitian_correction > 0, "Roundoff seed corrections are accepted and reported");
@@ -168,7 +176,7 @@ void invalid_input_tests() {
             for (auto index : field.get_fourier_range())
                 maximum = std::max(maximum, double(std::abs(field.get_fourier_from_index(index))));
     check_local(maximum == 0, "Zero-support seed gives exactly zero fields");
-    check_local(compute_eds_lpt(zero, settings(6,0)).report.beyond_validated_order, "Generic order six is marked beyond current validation");
+    check_local(compute_eds_lpt(zero, settings(7,0)).report.beyond_validated_order, "Generic order seven is marked beyond current validation");
 }
 
 int export_fields(int argc, char ** argv) {

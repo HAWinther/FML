@@ -15,7 +15,7 @@ USE_DEBUG           ?= false
 # Extra defines added when USE_DEBUG = true
 DEBUG_OPTIONS     = -DBOUNDSCHECK_FFTWGRID -DDEBUG_LPT
 
-TARGETS := lpt
+TARGETS := lpt eds_lpt
 
 include ../../Makefile.config
 
@@ -23,4 +23,7 @@ OPTIONS     += -DMIN_BYTES_TO_LOG=0
 FML_MODULES := Global
 
 lpt: Main.o Global.o
+	$(LINK_EXE)
+
+eds_lpt: ArbitraryOrder.o Global.o
 	$(LINK_EXE)

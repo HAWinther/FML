@@ -9,6 +9,7 @@ using namespace FML::COSMOLOGY::LPT;
 using Grid = FML::GRID::FFTWGrid<3>;
 using Complex = FML::GRID::ComplexType;
 using Real = FML::GRID::FloatType;
+constexpr double comparison_tolerance = sizeof(Real) == sizeof(float) ? 2e-9 : 1e-15;
 using FML::TESTS::check_local;
 
 EdSLPTOptions settings(int order = 5, int cutoff = 2) {
@@ -68,7 +69,7 @@ void correctness_and_failures() {
     options.workspace = EdSLPTWorkspace::RecomputeGradients;
     const auto recomputed = compute_eds_lpt(input,options);
     for (int n = 0; n < 5; ++n)
-        check_local(difference(original.orders_fourier[n],recomputed.orders_fourier[n]) < 1e-15,
+        check_local(difference(original.orders_fourier[n],recomputed.orders_fourier[n]) < comparison_tolerance,
                     "Recomputed gradients reproduce cached-gradient fields");
     check_local(recomputed.report.fft_count == recomputed.report.planned_fft_count &&
                 original.report.maximum_accounted_peak_bytes <= original.report.maximum_owned_peak_bound_bytes,
@@ -86,7 +87,7 @@ void correctness_and_failures() {
     check_local(delivered == 5 && local_stream_error == 0, "Distributed streaming reproduces collected fields");
     const auto evaluated = original.evaluate(.7, options.max_owned_bytes_per_rank);
     const auto evaluated_recomputed = recomputed.evaluate(.7, options.max_owned_bytes_per_rank);
-    check_local(difference(evaluated.displacement_fourier,evaluated_recomputed.displacement_fourier) < 1e-15,
+    check_local(difference(evaluated.displacement_fourier,evaluated_recomputed.displacement_fourier) < comparison_tolerance,
                 "Distributed EdS evaluation agrees across workspace policies");
     const int target = FML::NTasks-1;
     collective_failure([&] {
@@ -217,6 +218,18 @@ void export_or_benchmark(int argc, char ** argv) {
             output.close();
             if (!output) throw std::runtime_error("Cannot write comparison fields");
         }, "Write test output");
+        eds_detail::collective_try([&] {
+            if (FML::ThisTask == 0) {
+                std::ofstream metadata(prefix + ".report.json");
+                metadata << "{\"scalar_bytes\":" << result.report.scalar_bytes
+                         << ",\"ranks\":" << result.report.ranks << ",\"threads\":" << result.report.threads
+                         << ",\"work_mesh\":" << result.report.work_mesh
+                         << ",\"validated_max_order\":" << result.report.validated_max_order
+                         << ",\"worst_compatibility_ratio\":" << result.report.worst_compatibility_ratio << "}\n";
+                metadata.close();
+                if (!metadata) throw std::runtime_error("Cannot write comparison metadata");
+            }
+        }, "Write test metadata");
     } else {
         rusage usage{};
         getrusage(RUSAGE_SELF,&usage);

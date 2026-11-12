@@ -14,6 +14,7 @@ import eds_reference as ref
 
 LIBRARY_EXE = None
 MESH_EXE = None
+PRECISION = "double"
 
 
 def norm(vector):
@@ -32,6 +33,10 @@ class ReferenceTests(unittest.TestCase):
         cls.orders = ref.solve(cls.delta, 5)
 
     def assert_fields_close(self, actual, expected, tolerance=3e-12):
+        self.assertLessEqual(error(actual, expected), tolerance * norm(expected) + 1e-18)
+
+    def assert_mesh_close(self, actual, expected):
+        tolerance = 3e-5 if PRECISION == "float" else 3e-12
         self.assertLessEqual(error(actual, expected), tolerance * norm(expected) + 1e-18)
 
     def test_published_kernels_through_fourth_order(self):
@@ -145,7 +150,7 @@ class ReferenceTests(unittest.TestCase):
                     for n in range(1, 4):
                         expected = [{mode: value for mode, value in component.items() if mode[2] >= 0}
                                     for component in self.orders[n]]
-                        self.assert_fields_close(actual[n], expected)
+                        self.assert_mesh_close(actual[n], expected)
 
     def test_mesh_coefficients_through_fifth_order(self):
         if not MESH_EXE:
@@ -173,14 +178,16 @@ class ReferenceTests(unittest.TestCase):
                         expected = [{mode: value for mode, value in component.items()
                                      if mode[2] >= 0 and all(2 * abs(x) < mesh for x in mode)}
                                     for component in expected_orders[n]]
-                        self.assert_fields_close(actual[n], expected)
+                        self.assert_mesh_close(actual[n], expected)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--precision", choices=("double", "float"), default="double")
     parser.add_argument("--library-exe", type=lambda path: str(Path(path).resolve()))
     parser.add_argument("--mesh-exe", type=lambda path: str(Path(path).resolve()))
     args, unittest_args = parser.parse_known_args()
+    PRECISION = args.precision
     LIBRARY_EXE = args.library_exe
     MESH_EXE = args.mesh_exe
     unittest.main(argv=[__file__, *unittest_args], verbosity=2)

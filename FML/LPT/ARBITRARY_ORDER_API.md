@@ -2,8 +2,10 @@
 
 Contract for backlog item 55, 11 November 2026. Stages 3-4 implement the
 collected, streaming, planning and evaluation entry points in `ArbitraryOrder.h`
-for serial and supported distributed slabs. Double precision is validated
-through order 5. Multi-rank validation and execution use collective recovery
+for serial and supported distributed slabs. The stage-5 small band-limited
+fixtures are validated through order 6 in float and double. MPI validation is
+double precision; single precision is checked in serial and OpenMP. See
+[`SCIENCE_RESULTS.md`](SCIENCE_RESULTS.md) for numerical scope and limits. Multi-rank validation and execution use collective recovery
 points; empty slabs are not supported by the current `FFTWGrid` contract. The
 stage-1 equations and executable reference are described in
 [`ARBITRARY_ORDER_DERIVATION.md`](ARBITRARY_ORDER_DERIVATION.md).
@@ -253,9 +255,11 @@ one double-precision serial work grid then occupies approximately 16.49 GB
 (15.36 GiB) before the solver's multiple retained/scratch grids.
 
 The double-precision sparse fixtures use a relative comparison
-threshold 3e-12 times the maximum reference coefficient plus 1e-18. Independent
-float and larger-order tests must set justified precision/amplitude-scaled
-tolerances. Do not reuse the double threshold as a universal accuracy claim.
+threshold 3e-12 times the maximum reference coefficient plus 1e-18. The float fixtures use 3e-5 times the maximum reference coefficient plus
+1e-18, approximately 250 float epsilons; measured errors are substantially below
+that threshold. Native evaluator/roundoff tests use precision-aware steps and
+perturbations. Neither threshold is a universal accuracy claim for large fields,
+large orders or near-cancelled individual coefficients.
 
 The stage-2 acceptance gate is this explicit written contract. Stage-3 tests
 exercise collected and streamed agreement, output lifetime, evaluator weights,
@@ -309,7 +313,7 @@ Run `make -C FML/LPT/tests run` with the shared FFTW path settings. The stage-3
 checks exercise all collected/streamed orders, evaluator sums and finite
 differences, input/halo preservation and output lifetime, exact budget acceptance
 and rejection one byte below the bound, invalid data/options, correction
-reporting, and zero input. A generic order-6 zero-field request is accepted and
+reporting, and zero input. A generic order-7 zero-field request is accepted and
 marked beyond the validated range. The independent sparse reference checks all
 stored coefficients through order 5 on N=16 and N=9 meshes, plus an N=8,
 K=3 high-frequency fixture with nonlinear intermediate modes outside the final
@@ -327,3 +331,22 @@ auto plan = plan_eds_lpt(delta_ref, options, EdSLPTOutput::RetainOrders);
 auto fields = compute_eds_lpt(delta_ref, options);
 auto at_half_reference_a = fields.evaluate(0.5, options.max_owned_bytes_per_rank);
 ```
+
+
+The stage-5 `test_science.py` suite additionally compares nonzero sixth-order
+mesh fields against the independent cofactor-equation oracle, applies translations,
+reflections, axis permutations and negative amplitude scaling, and checks the
+original scalar/Cauchy equations on the physical sparse support. Every exported
+coefficient is checked independently, including roundoff-only forbidden modes.
+It checks cache/recompute and supported MPI/OpenMP configurations, fixed-support
+mesh refinement and controlled input-support sensitivity. `example/ArbitraryOrder.cpp`
+reports per-order Parseval norms and grid-sampled Jacobians of truncated sums;
+NumPy independently verifies those diagnostics. Positive sampled Jacobians do
+not prove convergence or exclude intercell shell crossing.
+
+The cubic mixed determinant groups its column permutations into 2x2 minors.
+This is algebraically the same source and keeps the absolute contribution envelope,
+but preserves exact rank-one cancellation on the tested plane waves. Separately
+summing 36 signed products seeded roundoff-only higher orders and could trigger
+a later compatibility failure on a valid plane-parallel input. No compatibility
+threshold was loosened; the before/after regression is documented in the results.

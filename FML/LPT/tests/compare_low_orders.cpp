@@ -67,12 +67,12 @@ int main(int argc, char ** argv) {
             for (int i = 0; i < 3; ++i) {
                 const int j = (i + 1) % 3, k = (i + 2) % 3;
                 const std::array<Complex, 3> displacement{
-                    imaginary * derivative_wave[i] * phi1.get_fourier_from_index(index),
-                    imaginary * derivative_wave[i] * phi2.get_fourier_from_index(index),
-                    imaginary * (derivative_wave[i] * (phi3a.get_fourier_from_index(index) +
+                    imaginary * FML::GRID::FloatType(derivative_wave[i]) * phi1.get_fourier_from_index(index),
+                    imaginary * FML::GRID::FloatType(derivative_wave[i]) * phi2.get_fourier_from_index(index),
+                    imaginary * (FML::GRID::FloatType(derivative_wave[i]) * (phi3a.get_fourier_from_index(index) +
                                                         phi3b.get_fourier_from_index(index)) +
-                                 derivative_wave[j] * vector_potential[k].get_fourier_from_index(index) -
-                                 derivative_wave[k] * vector_potential[j].get_fourier_from_index(index))};
+                                 FML::GRID::FloatType(derivative_wave[j]) * vector_potential[k].get_fourier_from_index(index) -
+                                 FML::GRID::FloatType(derivative_wave[k]) * vector_potential[j].get_fourier_from_index(index))};
                 for (int n = 0; n < 3; ++n)
                     output << n + 1 << ' ' << mode[0] << ' ' << mode[1] << ' ' << mode[2] << ' ' << i << ' '
                            << displacement[n].real() << ' ' << displacement[n].imag() << '\n';

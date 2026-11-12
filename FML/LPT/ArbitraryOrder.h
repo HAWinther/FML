@@ -32,7 +32,7 @@ namespace FML::COSMOLOGY::LPT {
 
     struct EdSLPTReport {
         int input_mesh = 0, work_mesh = 0, max_order = 0;
-        int validated_max_order = std::is_same_v<FML::GRID::FloatType, double> ? 5 : 0;
+        int validated_max_order = 6; // Small band-limited float/double reference fixtures; see SCIENCE_RESULTS.md.
         int scalar_bytes = sizeof(FML::GRID::FloatType);
         int ranks = FML::NTasks, threads = FML::NThreads;
         bool beyond_validated_order = false;
@@ -564,13 +564,17 @@ namespace FML::COSMOLOGY::LPT {
             static constexpr int permutation[6][3] = {{0,1,2}, {1,2,0}, {2,0,1}, {0,2,1}, {2,1,0}, {1,0,2}};
             Real value = 0;
             envelope = 0;
+            // Group the column permutations into 2x2 minors before summing. For an
+            // aligned rank-one deformation each minor cancels exactly; summing all
+            // 36 signed products separately can seed spurious higher-order fields.
             for (int row = 0; row < 6; ++row)
-                for (int column = 0; column < 6; ++column) {
-                    const Real term = a[3 * permutation[row][0] + permutation[column][0]] *
-                                      b[3 * permutation[row][1] + permutation[column][1]] *
-                                      c[3 * permutation[row][2] + permutation[column][2]];
-                    value += (row < 3 ? 1 : -1) * (column < 3 ? 1 : -1) * term;
-                    envelope += std::abs(term);
+                for (int column = 0; column < 3; ++column) {
+                    const int j = (column + 1) % 3, k = (column + 2) % 3;
+                    const Real factor = a[3 * permutation[row][0] + column];
+                    const Real positive = b[3 * permutation[row][1] + j] * c[3 * permutation[row][2] + k];
+                    const Real negative = b[3 * permutation[row][1] + k] * c[3 * permutation[row][2] + j];
+                    value += (row < 3 ? 1 : -1) * factor * (positive - negative);
+                    envelope += std::abs(factor) * (std::abs(positive) + std::abs(negative));
                 }
             return value;
         }
