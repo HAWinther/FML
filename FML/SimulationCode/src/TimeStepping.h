@@ -28,9 +28,11 @@ namespace SIMCODE {
             : FML::NBODY::TimeStepping(
                   {settings.method, settings.spacing, settings.cola_nLPT, settings.spacing_power},
                   [cosmo](double a) { return cosmo->HoverH0_of_a(a); },
-                  [cosmo, grav](double a) { return 1.5 * cosmo->get_OmegaM() * grav->GeffOverG(a) * a; },
+                  [cosmo, grav](double a) {
+                      return 1.5 * cosmo->get_OmegaM() * cosmo->clustering_mass_factor(a) * grav->GeffOverG(a) * a;
+                  },
                   large_scale_growth_history(grav),
-                  cosmo ? cosmo->velocity_friction_integral() : std::function<double(double)>{}) {
+                  grav ? grav->velocity_friction_integral() : std::function<double(double)>{}) {
             if (!cosmo)
                 throw std::invalid_argument("[TimeStepping] Cosmology is required");
         }

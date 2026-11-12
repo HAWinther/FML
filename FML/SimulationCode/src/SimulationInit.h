@@ -11,6 +11,9 @@ template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::read_parameters(const ParameterMap & param, const Parameters & _params) {
     parameters = std::make_shared<ParameterMap>(param);
     params = _params;
+    // Coupled quintessence with CDM and baryon particles: the PM force is gravity alone and the CDM gets the fifth
+    // force of the CDM in a second kick (kick_cdm_fifth_force)
+    grav->set_cdm_coupling_in_force(not cdm_fifth_force_separate());
     // Library callers can construct the simulation without Main.cpp's model checks.
     if (params.force.short_range.enabled) {
         params.validate();
@@ -644,8 +647,8 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
     const auto splines = SIMCODE::two_species_ic_splines<NDIM>(*transfers,
                                                                *grav_ic,
                                                                ic.initial_redshift,
-                                                               cdm.weight_cb,
-                                                               baryon.weight_cb);
+                                                               cb_weight(cdm, aini),
+                                                               cb_weight(baryon, aini));
 
     const double fac = aini * aini * cosmo->HoverH0_of_a(aini);
     const std::vector<double> velocity_norms = ic_velocity_norms(fac);

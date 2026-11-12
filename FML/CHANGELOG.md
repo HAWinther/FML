@@ -5,6 +5,27 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: coupled quintessence
+- `cosmology_model = CoupledQuintessence` (`cosmology_cq_lambda`, `cosmology_cq_beta`): the background and IC of FML's
+  `coupled_quintessence`, with the varying CDM mass (rho_c a^3 ~ exp(-beta phi)) in the Poisson normalization
+  (`Cosmology::clustering_mass_factor`; exactly 1 for the other models).
+- `gravity_model = CoupledQuintessence` (needs that cosmology, as JBD): the CDM feels G (1 + 2 beta^2) from the CDM
+  and the velocity term +beta phi' v. One set of CDM+baryon particles: a momentum-weighted fluid (G_eff/G = 1 + 2 beta^2
+  f_c^2, friction f_c (-beta phi')). With `particle_baryons = true`: the PM force is gravity alone, the CDM gets the
+  fifth force of the CDM density in a second kick (`kick_cdm_fifth_force`, no extra memory), its own friction and
+  steps; delta_cb, the species P(k), shot noise, IC and halo masses use the time-dependent CDM fraction
+  (`cb_weight`). Not with massive neutrinos; with particle_baryons not with BullFrog or the short-range force.
+- `GravityModel`: the velocity friction is the gravity model's (`velocity_friction`, `velocity_friction_cdm`,
+  `velocity_friction_integral`; by default the cosmology's, i.e. dark scattering), plus `GeffOverG_gravity` and
+  `has_cdm_fifth_force` / `cdm_fifth_force_coupling` for a force of the CDM on the CDM alone.
+- `src/SpeciesTimeStepping.h`: the two-fluid growth with species couplings and a varying CDM fraction (dark
+  scattering unchanged, bit-identical).
+- Validated against the Einstein-Boltzmann solver (lambda = 0.5, beta = 0.15, relative to beta = 0): one-fluid growth
+  to 1e-4; simulations (Quinn, FastPM, COLA + Quinn/FastPM) to 7-9e-4 for the CDM, baryons and CDM+baryons (the
+  resolution), delta_b/delta_c at z = 0 to 3e-4. Regression cases `coupled_quintessence_cola`,
+  `coupled_quintessence_baryons_cola`, `_fastpm` (table `input/transfer_tables/coupled_quintessence.txt`); the
+  existing cases are bit-identical.
+
 ### SimulationCode: dark scattering with CDM and baryon particles
 - `cosmology_model = DarkScattering` with `particle_baryons = true`: the CDM particles feel the full drag
   (`Cosmology::velocity_friction_cdm`), the baryon particles none. Both take the steps of the CDM+baryon fluid with

@@ -44,6 +44,10 @@
 ///                    scattering (Simpson 2010; Baldi & Simpson 2015). The scattering is a velocity friction of the
 ///                    dark matter (velocity_friction(a)); cs2 (the sound speed of the dark energy) is only used by the
 ///                    internal Einstein-Boltzmann solver for the IC
+///   CoupledQuintessence -> coupled_quintessence (cosmology_cq_lambda, _beta): a scalar field with V ~ exp(-lambda
+///                    phi) coupled to the CDM, whose particles have the mass m ~ exp(-beta phi) (Wetterich 1995;
+///                    Amendola 2000): the background, rho_c(a) = Omega_cdm cdm_mass_factor(a) a^-3. The force and the
+///                    velocity term of the CDM are in the gravity model CoupledQuintessence (needs this cosmology)
 ///   Tabulated     -> a tabulated dark energy (BackgroundModel_Tabulated.h; cosmology_tabulated_filename, _format
 ///                    = H (z, H/H0), CLASS (a CLASS background file) or w (a, w))
 ///
@@ -106,6 +110,7 @@ class Cosmology {
         std::string tabulated_filename, tabulated_format;
         double dgp_OmegaRC;
         double ds_w, ds_xi, ds_cs2;
+        double cq_lambda, cq_beta;
         double As, ns, kpivot_mpc; // The primordial power-spectrum
 
         /// The parameters of the background and of the models
@@ -222,6 +227,18 @@ class Cosmology {
                            "Dark scattering: the rest-frame sound speed squared of the dark energy (only for the IC "
                            "from the internal Einstein-Boltzmann solver)");
             });
+            f.for_cosmology({"CoupledQuintessence"}, [&]() {
+                f.required("cosmology_cq_lambda",
+                           cq_lambda,
+                           0.5,
+                           "Coupled quintessence: the slope lambda of the potential V ~ exp(-lambda phi) (phi in "
+                           "reduced Planck masses)");
+                f.required("cosmology_cq_beta",
+                           cq_beta,
+                           0.05,
+                           "Coupled quintessence: the coupling beta (Amendola's sqrt(2/3) beta): the CDM particles have "
+                           "the mass m ~ exp(-beta phi) and feel G (1 + 2 beta^2) from the CDM. 0: uncoupled");
+            });
             f.for_cosmology({"DGP"}, [&]() {
                 f.required("cosmology_dgp_OmegaRC",
                            dgp_OmegaRC,
@@ -319,6 +336,11 @@ class Cosmology {
                     background_parameters[q.name] = model_parameters.at(q.name);
             bg = BG::make_background(registry_name, p, background_parameters, range);
         }
+        cq_sector = nullptr;
+        if (registry_name == "coupled_quintessence")
+            for (const auto & s : bg->species())
+                if (const auto * field = dynamic_cast<const BG::CoupledFieldSpecies *>(s.get()))
+                    cq_sector = &field->sector();
         massive_neutrinos.clear();
         for (double m : params().m_nu_eV)
             massive_neutrinos.emplace_back(m, params());
@@ -471,6 +493,8 @@ class Cosmology {
     /// DarkScattering: the drag of the dark matter (BACKGROUND::dark_scattering_cdm_drag, the rate of the
     /// Einstein-Boltzmann solver) on the CDM+baryon particles as one fluid: f_c = OmegaCDM / OmegaCB of it (the baryons
     /// do not scatter; momentum conservation of the fluid with v_b = v_c)
+    /// (The gravity model uses these by default, GravityModel::velocity_friction; coupled quintessence has its velocity
+    /// term in GravityModel_CoupledQuintessence)
     bool has_velocity_friction() const { return registry_name == "dark_scattering" and ds_xi_SI != 0.0; }
     double velocity_friction(double a) const {
         if (not has_velocity_friction())
@@ -485,27 +509,40 @@ class Cosmology {
             return 0.0;
         return FML::COSMOLOGY::BACKGROUND::dark_scattering_cdm_drag(*bg, ds_xi_SI, std::log(a));
     }
-    /// The friction integral I(a) = int_amin^a Gamma dlna (a spline in log a on [amin, amax], constant outside), for
-    /// the time stepping. An empty function without friction. cdm_only: of velocity_friction_cdm (the CDM particles
-    /// with particle_baryons), else of velocity_friction (the CDM+baryon fluid)
-    std::function<double(double)>
-    velocity_friction_integral(double amin = 1e-6, double amax = 100.0, bool cdm_only = false) const {
-        if (not has_velocity_friction())
-            return {};
-        const int n = 4000;
-        std::vector<double> x(n);
-        for (int i = 0; i < n; i++)
-            x[i] = std::log(amin) + std::log(amax / amin) * i / double(n - 1);
-        FML::SOLVERS::ODESOLVER::ODEFunction deriv = [&](double xx, [[maybe_unused]] const double * y, double * dydx) {
-            dydx[0] = cdm_only ? velocity_friction_cdm(std::exp(xx)) : velocity_friction(std::exp(xx));
-            return GSL_SUCCESS;
-        };
-        FML::SOLVERS::ODESOLVER::ODESolver ode;
-        std::vector<double> ini{0.0};
-        ode.solve(deriv, x, ini);
-        auto spline = std::make_shared<const FML::INTERPOLATION::SPLINE::Spline>(
-            x, ode.get_data_by_component(0), "Friction integral I(log(a))");
-        return [spline](double a) { return (*spline)(std::log(a)); };
+
+    //========================================================================
+    // Coupled quintessence: the background of the field and the CDM (the force and the velocity term of the CDM are in
+    // GravityModel_CoupledQuintessence). The CDM mass factors are exactly 1 for the other models
+    //========================================================================
+    bool is_coupled_quintessence() const { return cq_sector != nullptr; }
+    /// The coupling beta (0 for the other models)
+    double cq_beta() const { return cq_sector ? cq_sector->beta : 0.0; }
+    /// dphi/dlna of the field (0 for the other models)
+    double cq_dphidlna(double a) const { return cq_sector ? cq_sector->dphidx(std::log(a)) : 0.0; }
+    /// The CDM mass relative to today, m(a) / m(1) = rho_c(a) a^3 / Omega_cdm (= exp(-beta (phi(a) - phi(1))))
+    double cdm_mass_factor(double a) const {
+        if (not cq_sector)
+            return 1.0;
+        return cq_sector->rho_c(std::log(a)) * a * a * a / get_OmegaCDM();
+    }
+    /// The CDM fraction of the CDM+baryon density at a, rho_c(a) / (rho_c(a) + rho_b(a))
+    double cdm_fraction_cb(double a) const {
+        const double c = get_OmegaCDM() * cdm_mass_factor(a);
+        return c / (c + get_Omegab());
+    }
+    /// rho_m(a) a^3 / OmegaM of the clustering matter: the time dependence of the Poisson source 1.5 OmegaM a delta
+    /// from the CDM mass (exactly 1 except for coupled quintessence)
+    double clustering_mass_factor(double a) const {
+        if (not cq_sector)
+            return 1.0;
+        return (get_OmegaCDM() * cdm_mass_factor(a) + get_Omegab() + get_OmegaMNu()) / get_OmegaM();
+    }
+    /// rho_cb(a) a^3 / OmegaCB: the mass of the CDM+baryon particles relative to today (exactly 1 except for coupled
+    /// quintessence)
+    double cb_mass_factor(double a) const {
+        if (not cq_sector)
+            return 1.0;
+        return (get_OmegaCDM() * cdm_mass_factor(a) + get_Omegab()) / (get_OmegaCDM() + get_Omegab());
     }
 
     /// The growth suppression of the large-scale potential today, g = D(a = 1) / D_EdS(a = 1) with D normalized to a in
@@ -613,6 +650,7 @@ class Cosmology {
             {"Quintessence", &Cosmology::read_quintessence, true},
             {"EDE", &Cosmology::read_ede, true},
             {"DarkScattering", &Cosmology::read_dark_scattering},
+            {"CoupledQuintessence", &Cosmology::read_coupled_quintessence},
             {"Tabulated", &Cosmology::read_tabulated, true, false, true},
         };
         return list;
@@ -646,6 +684,12 @@ class Cosmology {
             throw std::runtime_error("DarkScattering: need cosmology_ds_cs2 > 0");
         ds_xi_SI = FML::COSMOLOGY::BACKGROUND::dark_scattering_xi_SI(xi);
         model_parameters = {{"ds_w", w}, {"ds_xi", xi}, {"ds_cs2", cs2}};
+    }
+    void read_coupled_quintessence() {
+        registry_name = "coupled_quintessence";
+        if (not std::isfinite(settings.cq_lambda) or not std::isfinite(settings.cq_beta))
+            throw std::runtime_error("CoupledQuintessence: need finite cosmology_cq_lambda and cosmology_cq_beta");
+        model_parameters = {{"cq_lambda", settings.cq_lambda}, {"cq_beta", settings.cq_beta}};
     }
     void read_dgp() {
         registry_name = "dgp";
@@ -752,6 +796,8 @@ class Cosmology {
     const double N_nu{3};     // Number of neutrinos (3)
     double w0{-1.0}, wa{0.0}; // w0waCDM (for the nonlinear boost)
     double ds_xi_SI{0.0};     // DarkScattering: xi = sigma_D / m_c in m^2/kg
+    // CoupledQuintessence: the background solution of the field and the CDM (owned by bg)
+    const FML::COSMOLOGY::BACKGROUND::CoupledDarkSector * cq_sector{nullptr};
     std::string tabulated_filename, tabulated_format;
 
     // zeta(3), zeta(4), zeta(5): the non-relativistic neutrino mass relation and the sound speed

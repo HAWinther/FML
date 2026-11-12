@@ -930,13 +930,14 @@ measure_species_power_spectra(NBodySimulation<NDIM, T> & sim,
                 {info.name, SIMCODE::species_transfer(info.species), bin(delta, sim.species_shotnoise(info))});
         if (icb == 0) {
             delta_cb = std::move(delta);
-            weight_first = info.weight_cb;
+            weight_first = sim.cb_weight(info, 1.0 / (1.0 + redshift));
         } else {
-            FML::GRID::linear_combination_fourier<NDIM>(delta_cb, delta, icb == 1 ? weight_first : 1.0, info.weight_cb);
+            FML::GRID::linear_combination_fourier<NDIM>(
+                delta_cb, delta, icb == 1 ? weight_first : 1.0, sim.cb_weight(info, 1.0 / (1.0 + redshift)));
         }
         icb++;
     });
-    pofk_cb_binning = bin(delta_cb, sim.cb_shotnoise());
+    pofk_cb_binning = bin(delta_cb, sim.cb_shotnoise(1.0 / (1.0 + redshift)));
     // Neutrino particles: P_nu(k) and the total P(k) of delta_m = (1 - f_nu) delta_cb + f_nu delta_nu
     if (sim.has_neutrino_particles()) {
         // With force_neutrino_energy_density: the energy-density contrast of the neutrinos, and the total

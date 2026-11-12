@@ -53,7 +53,7 @@ end
 ------------------------------------------------------------
 -- Choose the cosmology 
 ------------------------------------------------------------
--- Cosmology: LCDM, w0waCDM, DGP, JBD, Quintessence, EDE, DarkScattering, Tabulated ... add your own ...
+-- Cosmology: LCDM, w0waCDM, DGP, JBD, Quintessence, EDE, DarkScattering, CoupledQuintessence, Tabulated ... add your own ...
 cosmology_model = "LCDM"
 --- CDM density
 cosmology_OmegaCDM = 0.2685
@@ -119,6 +119,13 @@ if cosmology_model == "DarkScattering" then
   cosmology_ds_xi = 10.0
   cosmology_ds_cs2 = 1.0
 end
+if cosmology_model == "CoupledQuintessence" then
+  -- A scalar field with V ~ exp(-lambda phi) coupled to the CDM (CDM mass ~ exp(-beta phi)): the background.
+  -- Needs gravity_model = "CoupledQuintessence" (the CDM feels G (1 + 2 beta^2) from the CDM and the velocity term
+  -- +beta phi' v)
+  cosmology_cq_lambda = 0.5
+  cosmology_cq_beta = 0.05
+end
 if cosmology_model == "Tabulated" then
   -- The background from a file: H (columns z, H/H0), CLASS (a CLASS background file) or w (columns a, w(a))
   cosmology_tabulated_filename = "input/class_background_w0wa.dat"
@@ -154,8 +161,9 @@ end
 ------------------------------------------------------------
 -- Choose the gravity model
 ------------------------------------------------------------
--- Gravity model: GR, f(R), DGP, JBD, Symmetron, Dilaton, mbeta, mu ... add your own ...
--- (JBD needs cosmology_model = "JBD": it takes phi(a) from the background)
+-- Gravity model: GR, f(R), DGP, JBD, Symmetron, Dilaton, mbeta, mu, CoupledQuintessence ... add your own ...
+-- (JBD needs cosmology_model = "JBD": it takes phi(a) from the background; CoupledQuintessence goes together with
+-- cosmology_model = "CoupledQuintessence": the force and velocity term of the coupled CDM)
 gravity_model = "GR"
 
 -- Poisson equation with G_eff/G = mu(a,k), no screening

@@ -230,6 +230,14 @@ class NBodySimulation {
             if (info.is(SIMCODE::ParticleSpecies::MassiveNeutrino))
                 f(part_neutrinos.particles(), info);
     }
+    /// The weight of a CDM+baryon species in delta_cb at a: Omega_i / OmegaCB (info.weight_cb), or with a varying CDM
+    /// mass (coupled quintessence) rho_i(a) / rho_cb(a)
+    double cb_weight(const SIMCODE::SpeciesInfo & info, double a) const {
+        if (not cosmo->is_coupled_quintessence() or info.is(SIMCODE::ParticleSpecies::CDMBaryon))
+            return info.weight_cb;
+        const double f_c = cosmo->cdm_fraction_cb(a);
+        return info.is(SIMCODE::ParticleSpecies::CDM) ? f_c : 1.0 - f_c;
+    }
     /// The shot noise of the density field of a species (in units of the box volume): 1/N (sum w^2 / N^2 for the
     /// delta-f neutrinos). Collective
     double species_shotnoise(const SIMCODE::SpeciesInfo & info) {
@@ -237,11 +245,12 @@ class NBodySimulation {
             return part_neutrinos.shotnoise();
         return 1.0 / double(cb_particles_of(info).get_npart_total());
     }
-    /// The shot noise of delta_cb = sum_i w_i delta_i: sum_i w_i^2 / N_i
-    double cb_shotnoise() {
+    /// The shot noise of delta_cb = sum_i w_i delta_i: sum_i w_i^2 / N_i (the weights at a, cb_weight; a <= 0: today's)
+    double cb_shotnoise(double a = -1.0) {
         double shotnoise = 0.0;
         for_each_cb_species([&](MPIParticles & particles, const SIMCODE::SpeciesInfo & info) {
-            shotnoise += info.weight_cb * info.weight_cb / double(particles.get_npart_total());
+            const double w = a > 0.0 ? cb_weight(info, a) : info.weight_cb;
+            shotnoise += w * w / double(particles.get_npart_total());
         });
         return shotnoise;
     }
@@ -368,6 +377,9 @@ class NBodySimulation {
         return it == species_steps.end() ? s : it->second;
     }
     void kick_short_range_force(const Step & s);
+    /// Coupled quintessence with CDM and baryon particles: the fifth force of the CDM on the CDM
+    bool cdm_fifth_force_separate() const { return grav->has_cdm_fifth_force() and has_baryons(); }
+    void kick_cdm_fifth_force(const Step & s, FFTWGrid<NDIM> & density, std::array<FFTWGrid<NDIM>, NDIM> & force);
     void step(const Step & s);
     void drift_and_lightcone(const Step & s);
     void kick_with_interlaced_force(const Step & s);

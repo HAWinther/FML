@@ -46,6 +46,13 @@ add a model is in [DEVELOPING.md](DEVELOPING.md#adding-a-model).
   particles are not supported with it yet. The IC from the internal solver (`ic_type_of_input = internal` or `tables`) include the scattering
   (`cosmology_ds_cs2` is the sound speed of the dark-energy perturbations there).
 
+* CoupledQuintessence: a scalar field phi (reduced Planck masses) with V ~ exp(-lambda phi) coupled to the CDM, whose
+  particles have the mass m ~ exp(-beta phi) (Wetterich 1995; Amendola 2000): the background and the internal
+  Einstein-Boltzmann solver's `coupled_quintessence` (`cosmology_cq_lambda`, `cosmology_cq_beta`; beta is Amendola's
+  sqrt(2/3) beta). The CDM density is rho_c(a) a^3 = OmegaCDM m(a)/m(1) (`Cosmology::cdm_mass_factor`; the Poisson
+  source `clustering_mass_factor`). Needs `gravity_model = CoupledQuintessence` (the force and the velocity term of the
+  CDM, below).
+
 For Quintessence, EDE and Tabulated the dark energy is smooth (no perturbations) and the gravity model is GR (they can be combined with the other gravity models, but those use the background only through H(a)). The backgrounds were checked against an independent solution (scipy): H(a) agrees to < 1e-4 and w(a) to < 1e-5 for a < 1, and the EDE peak fraction and redshift to < 1e-3.
 
 ## Gravity models
@@ -70,6 +77,22 @@ For Quintessence, EDE and Tabulated the dark energy is smooth (no perturbations)
   coupling β(a) and the mass m(a) = m0 a^-r of the generalised model.
 
 * mbeta: the general (m(a), β(a)) parametrisation of chameleon-like models, β(a) = β0 a^n and m(a) = m0 H0 a^m.
+
+* CoupledQuintessence: the force and the velocity term of the CDM of the cosmology with the same name (and it needs
+  that cosmology, as JBD; it takes beta and phi(a) from the background). In the N-body equations (the sub-horizon limit
+  of those of the Einstein-Boltzmann solver) the CDM feels G (1 + 2 beta^2) from the CDM (the fifth force of the light
+  field, unscreened and scale independent on N-body scales) and G from the baryons, and has the velocity term
+  +beta phi' v (`velocity_friction_cdm` = -beta dphi/dlna, through the velocity-friction machinery of DarkScattering:
+  an acceleration for beta phi' > 0); the baryons feel gravity only. With the CDM and baryons as one set of particles
+  they are a momentum-weighted fluid: G_eff/G = 1 + 2 beta^2 f_c(a)^2 (`GeffOverG`) and the friction f_c(a)
+  (-beta phi') with f_c(a) = rho_c/rho_cb, in the growth equations (all LPT orders, COLA, IC) and the force. With
+  `particle_baryons = true` the PM force is gravity alone (`GeffOverG_gravity`) and the CDM gets its fifth force from
+  the CDM density in a second kick (`cdm_fifth_force_coupling` = 2 beta^2) and its own friction (see
+  [SPECIES.md](SPECIES.md)). Not with massive neutrinos. Tested against the solver (lambda = 0.5, beta = 0.15: 13% more
+  growth from z = 49 to 0 than uncoupled quintessence): the one-fluid growth agrees with it to 1e-4, and the CDM+baryon
+  growth of the simulations (Quinn, FastPM, COLA + Quinn, COLA + FastPM) to 7-8e-4 (the resolution: 1.6e-4 in the
+  largest-scale bin). Halo masses are those at the output (times `cb_mass_factor(a)`); the masses in the snapshot
+  files are those of today's density parameters.
 
 * mu: Phenomenological modified gravity, the Poisson equation with G_eff/G = mu(a,k) and no screening (as in linear theory, also on small scales): `gravity_model_mu_parametrization = "DE"` with mu = 1 + mu0 Omega_DE(a)/Omega_DE(a=1) (the "late-time" parametrisation used by Planck and DES), `"BZ"` with mu = (1 + beta1 lambda1^2 k^2 a^s) / (1 + lambda1^2 k^2 a^s) (Bertschinger & Zukin 2008; k in h/Mpc, lambda1 in Mpc/h), or `"table"` with mu(a) or mu(a,k) from a file with rows `a mu` or `a k mu` on a regular grid (e.g. computed with hi_class; splined in log a and log k, the closest value outside the table; example: `input/mu_table_BZ_example.txt`). The growth factors (1LPT-3LPT) are solved with mu(a,k), so a k-dependent mu gives scale-dependent growth (use scale-dependent COLA, or COLA with the large-scale growth and the rest from the PM part). Only the potential that moves the particles is modified (Sigma, the lensing potential, is not used: the lightcone potential maps are GR). Test (`tests/check_mu_gravity.py`: 64^3 particles, 256 Mpc/h, 2x grid, linear amplitude, IC from GR growth at z = 19): P_mu/P_GR at z = 0 agrees with (D_mu/D_GR)^2 from an independent solution of the growth equation to 0.05% for k <= 0.1 h/Mpc (mu0 = 0.5: P_mu/P_GR = 1.131; BZ with beta1 = 4/3, lambda1 = 10 Mpc/h, s = 4: 1.002-1.18 for k = 0.03-0.6) and to 0.2-1.2% up to k = 0.6 h/Mpc (the force resolution of the PM grid), with and without scale-dependent COLA; the tables reproduce the parametrisations to 0.001%. At normal amplitude COLA (30 steps, scale-dependent for BZ) gives the same response P_mu/P_GR as 200 Quinn steps to 0.02% for k < 0.6 h/Mpc.
 

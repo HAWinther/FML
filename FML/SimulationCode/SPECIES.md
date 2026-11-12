@@ -81,6 +81,25 @@ stepping:
 | COLA + FastPM, 10 steps | -6.12% | -1.34% | -5.38% |
 | one species (f_c Gamma), Quinn, 200 steps | | | -5.42% |
 
+Coupled quintessence (`cosmology_model = CoupledQuintessence`, see [MODELS.md](MODELS.md)): the CDM particles feel
+gravity and the fifth force of the CDM density, D^2 Phi_5 = 2 beta^2 1.5 OmegaCDM m(a) a delta_c (a second kick
+after the PM kick, in the same grids: `kick_cdm_fifth_force`), and the velocity term +beta phi' v; the baryons only
+gravity. delta_cb is weighted with the CDM fraction f_c(a) of the varying CDM mass. The steps are as for dark
+scattering, FastPM with the two-fluid growth with the couplings (the CDM feels 1 + 2 beta^2 of the CDM). The growth
+from z = 49 to 0 relative to uncoupled quintessence (lambda = 0.5, beta = 0.15, as above):
+
+| | CDM | baryons | CDM+baryons | delta_b / delta_c at z = 0 |
+|---|---|---|---|---|
+| Einstein-Boltzmann solver | +14.19% | +10.66% | +13.26% | 0.9327 |
+| Quinn, 200 logarithmic steps | +14.10% | +10.58% | +13.18% | 0.9324 |
+| FastPM, 10 steps | +14.11% | +10.59% | +13.18% | 0.9325 |
+| COLA + Quinn, 10 steps | +14.11% | +10.58% | +13.19% | 0.9323 |
+| COLA + FastPM, 10 steps | +14.10% | +10.59% | +13.18% | 0.9325 |
+
+(uncoupled: delta_b / delta_c = 0.9960, solver 0.9961). The growth of the species from z = 49 includes the baryons
+catching up with the CDM (delta_b / delta_c = 0.865 at z = 49, 0.898 uncoupled), so it is not that of the two-fluid
+growing mode (CDM +14.4%, baryons +7.0%); its D_b / D_c = 0.9355 is the ratio the solver approaches by z = 0.
+
 With the same lattice keep the force grid at most twice the particle grid: a finer grid resolves the attraction
 between the CDM and baryon particles that start at the same point, which damps the CDM-baryon difference the drag
 builds up (CDM / baryons with Quinn: -6.01% / -1.22% with a 1x grid, -6.12% / -1.30% 2x, -5.90% / -2.62% 4x,

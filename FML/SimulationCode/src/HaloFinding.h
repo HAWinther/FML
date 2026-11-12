@@ -340,7 +340,8 @@ std::vector<SIMCODE::HaloRecord<NDIM>> find_cb_halos(NBodySimulation<NDIM, T> & 
         c.mass_unit_msunh = SIMCODE::halo_particle_mass_msunh(cosmo->get_Omegab() + cosmo->get_OmegaCDM(),
                                                               boxsize,
                                                               sim.get_gravity_model()->H0_hmpc,
-                                                              size_t(npart_total));
+                                                              size_t(npart_total)) *
+                            cosmo->cb_mass_factor(1.0 / (1.0 + redshift));
         c.velocity_unit_kms = 100.0 * boxsize * (1.0 + redshift);
         c.mean_particle_separation = 1.0 / std::pow(double(n_one_species), 1.0 / NDIM);
         c.number_scale = double(npart_total) / double(n_one_species);
@@ -373,7 +374,8 @@ std::vector<SIMCODE::HaloRecord<NDIM>> find_cb_halos(NBodySimulation<NDIM, T> & 
         });
         sim.for_each_cb_species([&](auto & particles, const SIMCODE::SpeciesInfo & info) {
             n_one_species = (long long int)particles.get_npart_total();
-            const double mass = info.weight_cb * double(npart_total) / double(particles.get_npart_total());
+            const double mass =
+                sim.cb_weight(info, 1.0 / (1.0 + redshift)) * double(npart_total) / double(particles.get_npart_total());
             for (auto & p : particles) {
                 P q;
                 const auto * pos = FML::PARTICLE::GetPos(p);
@@ -821,7 +823,9 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
     // Halo finding with the CDM+baryon particles, in physical units
     long long int npart_total = 0;
     auto halos = find_cb_halos(sim, so_thresholds, npart_total, redshift);
-    const double mass_norm = SIMCODE::halo_particle_mass_msunh(OmegaCB, boxsize, H0_hmpc, size_t(npart_total));
+    // (times the CDM+baryon mass at the output relative to today: a varying CDM mass, coupled quintessence)
+    const double mass_norm = SIMCODE::halo_particle_mass_msunh(OmegaCB, boxsize, H0_hmpc, size_t(npart_total)) *
+                             sim.get_cosmology()->cb_mass_factor(1.0 / (1.0 + redshift));
     halos_to_physical_units<NDIM>(halos, mass_norm, boxsize, redshift);
 
     write_mass_functions(sim, halos, so_definitions, so_thresholds, redshift, snapshot_folder);

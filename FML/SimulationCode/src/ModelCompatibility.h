@@ -36,11 +36,28 @@ namespace SIMCODE {
             params.baryonification.profile_model(cosmo.get_Omegab() / cosmo.get_OmegaM()).validate();
         }
 
-        // Velocity friction (Cosmology::velocity_friction): on the CDM+baryon fluid, or with particle_baryons on the
+        // Coupled quintessence: the background is the cosmology's and the force and velocity term of the CDM the gravity
+        // model's (GravityModel_CoupledQuintessence: one fluid, or with particle_baryons a second kick of the CDM,
+        // kick_cdm_fifth_force, and its own steps). The two go together
+        if (cosmo.is_coupled_quintessence() != (grav.get_name() == "CoupledQuintessence"))
+            fail("cosmology_model = CoupledQuintessence and gravity_model = CoupledQuintessence go together (the "
+                 "background of the coupled field and the force and velocity term of the coupled CDM)");
+        if (cosmo.is_coupled_quintessence()) {
+            if (cosmo.get_OmegaMNu() != 0.0)
+                fail("cosmology_model = CoupledQuintessence is not implemented with massive neutrinos");
+            if (params.particle.baryons and params.force.short_range.enabled)
+                fail("cosmology_model = CoupledQuintessence with particle_baryons = true is not implemented with "
+                     "force_short_range");
+            if (params.particle.baryons and params.timestep.method == FML::NBODY::TimestepMethod::BullFrog)
+                fail("cosmology_model = CoupledQuintessence with particle_baryons = true needs timestep_method = "
+                     "Quinn, Tassev or FastPM (BullFrog follows the growth of one fluid)");
+        }
+
+        // Velocity friction (GravityModel::velocity_friction): on the CDM+baryon fluid, or with particle_baryons on the
         // CDM particles alone (their own steps, SpeciesTimeStepping.h; not with BullFrog). Not with neutrino particles
-        if (cosmo.has_velocity_friction() and params.particle.neutrinos)
+        if (grav.has_velocity_friction() and params.particle.neutrinos)
             fail("a cosmology with velocity friction needs particle_neutrinos = false");
-        if (cosmo.has_velocity_friction() and params.particle.baryons and
+        if (grav.has_velocity_friction() and params.particle.baryons and
             params.timestep.method == FML::NBODY::TimestepMethod::BullFrog)
             fail("a cosmology with velocity friction and particle_baryons = true needs timestep_method = Quinn, Tassev "
                  "or FastPM (BullFrog follows the growth of one fluid)");

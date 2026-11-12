@@ -432,6 +432,38 @@ CASES = {
         ic_input_filename=INPUT + "/transfer_tables/dark_scattering.txt",
         ic_input_redshift=20.0,
     ),
+    # Coupled quintessence: the CDM+baryon particles as one fluid (G_eff, friction and the CDM mass of the coupling),
+    # and with CDM and baryon particles (the fifth force of the CDM on the CDM, the species' own steps)
+    "coupled_quintessence_cola": dict(
+        cosmology_model="CoupledQuintessence",
+        gravity_model="CoupledQuintessence",
+        cosmology_cq_lambda=0.5,
+        cosmology_cq_beta=0.15,
+    ),
+    "coupled_quintessence_baryons_cola": dict(
+        cosmology_model="CoupledQuintessence",
+        gravity_model="CoupledQuintessence",
+        cosmology_cq_lambda=0.5,
+        cosmology_cq_beta=0.15,
+        particle_baryons=True,
+        particle_baryon_lattice="same",
+        ic_type_of_input="tables",
+        ic_input_filename=INPUT + "/transfer_tables/coupled_quintessence.txt",
+        ic_input_redshift=20.0,
+    ),
+    "coupled_quintessence_baryons_fastpm": dict(
+        cosmology_model="CoupledQuintessence",
+        gravity_model="CoupledQuintessence",
+        cosmology_cq_lambda=0.5,
+        cosmology_cq_beta=0.15,
+        particle_baryons=True,
+        particle_baryon_lattice="same",
+        simulation_use_cola=False,
+        timestep_method="FastPM",
+        ic_type_of_input="tables",
+        ic_input_filename=INPUT + "/transfer_tables/coupled_quintessence.txt",
+        ic_input_redshift=20.0,
+    ),
     # CDM and baryons as separate particles (same lattice), BullFrog, IC from the transfer functions at zini
     "two_species_bullfrog": dict(
         particle_baryons=True,

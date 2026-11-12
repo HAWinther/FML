@@ -36,7 +36,7 @@ void NBodySimulation<NDIM, T>::compute_density_field_fourier(FFTWGrid<NDIM> & de
         timer.StartTiming("PofkEveryStep");
         bin_up_power_spectrum_every_step(density_grid_fourier,
                                          deconvolve,
-                                         subtract_shotnoise ? cb_shotnoise() : 0.0,
+                                         subtract_shotnoise ? cb_shotnoise(a) : 0.0,
                                          a,
                                          pofk_cb_every_step);
         timer.EndTiming("PofkEveryStep");
@@ -127,7 +127,7 @@ void NBodySimulation<NDIM, T>::assign_cb_particles_to_grid(FFTWGrid<NDIM> & dens
         };
         if (icb == 0) {
             assign(density_grid_fourier);
-            weight_first = info.weight_cb;
+            weight_first = cb_weight(info, a);
         } else {
             FFTWGrid<NDIM> & grid = pm_workspace("species density",
                                                  density_grid_fourier.get_nmesh(),
@@ -137,7 +137,7 @@ void NBodySimulation<NDIM, T>::assign_cb_particles_to_grid(FFTWGrid<NDIM> & dens
             FML::GRID::linear_combination_fourier<NDIM>(density_grid_fourier,
                                                         grid,
                                                         icb == 1 ? weight_first : 1.0,
-                                                        info.weight_cb);
+                                                        cb_weight(info, a));
         }
         icb++;
     });

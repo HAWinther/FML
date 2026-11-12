@@ -50,7 +50,7 @@ void NBodySimulation<NDIM, T>::run() {
     const auto stepper = time_stepping();
     // CDM and baryons with their own friction: their own coefficients at the scale factors of the steps
     std::map<SIMCODE::ParticleSpecies, FML::NBODY::TimeStepping> species_steppers;
-    if (SIMCODE::species_have_own_time_stepping(params, *cosmo))
+    if (SIMCODE::species_have_own_time_stepping<NDIM>(params, *grav))
         species_steppers = SIMCODE::make_species_time_stepping<NDIM>(params, cosmo, grav);
 
     // If we only give the total number of steps then compute how many steps between outputs
@@ -287,6 +287,9 @@ void NBodySimulation<NDIM, T>::step(const Step & s) {
                     if (extra != 0.0)
                         cola.add_on_LPT_velocity(particles, s.avel, extra);
                 });
+            // Coupled quintessence with CDM and baryon particles: the fifth force on the CDM
+            if (cdm_fifth_force_separate())
+                kick_cdm_fifth_force(s, density_grid_fourier, force_real);
         }
         kick_short_range_force(s);
         // The delta-f weights depend on the momenta
@@ -295,6 +298,36 @@ void NBodySimulation<NDIM, T>::step(const Step & s) {
         timer.EndTiming("Kick");
     }
     drift_and_lightcone(s);
+}
+
+/// A force of the CDM on the CDM alone (GravityModel::has_cdm_fifth_force: coupled quintessence) with CDM and baryon
+/// particles: the CDM feels, besides gravity (the PM kick), the fifth force sourced by the CDM, D^2 Phi_5 = g 1.5
+/// OmegaCDM m(a) a delta_c (g = cdm_fifth_force_coupling, 2 beta^2; m(a) = cdm_mass_factor, the CDM mass relative to
+/// today). A second kick of the CDM (velocity_scale 1, its kick factor) with the force of the CDM
+/// density alone, computed in the density and force grids of the step (their contents are not needed any more)
+template <int NDIM, class T>
+void NBodySimulation<NDIM, T>::kick_cdm_fifth_force(const Step & s,
+                                                    FFTWGrid<NDIM> & density,
+                                                    std::array<FFTWGrid<NDIM>, NDIM> & force) {
+    timer.StartTiming("CDMFifthForce");
+    const auto & method = current_force.density_assignment_method;
+    FML::INTERPOLATION::particles_to_grid(part.get_particles_ptr(), part.get_npart(), part.get_npart_total(), density, method);
+    density.fftw_r2c();
+    const double norm =
+        grav->cdm_fifth_force_coupling(s.apos) * 1.5 * cosmo->get_OmegaCDM() * cosmo->cdm_mass_factor(s.apos) * s.apos;
+    grav->compute_force_from_total_density(density, norm, method, force, force_options);
+    for_each_cb_species([&](MPIParticles & particles, const SIMCODE::SpeciesInfo & info) {
+        if (info.is(SIMCODE::ParticleSpecies::CDM))
+            SIMCODE::kick_particles<NDIM>(particles,
+                                          info,
+                                          force,
+                                          s.apos,
+                                          step_of(s, info).delta_time_kick,
+                                          1.0,
+                                          method,
+                                          params.simulation.boxsize);
+    });
+    timer.EndTiming("CDMFifthForce");
 }
 
 /// Add the short acceleration once, after the ordinary PM velocity scaling and before any drift.
