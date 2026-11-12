@@ -135,3 +135,112 @@ posterior information and sampler controls are replicated. This is not a measure
 strong-scaling claim. Frequent safety collectives and scratch allocations remain.
 Distributed LPT/deposition adjoints, nonlinear coverage and checkpoint/restart are
 still open, with survey likelihoods deferred until after the prioritized MPI work.
+
+## Distributed 1LPT stage 4b (12 November 2026)
+
+Historical stage-4b results; stage 4c below extends the same backend to 2LPT.
+
+`DistributedLPTModel` adds actual distributed Zel'dovich predictions, smoothed
+Lagrangian bias/RSD adjoints, sparse particle/mesh routing and joint MAP/HMC
+execution. `Evolution::LPT2` is deliberately rejected until its separate distributed
+source/adjoint increment is implemented. The original single-rank model stays intact.
+
+The new `test_framework_lpt_mpi` suite passes 20 serial/one-rank checks and 36/72
+total helper checks on two/four OpenMPI ranks. Two ranks with two OpenMP threads
+per rank and `NO_AUTO_FML_SETUP` pass 36 checks; serial ASan/UBSan passes 20.
+The shared Makefile's `framework-lpt-mpi` target passes on two ranks. Rebuilt
+stage-4a MPI linear tests pass 46 checks on two ranks, and the unchanged periodic
+framework regression passes all 53 checks. This increment does not alter the
+shared HMC engine or the original BAO/LPT numerical kernels.
+
+At mesh 8, density mesh 16 and kernel width 6, the checks cover:
+
+- Field and all seven scalar derivatives (amplitude, tilt, b1, b2, b_s2,
+  b_laplacian, log noise), with separate initial/bias/likelihood cutoffs, RSD and
+  a nonidentity Fourier response. Directional and component finite differences
+  use 2e-6 relative to max(1,|analytic|,|numeric|).
+- A separate forward/reverse dot product through both the particle-node transport
+  and initial/density Fourier remapping; serial predictions agree within 1e-12,
+  field gradients within 1e-11 and scalar gradients within 1e-9.
+- A strong-displacement case (white field multiplied by 80), exercising periodic
+  wraps and rank crossings without assuming neighboring-slab particle motion.
+- An independent sparse scatter/reverse test against an analytic mesh cotangent,
+  including colliding/distant node deposits and empty-request ranks. Missing
+  forward state and invalid uint64 node keys reject collectively before exchange.
+- Nonlinear field MAP lowers the global objective; a deliberately short joint HMC
+  chain moves with synchronized scalar states and no divergences. It is an
+  execution smoke check, not a nonlinear posterior-moment/coverage test.
+- One-rank malformed fields fail collectively; nonfinite proposals reject before
+  converting particle coordinates to integer mesh indices.
+
+Optional test output records each retained mode and owned field-gradient cell.
+Comparing those arrays across 1/2/4 ranks gives maximum absolute differences
+1.63e-17 for predictions and 4.45e-16 for field gradients. The ordinary posterior
+potential differs by at most 5.69e-14; the strong-displacement potential is about
+1.61e6 and differs by 1.17e-9 (approximately 7.3e-16 relative). Scalar-gradient
+and short joint-trajectory comparisons also agree within floating-point rounding.
+Rank-count bitwise identity for arbitrary longer chains is not promised.
+
+The updated MPI example runs in linear or `1lpt` mode. Its two-rank 1LPT field MAP
+has maximum gradient 1.85e-7; the short field HMC example has acceptance 0.736987
+and zero divergences. These toy outcomes are not production convergence criteria.
+
+The FFT fields remain local. Sparse maps are rebuilt per prediction and exchange
+is through checked MPI-int layouts, with explicit overflow rejection rather than
+large-count transport. Concentrated particles can concentrate incoming requests.
+No strong-scaling, balanced peak-memory or new OpenMP particle-loop speedup claim
+is made. Wider numerical convergence, nonlinear inference calibration, 2LPT,
+checkpoint/restart and reconstruction output bundles remain open.
+
+## Distributed 1LPT/2LPT stage 4c (12 November 2026)
+
+The distributed LPT backend now supports both Zel'dovich and EdS-factorized 2LPT.
+The combined suite runs the original stage-4b checks for each order, including
+serial prediction/posterior/gradient comparisons, all seven scalar derivatives,
+field directional differences and independent forward/reverse dot products,
+large periodic displacements, sparse node communication, MAP and short joint-HMC
+execution. Non-LPT evolution remains explicitly rejected.
+
+Apple Clang serial and OpenMPI/Clang17 with one rank pass 44 checks. Actual two/four
+rank runs pass 80/160 total helper checks; those totals sum per-rank checks and
+exclude one-rank-only serial comparisons. Serial ASan/UBSan passes 44 checks.
+Two ranks with two OpenMP threads each and `NO_AUTO_FML_SETUP` pass 80 checks.
+The existing linear MPI suite passes 46 checks on two ranks, and the original
+periodic framework suite passes 53. The shared Makefile target also runs the
+combined LPT suite on two ranks. The shared HMC engine and original serial kernels
+are unchanged by this increment.
+
+Additional independent checks:
+
+- Two orthogonal initial plane waves have analytic S2 = A B cos(kx) cos(kz).
+  A direct sum over the corresponding exact 2LPT particle positions verifies
+  the 3/7 coefficient/sign and `1+2f` second-order RSD factor. Input cutoff .08
+  excludes the mixed source wave while the full-grid evolution retains it.
+  Maximum retained-mode error is 8.11e-7 against a 2e-5 absolute finite-assignment
+  tolerance; the actual second-order prediction change is 0.02859. This direct
+  particle reference is independent of the implemented mesh source/adjoint.
+- A single axis plane wave gives identical 1LPT and 2LPT predictions to 1e-12,
+  checking vanishing second-order source on distributed slabs.
+- Assignment widths 4 and 8 pass separate 2LPT field-adjoint finite differences;
+  the main cases use width 6. Mesh 8 / density mesh 16 and separate cutoffs are
+  used throughout these bounded regressions, not a production convergence study.
+
+Full prediction and field-gradient arrays are recorded separately for each order
+and compared across 1/2/4 ranks. For 2LPT, maximum absolute differences are
+1.50e-17 for predictions and 4.45e-16 for field gradients. The 1LPT comparison
+remains within 1.63e-17 / 4.45e-16. Scalar gradients and short joint trajectories
+also agree within floating-point rounding. This does not promise bitwise identity
+for arbitrary longer HMC chains.
+
+The example now accepts `2lpt` as well as `1lpt` and the default linear mode.
+On two ranks, the 2LPT field MAP gradient norm is 1.88e-7; its short field HMC
+example has acceptance 0.666303 and zero divergences. The toy joint-HMC checks
+and examples verify execution and movement, not nonlinear posterior calibration.
+
+The source and reverse use the full distributed initial-grid derivative operator
+with zero and Nyquist planes removed. Unsmoothed matter density/tensors are cached
+separately from bias fields only for 2LPT (seven extra local fields), with temporary
+source/reverse fields. No recomputation policy, new speedup or strong-scaling
+claim is made. High-cutoff padding, general cosmological growth derivatives,
+checkpoint/restart, distributed reconstruction outputs and nonlinear scientific
+validation remain open; survey likelihoods are still deferred.

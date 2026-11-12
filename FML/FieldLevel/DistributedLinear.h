@@ -9,6 +9,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
     // same configuration, scalar parameters and inference controls. Spectrum callbacks
     // must be deterministic and identical across ranks. No particle/LPT MPI claim.
     class DistributedLinearModel {
+        friend class DistributedLPTModel;
         Configuration config_;
         Spectrum spectrum_;
         std::vector<Parameter> parameters_;
@@ -81,6 +82,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
       public:
         struct Workspace {
             friend class DistributedLinearModel;
+            friend class DistributedLPTModel;
 
           private:
             const DistributedLinearModel * owner;

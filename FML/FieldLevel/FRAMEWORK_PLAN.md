@@ -22,7 +22,7 @@ open. The user authorized the MPI/input-safety prerequisite first, followed by s
 - Validation and sampler limitations, including rare divergent proposals with wide
   noise priors, are recorded in [tests/FRAMEWORK_RESULTS.md](tests/FRAMEWORK_RESULTS.md).
 
-## MPI priority and stage 4a (12 November 2026)
+## MPI priority and stages 4a–4c (12 November 2026)
 
 At the user's request, prioritize MPI before the proposed survey likelihood.
 No survey-likelihood implementation was started; retain it as stage 5 work.
@@ -30,9 +30,14 @@ The first MPI increment is a distributed periodic linear-Gaussian model in
 [DistributedLinear.h](DistributedLinear.h), using the generic posterior/MAP/HMC
 with global reductions, local FFT slabs and counter-based field momenta. Exact
 linear references and 1/2/4-rank checks anchor this increment. It does not complete
-stage 4: 1LPT/2LPT communication adjoints, nonlinear inference validation and
-checkpoint/restart remain next. See [FRAMEWORK.md](FRAMEWORK.md) for ownership,
-collective-call contracts and current limits.
+stage 4: nonlinear inference validation, checkpoint/restart and distributed
+reconstruction outputs remain next. Stage 4b adds distributed 1LPT predictions,
+bias/RSD adjoints, sparse particle/mesh routing, MAP and joint-HMC execution.
+Stage 4c extends that backend to EdS 2LPT with its full-grid quadratic source,
+reverse path and second-order RSD factor. The original single-rank implementation
+remains a numerical compatibility reference.
+See [FRAMEWORK.md](FRAMEWORK.md) for ownership, collective-call contracts and current
+limits.
 
 ## Aim and posterior
 

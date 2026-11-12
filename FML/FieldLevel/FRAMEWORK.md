@@ -322,7 +322,138 @@ a linear distributed inference foundation, not nonlinear posterior calibration o
 a strong-scaling result. No full fields or mode arrays are gathered by the model.
 Small replicated metadata and repeated safety reductions still have overhead.
 
-Next: distributed 1LPT and then 2LPT evolution/deposition adjoints, nonlinear
-inference validation, and checkpoint/restart. Survey likelihoods remain deferred
+Distributed 1LPT and 2LPT are available in stages 4b–4c below. Next:
+nonlinear inference validation, checkpoint/restart and reconstruction outputs. Survey likelihoods remain deferred
 until after the prioritized MPI work. MPI BAO compatibility and PM/COLA are not
 provided by this linear backend. The original single-rank safety checks remain.
+
+## Distributed 1LPT (stage 4b, 12 November 2026)
+
+Include `<FML/FieldLevel/DistributedLPT.h>`, set `evolution=Evolution::Zeldovich`,
+and construct `DistributedLPTModel` / `DistributedLPTPosterior`. They use the same
+configuration, spectrum, prior specifications, smoothed Lagrangian bias conventions,
+plane-parallel RSD and full-Hermitian mode inner product as the single-rank `Model`.
+Supported scalar parameters are spectrum parameters followed by b1, b2, b_s2,
+b_laplacian and log noise power. The initial cutoff must remain strictly below
+half the initial-grid Nyquist; the density mesh must be even, at least the initial
+mesh, and divisible by the number of ranks. Kernel widths 4/6/8 are supported.
+The backend now accepts `Zeldovich` and `LPT2`; stage 4c below documents the
+second-order source and adjoint extension.
+
+```cpp
+#include <FML/FieldLevel/DistributedLPT.h>
+namespace FF = FML::FIELDLEVEL::FRAMEWORK;
+// After FML::FMLSetup::init, on every rank:
+FF::Configuration c;
+c.evolution = FF::Evolution::Zeldovich;
+c.mesh = 8; c.density_mesh = 16; c.boxsize = 100;
+c.initial_cutoff = .115; c.bias_cutoff = .08; c.likelihood_cutoff = .10;
+FF::DistributedLPTModel model(c, FF::Spectrum::fixed([](double) { return 200.; }));
+auto work = model.workspace();
+auto p = model.initial_parameters();
+auto data = model.mock(model.white_noise(10), p, 11, work); // Local modes
+FF::DistributedLPTPosterior posterior(model, data);
+auto fit = FF::map(posterior, model.white_noise(12), p, false);
+```
+
+The field/parameter ownership and collective-call rules from stage 4a still apply.
+Particles stay on their Lagrangian owners. Each forward pass computes distributed
+initial/bias fields, uses globally centered quadratic/tidal bias operators, and
+builds sparse contributions to density nodes on any rank. Node contributions are
+aggregated locally, routed to their FFT slab owners and summed there. The cached
+communication layout returns mesh cotangents to the same particle owners; interpolation
+and displacement/bias adjoints then reverse the forward map. Thus the method handles
+arbitrary periodic particle displacements without retaining a full density grid on
+every rank or assuming that particles stay within neighboring slabs.
+
+Initial and density meshes have different Fourier ownership. Reusable
+`FourierResamplingPlan` objects transfer normalized coefficients between their
+layouts; the reverse uses the corresponding upsampling map with the density FFT
+adjoint's N_density³ normalization. Smooth assignment and its Fourier correction
+match the original serial model. Nonfinite particle proposals reject before
+floating-point coordinates are converted to node indices. Routed key/count errors
+and invalid local states fail collectively; reverse communication requires a
+successful matching scatter.
+
+`map`, `sample`, `mock`, `predict`, `pullback`, `white_noise` and the frozen
+linear field metric are supported. There is no exact nonlinear conditional, and
+this backend does not yet provide the reconstruction-output bundle. A nonlinear
+MAP is a local optimum; the short joint-HMC regression checks execution, not
+posterior calibration.
+
+```sh
+make -C FML/FieldLevel/tests USE_MPI=true framework-lpt-mpi
+make -C FML/FieldLevel/example USE_MPI=true framework_mpi
+mpirun -np 4 FML/FieldLevel/example/framework_mpi 1lpt
+```
+
+The new sparse exchange uses checked MPI-int counts/displacements and rejects an
+exchange exceeding INT_MAX entries on any rank. It is not a large-count transport
+implementation. Scratch is bounded by local particles, local grids and distinct
+routed stencil nodes (at most (kernel_width+1)³ nodes per local particle before
+deduplication), plus incoming requests. Highly clustered particles can concentrate
+requests on a rank; this is not a strict balanced-memory or strong-scaling guarantee.
+Sparse maps are rebuilt each prediction. Double FFTW and sequential collective
+chains are the validated configuration; no additional OpenMP speedup is claimed
+for the new routing/particle loops.
+
+Validation covers serial compatibility, actual 1/2/4-rank predictions/gradients,
+large displacements, independent sparse scatter/reverse dot products, nonlinear
+MAP, joint-HMC synchronization, sanitizers and MPI/OpenMP/manual initialization.
+Distributed 2LPT is available in stage 4c below. Checkpoint/restart,
+reconstruction outputs, measured workspace/communication optimization and
+nonlinear scientific validation remain open.
+Survey likelihoods remain deferred until after the prioritized MPI work.
+
+## Distributed 2LPT (stage 4c, 12 November 2026)
+
+The same `DistributedLPTModel` / `DistributedLPTPosterior` now also accept
+`Configuration::evolution = Evolution::LPT2`. Ownership, scalar parameter order,
+cutoff restrictions, Gaussian likelihood, sparse particle/mesh communication and
+MAP/HMC interfaces remain as in stage 4b. The example accepts `2lpt`:
+
+```sh
+make -C FML/FieldLevel/tests USE_MPI=true framework-lpt-mpi
+make -C FML/FieldLevel/example USE_MPI=true framework_mpi
+mpirun -np 4 FML/FieldLevel/example/framework_mpi 2lpt
+```
+
+The EdS-factorized second-order displacement uses the **unsmoothed initial field**:
+
+```
+T_ij = partial_i partial_j inverse_laplacian(delta_L)
+S2 = (delta_L^2 - sum_ij T_ij^2) / 2
+Psi2 = (3/7) D[S2],     D(k) = i k_box / k_box^2
+x = q + Psi1 + Psi2 + f zhat (Psi1_z + 2 Psi2_z)
+```
+
+Here displacements and q are in box units, so `k_box=2 pi n`. This is the same
+EdS growth factorization and fixed plane-parallel growth rate as the original
+periodic model, not a new general cosmological-growth implementation. Bias smoothing
+still affects only the Lagrangian bias operators, independently of the matter source.
+
+The source generates modes beyond the input cutoff. Its derivative/inverse-Laplacian
+operator therefore runs over the full distributed initial FFT grid, with the zero
+mode and all Nyquist planes removed to preserve the real/Hermitian convention.
+The strict initial cutoff below half Nyquist resolves the quadratic products;
+high-cutoff padded adjoints remain unsupported. The reverse uses `D^T=-D` and
+propagates S2 cotangents through both delta_L and all six independent tensor
+components, with the off-diagonal multiplicities. The second-order RSD factor is
+`1+2f` along z. Spectrum derivatives include this quadratic evolution path.
+
+Seven additional **local** fields (initial density and six matter tensors) are
+cached only for 2LPT, separately from the smoothed bias cache. The quadratic source
+and its reverse also need temporary local fields. This increment does not provide
+a recomputation-memory policy or a measured speed/scaling improvement.
+
+The combined LPT suite runs both orders on 1/2/4 ranks and checks serial compatibility,
+field/scalar finite differences, adjoint products, periodic crossings, MAP and short
+joint-HMC execution. Independent two-wave particle positions verify the EdS coefficient,
+sign and RSD factor; a single plane wave has zero second-order source. Assignment
+widths 4 and 8 receive additional field-adjoint checks alongside the main width-6
+cases. Fixed cutoffs and toy meshes do not establish production convergence or
+nonlinear posterior calibration.
+
+Checkpoint/restart, distributed reconstruction outputs, scientific nonlinear
+validation and workspace/communication profiling remain next. Survey likelihoods
+are still deferred until after the prioritized MPI work; #52 is not complete.

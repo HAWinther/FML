@@ -5,7 +5,10 @@ linear/Zel'dovich/2LPT forward models, distinct initial/bias/likelihood cutoffs,
 joint field/bias/noise inference, MAP, exact linear references and streamed field
 outputs. A separate [distributed linear backend](FRAMEWORK.md#distributed-linear-inference-stage-4a-12-november-2026)
 provides MPI predictions, adjoints, exact conditionals, MAP and joint HMC; the
-particle-based LPT backend is still single-rank. See [the saved plan](FRAMEWORK_PLAN.md) for the broader #52 scope.
+new [distributed 1LPT/2LPT backend](FRAMEWORK.md#distributed-2lpt-stage-4c-12-november-2026)
+adds particle/mesh communication, the quadratic EdS source and matching bias/RSD
+adjoints. Checkpoint/restart and distributed reconstruction outputs remain open;
+the original BAO/LPT backend stays single-rank. See [the saved plan](FRAMEWORK_PLAN.md) for the broader #52 scope.
 
 ## BAO application (prototype)
 
