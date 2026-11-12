@@ -127,6 +127,49 @@ namespace FML {
             }
         };
 
+        //=============================================================================
+        /// The bispectrum B(k1, k2, k3) of the particles (mass weighted if they have masses), as SimulationCode's
+        /// (bispectrum = true): nbins linear bins in each k from 0 to the Nyquist frequency of the grid. Keys
+        /// bispectrum_<name>, SimulationCode's names and defaults (SimulationCode requires nmesh and nbins). Memory and
+        /// time: nbins grids of nmesh^3 and nbins^3 integrals
+        //=============================================================================
+        struct BispectrumSettings {
+            static constexpr const char * prefix = "bispectrum_";
+            int nmesh;
+            int nbins;
+            std::string density_assignment_method;
+            bool interlacing;
+            bool subtract_shotnoise;
+
+            BispectrumSettings() {
+                parameters([](const char *, auto & value, const auto & default_value, const char *) {
+                    value = default_value;
+                });
+            }
+
+            template <class F>
+            void parameters(F && f) {
+                f("nmesh", nmesh, 128, "Grid size");
+                f("nbins",
+                  nbins,
+                  16,
+                  "Number of linear k-bins from 0 to the Nyquist frequency (memory and time scale as nbins grids and "
+                  "nbins^3 integrals)");
+                f("density_assignment_method",
+                  density_assignment_method,
+                  std::string("CIC"),
+                  "Density assignment method (NGP, CIC, TSC, PCS, PQS)");
+                f("interlacing", interlacing, true, "Use interlaced grids to reduce aliasing");
+                f("subtract_shotnoise", subtract_shotnoise, false, "Subtract shot-noise");
+            }
+
+            void validate() const {
+                detail::validate_spectrum_settings(prefix, nmesh, nbins, density_assignment_method);
+                if (nbins < 1)
+                    throw std::runtime_error("bispectrum_nbins must be >= 1");
+            }
+        };
+
         /// P(k) in physical units (k in h/Mpc, P in (Mpc/h)^3)
         template <int NDIM, class P>
         FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM> measure_power_spectrum(P * particles,
@@ -146,6 +189,53 @@ namespace FML {
                                                                        settings.interlacing);
             binning.scale(context.boxsize);
             return binning;
+        }
+
+        /// The bispectrum in physical units (k in h/Mpc, B in (Mpc/h)^6), as SimulationCode's. Collective
+        template <int NDIM, class P>
+        FML::CORRELATIONFUNCTIONS::BispectrumBinning<NDIM> measure_bispectrum(P * particles,
+                                                                            size_t npart,
+                                                                            size_t npart_total,
+                                                                            const BispectrumSettings & settings,
+                                                                            const AnalysisContext & context) {
+            settings.validate();
+            using Binning = FML::CORRELATIONFUNCTIONS::BispectrumBinning<NDIM>;
+            Binning bofk(0.0, 2.0 * M_PI * settings.nmesh / 2, settings.nbins, Binning::LINEAR_SPACING);
+            bofk.subtract_shotnoise = settings.subtract_shotnoise;
+            FML::CORRELATIONFUNCTIONS::compute_bispectrum(settings.nmesh,
+                                                          particles,
+                                                          npart,
+                                                          npart_total,
+                                                          bofk,
+                                                          settings.density_assignment_method,
+                                                          settings.interlacing);
+            bofk.scale(context.boxsize);
+            return bofk;
+        }
+
+        /// Write the bispectrum with SimulationCode's columns: i1 i2 i3, k1 k2 k3 (h/Mpc, the mean k of the bins),
+        /// B (Mpc/h)^6, the reduced Q and the number of triangles N, for all nbins^3 bins (collective)
+        template <int NDIM>
+        void write_bispectrum(const std::string & filename,
+                              const FML::CORRELATIONFUNCTIONS::BispectrumBinning<NDIM> & bispectrum,
+                              const std::string & header = "") {
+            auto bofk = bispectrum; // the accessors are not const
+            write_on_root(filename, [&](std::ostream & fp) {
+                fp << header;
+                fp << "# ShotnoiseSubtracted = " << std::boolalpha << bofk.subtract_shotnoise << "\n";
+                fp << "#  i1    i2   i3       k1  (h/Mpc)       k2 (h/Mpc)       k3 (h/Mpc)       B(k1,k2,k3) "
+                      "(Mpc/h)^6       Q(k1,k2,k3)       N(k1,k2,k3) \n";
+                for (int i = 0; i < bofk.n; i++)
+                    for (int j = 0; j < bofk.n; j++)
+                        for (int k = 0; k < bofk.n; k++) {
+                            fp << std::setw(3) << i << " " << std::setw(3) << j << " " << std::setw(3) << k << " ";
+                            fp << std::setw(15) << bofk.kmean[i] << " " << std::setw(15) << bofk.kmean[j] << " "
+                               << std::setw(15) << bofk.kmean[k] << " ";
+                            fp << std::setw(15) << bofk.get_spectrum(i, j, k) << " ";
+                            fp << std::setw(15) << bofk.get_reduced_spectrum(i, j, k) << " ";
+                            fp << std::setw(15) << bofk.get_bincount(i, j, k) << "\n";
+                        }
+            });
         }
 
         /// P_ell(k) for ell = 0, 1, ..., ellmax (element ell; the odd ones vanish) in physical units. The velocities

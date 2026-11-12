@@ -5,6 +5,14 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SnapshotAnalyzer: bispectrum
+- `bispectrum = true` and the `bispectrum_*` parameters (SimulationCode's names; defaults nmesh 128, nbins 16, CIC,
+  interlacing): `bispectrum_z<z>.txt` with SimulationCode's columns. Shared code: `FML/Analysis/PowerSpectrum.h`
+  (`BispectrumSettings`, `measure_bispectrum`, `write_bispectrum`). On a SimulationCode snapshot it equals
+  SimulationCode's bispectrum to the float32 precision of the Gadget positions (~2e-6).
+- Tests: `Analysis/tests` (equals `compute_bispectrum`, k in h/Mpc, the file, settings checks) and
+  `SnapshotAnalyzer/tests` (independent of the number of tasks and read mode, symmetric, B > 0 on large scales).
+
 ### FriendsOfFriends: relaxed FoF
 - `FriendsOfFriends/RelaxedFoF.h`: `FML::FOF::RelaxedFriendsOfFriends`, the relaxed FoF of Dai, Feng, Seljak & Singh
   2019 (arXiv:1908.05276) as in FastPM (`libfastpm/rfof.c`): FoF passes with a linking length per halo-size bin

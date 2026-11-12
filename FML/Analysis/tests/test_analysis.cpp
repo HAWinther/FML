@@ -459,5 +459,79 @@ int main() {
                     "relaxed FoF without the context is rejected");
     }
 
+    //=========================================================================
+    // Bispectrum (bispectrum = true): measure_bispectrum equals compute_bispectrum, k in h/Mpc, the file
+    //=========================================================================
+    {
+        auto parts = make_particles(8000, {{0.3, 0.3, 0.3}, {0.7, 0.6, 0.2}}, {0.02, 0.03}, {3000, 2000});
+        auto copy = parts;
+        const auto context = make_context(200.0, 1.0);
+        AN::BispectrumSettings settings;
+        settings.nmesh = 32;
+        settings.nbins = 6;
+        size_t ntot = parts.size();
+        FML::SumOverTasks(&ntot);
+        const auto bofk = AN::measure_bispectrum<3>(parts.data(), parts.size(), ntot, settings, context);
+        using Binning = FML::CORRELATIONFUNCTIONS::BispectrumBinning<3>;
+        Binning direct(0.0, 2.0 * M_PI * 16, 6, Binning::LINEAR_SPACING);
+        direct.subtract_shotnoise = false;
+        FML::CORRELATIONFUNCTIONS::compute_bispectrum(32, copy.data(), copy.size(), ntot, direct, "CIC", true);
+        direct.scale(200.0);
+        auto b = bofk;
+        double maxdiff = 0.0, maxb = 0.0;
+        for (int i = 0; i < 6; i++)
+            for (int j = 0; j < 6; j++)
+                for (int k = 0; k < 6; k++) {
+                    maxdiff = std::max(maxdiff, std::abs(b.get_spectrum(i, j, k) - direct.get_spectrum(i, j, k)));
+                    maxb = std::max(maxb, std::abs(b.get_spectrum(i, j, k)));
+                }
+        check(maxdiff <= 1e-12 * maxb and maxb > 0.0,
+              "bispectrum: measure_bispectrum equals compute_bispectrum (relative difference " + num(maxdiff / maxb) + ")");
+        // The bins: linear from 0 to the Nyquist frequency pi nmesh / Box (h/Mpc)
+        const double dk = M_PI * 32 / 200.0 / 6;
+        bool kok = true;
+        for (int i = 1; i < 6; i++)
+            kok = kok and b.kmean[i] > i * dk and b.kmean[i] < (i + 1) * dk;
+        check(kok, "bispectrum: the mean k of the bins in h/Mpc");
+        // Clustered particles (two blobs): B > 0 for the equilateral triangles of the largest scales
+        check(b.get_spectrum(1, 1, 1) > 0.0 and b.get_reduced_spectrum(1, 1, 1) > 0.0,
+              "bispectrum: positive equilateral B and Q for clustered particles");
+
+        const std::string file = "test_analysis_bispectrum.txt";
+        AN::write_bispectrum<3>(file, bofk, "# test\n");
+        if (FML::ThisTask == 0) {
+            std::ifstream in(file);
+            std::string line;
+            int rows = 0, comments = 0;
+            bool ncol_ok = true;
+            while (std::getline(in, line)) {
+                if (line.empty())
+                    continue;
+                if (line[0] == '#') {
+                    comments++;
+                    continue;
+                }
+                std::stringstream ss(line);
+                std::string word;
+                int ncols = 0;
+                while (ss >> word)
+                    ncols++;
+                ncol_ok = ncol_ok and ncols == 9;
+                rows++;
+            }
+            check_local(rows == 216 and ncol_ok and comments == 3,
+                        "bispectrum: the file has nbins^3 rows of SimulationCode's 9 columns");
+            std::remove(file.c_str());
+        }
+
+        AN::BispectrumSettings bad;
+        bad.nbins = 0;
+        AN::BispectrumSettings bad_method;
+        bad_method.density_assignment_method = "XYZ";
+        check_local(FML::TESTS::throws<std::runtime_error>([&] { bad.validate(); }) and
+                        FML::TESTS::throws<std::runtime_error>([&] { bad_method.validate(); }),
+                    "bispectrum: invalid settings are rejected");
+    }
+
     return FML::TESTS::summary("Analysis");
 }

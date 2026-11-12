@@ -8,7 +8,7 @@ Everything is in `FML::ANALYSIS` and header-only (C++17).
 | Header | What |
 |---|---|
 | `AnalysisContext.h` | `AnalysisContext`: box size, scale factor, expansion history (`Background`), particle unit conversions |
-| `PowerSpectrum.h` | P(k) and redshift-space multipoles P_ell(k) and their output files |
+| `PowerSpectrum.h` | P(k), redshift-space multipoles P_ell(k), the bispectrum B(k1,k2,k3) and their output files |
 | `Halos.h` | FoF (or relaxed FoF, `fof_relaxed`) halos, spherical overdensity (SO) masses, overlap flags, halo catalogue (text/HDF5), mass functions |
 | `Baryonification.h` | Position-only baryonification (FoF/M200c hosts + FML/Baryonification profiles) |
 | `Voids.h` | Void catalogues: voxel watershed, spherical underdensities, ZOBOV (CGAL) |
@@ -47,6 +47,8 @@ SimulationCode does not have: `pofk_nbins`, `pofk_log_binning` (and the multipol
 
 - `measure_power_spectrum` / `measure_power_spectrum_multipoles`: as SimulationCode's (default binning: nmesh/2
   linear bins). The multipoles take the velocity-to-displacement factor from the context.
+- `measure_bispectrum` / `write_bispectrum` (settings `bispectrum_*`): as SimulationCode's (`bispectrum = true`):
+  nbins linear bins in each k from 0 to the Nyquist frequency, and SimulationCode's file columns.
 - `find_halos`: FoF (Davis et al. 1985), then for each `fof_so_definitions` entry (`200m`, `500c`, `vir`, ...) a
   shrinking-sphere center and the outermost radius where the mean enclosed density is Delta times the reference
   (m: mean density of the particles, c: critical density, vir: Bryan & Norman 1998); halos whose SO center is inside

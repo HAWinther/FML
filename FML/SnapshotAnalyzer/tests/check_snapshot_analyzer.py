@@ -6,8 +6,8 @@ Usage: check_snapshot_analyzer.py path/to/snapshot_analyzer [--mpirun "mpirun --
 
 The snapshot (100 Mpc/h, Omega_m = 0.3, two Gadget files) is a uniform background with three dense blobs (halos) and
 a spherical hole of radius 15 Mpc/h (a void). Checks:
-  - every analysis writes its files, and the results do not depend on the number of MPI tasks or on the read mode
-    (files_per_task / all_tasks);
+  - every analysis writes its files (the bispectrum: nbins^3 rows, symmetric, B > 0 on large scales), and the
+    results do not depend on the number of MPI tasks or on the read mode (files_per_task / all_tasks);
   - the three largest FoF halos are the blobs, with the right number of particles; the mass functions hold all halos;
   - relaxed FoF (fastpm and paper mode): the blobs, the rfof columns, independent of the number of tasks, and (with
     scipy) the same halos as the independent implementation in FriendsOfFriends/tests/make_rfof_reference.py;
@@ -184,6 +184,7 @@ def main():
         'snapshot_input': 'snap',
         'pofk_nmesh': 64, 'pofk_interlacing': True, 'pofk_density_assignment_method': 'PCS',
         'pofk_multipole': True, 'pofk_multipole_nmesh': 64,
+        'bispectrum': True, 'bispectrum_nmesh': 32, 'bispectrum_nbins': 8,
         'fof': True, 'fof_so_definitions': ['200m', '200c', 'vir'], 'fof_buffer_length_mpch': 5.0,
         'baryonification': True, 'baryonification_output_particles': True, 'baryonification_baryon_fraction': 0.16,
         'baryonification_fof_buffer_mpch': 5.0, 'baryonification_max_radius_over_r200': SUPPORT,
@@ -191,7 +192,7 @@ def main():
     }
     if have_cgal:
         base.update({'zobov_voids': True, 'dtfe': True, 'dtfe_nmesh': 32, 'dtfe_buffer_fraction': 1.0})
-    files = ['pofk_z0.000.txt', 'pofk_multipole_z0.000.txt', 'halos_z0.000.txt', 'massfunc_z0.000.txt',
+    files = ['pofk_z0.000.txt', 'pofk_multipole_z0.000.txt', 'bispectrum_z0.000.txt', 'halos_z0.000.txt', 'massfunc_z0.000.txt',
              'massfunc_so200m_z0.000.txt', 'massfunc_so200c_z0.000.txt', 'massfunc_sovir_z0.000.txt',
              'baryonification_z0.000.txt', 'pofk_baryonified_z0.000.txt', 'voids_z0.000.txt',
              'voids_spherical_z0.000.txt'] + (['voids_zobov_z0.000.txt', 'dtfe_spectra_z0.000.txt'] if have_cgal else [])
@@ -222,8 +223,8 @@ def main():
     for name, d in results.items():
         if name == ref_name:
             continue
-        for f in ['pofk_z0.000.txt', 'pofk_multipole_z0.000.txt', 'pofk_baryonified_z0.000.txt',
-                  'baryonification_z0.000.txt']:
+        for f in ['pofk_z0.000.txt', 'pofk_multipole_z0.000.txt', 'bispectrum_z0.000.txt',
+                  'pofk_baryonified_z0.000.txt', 'baryonification_z0.000.txt']:
             check(same(sorted_rows(ref / f), sorted_rows(d / f), 1e-6), f'{name}: {f} as {ref_name}')
         # Voids: the same voids; the barycenters (sums in a different order) to 0.01 Mpc/h, not the density ratio
         # (min/max density, ill conditioned when the minimum is ~0)
@@ -236,6 +237,17 @@ def main():
         halos_a, halos_b = sorted_rows(ref / 'halos_z0.000.txt'), sorted_rows(d / 'halos_z0.000.txt')
         big_a, big_b = halos_a[halos_a[:, 0] > 1000], halos_b[halos_b[:, 0] > 1000]
         check(same(big_a, big_b, 1e-6), f'{name}: the large halos as {ref_name}')
+
+    # Bispectrum: nbins^3 rows; the bins and triangle counts symmetric in (k1, k2, k3); B > 0 on large scales
+    b = table(ref / 'bispectrum_z0.000.txt')
+    nb = base['bispectrum_nbins']
+    B = b[:, 6].reshape(nb, nb, nb)
+    N = b[:, 8].reshape(nb, nb, nb)
+    check(b.shape == (nb**3, 9) and np.all(np.isfinite(b)), f'bispectrum: {nb}^3 rows of 9 finite columns')
+    check(same(N, N.transpose(1, 0, 2), 1e-12) and same(N, N.transpose(2, 1, 0), 1e-12) and
+          np.allclose(B, B.transpose(1, 0, 2), rtol=1e-6, atol=1e-6 * np.abs(B).max()),
+          'bispectrum: B and N symmetric under permutations of (k1, k2, k3)')
+    check(B[1, 1, 1] > 0, f'bispectrum: positive equilateral B on large scales (clustered snapshot) ({B[1, 1, 1]:.4g})')
 
     # Halos: the three largest are the blobs
     halos = table(ref / 'halos_z0.000.txt')

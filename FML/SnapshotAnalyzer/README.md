@@ -18,9 +18,9 @@ need `make USE_HDF5=true`.
 
 ## Capabilities
 
-All the analyses are the shared analysis code in [FML/Analysis](../Analysis/README.md). P(k), multipoles,
-FoF/SO halos and baryonification have the same parameter names, defaults, algorithms and output files as
-SimulationCode, so the two give the same result for the same particles.
+All the analyses are the shared analysis code in [FML/Analysis](../Analysis/README.md). P(k), multipoles, the
+bispectrum, FoF/SO halos (and relaxed FoF) and baryonification have the same parameter names, defaults, algorithms
+and output files as SimulationCode, so the two give the same result for the same particles.
 
 - Particle positions, velocities, IDs, types and masses from Gadget binary (`prefix.0, prefix.1, ...` or a single
   file `prefix`) or Gadget HDF5 snapshots (`prefix.hdf5` or `prefix.0.hdf5, ...`; per-particle `Masses` are read
@@ -35,6 +35,11 @@ SimulationCode, so the two give the same result for the same particles.
 - Mass-weighted P(k) (`pofk_z<z>.txt`) with interlacing, density assignment and shot-noise subtraction.
 - Redshift-space multipoles (`pofk_multipole_z<z>.txt`): the velocity-to-displacement factor
   `1 / (100 a E(a) B)` comes from the cosmology.
+- Bispectrum B(k1, k2, k3) (`bispectrum_z<z>.txt`, SimulationCode's parameters and columns: the bin indices, the
+  mean k of the bins, B, the reduced bispectrum Q and the number of triangles, for all `bispectrum_nbins`^3 bins;
+  linear bins from 0 to the Nyquist frequency). Memory and time grow as `bispectrum_nbins` grids of
+  `bispectrum_nmesh`^3 and `bispectrum_nbins`^3 integrals. On a SimulationCode snapshot it equals SimulationCode's
+  own bispectrum to the float32 precision of the Gadget positions (~2e-6).
 - Distributed periodic Friends-of-Friends halos with optional spherical overdensity masses
   (`fof_so_definitions = {"200m", "500c", "vir"}`), overlap flags, the halo catalogue (`halos_z<z>.txt`, or `.hdf5`
   with `fof_output_fileformat = "HDF5"` and `USE_HDF5=true`) and mass functions (`massfunc_z<z>.txt`,
@@ -95,6 +100,13 @@ pofk_multipole_ellmax = 4 -- even; P_0, P_2, ..., P_ellmax
 pofk_multipole_density_assignment_method = "CIC"
 pofk_multipole_nbins = 0
 pofk_multipole_log_binning = false
+
+bispectrum = false
+bispectrum_nmesh = 128
+bispectrum_nbins = 16 -- linear bins from 0 to the Nyquist frequency
+bispectrum_density_assignment_method = "CIC"
+bispectrum_interlacing = true
+bispectrum_subtract_shotnoise = false
 
 fof = false
 fof_nmin_per_halo = 20

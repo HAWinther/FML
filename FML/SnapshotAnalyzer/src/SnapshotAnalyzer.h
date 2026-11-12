@@ -168,6 +168,8 @@ namespace FML {
             FML::ANALYSIS::PowerSpectrumSettings pofk_settings;
             bool pofk_multipole{false};
             FML::ANALYSIS::PowerSpectrumMultipoleSettings pofk_multipole_settings;
+            bool bispectrum{false};
+            FML::ANALYSIS::BispectrumSettings bispectrum_settings;
             bool fof{false};
             FML::ANALYSIS::HaloSettings fof_settings;
             bool baryonification{false};
@@ -199,6 +201,8 @@ namespace FML {
                 r.read(pofk_settings);
                 get("pofk_multipole", pofk_multipole);
                 r.read(pofk_multipole_settings);
+                get("bispectrum", bispectrum);
+                r.read(bispectrum_settings);
                 get("fof", fof);
                 r.read(fof_settings);
                 get("baryonification", baryonification);
@@ -238,14 +242,16 @@ namespace FML {
                     throw std::runtime_error("particle_allocation_factor must be >= 1");
                 if (not(cosmology_Omega_r >= 0.0))
                     throw std::runtime_error("cosmology_Omega_r must be >= 0");
-                if (not pofk and not pofk_multipole and not fof and not voids and not spherical_voids and
-                    not zobov_voids and not dtfe and not baryonification)
-                    throw std::runtime_error("Enable at least one analysis: pofk, pofk_multipole, fof, baryonification, "
-                                             "voids, spherical_voids, zobov_voids or dtfe");
+                if (not pofk and not pofk_multipole and not bispectrum and not fof and not voids and
+                    not spherical_voids and not zobov_voids and not dtfe and not baryonification)
+                    throw std::runtime_error("Enable at least one analysis: pofk, pofk_multipole, bispectrum, fof, "
+                                             "baryonification, voids, spherical_voids, zobov_voids or dtfe");
                 if (pofk or baryonification)
                     pofk_settings.validate();
                 if (pofk_multipole)
                     pofk_multipole_settings.validate();
+                if (bispectrum)
+                    bispectrum_settings.validate();
                 if (fof)
                     fof_settings.validate();
                 if (baryonification) {
@@ -283,6 +289,8 @@ namespace FML {
                     measure_pofk();
                 if (options.pofk_multipole)
                     measure_multipoles();
+                if (options.bispectrum)
+                    measure_bispectrum();
                 if (options.fof)
                     find_halos();
                 if (options.voids)
@@ -475,6 +483,18 @@ namespace FML {
                                                   {{"modes", [&](int i) { return pofk.count[i]; }}});
                 if (FML::ThisTask == 0)
                     std::cout << "P(k) written: " << filename << "\n";
+            }
+
+            void measure_bispectrum() {
+                const auto bofk = ANALYSIS::measure_bispectrum<3>(mpiparticles.get_particles_ptr(),
+                                                                  mpiparticles.get_npart(),
+                                                                  mpiparticles.get_npart_total(),
+                                                                  options.bispectrum_settings,
+                                                                  context);
+                const auto filename = output_path("bispectrum_z" + redshift_label() + ".txt");
+                ANALYSIS::write_bispectrum<3>(filename, bofk, "# Bispectrum of " + options.snapshot_input + "\n");
+                if (FML::ThisTask == 0)
+                    std::cout << "Bispectrum written: " << filename << "\n";
             }
 
             void measure_multipoles() {
