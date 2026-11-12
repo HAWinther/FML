@@ -701,6 +701,41 @@ void test_validation() {
     p.ells = {0, 2, 4};
     p.edges = {0, 1, 1};
     check(rejects([&] { estimate_power(data, randoms, g, p); }), "invalid bin edges are rejected");
+    p.edges = {0, 1, 2};
+    p.i2 = std::numeric_limits<double>::quiet_NaN();
+    check(rejects([&] { estimate_power(data, randoms, g, p); }), "nonfinite power normalization option is rejected");
+    p.i2 = 0;
+    if (FML::NTasks > 1) {
+        for (int scenario = 0; scenario < 10; ++scenario) {
+            auto options = p;
+            auto geometry = g;
+            const std::vector<CatalogPoint> * shifted = nullptr;
+            if (FML::ThisTask == FML::NTasks - 1) {
+                if (scenario == 0)
+                    options.ells = {0};
+                if (scenario == 1)
+                    options.ells = {4, 2, 0};
+                if (scenario == 2)
+                    options.edges = {0, .7, 1.3, 2};
+                if (scenario == 3)
+                    options.edges = {0, .7, 2};
+                if (scenario == 4)
+                    geometry.nmesh = 32;
+                if (scenario == 5)
+                    geometry.observer[0] += 1;
+                if (scenario == 6)
+                    geometry.local_los = false;
+                if (scenario == 7)
+                    options.i2 = 1;
+                if (scenario == 8)
+                    options.compensate_cic = false;
+                if (scenario == 9)
+                    shifted = &randoms;
+            }
+            check(rejects([&] { estimate_power(data, randoms, geometry, options, shifted); }),
+                  "rank-dependent survey power schema rejected before FFT/reduction, case " + std::to_string(scenario));
+        }
+    }
     WindowMultipoles w;
     w.ells = {0};
     w.q = {{1, 1}};

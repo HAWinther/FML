@@ -1,6 +1,6 @@
 # FML remaining-work backlog
 
-Updated 12 November 2026 (item 34), including completed Engineering items 1–7, 10, 14, 17 and 19–21, and tested initial implementations of items 25–32, 34–38, 49 and 54. This consolidates the original review and subsequent work in this chat. The user intends to work through the full backlog over time. These initial implementations and their remaining production-validation work are recorded below; KD-tree work remains deferred. Effort estimates are relative; performance gains need measurements. Remaining new science entries are proposals from the original review and need a focused capability check before implementation.
+Updated 12 November 2026 (items 25 and 34), including completed Engineering items 1–7, 10, 14, 17 and 19–21, and tested initial implementations of items 25–32, 34–38, 49 and 54. This consolidates the original review and subsequent work in this chat. The user intends to work through the full backlog over time. These initial implementations and their remaining production-validation work are recorded below; KD-tree work remains deferred. Effort estimates are relative; performance gains need measurements. Remaining new science entries are proposals from the original review and need a focused capability check before implementation.
 
 ## Completed in this sequence
 
@@ -40,7 +40,7 @@ These completions do not cover all the follow-ups below. Other ongoing Simulatio
 
 ## Survey workflow status
 
-Items 25–27 have initial implementations in `Survey/SurveyPower.h`, `Survey/SurveyWindow.h` and `Survey/SurveyReconstruction.h`. The standalone example and tests are in `Survey/workflow_example/` and `Survey/tests/`. Read `Survey/README.md` for conventions and limits. Independent DFT, explicit random-pair, analytic Gaussian convolution and manufactured displacement tests pass in serial, float/OpenMP, sanitizer and MPI builds. Production mock recovery, external pypower/pyrecon numerical comparisons, and application-specific mesh/padding/binning convergence remain follow-up validation work.
+Items 25–27 have initial implementations in `Survey/SurveyPower.h`, `Survey/SurveyWindow.h` and `Survey/SurveyReconstruction.h`. The standalone example and tests are in `Survey/workflow_example/` and `Survey/tests/`. Read `Survey/README.md` for conventions and limits. Independent DFT, explicit random-pair, analytic Gaussian convolution and manufactured displacement tests pass in serial, float/OpenMP, sanitizer and MPI builds. Item 25 now also has an external pypower raw-multipole comparison with matched normalization/CIC conventions, an independent unpainted-catalogue DFT mesh-convergence experiment and pre-FFT MPI option agreement checks; see `Survey/power_validation/README.md` and `RESULTS.md`. Production mock recovery, external pyrecon/window comparisons and application-specific mask/padding/binning/noise convergence remain follow-up validation work.
 
 ## HOD and spatial-statistics status
 
@@ -88,7 +88,7 @@ Items 22–23 were explicitly deferred. Item 24 is grouped here as related KD-tr
 
 | # | Capability | First useful scope |
 |---|---|---|
-| 25 | Survey Fourier multipoles | FKP data/random fields, observer position, local-LOS Yamamoto estimator, normalization and weighted shot noise. |
+| 25 | Survey Fourier multipoles (implemented; external raw-estimator validation added) | FKP data/random fields, fixed/local-LOS 0/2/4 multipoles, normalization and declared weighted/CIC noise. pypower raw-multipole agreement, independent catalogue-DFT mesh refinement and MPI schema checks pass; target-survey production/noise/padding calibration remains. |
 | 26 | Survey-window modeling | Window multipoles/mixing matrices and integral-constraint treatment; keep survey windows distinct from assignment-window deconvolution. |
 | 27 | Complete survey BAO reconstruction | Data/random displacement APIs, RecIso/RecSym, local LOS, masks/selection and reconstructed statistics. |
 | 28 | HOD galaxy mocks | Central Bernoulli and satellite Poisson occupations, NFW/particle satellites, halo-ID-keyed randomness; then velocity, concentration and assembly-bias extensions. |

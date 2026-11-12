@@ -35,6 +35,8 @@ std::vector<CatalogPoint> data, randoms; // locally stored objects, arbitrary ra
 // Example effective weight: systematic_weight * fkp_weight(nbar, P0).
 ```
 
+`estimate_power` checks that geometry, bin edges, multipole ordering, normalization/compensation options and shifted-random presence agree across ranks before FFTs or bin reductions. Nonfinite options fail collectively.
+
 All lengths (positions, box size, smoothing radius, separation bins) use the same
 physical units; k uses their inverse and P uses length cubed. An observer is a
 physical point independent of the mesh minimum. Geometry is cubic; RA/Dec and
@@ -320,8 +322,11 @@ solves against manufactured right-hand sides built with the same discrete operat
 independent spectral solution agreed to slope 0.995 and correlation 0.99995 in the Oct 2026 review). They also
 check IC nulling, MPI ownership/order, masks, normalization, RecIso/RecSym,
 shifted-random spectra and collective invalid-input behavior. These establish
-numerical/convention checks; no production-survey mock recovery or external
-pypower/pyrecon numerical comparison has yet been performed.
+numerical/convention checks. The optional [power validation experiment](power_validation/README.md)
+now additionally compares raw fixed/local-LOS multipoles to pypower with matched I2/CIC
+conventions, checks independent catalogue-DFT mesh convergence and MPI configuration
+failures; see [its results](power_validation/RESULTS.md). Production-survey mock recovery
+and external pyrecon/window comparisons remain follow-ups.
 
 References for the conventions:
 [Bianchi et al. (2015)](https://arxiv.org/abs/1505.05341),

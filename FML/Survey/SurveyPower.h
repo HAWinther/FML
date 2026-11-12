@@ -33,6 +33,39 @@ namespace FML::SURVEY {
                 throw std::invalid_argument(
                     "Survey multipoles must be distinct even orders within the supported range");
         }
+        // Fail collectively before rank-dependent FFT schedules or differently sized bin reductions.
+        inline void agree_power_options(const Geometry & g, const PowerOptions & o, bool shifted) {
+            std::vector<double> values{double(g.nmesh),
+                                       g.boxsize,
+                                       double(g.local_los),
+                                       o.i2,
+                                       double(o.compensate_cic),
+                                       double(o.subtract_shotnoise),
+                                       double(o.aliased_shotnoise),
+                                       double(shifted),
+                                       double(o.edges.size()),
+                                       double(o.ells.size())};
+            values.insert(values.end(), g.minimum.begin(), g.minimum.end());
+            values.insert(values.end(), g.observer.begin(), g.observer.end());
+            values.insert(values.end(), g.fixed_los.begin(), g.fixed_los.end());
+            values.insert(values.end(), o.edges.begin(), o.edges.end());
+            for (int ell : o.ells)
+                values.push_back(ell);
+            size_t lo = values.size(), hi = lo;
+            FML::MinOverTasks(&lo);
+            FML::MaxOverTasks(&hi);
+            require(lo == hi, "Survey power options have different lengths across MPI ranks");
+            bool finite = true;
+            for (double v : values)
+                finite = finite && std::isfinite(v);
+            require(finite, "Survey power options must be finite");
+#ifdef USE_MPI
+            auto lower = values, upper = values;
+            FML::MinArrayOverTasks(lower.data(), lower.size());
+            FML::MaxArrayOverTasks(upper.data(), upper.size());
+            require(lower == upper, "Survey power geometry/options differ across MPI ranks");
+#endif
+        }
         // A_l(k) = FFT[F(x) L_l(khat.los(x))], with F in weighted counts per cell.
         inline std::vector<Mesh>
         angular_transforms(const Mesh & field, const Geometry & g, const std::vector<int> & ells) {
@@ -85,6 +118,7 @@ namespace FML::SURVEY {
                                         const Geometry & g,
                                         const PowerOptions & options,
                                         const std::vector<CatalogPoint> * shifted_randoms = nullptr) {
+        detail::agree_power_options(g, options, shifted_randoms != nullptr);
         g.validate();
         detail::validate_edges(options.edges);
         detail::validate_ells(options.ells, 4);
