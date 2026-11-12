@@ -35,6 +35,7 @@
 #include "SimulationParameters.h"
 #include "ShortRangeForce.h"
 #include "Species.h"
+#include "SpeciesTimeStepping.h"
 #include "TimeStepping.h"
 
 #include <algorithm>
@@ -357,6 +358,15 @@ class NBodySimulation {
 
     // The parts of run() (a step: where the positions and velocities are, and the kick/drift sizes)
     using Step = FML::NBODY::TimeStepping::Step;
+    /// The steps of the CDM and baryon particles when they have their own friction (species_have_own_time_stepping):
+    /// the same scale factors as the step of the CDM+baryon fluid, their own drift, kick and velocity_scale. Set for
+    /// every step by run(); empty otherwise
+    std::map<SIMCODE::ParticleSpecies, Step> species_steps;
+    /// The step of a species: its own (species_steps) or the step s of all the particles
+    const Step & step_of(const Step & s, const SIMCODE::SpeciesInfo & info) const {
+        const auto it = species_steps.find(info.species);
+        return it == species_steps.end() ? s : it->second;
+    }
     void kick_short_range_force(const Step & s);
     void step(const Step & s);
     void drift_and_lightcone(const Step & s);

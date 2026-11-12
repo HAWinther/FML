@@ -58,6 +58,35 @@ The mass encoding at linear amplitude is 1.5-3% (in amplitude) above the linear-
 
 Output: P(k) of CDM (`pofk_cdm_zX.txt`), baryons (`pofk_baryon_zX.txt`) and CDM+baryons (`pofk_zX.txt`, as before) with linear theory P_cb (T_i/T_cb)^2. The same files are written for every step. GADGET (binary and HDF5) files have the CDM as type 1 and the baryons as type 2 (a collisionless type: type 0 is SPH gas in GADGET, which many readers expect to have gas fields). Baryon IDs follow the CDM IDs.
 
+Dark scattering (`cosmology_model = DarkScattering`, see [MODELS.md](MODELS.md)): the CDM particles feel the full
+drag Gamma and the baryon particles none (with one set of CDM+baryon particles: f_c Gamma). Both species take the
+steps of the CDM+baryon fluid (the same scale factors) with their own kick, drift and velocity factors
+(`src/SpeciesTimeStepping.h`): Quinn and Tassev from the friction of the species, FastPM from the linear growth of
+CDM and baryons as two fluids sourced by the same delta_cb (D_c, D_b; the kick with the force of D_cb), so each
+species follows its linear growing mode exactly. BullFrog is not supported (its coefficients are those of one
+fluid). With COLA the frame is the CDM+baryon one (friction f_c Gamma); a species with another friction gets
+(velocity factor of the species - that of the frame) v_LPT in every kick, the part of the change of its LPT velocity
+that the frame's kick does not have (without it the CDM-baryon split below was -5.6% / -4.5% instead of
+-6.2% / -1.3%). The growth from z = 49 to 0 relative to wCDM (w = -0.9, xi = 50 barn/GeV, 1e-4 times the power,
+32^3 of each species in 1000 Mpc/h, 2x force grid, k < 0.05 h/Mpc), each run against wCDM with the same time
+stepping:
+
+| | CDM | baryons | CDM+baryons |
+|---|---|---|---|
+| Two-fluid linear growth | -6.16% | -1.31% | -5.42% |
+| Einstein-Boltzmann solver | -6.17% | -1.52% | -5.45% |
+| Quinn, 200 logarithmic steps | -6.12% | -1.30% | -5.38% |
+| FastPM, 10 steps | -6.12% | -1.30% | -5.38% |
+| COLA + Quinn, 10 steps | -6.14% | -1.25% | -5.39% |
+| COLA + FastPM, 10 steps | -6.12% | -1.34% | -5.38% |
+| one species (f_c Gamma), Quinn, 200 steps | | | -5.42% |
+
+With the same lattice keep the force grid at most twice the particle grid: a finer grid resolves the attraction
+between the CDM and baryon particles that start at the same point, which damps the CDM-baryon difference the drag
+builds up (CDM / baryons with Quinn: -6.01% / -1.22% with a 1x grid, -6.12% / -1.30% 2x, -5.90% / -2.62% 4x,
+-5.55% / -4.63% 8x). The baryons of the Einstein-Boltzmann solver are 0.2% below the two-fluid growth (the
+simulations follow the two-fluid growth).
+
 Not implemented for two species yet (the code stops with a message): COLA with the Tassev operators, reading the IC from file, NUFFT / sheet densities, force interlacing and the early-time force, the N-body gauge, the lightcone, multipoles and the bispectrum (the full list is the table at the end of [PARAMETERS.md](PARAMETERS.md)). Use `ic_input_redshift = ic_initial_redshift` (the two species are made from the transfer functions at zini).
 
 ## Neutrino masses

@@ -3,7 +3,7 @@
 # Regenerate the transfer tables of the tests (input/transfer_tables/*.txt) with the internal
 # Einstein-Boltzmann solver: ./nbody --write-transfers for the cosmology of the regression cases
 # (tests/regression/cases.py BASE) with 0, 0.1, 0.2 and 0.4 eV of massive neutrinos (three degenerate
-# species) and in the N-body gauge (0 eV), for ic_initial_redshift = 20 as in the tests (the tables cover
+# species), in the N-body gauge (0 eV) and with dark scattering, for ic_initial_redshift = 20 as in the tests (the tables cover
 # z <= 41, as those of ic_type_of_input = internal for these runs).
 # The tests read them with ic_type_of_input = tables, which checks that the cosmology is the same.
 #
@@ -30,6 +30,9 @@ TABLES = {
     "lcdm_nu0.2": dict(cosmology_OmegaMNu=0.0048, cosmology_OmegaCDM=0.2637),
     "lcdm_nu0.4": dict(cosmology_OmegaMNu=0.0095, cosmology_OmegaCDM=0.259),
     "lcdm_nbody_gauge": dict(force_nbody_gauge=True),
+    # Dark matter - dark energy scattering (the regression cases with CDM and baryon particles)
+    "dark_scattering": dict(cosmology_model="DarkScattering", cosmology_ds_w=-0.9, cosmology_ds_xi=50.0,
+                            cosmology_ds_cs2=1.0),
 }
 
 
@@ -47,6 +50,10 @@ def main():
         p.update(TABLES[name])
         p.update(ic_type_of_input="internal", ic_input_filename="", ic_internal_solver_parameters=[],
                  ic_initial_redshift=20.0, ic_input_redshift=20.0)
+        # The IC-only axion parameters (read with ic_type_of_input = internal; all parameters must be in the file)
+        p.setdefault("ic_axion_fraction", 0.0)
+        p.setdefault("ic_axion_log10_m", -22.0)
+        p.setdefault("ic_axion_switch_mH", 0.0)
         with tempfile.TemporaryDirectory() as d:
             with open(os.path.join(d, "parameterfile.lua"), "w") as f:
                 for k, v in p.items():

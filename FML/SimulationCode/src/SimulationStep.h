@@ -48,6 +48,10 @@ void NBodySimulation<NDIM, T>::run() {
     }
 
     const auto stepper = time_stepping();
+    // CDM and baryons with their own friction: their own coefficients at the scale factors of the steps
+    std::map<SIMCODE::ParticleSpecies, FML::NBODY::TimeStepping> species_steppers;
+    if (SIMCODE::species_have_own_time_stepping(params, *cosmo))
+        species_steppers = SIMCODE::make_species_time_stepping<NDIM>(params, cosmo, grav);
 
     // If we only give the total number of steps then compute how many steps between outputs
     std::vector<int> nsteps = params.timestep.nsteps;
@@ -76,6 +80,9 @@ void NBodySimulation<NDIM, T>::run() {
         const double amin = (ioutput == 0) ? 1.0 / (1.0 + zini) : 1.0 / (1.0 + output_redshifts[ioutput - 1]);
         const double amax = 1.0 / (1.0 + output_redshifts[ioutput]);
         const auto steps = stepper.steps(amin, amax, nsteps[ioutput]);
+        std::map<SIMCODE::ParticleSpecies, std::vector<Step>> steps_of_species;
+        for (auto & [species, species_stepper] : species_steppers)
+            steps_of_species[species] = species_stepper.restep(steps);
 
         if (nsteps[ioutput] > 0) {
             for (int istep = 0; istep <= nsteps[ioutput]; istep++) {
@@ -103,6 +110,9 @@ void NBodySimulation<NDIM, T>::run() {
                     timer.EndTiming("SortParticles");
                 }
 
+                species_steps.clear();
+                for (auto & [species, species_step_list] : steps_of_species)
+                    species_steps[species] = species_step_list[istep];
                 step(steps[istep]);
 
                 // Most plans are made by now (initial conditions and the first step): save them already so that
@@ -258,15 +268,25 @@ void NBodySimulation<NDIM, T>::step(const Step & s) {
                                                 force.nufft_epsilon);
         } else {
             for_each_species([&](auto & particles, const SIMCODE::SpeciesInfo & info) {
+                const Step & si = step_of(s, info);
                 SIMCODE::kick_particles<NDIM>(particles,
                                               info,
                                               force_real,
                                               s.apos,
-                                              s.delta_time_kick,
-                                              s.velocity_scale,
+                                              si.delta_time_kick,
+                                              si.velocity_scale,
                                               force.density_assignment_method,
                                               sim.boxsize);
             });
+            // COLA with a species whose friction differs from that of the frame (CDM+baryons): its COLA velocity
+            // v - v_LPT gets (velocity_scale_species - velocity_scale_frame) v_LPT(avel), the part of the change of
+            // the LPT velocity the frame's kick (below) does not have
+            if (cola.enabled)
+                for_each_cb_species([&](MPIParticles & particles, const SIMCODE::SpeciesInfo & info) {
+                    const double extra = step_of(s, info).velocity_scale - s.velocity_scale;
+                    if (extra != 0.0)
+                        cola.add_on_LPT_velocity(particles, s.avel, extra);
+                });
         }
         kick_short_range_force(s);
         // The delta-f weights depend on the momenta
@@ -353,7 +373,8 @@ void NBodySimulation<NDIM, T>::drift_and_lightcone(const Step & s) {
     if (s.delta_time_drift != 0.0 and not sim.enforce_LPT_trajectories) {
         timer.StartTiming("Drift");
         for_each_species([&](auto & particles, const SIMCODE::SpeciesInfo & info) {
-            SIMCODE::drift_particles<NDIM>(particles, info, s.apos, s.apos_new, s.delta_time_drift, sim.boxsize);
+            SIMCODE::drift_particles<NDIM>(
+                particles, info, s.apos, s.apos_new, step_of(s, info).delta_time_drift, sim.boxsize);
         });
         timer.EndTiming("Drift");
     }

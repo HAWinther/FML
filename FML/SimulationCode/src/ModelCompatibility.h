@@ -36,10 +36,14 @@ namespace SIMCODE {
             params.baryonification.profile_model(cosmo.get_Omegab() / cosmo.get_OmegaM()).validate();
         }
 
-        // Velocity friction (Cosmology::velocity_friction) acts on the CDM+baryon fluid: one step (velocity_scale) for
-        // all the species, so only with CDM+baryons as one species and no neutrino particles for now
-        if (cosmo.has_velocity_friction() and (params.particle.neutrinos or params.particle.baryons))
-            fail("a cosmology with velocity friction needs particle_baryons = false and particle_neutrinos = false (one CDM+baryon species)");
+        // Velocity friction (Cosmology::velocity_friction): on the CDM+baryon fluid, or with particle_baryons on the
+        // CDM particles alone (their own steps, SpeciesTimeStepping.h; not with BullFrog). Not with neutrino particles
+        if (cosmo.has_velocity_friction() and params.particle.neutrinos)
+            fail("a cosmology with velocity friction needs particle_neutrinos = false");
+        if (cosmo.has_velocity_friction() and params.particle.baryons and
+            params.timestep.method == FML::NBODY::TimestepMethod::BullFrog)
+            fail("a cosmology with velocity friction and particle_baryons = true needs timestep_method = Quinn, Tassev "
+                 "or FastPM (BullFrog follows the growth of one fluid)");
 
         // The particle species (CDM+baryons as one, or CDM and baryons, and massive neutrinos)
         if (params.particle.neutrinos and not(cosmo.get_OmegaMNu() > 0.0 and cosmo.get_Mnu_eV() > 0.0))

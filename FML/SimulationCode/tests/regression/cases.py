@@ -406,6 +406,32 @@ CASES = {
         simulation_use_cola=False,
         timestep_method="FastPM",
     ),
+    # Dark scattering with CDM and baryons as separate particles: the CDM has the friction, the baryons none (their
+    # own kick, drift and velocity scale; with COLA the correction of the frame's LPT velocity)
+    "dark_scattering_baryons_cola": dict(
+        cosmology_model="DarkScattering",
+        cosmology_ds_w=-0.9,
+        cosmology_ds_xi=50.0,
+        cosmology_ds_cs2=1.0,
+        particle_baryons=True,
+        particle_baryon_lattice="same",
+        ic_type_of_input="tables",
+        ic_input_filename=INPUT + "/transfer_tables/dark_scattering.txt",
+        ic_input_redshift=20.0,
+    ),
+    "dark_scattering_baryons_fastpm": dict(
+        cosmology_model="DarkScattering",
+        cosmology_ds_w=-0.9,
+        cosmology_ds_xi=50.0,
+        cosmology_ds_cs2=1.0,
+        particle_baryons=True,
+        particle_baryon_lattice="same",
+        simulation_use_cola=False,
+        timestep_method="FastPM",
+        ic_type_of_input="tables",
+        ic_input_filename=INPUT + "/transfer_tables/dark_scattering.txt",
+        ic_input_redshift=20.0,
+    ),
     # CDM and baryons as separate particles (same lattice), BullFrog, IC from the transfer functions at zini
     "two_species_bullfrog": dict(
         particle_baryons=True,

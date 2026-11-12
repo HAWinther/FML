@@ -367,7 +367,9 @@ class Cosmology {
                 std::cout << "# Background              : " << bg->description() << "\n";
             if (bg and has_velocity_friction())
                 std::cout << "# Velocity friction       : Gamma = " << velocity_friction(1.0) << " (a = 1), "
-                          << velocity_friction(0.5) << " (a = 0.5) per ln a, of the CDM+baryon particles\n";
+                          << velocity_friction(0.5) << " (a = 0.5) per ln a, of the CDM+baryon particles ("
+                          << velocity_friction_cdm(1.0) << ", " << velocity_friction_cdm(0.5)
+                          << " of the CDM alone with particle_baryons)\n";
             std::cout << "#=====================================================\n";
             std::cout << "\n";
         }
@@ -474,11 +476,20 @@ class Cosmology {
         if (not has_velocity_friction())
             return 0.0;
         const double f_c = get_OmegaCDM() / (get_OmegaCDM() + get_Omegab());
-        return f_c * FML::COSMOLOGY::BACKGROUND::dark_scattering_cdm_drag(*bg, ds_xi_SI, std::log(a));
+        return f_c * velocity_friction_cdm(a);
+    }
+    /// The friction of the CDM alone (CDM and baryons as separate particles, particle_baryons; the baryons have none):
+    /// DarkScattering: the full drag of the dark matter. 0 without friction
+    double velocity_friction_cdm(double a) const {
+        if (not has_velocity_friction())
+            return 0.0;
+        return FML::COSMOLOGY::BACKGROUND::dark_scattering_cdm_drag(*bg, ds_xi_SI, std::log(a));
     }
     /// The friction integral I(a) = int_amin^a Gamma dlna (a spline in log a on [amin, amax], constant outside), for
-    /// the time stepping. An empty function without friction
-    std::function<double(double)> velocity_friction_integral(double amin = 1e-6, double amax = 100.0) const {
+    /// the time stepping. An empty function without friction. cdm_only: of velocity_friction_cdm (the CDM particles
+    /// with particle_baryons), else of velocity_friction (the CDM+baryon fluid)
+    std::function<double(double)>
+    velocity_friction_integral(double amin = 1e-6, double amax = 100.0, bool cdm_only = false) const {
         if (not has_velocity_friction())
             return {};
         const int n = 4000;
@@ -486,7 +497,7 @@ class Cosmology {
         for (int i = 0; i < n; i++)
             x[i] = std::log(amin) + std::log(amax / amin) * i / double(n - 1);
         FML::SOLVERS::ODESOLVER::ODEFunction deriv = [&](double xx, [[maybe_unused]] const double * y, double * dydx) {
-            dydx[0] = velocity_friction(std::exp(xx));
+            dydx[0] = cdm_only ? velocity_friction_cdm(std::exp(xx)) : velocity_friction(std::exp(xx));
             return GSL_SUCCESS;
         };
         FML::SOLVERS::ODESOLVER::ODESolver ode;

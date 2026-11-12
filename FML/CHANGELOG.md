@@ -5,6 +5,22 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: dark scattering with CDM and baryon particles
+- `cosmology_model = DarkScattering` with `particle_baryons = true`: the CDM particles feel the full drag
+  (`Cosmology::velocity_friction_cdm`), the baryon particles none. Both take the steps of the CDM+baryon fluid with
+  their own kick, drift and velocity factors (`src/SpeciesTimeStepping.h`): Quinn/Tassev from the species' friction,
+  FastPM from the two-fluid linear growth (D_c, D_b sourced by delta_cb). With COLA the CDM+baryon frame plus the
+  term (velocity factor of the species - that of the frame) v_LPT per kick. Not with BullFrog or neutrino particles.
+- `FML/NBody/TimeStepping.h`: `restep(steps)` (the coefficients of another species at the same scale factors) and
+  an optional `force_growth` (FastPM with several species). The one-species steps are unchanged.
+- Validated (1e-4 times the power, relative to wCDM): CDM / baryons / CDM+baryons follow the two-fluid growth to
+  <= 6e-4 with Quinn (200 steps), FastPM (10), COLA + Quinn (10) and COLA + FastPM (10); the CDM+baryon growth agrees
+  with the Einstein-Boltzmann solver to 7e-4 (2x force grid; finer grids damp the CDM-baryon difference on the same
+  lattice, see SPECIES.md). Test: `tests/test_timestepping.cpp` (the exact EdS two-species growing mode with FastPM at
+  any step size, second-order convergence of Quinn, restep). Regression cases `dark_scattering_baryons_cola` and
+  `_fastpm` (table `input/transfer_tables/dark_scattering.txt`); the existing cases are bit-identical.
+- `tests/make_transfer_tables.py` writes the axion IC defaults (it failed with all_parameters_must_be_in_file).
+
 ### SnapshotAnalyzer: hybrid bias spectra
 - `hybridbias = true` (`hybridbias_*`): the 15 cross spectra P_ab(k) of the Lagrangian bias operators
   (1, delta_L, delta_L^2, s^2, nabla^2 delta_L) advected with the particles of a snapshot; `hybridbias_z<z>.txt` with

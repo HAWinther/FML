@@ -47,6 +47,13 @@ namespace FML::NBODY {
     /// (Gp(avel_new) - velocity_scale Gp(avel)) / Gf(apos), its drift is unchanged. BullFrog: unchanged (its
     /// coefficients only use D(a), E(a) and Gp(a), which include the friction through the growth history).
     /// The growth history must be that of the growth equations with the same friction.
+    ///
+    /// Several particle species with different frictions (e.g. dark scattering acting on the CDM but not on the
+    /// baryons) that feel the same force: one TimeStepping per species with its friction integral, its own growth
+    /// history (FastPM) and force_growth(a), the growth factor of the field that sources the force (default: the
+    /// growth history's own). The steps of a species are restep(steps) of the reference steps: the same scale
+    /// factors, the species' drift, kick and velocity_scale. restep of a TimeStepping's own steps gives them back
+    /// exactly. Not for BullFrog (its coefficients are those of one fluid).
     //=============================================================================
     class TimeStepping {
       public:
@@ -70,9 +77,11 @@ namespace FML::NBODY {
                      std::function<double(double)> HoverH0,
                      std::function<double(double)> force_prefactor,
                      FML::COSMOLOGY::GrowthHistory growth = {},
-                     std::function<double(double)> friction_integral = {})
+                     std::function<double(double)> friction_integral = {},
+                     std::function<double(double)> force_growth = {})
             : settings(options), HoverH0(std::move(HoverH0)), force_prefactor(std::move(force_prefactor)),
-              growth(std::move(growth)), friction_integral(std::move(friction_integral)) {
+              growth(std::move(growth)), friction_integral(std::move(friction_integral)),
+              force_growth(std::move(force_growth)) {
             if (!this->HoverH0 || !this->force_prefactor)
                 throw std::invalid_argument("[TimeStepping] Expansion and force-prefactor functions are required");
             if (!std::isfinite(settings.cola_nLPT) ||
@@ -142,21 +151,34 @@ namespace FML::NBODY {
                 double avel_old = (i == 0) ? amin : scale_factor_of_step(amin, amax, nsteps, i - 0.5);
                 double avel_new = (i == 0) ? scale_factor_of_step(amin, amax, nsteps, 0.5) :
                                              (i == nsteps ? amax : scale_factor_of_step(amin, amax, nsteps, i + 0.5));
-                // The force of the kick is computed at apos_old (with poisson_factor(apos_old)) and the Tassev drift
-                // weights the drift with the time of the velocities avel_new. With linear spacing these are the
-                // midpoints of [avel_old, avel_new] and [apos_old, apos_new] (the first and last kick: their ends),
-                // and we use that expression (which differs from apos_old and avel_new by round-off) so that the
-                // results are unchanged. With other spacings the midpoints are not these times, which gave the linear
-                // growth wrong by -0.76% (Quinn, 20 logarithmic steps from a = 0.05) instead of -0.38%
-                double akick = apos_old, adrift = avel_new;
-                if (settings.spacing == ScaleFactorSpacing::Linear) {
-                    akick = (i == 0) ? avel_old : (i == nsteps ? avel_new : (avel_old + avel_new) / 2.);
-                    adrift = (apos_old + apos_new) / 2.;
-                }
-                delta_time_drift.push_back(drift_timestep(apos_old, apos_new, adrift));
-                delta_time_kick.push_back(kick_timestep(avel_old, avel_new, akick));
+                const auto dt = deltatime_of_step(apos_old, apos_new, avel_old, avel_new, i == 0, i == nsteps);
+                delta_time_drift.push_back(dt.first);
+                delta_time_kick.push_back(dt.second);
             }
             return {delta_time_drift, delta_time_kick};
+        }
+
+        /// The steps of this TimeStepping at the scale factors of other steps (from steps() of a TimeStepping with
+        /// the same method and spacing, e.g. of another particle species): the same apos, apos_new, avel, avel_new
+        /// and this one's drift, kick and velocity_scale. restep(steps(...)) == steps(...) exactly. Not for BullFrog
+        std::vector<Step> restep(const std::vector<Step> & reference) const {
+            if (settings.method == TimestepMethod::BullFrog)
+                throw std::invalid_argument("[TimeStepping] restep is not implemented for BullFrog");
+            std::vector<Step> result;
+            const size_t n = reference.size();
+            for (size_t i = 0; i < n; i++) {
+                const auto & r = reference[i];
+                const double velocity_scale = friction_factor(r.avel, r.avel_new);
+                if (settings.method == TimestepMethod::FastPM) {
+                    const double drift = (D(r.apos_new) - D(r.apos)) / Gp(r.avel_new);
+                    const double kick = (Gp(r.avel_new) - velocity_scale * Gp(r.avel)) / Gf(r.apos);
+                    result.push_back({r.apos, r.apos_new, r.avel, r.avel_new, drift, kick, velocity_scale});
+                } else {
+                    const auto dt = deltatime_of_step(r.apos, r.apos_new, r.avel, r.avel_new, i == 0, i + 1 == n);
+                    result.push_back({r.apos, r.apos_new, r.avel, r.avel_new, dt.first, dt.second, velocity_scale});
+                }
+            }
+            return result;
         }
 
         /// The steps we take to go from amin to amax (nsteps + 1 steps, the last one synchronizes)
@@ -198,6 +220,24 @@ namespace FML::NBODY {
         std::function<double(double)> HoverH0, force_prefactor;
         FML::COSMOLOGY::GrowthHistory growth;
         std::function<double(double)> friction_integral;
+        std::function<double(double)> force_growth;
+
+        // Quinn/Tassev drift and kick of step i (first: i = 0, last: i = nsteps) of a KDK sequence
+        std::pair<double, double> deltatime_of_step(
+            double apos_old, double apos_new, double avel_old, double avel_new, bool first, bool last) const {
+            // The force of the kick is computed at apos_old (with poisson_factor(apos_old)) and the Tassev drift
+            // weights the drift with the time of the velocities avel_new. With linear spacing these are the
+            // midpoints of [avel_old, avel_new] and [apos_old, apos_new] (the first and last kick: their ends),
+            // and we use that expression (which differs from apos_old and avel_new by round-off) so that the
+            // results are unchanged. With other spacings the midpoints are not these times, which gave the linear
+            // growth wrong by -0.76% (Quinn, 20 logarithmic steps from a = 0.05) instead of -0.38%
+            double akick = apos_old, adrift = avel_new;
+            if (settings.spacing == ScaleFactorSpacing::Linear) {
+                akick = first ? avel_old : (last ? avel_new : (avel_old + avel_new) / 2.);
+                adrift = (apos_old + apos_new) / 2.;
+            }
+            return {drift_timestep(apos_old, apos_new, adrift), kick_timestep(avel_old, avel_new, akick)};
+        }
 
         using DVector = FML::INTERPOLATION::SPLINE::DVector;
         using ODESolver = FML::SOLVERS::ODESOLVER::ODESolver;
@@ -309,9 +349,9 @@ namespace FML::NBODY {
             return value;
         }
         // Gf = 1.5 OmegaM Geff/G a D: the force of the linear mode, F = Gf Psi (= a^3 E dGp/da from the growth
-        // equation without friction)
+        // equation without friction). With force_growth (several species) D is that of the field of the force
         double Gf(double a) const {
-            const double value = poisson_factor(a) * D(a);
+            const double value = poisson_factor(a) * (force_growth ? force_growth(a) : D(a));
             if (value == 0.0 || !std::isfinite(value))
                 throw std::domain_error("[TimeStepping] Force growth must be nonzero and finite");
             return value;

@@ -39,8 +39,11 @@ add a model is in [DEVELOPING.md](DEVELOPING.md#adding-a-model).
   enters the growth equations (all LPT orders, the COLA frame and the IC velocities) and the kick and drift factors of
   all the time-stepping methods (`Cosmology::velocity_friction`, see `FML/NBody/TimeStepping.h`). The baryons do not
   scatter: with the CDM and baryons as one set of particles they feel f_c = OmegaCDM / OmegaCB of the drag (the
-  momentum of the fluid with v_b = v_c); `particle_baryons = true` and neutrino particles are not supported with it
-  yet. The IC from the internal solver (`ic_type_of_input = internal` or `tables`) include the scattering
+  momentum of the fluid with v_b = v_c). With `particle_baryons = true` the CDM particles feel the full drag and
+  the baryon particles none, at the same steps with their own kick, drift and velocity factors (FastPM: from the
+  two-fluid linear growth, so both species follow it exactly; COLA: the CDM+baryon frame plus the change of the LPT
+  velocity that the frame's friction does not have; not with BullFrog), see [SPECIES.md](SPECIES.md). Neutrino
+  particles are not supported with it yet. The IC from the internal solver (`ic_type_of_input = internal` or `tables`) include the scattering
   (`cosmology_ds_cs2` is the sound speed of the dark-energy perturbations there).
 
 For Quintessence, EDE and Tabulated the dark energy is smooth (no perturbations) and the gravity model is GR (they can be combined with the other gravity models, but those use the background only through H(a)). The backgrounds were checked against an independent solution (scipy): H(a) agrees to < 1e-4 and w(a) to < 1e-5 for a < 1, and the EDE peak fraction and redshift to < 1e-3.
