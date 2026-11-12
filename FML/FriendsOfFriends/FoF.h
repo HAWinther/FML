@@ -41,6 +41,10 @@ namespace FML {
         /// second, partial group on the neighbor task): increase the buffer if this is not zero
         inline size_t FoF_number_of_groups_reaching_buffer_edge{0};
 
+        /// Print the banner, progress, timings and the number of groups (on task 0). Set to false to run quietly
+        /// (e.g. when FoF is called many times, as in RelaxedFriendsOfFriends)
+        inline bool FoF_verbose{true};
+
         //========================================================================================
         /// Locate friends of friends groups and bin what you want over these groups.
         /// The FoF linking definition is the standard cosmological method of Davis et al. (1985),
@@ -55,7 +59,7 @@ namespace FML {
         ///
         /// @param[in] part Pointer to particles. If the particle has a set_fofid then we will also store the FoFID in
         /// the particles. NB: the particles are sorted (by their y-coordinate) in place.
-        /// @param[in] NumPart Number of local particles
+        /// @param[in] NumPart Number of local particles (may be zero on some of the tasks)
         /// @param[in] linking_length The distance in units of mean particle separation (in [0,1)) required to have a
         /// link between two particles. Typical value is 0.2.
         /// @param[in] nmin_FoF_group Minimum number of particles in a FoF group to store it. Typical value is 20.
@@ -66,6 +70,10 @@ namespace FML {
         /// @param[in] Ngrid (Optional) The maximum gridsize we use to bin the particles to in order to speed up the
         /// calculation. The default FoF_Ngrid_max is set in the header. Larger value means more memory needed. The
         /// grid used has at most about one cell per particle (the result does not depend on the grid).
+        /// @param[in] mean_particle_separation (Optional) The mean particle separation (in units of the box) that the
+        /// linking length is in units of. <= 0 (the default): from the number of particles given,
+        /// (sum of NumPart)^(-1/NDIM). Give it to link a subset of the particles of a simulation with the linking
+        /// length of the full simulation.
         ///
         //========================================================================================
         template <class T, int NDIM, class FoFHaloClass>
@@ -76,7 +84,8 @@ namespace FML {
                               bool periodic,
                               double Buffersize_over_Boxsize,
                               std::vector<FoFHaloClass> & LocalFoFGroups,
-                              int Ngrid = FoF_Ngrid_max);
+                              int Ngrid = FoF_Ngrid_max,
+                              double mean_particle_separation = 0.0);
 
         //=========================================================================
         /// A gridcell in a grid used for speeding up the linking of particles
@@ -206,16 +215,17 @@ namespace FML {
                               bool periodic,
                               double Buffersize_over_Boxsize,
                               std::vector<FoFHaloClass> & LocalFoFGroups,
-                              int Ngrid) {
+                              int Ngrid,
+                              double mean_particle_separation) {
 
             LocalFoFGroups.clear();
+            FoF_number_of_groups_reaching_buffer_edge = 0;
+            // Every task takes the same path below (all the communication is collective), also tasks without
+            // particles; only if there are no particles at all do we return here
             FML::COMMUNICATION::Count local_count = NumPart;
             const auto local_counts = FML::GatherFromTasks(&local_count);
             if (std::all_of(local_counts.begin(), local_counts.end(), [](auto n) { return n == 0; }))
                 return;
-            FML::COMMUNICATION::require_count(
-                std::all_of(local_counts.begin(), local_counts.end(), [](auto n) { return n > 0; }),
-                "[FoF] Nonempty global catalogues require particles on every rank");
             [[maybe_unused]] const bool debug = false;
 
             // Some basic checks
@@ -225,7 +235,8 @@ namespace FML {
             // Compute fof search distance
             size_t NumPart_tot = NumPart;
             FML::SumOverTasks(&NumPart_tot);
-            const double mean_particle_separation = 1.0 / std::pow(double(NumPart_tot), 1.0 / NDIM);
+            if (not(mean_particle_separation > 0.0))
+                mean_particle_separation = 1.0 / std::pow(double(NumPart_tot), 1.0 / NDIM);
             const double fof_distance = linking_length * mean_particle_separation;
             const double fof_distance2 = fof_distance * fof_distance;
 
@@ -273,8 +284,9 @@ namespace FML {
             // We gather particles within dx_boundary of each side
             //=========================================================================
             std::vector<T> boundary_particles{};
-            const auto record_size = FML::PARTICLE::GetSize(part[0]);
-            const size_t bytes_per_particle = record_size > 0 ? size_t(record_size) : 0;
+            // (a task without particles takes the record size of the others)
+            const auto record_size = NumPart > 0 ? FML::PARTICLE::GetSize(part[0]) : 0;
+            size_t bytes_per_particle = record_size > 0 ? size_t(record_size) : 0;
             // How many particles we send to / receive from the left and right task (used again at the end to send
             // the FoF IDs of the boundary particles back to the task they belong to)
             [[maybe_unused]] size_t n_send_left = 0;
@@ -288,11 +300,13 @@ namespace FML {
             if (FML::NTasks > 1) {
                 FML::COMMUNICATION::Count record_bytes = bytes_per_particle;
                 const auto record_sizes = FML::GatherFromTasks(&record_bytes);
+                const auto common_bytes = *std::max_element(record_sizes.begin(), record_sizes.end());
                 FML::COMMUNICATION::require_count(
-                    record_bytes > 0 && std::all_of(record_sizes.begin(),
+                    common_bytes > 0 && std::all_of(record_sizes.begin(),
                                                     record_sizes.end(),
-                                                    [&](auto n) { return n == record_bytes; }),
+                                                    [&](auto n) { return n == common_bytes or n == 0; }),
                     "[FoF] Boundary exchange requires a uniform positive serialized record size");
+                bytes_per_particle = size_t(common_bytes);
                 bool valid_sizes = true;
                 // Count how may particles to send left and right
                 size_t noutside = 0;
@@ -498,7 +512,7 @@ namespace FML {
             //=========================================================================
             // We now have all the boundary particles and can do the FoF linking
             //=========================================================================
-            if (FML::ThisTask == 0) {
+            if (FoF_verbose and FML::ThisTask == 0) {
                 std::cout << "\n";
                 std::cout << "#=====================================================\n";
                 std::cout << "#\n";
@@ -690,7 +704,6 @@ namespace FML {
 
             // Does a particle lie within one linking length of the outer edge of the buffer? Then its group might
             // continue outside the buffer (only boundary particles can be there and only with more than one task)
-            FoF_number_of_groups_reaching_buffer_edge = 0;
             auto reaches_edge = [&](T & p) {
                 if (FML::NTasks == 1)
                     return false;
@@ -706,7 +719,7 @@ namespace FML {
             for (size_t i = 0; i < NumPart_total; i++) {
 
                 // Show progress bar
-                if (FML::ThisTask == 0)
+                if (FoF_verbose and FML::ThisTask == 0)
                     if ((10 * i) / NumPart_total != (10 * i + 10) / NumPart_total or i == 0) {
                         std::cout << (100 * i + 100) / NumPart_total << "% " << std::flush;
                         if (i == NumPart_total - 1) {
@@ -796,13 +809,13 @@ namespace FML {
             PartCells = std::vector<FoFCell>();
 
             // Show timings
-            if (FML::ThisTask == 0)
+            if (FoF_verbose and FML::ThisTask == 0)
                 foftimer.PrintAllTimings();
 
             // Print how many particles we found
             auto nhalos = LocalFoFGroups.size();
             FML::SumOverTasks(&nhalos);
-            if (FML::ThisTask == 0)
+            if (FoF_verbose and FML::ThisTask == 0)
                 std::cout << "# We found a total of " << nhalos << " (" << LocalFoFGroups.size()
                           << " on task 0) "
                              "\n";

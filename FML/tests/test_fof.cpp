@@ -345,14 +345,16 @@ int main() {
         FML::FOF::FriendsOfFriends<Particle, NDIM>(nullptr, 0, .2, 1, true, .001, empty, 8);
         check_local(empty.empty(), "all-empty FoF input returns an empty catalogue collectively");
         if (FML::NTasks > 1) {
-            Particle p{{.5 * (FML::xmin_domain + FML::xmax_domain), .5, .5}, 0, 0};
-            bool rejected = false;
-            try {
-                FML::FOF::FriendsOfFriends<Particle, NDIM>(&p, FML::ThisTask == 0 ? 0 : 1, .2, 1, true, .001, empty, 8);
-            } catch (const std::overflow_error &) {
-                rejected = true;
-            }
-            check_local(rejected, "partially empty FoF ranks fail collectively instead of splitting the MPI path");
+            // Tasks without particles take part (RelaxedFoF links subsets): two linked particles on each task but
+            // the first, linked with the mean separation of 2 (NTasks - 1) particles
+            const double xc = .5 * (FML::xmin_domain + FML::xmax_domain);
+            Particle p[2] = {{{xc, .5, .5}, 0, 0}, {{xc + 1e-3, .5, .5}, 0, 0}};
+            const size_t n = FML::ThisTask == 0 ? 0 : 2;
+            FML::FOF::FriendsOfFriends<Particle, NDIM>(p, n, .2, 2, true, .001, empty, 8, 0.01);
+            size_t ng = empty.size();
+            FML::SumOverTasks(&ng);
+            check_local(ng == size_t(FML::NTasks - 1), "FoF with tasks without particles (" + std::to_string(ng) +
+                                                           " groups, expected " + std::to_string(FML::NTasks - 1) + ")");
         }
     }
 

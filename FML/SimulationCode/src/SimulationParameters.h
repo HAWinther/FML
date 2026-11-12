@@ -825,6 +825,15 @@ namespace SIMCODE {
         double massfunction_Mmin;      // ...and the range (Msun/h)
         double massfunction_Mmax;
         std::vector<std::string> so_definitions; // Spherical overdensity masses around the halos (e.g. 200m, 500c, vir)
+        // Relaxed FoF (FriendsOfFriends/RelaxedFoF.h; Dai et al. 2019, FastPM's RFOF): instead of standard FoF
+        bool relaxed{false};
+        std::string relaxed_mode{"fastpm"};
+        double relaxed_l1{0.25}, relaxed_l6{0.24}, relaxed_a1{0.012}, relaxed_a2{0.06};
+        double relaxed_linking_length_min{0.2};
+        std::vector<int> relaxed_bin_edges{20, 40, 80, 160, 320};
+        int relaxed_nmin{8};
+        bool relaxed_velocity_rejection{true};
+        double relaxed_b1{7.02}, relaxed_b2{6.025}, relaxed_r0_min{0.0};
 
         /// The parameters (see ParameterFields.h)
         template <class F>
@@ -876,6 +885,64 @@ namespace SIMCODE {
                                   "\"vir\"} (<Delta>m: Delta times the mean CDM+baryon density, <Delta>c: the critical "
                                   "density, vir: Bryan & Norman 1998). Empty: none. The spheres must fit in "
                                   "fof_buffer_length_mpch");
+                f.always_optional("fof_relaxed",
+                                  relaxed,
+                                  false,
+                                  "fof: relaxed FoF instead of standard FoF (Dai et al. 2019; FastPM's RFOF; see "
+                                  "FriendsOfFriends/RelaxedFoF.md): a linking length that is longer for small halos, "
+                                  "and rejection of fake halos by their velocity dispersion. fof_linking_length and "
+                                  "fof_nmin_per_halo are then not used");
+                f.if_true("fof_relaxed", [&]() {
+                    f.always_optional("fof_relaxed_mode",
+                                      relaxed_mode,
+                                      "fastpm",
+                                      "fastpm: the halo bins only, as FastPM (its parameters were fitted for this); "
+                                      "paper: then shorter linking lengths (x 0.9 per pass) for the particles of "
+                                      "rejected halos, as Algorithm 1 of the paper",
+                                      {"fastpm", "paper"});
+                    f.always_optional("fof_relaxed_l1",
+                                      relaxed_l1,
+                                      0.25,
+                                      "Linking length of the smallest halos: l1 - a1 / (1 + z) (units of the mean "
+                                      "particle separation; FastPM's defaults are fitted to TNG300-2-Dark for FastPM "
+                                      "with a mean separation of 0.3 Mpc/h and 40 steps)");
+                    f.always_optional("fof_relaxed_a1", relaxed_a1, 0.012, "See fof_relaxed_l1");
+                    f.always_optional("fof_relaxed_l6",
+                                      relaxed_l6,
+                                      0.24,
+                                      "Linking length of the largest halos: max(l6 - a2 / (1 + z), "
+                                      "fof_relaxed_linking_length_min); linear in the bin in between");
+                    f.always_optional("fof_relaxed_a2", relaxed_a2, 0.06, "See fof_relaxed_l6");
+                    f.always_optional("fof_relaxed_linking_length_min",
+                                      relaxed_linking_length_min,
+                                      0.2,
+                                      "Smallest linking length of the largest halos (units of the mean particle "
+                                      "separation)");
+                    f.always_optional("fof_relaxed_bin_edges",
+                                      relaxed_bin_edges,
+                                      std::vector<int>{20, 40, 80, 160, 320},
+                                      "Upper edges (particles) of the halo bins; the last bin has no upper edge");
+                    f.always_optional("fof_relaxed_nmin",
+                                      relaxed_nmin,
+                                      8,
+                                      "Minimum number of particles per halo (of one species with particle_baryons)",
+                                      check::at_least(2));
+                    f.always_optional("fof_relaxed_velocity_rejection",
+                                      relaxed_velocity_rejection,
+                                      true,
+                                      "Reject halos with a 3D velocity dispersion above r0(z) V0 (E(z) M / 1e15 "
+                                      "Msun/h)^(1/3), V0 = 1100 km/s, r0 = b1 - b2 ln(1 + z)");
+                    f.always_optional("fof_relaxed_b1", relaxed_b1, 7.02, "See fof_relaxed_velocity_rejection");
+                    f.always_optional("fof_relaxed_b2",
+                                      relaxed_b2,
+                                      6.025,
+                                      "See fof_relaxed_velocity_rejection. With the defaults r0 is 0.40 at z = 2 and "
+                                      "<= 0 for z > 2.2 (all halos rejected): they were fitted at z <= 2");
+                    f.always_optional("fof_relaxed_r0_min",
+                                      relaxed_r0_min,
+                                      0.0,
+                                      "Floor of r0(z) (0: none, as FastPM)");
+                });
             });
         }
     };

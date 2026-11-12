@@ -281,6 +281,19 @@ Parameters marked *optional* take the default value if they are not in the param
 | `fof_massfunction_Mmin` | double | `1e+10` | fof = true | fof: smallest mass of the mass function (Msun/h) |
 | `fof_massfunction_Mmax` | double | `1e+16` | fof = true | fof: largest mass of the mass function (Msun/h) |
 | `fof_so_definitions` | string list | `{}` | fof = true | fof: spherical overdensity masses around the FoF halos, e.g. {"200m", "500c", "vir"} (<Delta>m: Delta times the mean CDM+baryon density, <Delta>c: the critical density, vir: Bryan & Norman 1998). Empty: none. The spheres must fit in fof_buffer_length_mpch |
+| `fof_relaxed` | bool | `false` | fof = true | fof: relaxed FoF instead of standard FoF (Dai et al. 2019; FastPM's RFOF; see FriendsOfFriends/RelaxedFoF.md): a linking length that is longer for small halos, and rejection of fake halos by their velocity dispersion. fof_linking_length and fof_nmin_per_halo are then not used |
+| `fof_relaxed_mode` | string | `"fastpm"` | fof = true and fof_relaxed = true | fastpm: the halo bins only, as FastPM (its parameters were fitted for this); paper: then shorter linking lengths (x 0.9 per pass) for the particles of rejected halos, as Algorithm 1 of the paper. Options: `fastpm`, `paper` |
+| `fof_relaxed_l1` | double | `0.25` | fof = true and fof_relaxed = true | Linking length of the smallest halos: l1 - a1 / (1 + z) (units of the mean particle separation; FastPM's defaults are fitted to TNG300-2-Dark for FastPM with a mean separation of 0.3 Mpc/h and 40 steps) |
+| `fof_relaxed_a1` | double | `0.012` | fof = true and fof_relaxed = true | See fof_relaxed_l1 |
+| `fof_relaxed_l6` | double | `0.24` | fof = true and fof_relaxed = true | Linking length of the largest halos: max(l6 - a2 / (1 + z), fof_relaxed_linking_length_min); linear in the bin in between |
+| `fof_relaxed_a2` | double | `0.06` | fof = true and fof_relaxed = true | See fof_relaxed_l6 |
+| `fof_relaxed_linking_length_min` | double | `0.2` | fof = true and fof_relaxed = true | Smallest linking length of the largest halos (units of the mean particle separation) |
+| `fof_relaxed_bin_edges` | int list | `{20, 40, 80, 160, 320}` | fof = true and fof_relaxed = true | Upper edges (particles) of the halo bins; the last bin has no upper edge |
+| `fof_relaxed_nmin` | int | `8` | fof = true and fof_relaxed = true | Minimum number of particles per halo (of one species with particle_baryons) |
+| `fof_relaxed_velocity_rejection` | bool | `true` | fof = true and fof_relaxed = true | Reject halos with a 3D velocity dispersion above r0(z) V0 (E(z) M / 1e15 Msun/h)^(1/3), V0 = 1100 km/s, r0 = b1 - b2 ln(1 + z) |
+| `fof_relaxed_b1` | double | `7.02` | fof = true and fof_relaxed = true | See fof_relaxed_velocity_rejection |
+| `fof_relaxed_b2` | double | `6.025` | fof = true and fof_relaxed = true | See fof_relaxed_velocity_rejection. With the defaults r0 is 0.40 at z = 2 and <= 0 for z > 2.2 (all halos rejected): they were fitted at z <= 2 |
+| `fof_relaxed_r0_min` | double | `0` | fof = true and fof_relaxed = true | Floor of r0(z) (0: none, as FastPM) |
 
 ## Power-spectrum
 

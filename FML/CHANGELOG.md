@@ -5,6 +5,20 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### FriendsOfFriends: relaxed FoF
+- `FriendsOfFriends/RelaxedFoF.h`: `FML::FOF::RelaxedFriendsOfFriends`, the relaxed FoF of Dai, Feng, Seljak & Singh
+  2019 (arXiv:1908.05276) as in FastPM (`libfastpm/rfof.c`): FoF passes with a linking length per halo-size bin
+  (longer for small halos; eqs. 2.2-2.5) and rejection of fake halos by their 3D velocity dispersion (eqs. 2.1, 2.6).
+  FastPM's fitted parameters are the defaults; `paper` mode adds the shrinking linking length of Algorithm 1. The
+  particles are not reordered. See `FriendsOfFriends/RelaxedFoF.md` (also: with the default parameters r0(z) <= 0,
+  i.e. every halo rejected, for z > 2.2).
+- `FriendsOfFriends`: an optional `mean_particle_separation` (the linking length of a subset in units of the
+  separation of the whole simulation); tasks without particles are now allowed (before: an error); `FoF_verbose`.
+- SimulationCode: `fof_relaxed = true` and the `fof_relaxed_*` parameters; the halo catalogue then has the pass,
+  bin, linking length and sigma_v / V_std of each halo (text columns, HDF5 group `RelaxedFoF`).
+- Tests (`FriendsOfFriends/tests`, 1/2/4 MPI tasks): the halos equal those of an independent scipy implementation
+  (`make_rfof_reference.py`) for both modes at three redshifts; standard FoF; subsets with empty tasks.
+
 ### Emulator/NeuralNetwork: neural-network emulators (train and evaluate in C++)
 - `Emulator/NeuralNetwork/NeuralNetwork.h` (header only): `FML::EMULATOR::NEURALNETWORK::NeuralNetwork` (fully
   connected, 9 activations, input/output standardization, `evaluate`, `jacobian`, text `save`/`load`) and `train()`

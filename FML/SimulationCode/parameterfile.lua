@@ -702,6 +702,31 @@ fof_massfunction_Mmax = 1e16
 -- (<Delta>m: Delta times the mean CDM+baryon density, <Delta>c: times the critical density,
 -- vir: Bryan & Norman 1998). Empty: none. The spheres must fit in fof_buffer_length_mpch
 fof_so_definitions = {}
+-- Relaxed FoF instead of standard FoF (Dai et al. 2019, as FastPM's RFOF; see FriendsOfFriends/RelaxedFoF.md):
+-- a longer linking length for small halos (better halos in low-resolution simulations) and rejection of fake
+-- halos by their velocity dispersion. fof_linking_length and fof_nmin_per_halo are then not used
+fof_relaxed = false
+if fof_relaxed then
+  -- fastpm: the halo bins only (as FastPM); paper: then shorter linking lengths for rejected halos (Algorithm 1)
+  fof_relaxed_mode = "fastpm"
+  -- Linking lengths (units of the mean separation): l1 - a1/(1+z) for the smallest halos, max(l6 - a2/(1+z),
+  -- fof_relaxed_linking_length_min) for the largest, linear in the bin in between. FastPM's defaults are fitted
+  -- to TNG300-2-Dark for FastPM with a mean separation of 0.3 Mpc/h and 40 steps: refit for other setups
+  fof_relaxed_l1 = 0.25
+  fof_relaxed_a1 = 0.012
+  fof_relaxed_l6 = 0.24
+  fof_relaxed_a2 = 0.06
+  fof_relaxed_linking_length_min = 0.2
+  -- Upper edges of the halo bins (particles) and the minimum halo size
+  fof_relaxed_bin_edges = {20, 40, 80, 160, 320}
+  fof_relaxed_nmin = 8
+  -- Reject halos with sigma_v(3D) > r0(z) * 1100 km/s (E(z) M / 1e15 Msun/h)^(1/3), r0 = b1 - b2 ln(1+z)
+  -- (with the defaults r0 <= 0, i.e. all halos rejected, for z > 2.2; fof_relaxed_r0_min sets a floor)
+  fof_relaxed_velocity_rejection = true
+  fof_relaxed_b1 = 7.02
+  fof_relaxed_b2 = 6.025
+  fof_relaxed_r0_min = 0.0
+end
 
 ------------------------------------------------------------
 -- Baryonification (snapshot post-processing)

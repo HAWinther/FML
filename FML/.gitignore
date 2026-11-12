@@ -31,6 +31,8 @@ CosmologyFitting/tests/test_*
 !CosmologyFitting/tests/test_*.cpp
 MCMC/tests/test_*
 !MCMC/tests/test_*.cpp
+FriendsOfFriends/tests/test_*
+!FriendsOfFriends/tests/test_*.cpp
 Emulator/example/ee2
 FFTLog/example/fftlog
 FFTWGrid/example/fftwgrid

@@ -2,6 +2,7 @@
 #define HALOFINDING_HEADER
 
 #include <FML/FriendsOfFriends/FoF.h>
+#include <FML/FriendsOfFriends/RelaxedFoF.h>
 #include <FML/FriendsOfFriends/SphericalOverdensity.h>
 #include <FML/GadgetUtils/GadgetUtilsHDF5.h>
 #include <FML/Global/Global.h>
@@ -38,6 +39,10 @@
 // The halos are made of the CDM+baryon particles (the neutrino particles, if any, are not included). With CDM and
 // baryons as separate particles both are linked together (particles with masses Omega_i / OmegaCB) and the linking
 // length is in units of the mean separation of the particles of one species. Masses are in Msun/h from OmegaCB.
+//
+// With fof_relaxed = true the halos are found with relaxed FoF (FriendsOfFriends/RelaxedFoF.h; Dai et al. 2019 as
+// FastPM's RFOF) instead; the catalogue then also has the pass and bin that found each halo, its linking length
+// and its velocity dispersion over that of the scaling relation.
 //=============================================================================
 
 template <int NDIM, class T>
@@ -65,7 +70,45 @@ namespace SIMCODE {
         std::vector<long long int> so_npart;
         bool so_truncated{false}; // The sphere reached the search radius (the buffer)
         bool so_overlap{false};   // The SO center is inside the radius (first definition) of a more massive halo
+        // Relaxed FoF (fof_relaxed): the pass and bin (0: the shrinking passes of paper mode) that found the halo,
+        // its linking length (units of the mean separation) and sigma_v / V_std(M, z)
+        int rfof_pass{-1}, rfof_bin{-1};
+        double rfof_linking_length{0.0}, rfof_vdisp_ratio{0.0};
     };
+
+    /// What relaxed FoF needs besides the settings: the redshift and E(z) = H(z)/H0, the units of the halo masses
+    /// (Msun/h per unit of get_mass) and velocities (peculiar km/s per code unit), the mean separation (box units)
+    /// the linking lengths are in units of and the factor the particle numbers (nmin, bin edges) are scaled by (the
+    /// number of particles per particle of one species with particle_baryons)
+    struct RelaxedFoFContext {
+        double redshift{0.0};
+        double E_of_z{1.0};
+        double mass_unit_msunh{1.0};
+        double velocity_unit_kms{1.0};
+        double mean_particle_separation{0.0};
+        double number_scale{1.0};
+    };
+
+    /// The relaxed FoF parameters from the settings (particle numbers times number_scale)
+    inline FML::FOF::RelaxedFoFParameters relaxed_fof_parameters(const FoFSettings & s, double number_scale = 1.0) {
+        FML::FOF::RelaxedFoFParameters p;
+        p.mode = s.relaxed_mode == "paper" ? FML::FOF::RelaxedFoFParameters::Mode::paper
+                                           : FML::FOF::RelaxedFoFParameters::Mode::fastpm;
+        p.l1 = s.relaxed_l1;
+        p.l6 = s.relaxed_l6;
+        p.a1 = s.relaxed_a1;
+        p.a2 = s.relaxed_a2;
+        p.linking_length_min = s.relaxed_linking_length_min;
+        p.bin_edges.clear();
+        for (int e : s.relaxed_bin_edges)
+            p.bin_edges.push_back(size_t(std::lround(e * number_scale)));
+        p.nmin = int(std::lround(s.relaxed_nmin * number_scale));
+        p.velocity_rejection = s.relaxed_velocity_rejection;
+        p.b1 = s.relaxed_b1;
+        p.b2 = s.relaxed_b2;
+        p.r0_min = s.relaxed_r0_min;
+        return p;
+    }
 
     /// The particle used to link CDM and baryons together: position, velocity and mass
     template <int NDIM>
@@ -88,19 +131,10 @@ namespace SIMCODE {
                                                  double linking_length,
                                                  int nmin_per_halo,
                                                  const std::vector<double> & so_thresholds = {},
-                                                 double total_mass = 0.0) {
-        std::vector<FML::FOF::FoFHalo<P, NDIM>> groups;
-        FML::FOF::FriendsOfFriends<P, NDIM>(part,
-                                            npart,
-                                            linking_length,
-                                            nmin_per_halo,
-                                            true,
-                                            settings.buffer_length_mpch / boxsize,
-                                            groups,
-                                            settings.nmesh_max);
+                                                 double total_mass = 0.0,
+                                                 const RelaxedFoFContext * relaxed = nullptr) {
         std::vector<HaloRecord<NDIM>> halos;
-        halos.reserve(groups.size());
-        for (auto & g : groups) {
+        auto add = [&](const auto & g) {
             HaloRecord<NDIM> h;
             h.id = (long long int)g.id;
             h.np = (long long int)g.np;
@@ -111,6 +145,44 @@ namespace SIMCODE {
                 h.vel_rms[idim] = g.vel_rms[idim];
             }
             halos.push_back(h);
+        };
+        if (settings.relaxed and relaxed) {
+            // NB: does not reorder the particles (standard FoF sorts them)
+            const auto params = relaxed_fof_parameters(settings, relaxed->number_scale);
+            const auto groups = FML::FOF::RelaxedFriendsOfFriends<P, NDIM>(part,
+                                                                           npart,
+                                                                           params,
+                                                                           relaxed->redshift,
+                                                                           relaxed->E_of_z,
+                                                                           relaxed->mass_unit_msunh,
+                                                                           relaxed->velocity_unit_kms,
+                                                                           true,
+                                                                           settings.buffer_length_mpch / boxsize,
+                                                                           nullptr,
+                                                                           nullptr,
+                                                                           relaxed->mean_particle_separation,
+                                                                           settings.nmesh_max);
+            halos.reserve(groups.size());
+            for (auto & g : groups) {
+                add(g);
+                halos.back().rfof_pass = g.pass;
+                halos.back().rfof_bin = g.bin;
+                halos.back().rfof_linking_length = g.linking_length;
+                halos.back().rfof_vdisp_ratio = g.vdisp_ratio;
+            }
+        } else {
+            std::vector<FML::FOF::FoFHalo<P, NDIM>> groups;
+            FML::FOF::FriendsOfFriends<P, NDIM>(part,
+                                                npart,
+                                                linking_length,
+                                                nmin_per_halo,
+                                                true,
+                                                settings.buffer_length_mpch / boxsize,
+                                                groups,
+                                                settings.nmesh_max);
+            halos.reserve(groups.size());
+            for (auto & g : groups)
+                add(g);
         }
 
         // Spherical overdensity around the FoF halos. The first shrinking sphere has 1.5 times the radius of a
@@ -250,15 +322,35 @@ namespace SIMCODE {
 template <int NDIM, class T>
 std::vector<SIMCODE::HaloRecord<NDIM>> find_cb_halos(NBodySimulation<NDIM, T> & sim,
                                                     const std::vector<double> & so_thresholds,
-                                                    long long int & npart_total) {
+                                                    long long int & npart_total,
+                                                    double redshift) {
     using Halo = SIMCODE::HaloRecord<NDIM>;
     const auto & settings = sim.get_parameters().fof;
     const double boxsize = sim.get_parameters().simulation.boxsize;
     std::vector<Halo> halos;
     npart_total = 0;
+
+    // Relaxed FoF: masses in units of the mean particle mass -> Msun/h, code velocities -> peculiar km/s, linking
+    // lengths in units of the mean separation of one species (n_one_species particles)
+    auto relaxed_context = [&](long long int n_one_species) {
+        const auto cosmo = sim.get_cosmology();
+        SIMCODE::RelaxedFoFContext c;
+        c.redshift = redshift;
+        c.E_of_z = cosmo->HoverH0_of_a(1.0 / (1.0 + redshift));
+        c.mass_unit_msunh = SIMCODE::halo_particle_mass_msunh(cosmo->get_Omegab() + cosmo->get_OmegaCDM(),
+                                                              boxsize,
+                                                              sim.get_gravity_model()->H0_hmpc,
+                                                              size_t(npart_total));
+        c.velocity_unit_kms = 100.0 * boxsize * (1.0 + redshift);
+        c.mean_particle_separation = 1.0 / std::pow(double(n_one_species), 1.0 / NDIM);
+        c.number_scale = double(npart_total) / double(n_one_species);
+        return c;
+    };
+
     if (not sim.has_baryons()) {
         auto & part = sim.get_particles();
         npart_total = (long long int)part.get_npart_total();
+        const auto context = relaxed_context(npart_total);
         halos = SIMCODE::find_fof_halos<NDIM, T>(part.get_particles_ptr(),
                                                  part.get_npart(),
                                                  settings,
@@ -266,7 +358,8 @@ std::vector<SIMCODE::HaloRecord<NDIM>> find_cb_halos(NBodySimulation<NDIM, T> & 
                                                  settings.linking_length,
                                                  settings.nmin_per_halo,
                                                  so_thresholds,
-                                                 double(npart_total));
+                                                 double(npart_total),
+                                                 &context);
     } else {
         // CDM and baryons linked together. The particle masses are Omega_i / OmegaCB in units of the mean mass of all
         // the particles (times 1 + eps with the mass-encoded relative mode). The linking length is in units of the mean
@@ -296,6 +389,7 @@ std::vector<SIMCODE::HaloRecord<NDIM>> find_cb_halos(NBodySimulation<NDIM, T> & 
         });
         const double linking_length = settings.linking_length * std::cbrt(double(npart_total) / double(n_one_species));
         const int nmin = int(std::lround(settings.nmin_per_halo * double(npart_total) / double(n_one_species)));
+        const auto context = relaxed_context(n_one_species);
         halos = SIMCODE::find_fof_halos<NDIM, P>(fofpart.data(),
                                                  fofpart.size(),
                                                  settings,
@@ -303,7 +397,8 @@ std::vector<SIMCODE::HaloRecord<NDIM>> find_cb_halos(NBodySimulation<NDIM, T> & 
                                                  linking_length,
                                                  nmin,
                                                  so_thresholds,
-                                                 double(npart_total));
+                                                 double(npart_total),
+                                                 &context);
     }
     if (not so_thresholds.empty())
         SIMCODE::flag_overlapping_so_halos<NDIM>(halos);
@@ -496,6 +591,7 @@ void write_halo_catalogue_hdf5(const std::vector<SIMCODE::HaloRecord<NDIM>> & ha
     const std::string redshiftstring = redshift_to_string(redshift);
     const auto & so_definitions = settings.so_definitions;
     const bool do_so = not so_thresholds.empty();
+    const bool do_rfof = settings.relaxed;
     const int nso = int(so_definitions.size());
     // Gather all the halos on task 0 and write one file
     std::vector<double> local;
@@ -524,8 +620,15 @@ void write_halo_catalogue_hdf5(const std::vector<SIMCODE::HaloRecord<NDIM>> & ha
                 local.push_back(double(g.so_npart[id]));
             }
         }
+        if (do_rfof) {
+            local.push_back(double(g.rfof_pass));
+            local.push_back(double(g.rfof_bin));
+            local.push_back(g.rfof_linking_length);
+            local.push_back(g.rfof_vdisp_ratio);
+        }
     }
-    const int stride = 3 + 3 * NDIM + (do_so ? 3 * NDIM + 2 + 3 * nso : 0);
+    const int stride_so = 3 + 3 * NDIM + (do_so ? 3 * NDIM + 2 + 3 * nso : 0);
+    const int stride = stride_so + (do_rfof ? 4 : 0);
     std::vector<double> all = FML::COMMUNICATION::gather_records_checked(local);
     if (FML::ThisTask == 0) {
         namespace H5 = FML::FILEUTILS::GADGET::HDF5;
@@ -554,6 +657,26 @@ void write_halo_catalogue_hdf5(const std::vector<SIMCODE::HaloRecord<NDIM>> & ha
         const long long int nh = (long long int)nhalos, nmin = settings.nmin_per_halo;
         H5::write_attribute(header, "NumHalos", H5T_NATIVE_LLONG, H5T_NATIVE_LLONG, &nh, 1);
         H5::write_attribute(header, "MinParticlesPerHalo", H5T_NATIVE_LLONG, H5T_NATIVE_LLONG, &nmin, 1);
+        if (do_rfof) {
+            // Relaxed FoF: the settings (LinkingLength and MinParticlesPerHalo above are those of standard FoF)
+            const long long int rfof_nmin = settings.relaxed_nmin, paper = settings.relaxed_mode == "paper";
+            H5::write_attribute(header, "RelaxedFoFMinParticlesPerHalo", H5T_NATIVE_LLONG, H5T_NATIVE_LLONG, &rfof_nmin, 1);
+            H5::write_attribute(header, "RelaxedFoFPaperMode", H5T_NATIVE_LLONG, H5T_NATIVE_LLONG, &paper, 1);
+            const double rd[] = {settings.relaxed_l1,
+                                 settings.relaxed_a1,
+                                 settings.relaxed_l6,
+                                 settings.relaxed_a2,
+                                 settings.relaxed_linking_length_min,
+                                 settings.relaxed_b1,
+                                 settings.relaxed_b2,
+                                 settings.relaxed_r0_min};
+            H5::write_attribute(header, "RelaxedFoF_l1_a1_l6_a2_lmin_b1_b2_r0min", H5T_NATIVE_DOUBLE,
+                                H5T_NATIVE_DOUBLE, rd, 8);
+            std::vector<long long int> edges(settings.relaxed_bin_edges.begin(), settings.relaxed_bin_edges.end());
+            if (not edges.empty())
+                H5::write_attribute(header, "RelaxedFoFBinEdges", H5T_NATIVE_LLONG, H5T_NATIVE_LLONG, edges.data(),
+                                    edges.size());
+        }
         auto write_d = [&](hid_t loc, const std::string & name, int c, int ncols) {
             auto v = column(c, ncols);
             H5::write_dataset(loc, name, H5T_NATIVE_DOUBLE, H5T_NATIVE_DOUBLE, v.data(), nhalos, ncols);
@@ -587,6 +710,13 @@ void write_halo_catalogue_hdf5(const std::vector<SIMCODE::HaloRecord<NDIM>> & ha
                 write_ll(g, "NumParticles", c + 2);
             }
         }
+        if (do_rfof) {
+            H5::Handle rg(H5Gcreate2(file, "RelaxedFoF", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT), H5Gclose, "RelaxedFoF");
+            write_ll(rg, "Pass", stride_so);
+            write_ll(rg, "Bin", stride_so + 1);
+            write_d(rg, "LinkingLength", stride_so + 2, 1);
+            write_d(rg, "VelocityDispersionRatio", stride_so + 3, 1);
+        }
         std::cout << "Wrote " << nhalos << " halos to " << filename << "\n";
     }
 }
@@ -597,7 +727,8 @@ template <int NDIM>
 void write_halo_catalogue_ascii(const std::vector<SIMCODE::HaloRecord<NDIM>> & halos,
                                 const std::vector<std::string> & so_definitions,
                                 double redshift,
-                                const std::string & snapshot_folder) {
+                                const std::string & snapshot_folder,
+                                bool relaxed = false) {
     const std::string redshiftstring = redshift_to_string(redshift);
     const bool do_so = not so_definitions.empty();
     const int nso = int(so_definitions.size());
@@ -621,6 +752,8 @@ void write_halo_catalogue_ascii(const std::vector<SIMCODE::HaloRecord<NDIM>> & h
                         for (auto & def : so_definitions)
                             fp << "  M_" << def << " (Msun/h)  R_" << def << " (Mpc/h)  N_" << def;
                     }
+                    if (relaxed)
+                        fp << "  rfof: pass  bin  linking_length  sigma_v/V_std";
                     fp << "\n";
                 }
                 for (auto & g : halos) {
@@ -646,6 +779,10 @@ void write_halo_catalogue_ascii(const std::vector<SIMCODE::HaloRecord<NDIM>> & h
                                 fp << std::setw(15) << g.so_mass[id] << " " << std::setw(15) << g.so_radius[id] << " "
                                    << std::setw(10) << g.so_npart[id] << " ";
                         }
+                        if (relaxed)
+                            fp << std::setw(4) << g.rfof_pass << " " << std::setw(3) << g.rfof_bin << " "
+                               << std::setw(15) << g.rfof_linking_length << " " << std::setw(15) << g.rfof_vdisp_ratio
+                               << " ";
                         fp << "\n";
                     }
                 }
@@ -683,7 +820,7 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
 
     // Halo finding with the CDM+baryon particles, in physical units
     long long int npart_total = 0;
-    auto halos = find_cb_halos(sim, so_thresholds, npart_total);
+    auto halos = find_cb_halos(sim, so_thresholds, npart_total, redshift);
     const double mass_norm = SIMCODE::halo_particle_mass_msunh(OmegaCB, boxsize, H0_hmpc, size_t(npart_total));
     halos_to_physical_units<NDIM>(halos, mass_norm, boxsize, redshift);
 
@@ -695,7 +832,7 @@ void compute_fof_halos(NBodySimulation<NDIM, T> & sim, double redshift, std::str
         return;
     }
 #endif
-    write_halo_catalogue_ascii<NDIM>(halos, so_definitions, redshift, snapshot_folder);
+    write_halo_catalogue_ascii<NDIM>(halos, so_definitions, redshift, snapshot_folder, settings.relaxed);
 }
 
 #endif
