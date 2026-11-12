@@ -21,11 +21,21 @@ and rejects other models. `nonlinear = hmcode2016` selects HMcode-2016 (as CAMB 
 the general halo model in `FML/HaloModel`). The original Halofit option remains unchanged. See
 [nonlinear methods, library API and validation](../Spectra/NONLINEAR.md) for units, limits and reference tests.
 
-`nonlinear = react` adds the official ReACT reaction multiplied by an HMcode-2020 matched GR pseudo spectrum.
-It requires an enabled optional backend (`USE_REACT=true`) and supports flat `lcdm`, `fr` with n=1, `w0wa`,
-and normal-branch `dgp` with `dgp_lcdm_background=1`, including massive neutrinos. Reactions are restricted to
-z<=2.5; above `react_z_max` the solver uses the matched pseudo baseline with R=1 and reports this approximation.
-See [ReACT setup, conventions, reference tests and limits](../../ReACT/README.md).
+`nonlinear = react` is the halo-model reaction of ReACT (Cataneo et al. 2019; Bose et al. 2020, 2021) multiplied
+by HMcode-2020 of the matched GR pseudo cosmology (LCDM background, the target's total linear P at each z). The
+reaction is computed natively (no external code): the screened spherical collapse
+(`SphericalCollapse/ScreenedSphericalCollapse.h`), the real and pseudo halo models (`HaloModel/HaloModelReaction.h`)
+and the modified-gravity one-loop P for k* (`PerturbationTheory/MGOneLoop.h`). It supports flat `lcdm`, `fr` with
+n=1, `w0wa` and normal-branch `dgp` with `dgp_lcdm_background=1`, including massive neutrinos. The reaction is
+tabulated at `react_n_z` redshifts up to `react_z_max` (default 2.5, at most 10; validated against ReACT for
+z <= 2) and `react_n_k` k from 1e-5 to 100 h/Mpc, with `react_mass_loop` collapses per redshift; above
+`react_z_max` the solver uses the matched pseudo with R=1 (and says so). The native reaction agrees with the
+original ACTio-ReACTio code (a36dda02) to 1e-3 in R (2e-4 for f(R), 6e-4 for nDGP) except for one intentional
+difference: for f(R) the third-order screening term gamma3 is the correct one (Koyama, Taruya & Hiramatsu 2009;
+Bose & Koyama 2016), while ACTio-ReACTio uses 1/3 of it. `react_compat_gamma3 = true` reproduces ReACT; the
+difference in R is up to ~3e-3 for |fR0| = 1e-5. Against the f(R) N-body fit of Winther et al. (2019) the
+enhancement P_f(R)/P_LCDM agrees to 2-3% for k <= 1 h/Mpc (`tests/test_react_physics`). The reference tools for the
+comparisons with ReACT are in `FML/tests/reference/react/tools`.
 
 `nonlinear = ee2` uses the EuclidEmulator2 boost (Euclid Collaboration: Knabenhans et al. 2021; `FML/Emulator`) for
 flat `lcdm` and `w0wa` within its parameter ranges (an error outside them), tabulated at `ee2_n_z` redshifts up to

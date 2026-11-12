@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""Generate fixtures through the official Python interface (requires CAMB, NumPy).
+"""Generate the linear spectra of the ReACT reference fixtures (../<name>_linear.txt, ../cpl_nu_cosmology.txt).
+
+Requires CAMB, NumPy and ACTio-ReACTio (a36dda02) built as a shared library (build_backend.py): the f(R) and nDGP
+target linear spectra use ReACT's modified growth from the LCDM seed. Also writes ReACT's reaction for them
+(../<name>.txt; not used by the tests, which use the halomodel_<name>.txt of halomodel_oracle.cpp).
 
 OMP_NUM_THREADS=1 python3 generate_reference.py --upstream /path/to/ACTio-ReACTio --backend /path/to/libfml_react_backend.so
-The C++ tests compare the independent FML array/ABI adapter with this interface, not with simulations.
 """
 import argparse
 import importlib.util
@@ -20,7 +23,7 @@ spec.loader.exec_module(module)
 np.int = int  # Compatibility for the upstream wrapper's legacy NumPy alias; no engine changes.
 module.ReACT.libname = str(args.backend.resolve())
 engine = module.ReACT()
-out = Path(__file__).resolve().parent / 'reference'
+out = Path(__file__).resolve().parents[1]
 out.mkdir(exist_ok=True)
 z = np.array([0., .5, 1., 2.])
 k = np.geomspace(1e-5, 100., 128)

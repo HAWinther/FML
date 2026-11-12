@@ -9,7 +9,7 @@ The Einstein--Boltzmann solver accepts:
 | `halofit_bird` | Takahashi Halofit plus the updated Bird neutrino correction used by CLASS |
 | `hmcode2016` | HMcode-2016 (as CAMB `mead2016`), including massive neutrinos |
 | `hmcode2020` | Gravity-only HMcode-2020, including massive neutrinos |
-| `react` | Optional official ReACT reaction times an HMcode-2020 matched GR pseudo spectrum |
+| `react` | The ReACT halo-model reaction (computed natively) times HMcode-2020 of the matched GR pseudo cosmology |
 | `ee2` | EuclidEmulator2 boost (flat `lcdm`, `w0wa`, within its parameter ranges) |
 | `jbd_boost` | `model = jbd`: Sletmoen & Winther (2024), the Brans–Dicke boost from the mapped GR universe with `jbd_boost_gr` (`ee2` by default) |
 | `axionhmcode` | Mixed cold/ultralight-axion halo model ([AxionHMcode](../../AxionHMcode/README.md), Vogt et al. 2022, Dome et al. 2024) for `model = axion` |
@@ -26,9 +26,11 @@ The third column remains **linear** CDM+baryon power. With `lensing=true`, the s
 multiplies the Weyl-potential power in the Limber part of the lensing-potential calculation. This is the
 existing matter-to-Weyl prescription; no additional modified-gravity lensing relation is implied.
 
-`react` requires an optional backend and has separate model and redshift limits. See
-[ReACT build, API and scientific conventions](../../ReACT/README.md). Above its reaction range
-(default z=2.5), the solver uses the matched pseudo baseline with R=1 as an explicit approximation.
+`react` supports flat `lcdm`, `fr` (n = 1), `w0wa` and normal-branch `dgp` (LCDM background), with massive
+neutrinos. Above `react_z_max` (default z=2.5) the solver uses the matched pseudo baseline with R=1 as an explicit
+approximation. For f(R) the third-order screening term is the correct one, 3 times ReACT's (`react_compat_gamma3 =
+true` reproduces ACTio-ReACTio). See [OPTIONS.md](../EinsteinBoltzmannSolver/OPTIONS.md) and the
+[HaloModel README](../../HaloModel/README.md).
 
 ## Bird extension
 

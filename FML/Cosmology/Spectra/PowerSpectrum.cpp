@@ -7,7 +7,7 @@
 #include <FML/Spline/Spline.h>
 #include <FML/HaloModel/HMcode2016.h>
 #include <FML/HaloModel/HMcode2020.h>
-#include <FML/ReACT/ReACT.h>
+#include <FML/HaloModel/HaloModelReaction.h>
 #include <FML/Cosmology/Perturbations/Tensors.h>
 #include <FML/Cosmology/Spectra/HypersphericalBessel.h>
 #include <FML/Cosmology/Spectra/Lensing.h>
@@ -741,7 +741,7 @@ namespace FML::COSMOLOGY {
                             ee2          ? ee2->ratio(x, k) :
                             jbd          ? jbd->ps->nonlinear_ratio(x, k * jbd->h_ratio) :
                                            1.0;
-        return react && x >= react->x_min() ? base * react->reaction(std::min(x, react->x_max()),
+        return react && x >= react->x_min() ? base * (*react)(std::min(x, react->x_max()),
                                                                     k * Mpc / cosmo.get_params().h) : base;
     }
 

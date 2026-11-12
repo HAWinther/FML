@@ -1,7 +1,7 @@
 // Calls upstream ReACT's spherical collapse directly (SCOL::maxP_zeta and SCOL::myscol of ACTio-ReACTio a36dda02):
 // the reference values of FML/tests/test_screened_collapse.cpp (FML's ScreenedSphericalCollapse.h).
 //
-// Build against the backend (FML/ReACT/build_backend.py) and the upstream source:
+// Build against ACTio-ReACTio built as a shared library (build_backend.py in this folder) and the upstream source:
 //   g++ -O2 -std=c++17 scol_oracle.cpp -I<ACTio-ReACTio>/reactions/src -I<build-dir>/deps/include \
 //       -L<backend>/lib -lfml_react_backend -lgsl -lgslcblas -Wl,-rpath,<backend>/lib -o scol_oracle
 // Usage: scol_oracle model a OmegaM Omega_nu R_th sigma2_8 dsigma2dR_8 parameter

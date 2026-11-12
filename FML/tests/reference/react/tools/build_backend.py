@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Build pinned ReACT + SUNDIALS privately; no root or system installation required."""
+"""Build pinned ACTio-ReACTio + SUNDIALS privately (into .backend here), only to regenerate the ReACT reference
+values of FML's tests (README.md). No root or system installation required."""
 import argparse
 import os
 from pathlib import Path
@@ -60,7 +61,7 @@ def main():
         '-DCMAKE_BUILD_TYPE=Release', *extra)
     run('cmake', '--build', rb, '-j', a.j)
     run('cmake', '--install', rb)
-    print(f'Backend installed. Build FML with USE_REACT=true REACT_LIB={a.prefix / "lib"}')
+    print(f'Backend installed in {a.prefix / "lib"} (for the oracles in this folder)')
 
 
 if __name__ == '__main__':

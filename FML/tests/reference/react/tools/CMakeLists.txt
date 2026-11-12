@@ -1,4 +1,5 @@
-# Build the unmodified upstream reference backend outside the FML tree.
+# Build the unmodified upstream ACTio-ReACTio (a36dda02) as a shared library, only to regenerate the ReACT reference
+# values of the tests (see README.md here). Not part of FML.
 cmake_minimum_required(VERSION 3.15)
 project(FMLReACTBackend LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)

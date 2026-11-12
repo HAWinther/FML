@@ -13,9 +13,10 @@ COSMO_OBJS := $(notdir $(patsubst %.cpp,%.o,$(wildcard $(addsuffix /*.cpp,$(addp
 
 # FML modules the solver uses (FML_MODULES must include them: $(COSMO_FML_MODULES)). HaloModel: HMcode-2016 (the
 # general halo model, with SphericalCollapse) and HMcode-2020; AxionHMcode (nonlinear = axionhmcode)
-COSMO_FML_MODULES := Spline ODESolver Math ReACT HaloModel SphericalCollapse FileUtils AxionHMcode
-COSMO_OBJS += Spline.o ODESolver.o NumericalMethods.o ReACT.o HMcode2020.o HMcode2016.o Halomodel.o HaloModelTools.o \
-              SphericalCollapse.o SphericalCollapseModel.o Math.o FileUtils.o AxionHMcode.o
+COSMO_FML_MODULES := Spline ODESolver Math HaloModel SphericalCollapse FileUtils AxionHMcode
+COSMO_OBJS += Spline.o ODESolver.o NumericalMethods.o HMcode2020.o HMcode2016.o Halomodel.o HaloModelTools.o \
+              HaloModelReaction.o SphericalCollapse.o SphericalCollapseModel.o ScreenedSphericalCollapse.o Math.o \
+              FileUtils.o AxionHMcode.o
 # Errors in splines and ODEs are exceptions also with MPI (a failing parameter point in an MCMC is rejected)
 OPTIONS += -DSPLINE_THROW_ON_ERROR -DODESOLVER_THROW_ON_ERROR
 

@@ -10,7 +10,7 @@ endif
 test_direct: test_direct.o Global.o
 	$(LINK_EXE)
 
-# One-loop SPT with modified-gravity kernels (compared with ReACT; reads ../../ReACT/tests/reference)
+# One-loop SPT with modified-gravity kernels (compared with ReACT; reads ../../tests/reference/react)
 test_mg_oneloop: test_mg_oneloop.o Global.o
 	$(LINK_EXE)
 FML_MODULES := Global FFTLog

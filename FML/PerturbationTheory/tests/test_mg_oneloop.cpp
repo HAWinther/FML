@@ -5,9 +5,9 @@
 //   - f(R) third-order source: for equal Pi (k -> 0 in all Pi, homogeneous) the average of the three gamma3 terms and
 //     the gamma2 iteration reproduce the exact expansion of the field perturbation df(drho)
 //   - against ReACT (ACTio-ReACTio a36dda02, the one-loop P(k0 = 0.06) of the real and pseudo spectra printed by
-//     ReACT/tests/halomodel_oracle.cpp, reference ../../ReACT/tests/reference/halomodel_{fr,dgp}.txt) for the linear
+//     tests/reference/react/tools/halomodel_oracle.cpp, reference ../../tests/reference/react/halomodel_{fr,dgp}.txt) for the linear
 //     spectra of the ReACT module's fixtures, z = 0, 0.5, 1, 2; for f(R) with ReACT's gamma3 (1/3 of ours)
-// Run from this folder (reads ../../ReACT/tests/reference)
+// Run from this folder (reads ../../tests/reference/react)
 //==========================================================
 #include <FML/Global/Global.h>
 #include <FML/PerturbationTheory/MGOneLoop.h>
@@ -27,7 +27,7 @@ using namespace FML::PERTURBATION;
 using DVector = std::vector<double>;
 
 namespace {
-    const std::string refdir = "../../ReACT/tests/reference/";
+    const std::string refdir = "../../tests/reference/react/";
     std::vector<DVector> load(const std::string & file) {
         std::ifstream in(file);
         if (!in)
@@ -145,13 +145,8 @@ int main() {
         const DVector a = {1.0 / 3.0, 0.5, 2.0 / 3.0, 1.0};
         const int col[4] = {3, 2, 1, 0};
         const double Om = 0.317;
-        auto real = name == "fr" ? mg_hu_sawicki(1e-5, Om, Om) : mg_ndgp(0.1, Om, Om);
-        if (name == "fr") {
-            const auto g3 = real.gamma3;
-            real.gamma3 = [g3](double aa, const SPT::Vec3 & x, const SPT::Vec3 & y, const SPT::Vec3 & z) {
-                return g3(aa, x, y, z) / 3.0;
-            };
-        }
+        // f(R) with ReACT's gamma3 (1/3 of the correct one) to compare with ReACT
+        const auto real = name == "fr" ? mg_hu_sawicki(1e-5, Om, Om, true) : mg_ndgp(0.1, Om, Om);
         const auto rr = mg_one_loop(real, 0.06, a, [&](double q, size_t i) { return Sc[col[i]](q); });
         const auto rp = mg_one_loop(mg_lcdm(Om, Om), 0.06, a, [&](double q, size_t i) { return St[col[i]](q); });
         // ReACT's values (Z lines: a, ploopr, ploopp)

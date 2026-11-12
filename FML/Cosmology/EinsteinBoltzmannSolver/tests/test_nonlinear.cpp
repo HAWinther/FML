@@ -12,7 +12,6 @@
 #include <FML/Cosmology/Spectra/Halofit.h>
 #include <FML/HaloModel/HMcode2016.h>
 #include <FML/HaloModel/HMcode2020.h>
-#include <FML/ReACT/ReACT.h>
 #include <FML/Cosmology/EinsteinBoltzmannSolver/ParameterFile.h>
 #include <FML/Cosmology/Perturbations/Perturbations.h>
 #include <FML/Cosmology/Spectra/PowerSpectrum.h>
@@ -170,7 +169,7 @@ int main() {
             std::getline(in16, line);
             check(line.find("HMcode-2016") != std::string::npos, "matter output identifies HMcode-2016");
         }
-        if (ReACT::available()) {
+        {
             o.nonlinear = PowerSpectrumOptions::Nonlinear::ReACT;
             o.react_n_z = 4;
             o.react_n_k = 64;

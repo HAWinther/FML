@@ -89,8 +89,8 @@ namespace FML::COSMOLOGY {
     namespace HALOMODEL {
         class HMcode2016;
         class HMcode2020;
+        class ReactionTable;
     }
-    class ReACT;
 
     struct PowerSpectrumOptions {
         int ell_max = 2000;
@@ -128,9 +128,14 @@ namespace FML::COSMOLOGY {
         bool axionhmcode_allow_extrapolation = true;
         double axionhmcode_z_max = 10.0;
         int axionhmcode_n_z = 24;
-        // ReACT reactions are computed only up to z <= 2.5. Above that, use the matched GR pseudo baseline.
+        // ReACT: the halo-model reaction (computed natively, PowerSpectrumReACT.cpp) times HMcode-2020 of the matched
+        // pseudo cosmology, tabulated at react_n_z redshifts (uniform in ln a, z <= react_z_max <= 10; validated
+        // against ReACT for z <= 2) and react_n_k k from 1e-5 to 100 h/Mpc, with react_mass_loop spherical collapses
+        // per redshift. Above react_z_max the matched pseudo with R = 1. react_compat_gamma3: ReACT's f(R)
+        // third-order screening term (1/3 of the correct one, ACTio-ReACTio's BeyondLCDM.cpp), only to reproduce ReACT
         int react_n_z = 12, react_n_k = 256, react_mass_loop = 30;
         double react_z_max = 2.5;
+        bool react_compat_gamma3 = false;
         std::vector<int> ells; // ell values where C_ell is computed (default list if empty)
         int ell_step = 25;     // spacing of the default list above ell = 100
 
@@ -302,7 +307,7 @@ namespace FML::COSMOLOGY {
         std::unique_ptr<Halofit> halofit; // built by solve_matter() for either Halofit version
         std::unique_ptr<HALOMODEL::HMcode2020> hmcode;
         std::unique_ptr<HALOMODEL::HMcode2016> hmcode2016;
-        std::unique_ptr<ReACT> react;
+        std::unique_ptr<HALOMODEL::ReactionTable> react;
         std::unique_ptr<struct NonlinearRatioTable> axionhm, ee2;
         std::unique_ptr<struct JBDBoostState> jbd;
         void solve_react();

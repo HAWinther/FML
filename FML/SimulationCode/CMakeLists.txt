@@ -218,14 +218,15 @@ file(GLOB FML_COSMO_SOURCES CONFIGURE_DEPENDS
   ${FML_ROOT}/Cosmology/Perturbations/*.cpp
   ${FML_ROOT}/Cosmology/Spectra/*.cpp)
 list(APPEND FML_COSMO_SOURCES
-  ${FML_ROOT}/ReACT/ReACT.cpp
   ${FML_ROOT}/HaloModel/HMcode2020.cpp
   ${FML_ROOT}/HaloModel/HMcode2016.cpp
   ${FML_ROOT}/HaloModel/Halomodel.cpp
   ${FML_ROOT}/HaloModel/HaloModelTools.cpp
+  ${FML_ROOT}/HaloModel/HaloModelReaction.cpp
   ${FML_ROOT}/AxionHMcode/AxionHMcode.cpp
   ${FML_ROOT}/SphericalCollapse/SphericalCollapse.cpp
   ${FML_ROOT}/SphericalCollapse/SphericalCollapseModel.cpp
+  ${FML_ROOT}/SphericalCollapse/ScreenedSphericalCollapse.cpp
   ${FML_ROOT}/Cosmology/EinsteinBoltzmannSolver/ParameterFile.cpp
   ${FML_ROOT}/Cosmology/EinsteinBoltzmannSolver/EinsteinBoltzmannSolver.cpp)
 

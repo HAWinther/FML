@@ -258,6 +258,50 @@ namespace FML {
                        (plm + one_halo_pseudo(k));
             }
 
+            ReactionTable::ReactionTable(const std::vector<double> & z,
+                                         const std::vector<double> & k,
+                                         const std::vector<std::vector<double>> & R) {
+                if (z.size() < 4 or k.size() < 4 or R.size() != z.size())
+                    throw std::invalid_argument("ReactionTable: need >= 4 redshifts and k and R[z][k]");
+                for (size_t i = 0; i < z.size(); i++) {
+                    if (not(z[i] >= 0.0) or (i > 0 and not(z[i] > z[i - 1])) or R[i].size() != k.size())
+                        throw std::invalid_argument("ReactionTable: z must be increasing and >= 0, R[z] of size k");
+                    for (double r : R[i])
+                        if (not(r > 0.0) or not std::isfinite(r))
+                            throw std::invalid_argument("ReactionTable: R must be positive and finite");
+                }
+                std::vector<double> xs, lk;
+                std::vector<std::vector<double>> lr;
+                for (size_t i = 0; i < k.size(); i++) {
+                    if (not(k[i] > 0.0) or (i > 0 and not(k[i] > k[i - 1])))
+                        throw std::invalid_argument("ReactionTable: k must be positive and increasing");
+                    lk.push_back(std::log(k[i]));
+                }
+                for (size_t i = z.size(); i-- > 0;) {
+                    xs.push_back(-std::log1p(z[i]));
+                    std::vector<double> row;
+                    for (double r : R[i])
+                        row.push_back(std::log(r));
+                    lr.push_back(std::move(row));
+                }
+                xmin = xs.front();
+                xmax = xs.back();
+                lkmin = lk.front();
+                lkmax = lk.back();
+                lnR = FML::INTERPOLATION::SPLINE::Spline2D(xs, lk, lr, "ln R(log a, log k)");
+            }
+
+            double ReactionTable::operator()(double x, double k) const {
+                if (not std::isfinite(x) or not(k > 0.0) or not std::isfinite(k))
+                    throw std::invalid_argument("ReactionTable: need finite x and positive finite k");
+                if (x < xmin or x > xmax)
+                    throw std::out_of_range("ReactionTable: x outside the computed redshift range");
+                const double lk = std::log(k);
+                if (lk < lkmin)
+                    return 1.0;
+                return std::exp(lnR(x, std::min(lk, lkmax)));
+            }
+
         } // namespace HALOMODEL
     } // namespace COSMOLOGY
 } // namespace FML

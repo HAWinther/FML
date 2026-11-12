@@ -564,7 +564,8 @@ namespace FML::COSMOLOGY {
                 I("PowerSpectrum", "react_n_z", "ReACT redshift samples (>=4)", REF(int, ps.react_n_z)),
                 I("PowerSpectrum", "react_n_k", "ReACT logarithmic k samples, 1e-5 to 100 h/Mpc (>=32)", REF(int, ps.react_n_k)),
                 I("PowerSpectrum", "react_mass_loop", "ReACT spherical-collapse mass samples (10..1000)", REF(int, ps.react_mass_loop)),
-                D("PowerSpectrum", "react_z_max", "maximum ReACT redshift (<=2.5); above it use the matched pseudo baseline with R=1", REF(double, ps.react_z_max)),
+                D("PowerSpectrum", "react_z_max", "maximum ReACT redshift (<=10; validated against ReACT to z = 2); above it use the matched pseudo baseline with R=1", REF(double, ps.react_z_max)),
+                B("PowerSpectrum", "react_compat_gamma3", "ReACT: use ACTio-ReACTio's f(R) third-order screening term (1/3 of the correct one) to reproduce ReACT", REF(bool, ps.react_compat_gamma3)),
                 {"PowerSpectrum",
                  "jbd_boost_gr",
                  "jbd_boost: the GR nonlinear method of the mapped GR universe: ee2 (as the paper), hmcode2020, "

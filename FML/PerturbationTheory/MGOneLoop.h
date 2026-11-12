@@ -37,7 +37,8 @@
 /// arXiv:0902.0618, eq. 3.6; Bose & Koyama 2016, arXiv:1606.02520, eqs. 2.32-2.35) and mg_ndgp (normal-branch DGP,
 /// Vainshtein nonlinearities, Bose & Koyama 2016 eqs. 2.37-2.39). The third-order f(R) field perturbation reduces to
 /// the exact expansion of R(f_R) for a homogeneous perturbation (tests/test_mg_oneloop.cpp). ReACT's f(R) gamma3
-/// (BeyondLCDM.cpp, a36dda02) is 1/3 of this (an extra 1/3 on top of the average over the three splits). ReACT uses this one-loop P at
+/// (BeyondLCDM.cpp, a36dda02) is 1/3 of this (an extra 1/3 on top of the average over the three splits); the
+/// option react_gamma3 of mg_hu_sawicki reproduces it (for comparisons with ReACT only). ReACT uses this one-loop P at
 /// k0 = 0.06 h/Mpc for k* (HaloModel/HaloModelReaction.h): the real P_cb with the model's kernels and the pseudo P with
 /// the GR kernels of the LCDM background.
 ///
@@ -96,7 +97,9 @@ namespace FML::PERTURBATION {
         };
     } // namespace detail
 
-    inline MGKernelModel mg_hu_sawicki(double fR0, double OmegaM, double Omega_source) {
+    /// react_gamma3 = true: ReACT's third-order source (ACTio-ReACTio, BeyondLCDM.cpp, which has an extra factor 1/3,
+    /// so 1/3 of the correct one), only to reproduce ReACT's numbers
+    inline MGKernelModel mg_hu_sawicki(double fR0, double OmegaM, double Omega_source, bool react_gamma3 = false) {
         if (not(fR0 > 0.0))
             throw std::invalid_argument("mg_hu_sawicki: need |fR0| > 0");
         MGKernelModel m = mg_lcdm(OmegaM, Omega_source);
@@ -112,12 +115,12 @@ namespace FML::PERTURBATION {
             return -k2tot / (a * a) * hs.M2(a) * s * s /
                    (12.0 * H2 * hs.Pi(a, k2tot) * hs.Pi(a, k1.norm2()) * hs.Pi(a, k2.norm2()));
         };
-        m.gamma3 = [hs, E](double a, const SPT::Vec3 & k1, const SPT::Vec3 & k2, const SPT::Vec3 & k3) {
+        m.gamma3 = [hs, E, react_gamma3](double a, const SPT::Vec3 & k1, const SPT::Vec3 & k2, const SPT::Vec3 & k3) {
             const double k2tot = (k1 + k2 + k3).norm2();
             const double s = H0_hMpc * H0_hMpc * hs.Om / (a * a * a);
             const double H2 = std::pow(H0_hMpc * E(a), 2);
             const double M2 = hs.M2(a);
-            return k2tot / (a * a) * s * s * s *
+            return (react_gamma3 ? 1.0 / 3.0 : 1.0) * k2tot / (a * a) * s * s * s *
                    (M2 * M2 / hs.Pi(a, (k2 + k3).norm2()) - hs.M3(a)) /
                    (36.0 * H2 * hs.Pi(a, k2tot) * hs.Pi(a, k1.norm2()) * hs.Pi(a, k2.norm2()) *
                     hs.Pi(a, k3.norm2()));

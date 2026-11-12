@@ -5,6 +5,25 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### ReACT: native halo-model reaction; the external backend removed
+- `nonlinear = react` now computes the halo-model reaction natively: `SphericalCollapse/ScreenedSphericalCollapse.h`
+  (spherical collapse with a screened fifth force: Hu-Sawicki f(R) thin shell, nDGP Vainshtein, the most probable
+  environment), `HaloModel/HaloModelReaction.h` (real and pseudo one-halo terms, E, k*, massive neutrinos;
+  `ReactionTable` for the solver) and `PerturbationTheory/MGOneLoop.h` (one-loop P with kernels evolved in time with
+  mu, gamma2, gamma3, for k*). No external code, no `USE_REACT`, no SUNDIALS; `react_z_max` may now be up to 10.
+- Against ACTio-ReACTio (a36dda02): delta_c to 8e-5, the one-halo terms to 2e-3, R to 2e-4 (f(R)) and 6e-4 (nDGP),
+  1e-3 (CPL with neutrinos) for z <= 2 (`tests/test_screened_collapse`, `tests/test_halomodel_reaction`,
+  `PerturbationTheory/tests/test_mg_oneloop`). Solver: `EinsteinBoltzmannSolver/tests/test_react_physics` (f(R) N-body
+  fit, limits, w0wa and neutrinos against HMcode-2020).
+- Intentional difference: the f(R) third-order screening term gamma3 is the correct one (Koyama, Taruya & Hiramatsu
+  2009 eq. 3.6; Bose & Koyama 2016 eqs. 2.14, 2.34; checked against the exact expansion of the field perturbation);
+  ACTio-ReACTio's (BeyondLCDM.cpp) is 1/3 of it. R differs by up to ~3e-3 for |fR0| = 1e-5. New option
+  `react_compat_gamma3 = true` (and `mg_hu_sawicki(..., react_gamma3 = true)`) reproduces ReACT.
+- Also avoided: ACTio-ReACTio's bracket of the initial overdensity in the modified-gravity collapse (delta_c pinned at
+  the bracket edge at high z, 5% low at z = 2.3).
+- Removed: `FML/ReACT` (the wrapper of the external backend, its builder and tests), `USE_REACT`, `REACT_LIB`. The
+  reference values and the tools that regenerate them with the original code are in `tests/reference/react`.
+
 ### Documentation: SimulationCode and Einstein–Boltzmann solver READMEs
 - `SimulationCode/README.md` is now an overview (features, building, running, output, a map of the documentation);
   the details moved, unchanged, to `MODELS.md`, `INITIAL_CONDITIONS.md`, `EVOLUTION.md`, `SPECIES.md`, `ANALYSIS.md`
@@ -124,7 +143,7 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
   linear theory, the exact discrete solution for the paper's nonlinear sine profile, a screened halo, the warm start);
   regression case `dilaton_exact_multigrid`. New parameter check `check::at_most`.
 
-### ReACT: optional official halo-model reaction engine
+### ReACT: optional official halo-model reaction engine (superseded: see the native reaction above)
 - `FML/ReACT` interfaces to pinned ACTio-ReACTio v2, including massive neutrinos, with explicit [z][k]
   spectrum inputs, unit/order checks, serialized backend calls and immutable reaction tables. The optional
   private-backend builder includes SUNDIALS 4.1.0; ordinary builds do not require either dependency.

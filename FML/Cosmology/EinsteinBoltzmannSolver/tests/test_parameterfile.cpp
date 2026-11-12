@@ -57,15 +57,15 @@ int main() {
     std::cout << "Reading values\n";
     {
         const auto s = ParameterFile::read("", {"nonlinear=react", "react_n_z=8", "react_n_k=128",
-                                               "react_mass_loop=20", "react_z_max=2"});
+                                               "react_mass_loop=20", "react_z_max=2", "react_compat_gamma3=true"});
         check(s.ps.nonlinear == PowerSpectrumOptions::Nonlinear::ReACT && s.ps.react_n_z == 8 &&
-              s.ps.react_n_k == 128 && s.ps.react_mass_loop == 20 && s.ps.react_z_max == 2,
+              s.ps.react_n_k == 128 && s.ps.react_mass_loop == 20 && s.ps.react_z_max == 2 && s.ps.react_compat_gamma3,
               "ReACT method and sampling settings parsed");
         ParameterFile::write(s, dir + "/react.ini");
         const auto r = ParameterFile::read(dir + "/react.ini");
         check(r.ps.nonlinear == s.ps.nonlinear && r.ps.react_n_z == s.ps.react_n_z &&
               r.ps.react_n_k == s.ps.react_n_k && r.ps.react_mass_loop == s.ps.react_mass_loop &&
-              r.ps.react_z_max == s.ps.react_z_max, "ReACT settings survive a parameter-file round trip");
+              r.ps.react_z_max == s.ps.react_z_max && r.ps.react_compat_gamma3, "ReACT settings survive a parameter-file round trip");
     }
     {
         std::ofstream(dir + "/c.ini") << "# comment line\n"

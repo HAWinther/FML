@@ -1,18 +1,18 @@
 // =============================================================================
-// Tests of the solver's nonlinear = react (Cosmology/Spectra/PowerSpectrumReACT.cpp) with non-trivial reactions.
-// Needs the optional ReACT backend (USE_REACT=true, see FML/ReACT/README.md); passes trivially without it.
-// ~8 min on 2 cores (14 Boltzmann solves, precision = fast).
+// Tests of the solver's nonlinear = react (Cosmology/Spectra/PowerSpectrumReACT.cpp, the native halo-model reaction)
+// with non-trivial reactions. Several minutes on 2 cores (14 Boltzmann solves, precision = fast).
 //
-//   * Composition: the solver's P_NL for f(R) = R x P_NL,pseudo rebuilt independently here (ReACT library on a
-//     different k/z grid, HMcode-2020 of the matched pseudo cosmology evaluated directly in h/Mpc). Catches unit,
-//     ordering and interpolation errors that the massless-GR identity of test_nonlinear (R = 1) cannot.
+//   * Composition: the solver's P_NL for f(R) = R x P_NL,pseudo rebuilt independently here (HaloModelReaction and
+//     MGOneLoop directly at z = 0 and 1, not through the solver's table; HMcode-2020 of the matched pseudo cosmology
+//     evaluated directly in h/Mpc). Catches unit, ordering and interpolation errors that the massless-GR identity of
+//     test_nonlinear (R = 1) cannot.
 //   * f(R): the enhancement P_f(R)/P_LCDM (same initial conditions) against the fitting function of Winther et al.
 //     2019 (Emulator/FofrFittingFunction.h, calibrated on the ELEPHANT N-body simulations), for |fR0| = 1e-6, 1e-5
 //     in their cosmology (measured: 2-3% for k <= 1 h/Mpc, up to 7% at k = 3, z = 0 for 1e-5)
-//   * Limits: R -> 1 for |fR0| -> 0 and Omega_rc -> 0 (library), and on large scales
+//   * Limits: R -> 1 for |fR0| -> 0 and Omega_rc -> 0 (HaloModelReaction), and on large scales
 //   * w0wa and LCDM with massive neutrinos: ReACT x matched pseudo against HMcode-2020 run directly (both include
 //     these physics; they agree to the accuracy of the two halo models)
-//   * A_s outside upstream's former 1.5e-9 - 2.5e-9 range is accepted (it cancels in upstream's input conversion)
+//   * A_s = 3.2e-9 (outside the range the ReACT code accepted) works
 // =============================================================================
 
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
@@ -23,7 +23,9 @@
 #include <FML/Cosmology/Spectra/PowerSpectrum.h>
 #include <FML/Emulator/FofrFittingFunction.h>
 #include <FML/HaloModel/HMcode2020.h>
-#include <FML/ReACT/ReACT.h>
+#include <FML/HaloModel/HaloModelReaction.h>
+#include <FML/PerturbationTheory/MGOneLoop.h>
+#include <FML/SphericalCollapse/ScreenedSphericalCollapse.h>
 #include <FML/tests/TestHelpers.h>
 
 #include <cmath>
@@ -86,10 +88,9 @@ namespace {
 
 int main() {
     Utils::verbose = false;
-    if (!ReACT::available()) {
-        std::cout << "ReACT backend not enabled (USE_REACT=true): nothing to test\n";
-        return FML::TESTS::summary("ReACT solver physics (backend disabled)");
-    }
+    namespace PT = FML::PERTURBATION;
+    namespace SC = SPHERICALCOLLAPSE;
+    using HALOMODEL::HaloModelReaction;
 
     // The ELEPHANT cosmology (WMAP9) of the f(R) fitting function, massless neutrinos
     const std::vector<std::string> elephant = {"h=0.6974", "OmegaB=0.046", "OmegaCDM=0.235", "n_s=0.971",
@@ -101,37 +102,31 @@ int main() {
 
     const Run lcdm(elephant, Nonlinear::HMcode2020);
     const Run fr5(with(elephant, {"model=fr", "fR0=1e-5", "fR_n=1"}), Nonlinear::ReACT);
-    const double h = lcdm.s.cosmo.h;
 
     //=========================================================================
     std::cout << "Composition: solver P_NL(f(R)) = R (library) x P_NL,pseudo (HMcode-2020 of the pseudo cosmology)\n";
     //=========================================================================
     {
-        // The reaction from the library on its own grid (160 k, z = 0, 0.5, 1, 2; the solver uses 128 k, 8 z)
-        ReACT::Input in;
-        in.cosmology.h = h;
-        in.cosmology.n_s = fr5.s.cosmo.n_s;
-        in.cosmology.Omega_b = fr5.bg->rhoB(0);
-        in.cosmology.Omega_nu = 0.0;
-        in.cosmology.Omega_m = fr5.bg->rhoB(0) + fr5.bg->rhoCDM(0);
-        in.z = {0.0, 0.5, 1.0, 2.0};
-        for (int i = 0; i < 160; i++)
-            in.k.push_back(1e-5 * std::pow(1e7, i / 159.0));
-        for (double z : in.z) {
-            std::vector<double> t, c, l;
-            for (double kh : in.k) {
-                t.push_back(fr5.plin(z, kh));
-                c.push_back(fr5.plin(z, kh, true));
-                l.push_back(lcdm.plin(z, kh, true));
-            }
-            in.total.push_back(t);
-            in.cold.push_back(c);
-            in.lcdm_cold.push_back(l);
-        }
-        ReACT::Options ro;
-        ro.model = ReACT::Model::HuSawicki;
-        ro.parameters[0] = 1e-5;
-        const ReACT table(ReACT::compute(in, ro));
+        // The reaction directly at z = 0 and 1 (the solver tabulates it at 8 redshifts and 128 k)
+        const double Om = fr5.bg->rhoB(0) + fr5.bg->rhoCDM(0);
+        auto spectra = [&](double z) {
+            HaloModelReaction::LinearSpectra S;
+            S.P = [&fr5, z](double kh) { return fr5.plin(z, kh); };
+            S.Pcb = [&fr5, z](double kh) { return fr5.plin(z, kh, true); };
+            S.Pcb_lcdm = [&lcdm, z](double kh) { return lcdm.plin(z, kh, true); };
+            return S;
+        };
+        const std::vector<double> az = {0.5, 1.0};
+        const auto Sz1 = spectra(1.0), Sz0 = spectra(0.0);
+        auto Pi = [&](double q, size_t i, bool cb) { return (i == 0 ? (cb ? Sz1.Pcb : Sz1.P) : (cb ? Sz0.Pcb : Sz0.P))(q); };
+        const auto lr = PT::mg_one_loop(PT::mg_hu_sawicki(1e-5, Om, Om), 0.06, az, [&](double q, size_t i) { return Pi(q, i, true); });
+        const auto lp = PT::mg_one_loop(PT::mg_lcdm(Om, Om), 0.06, az, [&](double q, size_t i) { return Pi(q, i, false); });
+        HaloModelReaction::Cosmology hc;
+        hc.OmegaM = Om;
+        auto F = [Om](double R) { return SC::fifth_force_hu_sawicki(1e-5, 1.0, Om, R); };
+        HaloModelReaction hm1(hc, 0.5, Sz1, F), hm0(hc, 1.0, Sz0, F);
+        hm1.set_one_loop(lr[0], lp[0]);
+        hm0.set_one_loop(lr[1], lp[1]);
 
         // The pseudo cosmology: LCDM background, GR, the target's linear P
         auto pp = fr5.s.cosmo;
@@ -145,7 +140,7 @@ int main() {
             const std::vector<double> ks = {0.05, 0.2, 0.5, 1.0, 3.0};
             const auto pseudo = HALOMODEL::HMcode2020::spectrum(pseudo_bg, target, target, -std::log1p(z), ks);
             for (size_t i = 0; i < ks.size(); i++) {
-                const double R = table.reaction(-std::log1p(z), ks[i]);
+                const double R = (z == 0.0 ? hm0 : hm1).reaction(ks[i]);
                 rmax = std::max(rmax, std::abs(R - 1));
                 const double mine = fr5.pnl(z, ks[i]), indep = R * pseudo.nonlinear[i];
                 err = std::max(err, std::abs(mine / indep - 1));
@@ -190,37 +185,35 @@ int main() {
     std::cout << "Limits: R -> 1 for |fR0|, Omega_rc -> 0 and on large scales\n";
     //=========================================================================
     {
-        ReACT::Input in;
-        in.cosmology.h = h;
-        in.cosmology.n_s = lcdm.s.cosmo.n_s;
-        in.cosmology.Omega_b = lcdm.bg->rhoB(0);
-        in.cosmology.Omega_m = lcdm.bg->rhoB(0) + lcdm.bg->rhoCDM(0);
-        in.z = {0.0, 0.5, 1.0, 2.0};
-        for (int i = 0; i < 128; i++)
-            in.k.push_back(1e-5 * std::pow(1e7, i / 127.0));
-        for (double z : in.z) {
-            std::vector<double> c;
-            for (double kh : in.k)
-                c.push_back(lcdm.plin(z, kh, true));
-            in.total.push_back(c);
-            in.cold.push_back(c);
-            in.lcdm_cold.push_back(c);
-        }
-        ReACT::Options gr;
-        const auto rgr = ReACT::compute(in, gr);
-        for (auto [model, p] : {std::pair{ReACT::Model::HuSawicki, 1e-8}, {ReACT::Model::NormalDGP, 1e-6}}) {
-            ReACT::Options o;
-            o.model = model;
-            o.parameters[0] = p;
-            // relative to GR from the same call setup (removes upstream's real/pseudo GR mismatch)
-            const auto r = ReACT::compute(in, o);
+        // GR targets (the LCDM spectra) with a tiny fifth force: R = R_GR = 1
+        const double Om = lcdm.bg->rhoB(0) + lcdm.bg->rhoCDM(0);
+        HaloModelReaction::Cosmology hc;
+        hc.OmegaM = Om;
+        SC::SphericalCollapseModel bg;
+        bg.OmegaM = Om;
+        bg.set_model_lcdm();
+        for (int model : {0, 1}) {
+            const std::vector<double> az = {0.5, 1.0};
+            auto P = [&](double q, size_t i) { return lcdm.plin(i == 0 ? 1.0 : 0.0, q); };
+            const auto kern = model == 0 ? PT::mg_hu_sawicki(1e-10, Om, Om) : PT::mg_ndgp(1e-6, Om, Om);
+            const auto lr = PT::mg_one_loop(kern, 0.06, az, P), lp = PT::mg_one_loop(PT::mg_lcdm(Om, Om), 0.06, az, P);
+            HaloModelReaction::FifthForceOfRadius F;
+            if (model == 0)
+                F = [Om](double R) { return SC::fifth_force_hu_sawicki(1e-10, 1.0, Om, R); };
+            else
+                F = [bg](double) { return SC::fifth_force_ndgp(1e-6, bg); };
             double d = 0;
-            for (size_t iz = 0; iz < in.z.size(); iz++)
-                for (size_t ik = 0; ik < in.k.size(); ik++)
-                    if (in.k[ik] <= 3.0)
-                        d = std::max(d, std::abs(r.reaction[iz][ik] / rgr.reaction[iz][ik] - 1));
-            check(d < 2e-3, std::string(model == ReACT::Model::HuSawicki ? "|fR0| = 1e-8" : "Omega_rc = 1e-6") +
-                                ": R = R_GR to " + fmt(d, 2) + " for k <= 3 h/Mpc");
+            for (size_t i = 0; i < az.size(); i++) {
+                const double z = i == 0 ? 1.0 : 0.0;
+                HaloModelReaction::LinearSpectra S;
+                S.P = S.Pcb = S.Pcb_lcdm = [&lcdm, z](double kh) { return lcdm.plin(z, kh); };
+                HaloModelReaction hm(hc, az[i], S, F);
+                hm.set_one_loop(lr[i], lp[i]);
+                for (double k : {0.05, 0.3, 1.0, 3.0})
+                    d = std::max(d, std::abs(hm.reaction(k) - 1));
+            }
+            check(d < 2e-3, std::string(model == 0 ? "|fR0| = 1e-10" : "Omega_rc = 1e-6") + ": R = 1 to " + fmt(d, 2) +
+                                " for k <= 3 h/Mpc");
         }
         double large = 0;
         for (double z : {0.0, 1.0})

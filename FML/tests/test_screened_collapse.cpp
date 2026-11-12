@@ -5,7 +5,7 @@
 //   - limits: f(R) with fR0 = 0 and a very massive (screened) halo -> GR, nDGP with Omega_rc -> 0 -> GR, the linear
 //     nDGP force 1/(3 beta); delta_c decreases with decreasing halo mass between GR and the unscreened collapse
 //   - against ReACT's spherical collapse (ACTio-ReACTio a36dda02, SCOL::myscol and SCOL::maxP_zeta called directly;
-//     generator: ReACT/tests/scol_oracle.cpp): the most probable environment, delta_c, a_vir and delta(a_vir) for
+//     generator: reference/react/tools/scol_oracle.cpp): the most probable environment, delta_c, a_vir and delta(a_vir) for
 //     Hu-Sawicki f(R) (|fR0| = 1e-6, 1e-5, 1e-4; R_th = 0.3 - 8 Mpc/h; z = 0, 0.5, 1) and nDGP (Omega_rc = 0.25,
 //     1; z = 0, 1), OmegaM = 0.3 and sigma^2(8 Mpc/h) = 0.64 D(z)^2 / D(0)^2
 //   - the environment threshold for OmegaM = 1, the Lagrangian radius, invalid input

@@ -151,6 +151,28 @@ namespace FML {
                 double Pnu(double k) const;
             };
 
+            //=========================================================================================================
+            /// A table of R(z, k) for the solver: a bicubic spline of ln R in (x = log a, log k). R = 1 below the
+            /// table's k, the endpoint value above it; outside the redshift range it throws. Safe to evaluate from
+            /// several threads.
+            //=========================================================================================================
+            class ReactionTable {
+              public:
+                ReactionTable() = default;
+                /// z increasing (>= 4 values), k in h/Mpc increasing (>= 4), R[iz][ik] > 0
+                ReactionTable(const std::vector<double> & z,
+                              const std::vector<double> & k,
+                              const std::vector<std::vector<double>> & R);
+                /// R at x = log a and k in h/Mpc
+                double operator()(double x, double k) const;
+                double x_min() const { return xmin; }
+                double x_max() const { return xmax; }
+
+              private:
+                double xmin{}, xmax{}, lkmin{}, lkmax{};
+                FML::INTERPOLATION::SPLINE::Spline2D lnR;
+            };
+
         } // namespace HALOMODEL
     } // namespace COSMOLOGY
 } // namespace FML

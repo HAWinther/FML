@@ -50,7 +50,7 @@ building, set the environment variable `FML_DIR`.
 | Spectra | C_ℓ^TT, EE, TE by line of sight (hyperspherical Bessel functions when curved, with CLASS's flat approximation), P(k) of total matter and CDM+baryons; primordial P_R = A_s (k/k_pivot)^(n_s − 1 + α_s/2 ln(k/k_pivot)) with optional running `alpha_s` (as CLASS; adiabatic mode only, C_ℓ ratios to CLASS 5e-4) |
 | Tensor modes | Gravitational waves (`r`, `n_t` or the consistency relation): photon temperature and polarization and neutrino hierarchies, anisotropic stress, tight coupling, modified-gravity friction (α_M, M*² of Horndeski, Brans–Dicke, f(R)); TT, EE, TE, BB by line of sight, added to the scalar spectra and lensed with them; flat |
 | Isocurvature modes | CDM, baryon, neutrino density and neutrino velocity isocurvature (`f_*`, `n_*`, `c_ad_*` as CLASS), and axion density isocurvature (`f_axi`, or `ax_log10_Hinf`) for `model = axion`; each correlated with the adiabatic mode; CLASS initial conditions; one extra perturbation solve per mode; GR only |
-| Nonlinear | Halofit, Halofit+Bird, HMcode-2016, HMcode-2020, optional ReACT reactions and, for `model = axion`, the mixed cold/axion halo model AxionHMcode, EuclidEmulator2 and, for `model = jbd`, the Brans–Dicke boost from GR of Sletmoen & Winther (2024) (`halofit`, `halofit_bird`, `hmcode2016`, `hmcode2020`, `react`, `axionhmcode`, `ee2`, `jbd_boost`), used for nonlinear CMB lensing |
+| Nonlinear | Halofit, Halofit+Bird, HMcode-2016, HMcode-2020, ReACT halo-model reactions (native) and, for `model = axion`, the mixed cold/axion halo model AxionHMcode, EuclidEmulator2 and, for `model = jbd`, the Brans–Dicke boost from GR of Sletmoen & Winther (2024) (`halofit`, `halofit_bird`, `hmcode2016`, `hmcode2020`, `react`, `axionhmcode`, `ee2`, `jbd_boost`), used for nonlinear CMB lensing |
 | Lensing | C_ℓ^φφ (LOS + Limber), lensed TT, EE, TE, BB (full-sky correlation-function method) |
 | Two-point functions | CMB C(θ), ξ±, ξ_X with beams; matter ξ(r), σ_R, σ₈; angular C_ℓ and w(θ) of a projected tracer (exact + Limber) |
 | Fitting | MCMC, best fits and profile likelihoods with background, Planck CMB and lensing data: `FML/CosmologyFitting` (samplers in `FML/MCMC`) |
@@ -136,4 +136,4 @@ ebs.output();                                   // the files enabled in the sett
 - [params/default.ini](params/default.ini): every parameter with its description.
 - `report/paper.pdf`: the physics, numerics and validation of every module.
 - The background and perturbation modules: [Background](../Background/README.md), [Perturbations](../Perturbations/README.md).
-- [Nonlinear methods](../Spectra/NONLINEAR.md) and [ReACT](../../ReACT/README.md).
+- [Nonlinear methods](../Spectra/NONLINEAR.md) and the ReACT reaction ([OPTIONS.md](OPTIONS.md), [HaloModel](../../HaloModel/README.md)).

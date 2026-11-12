@@ -1,13 +1,15 @@
 // ReACT halo-model oracle: the per-redshift quantities of compute_reaction_nu_ext (pyreact/react_wrapper.cpp,
 // ACTio-ReACTio a36dda02) for tabulated target spectra: delta_c(M), sigma(M), a_vir(M), delta(a_vir) of the real and
 // pseudo collapse, the one-halo terms, E, k*, the one-loop P(k0) and the reaction. The reference of
-// FML/tests/test_halomodel_reaction.cpp (HaloModel/HaloModelReaction.h): reference/halomodel_<name>.txt.
+// FML/tests/test_halomodel_reaction.cpp (HaloModel/HaloModelReaction.h) and PerturbationTheory/tests/test_mg_oneloop.cpp:
+// tests/reference/react/halomodel_<name>.txt.
 //
-// Build against the backend (FML/ReACT/build_backend.py), its staged Copter headers and the upstream source:
+// Build against ACTio-ReACTio built as a shared library (build_backend.py in this folder), its staged Copter headers
+// and the upstream source:
 //   g++ -O2 -std=c++17 -fopenmp halomodel_oracle.cpp -I<build-dir>/react-build/include \
 //       -I<ACTio-ReACTio>/reactions/src -I<build-dir>/deps/include -L<backend>/lib -lfml_react_backend \
 //       -lgsl -lgslcblas -Wl,-rpath,<backend>/lib -o halomodel_oracle
-// Usage: halomodel_oracle reference/<name>_linear.txt model parameter0 parameter1 Omega_nu mass_loop
+// Usage: halomodel_oracle ../<name>_linear.txt model parameter0 parameter1 Omega_nu mass_loop
 //   (model 1 GR, 2 f(R), 3 nDGP, 5 CPL; the cosmology of generate_reference.py; prints lines Z, M, K)
 #include <Copter/HALO.h>
 #include <Copter/Cosmology.h>

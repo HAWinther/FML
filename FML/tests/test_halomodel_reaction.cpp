@@ -1,7 +1,7 @@
 //==========================================================
 // Tests for FML::COSMOLOGY::HALOMODEL::HaloModelReaction (the halo-model reaction of ReACT, HaloModelReaction.h):
-//   - against ReACT (ACTio-ReACTio a36dda02, HALO.cpp through ReACT/tests/halomodel_oracle.cpp; reference
-//     ../ReACT/tests/reference/halomodel_<name>.txt) for the linear spectra of the ReACT module's fixtures (GR,
+//   - against ReACT (ACTio-ReACTio a36dda02, HALO.cpp through reference/react/tools/halomodel_oracle.cpp;
+//     reference reference/react/halomodel_<name>.txt) for the linear spectra of reference/react/<name>_linear.txt (GR,
 //     f(R) |fR0| = 1e-5, nDGP Omega_rc = 0.1, CPL w0 = -0.9, wa = 0.1 with sum m_nu = 0.3 eV; z = 0, 0.5, 1, 2):
 //     delta_c(M) and sigma(M) of the real and pseudo halos, g_de, E, k* (from ReACT's one-loop P(k0)), the
 //     one-halo terms and the reaction
@@ -30,7 +30,7 @@ using namespace FML::COSMOLOGY::SPHERICALCOLLAPSE;
 using Spline = FML::INTERPOLATION::SPLINE::Spline;
 
 namespace {
-    const std::string refdir = "../ReACT/tests/reference/";
+    const std::string refdir = "reference/react/";
 
     std::vector<std::vector<std::string>> read(const std::string & file) {
         std::ifstream in(file);
@@ -170,15 +170,9 @@ int main() {
         std::vector<HaloModelReaction::LinearSpectra> S;
         for (int i = 0; i < 4; i++)
             S.push_back(spectra(lin, col[i]));
-        auto real = c.model == 2 ? PT::mg_hu_sawicki(c.p0, Om, Om) : PT::mg_ndgp(c.p0, Om, Om);
-        auto real_react = real;
-        if (c.model == 2) {
-            const auto g3 = real.gamma3;
-            real_react.gamma3 = [g3](double aa, const FML::PERTURBATION::SPT::Vec3 & x,
-                                     const FML::PERTURBATION::SPT::Vec3 & y, const FML::PERTURBATION::SPT::Vec3 & z) {
-                return g3(aa, x, y, z) / 3.0;
-            };
-        }
+        const auto real = c.model == 2 ? PT::mg_hu_sawicki(c.p0, Om, Om) : PT::mg_ndgp(c.p0, Om, Om);
+        // f(R) with ReACT's gamma3 (1/3 of the correct one) to compare with ReACT
+        const auto real_react = c.model == 2 ? PT::mg_hu_sawicki(c.p0, Om, Om, true) : real;
         auto Pcb = [&](double q, size_t i) { return S[i].Pcb(q); };
         const auto pr = PT::mg_one_loop(real_react, 0.06, a, Pcb);
         const auto pr_correct = c.model == 2 ? PT::mg_one_loop(real, 0.06, a, Pcb) : pr;

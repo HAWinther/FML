@@ -177,7 +177,7 @@ test_sphericalcollapse: test_sphericalcollapse.o Global.o Spline.o ODESolver.o M
 test_screened_collapse: test_screened_collapse.o Global.o Spline.o ODESolver.o Math.o SphericalCollapse.o SphericalCollapseModel.o ScreenedSphericalCollapse.o
 	$(LINK_EXE)
 
-# Halo-model reaction (reads the ReACT module's fixtures in ../ReACT/tests/reference)
+# Halo-model reaction (reads the ReACT references in reference/react)
 test_halomodel_reaction: test_halomodel_reaction.o Global.o Spline.o ODESolver.o Math.o SphericalCollapse.o SphericalCollapseModel.o ScreenedSphericalCollapse.o HaloModelReaction.o HaloModelTools.o
 	$(LINK_EXE)
 
