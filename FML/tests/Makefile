@@ -14,13 +14,14 @@ USE_LUA             ?= true
 TARGETS := test_core test_mpi_counts test_grid_tools test_fof test_so test_so_multislab test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_screened_collapse test_halomodel test_halomodel_reaction test_gadget test_ramses test_camb test_numcore test_fftlog test_emulator test_utils test_interpolation test_grids test_particles test_lpt test_nbody
 TARGETS += test_baryonification test_numericalmethods test_interlacing_offset test_streamed_kick test_lightcone test_random_fields test_timestepping test_transfers
 TARGETS += test_fourier_resampling test_testhelpers
+TARGETS += test_four_point
 TARGETS += test_cosmicweb test_short_range test_yukawa test_phase_space_halos test_control test_morphology test_environment test_pt_direct test_halo_history
 
 include ../Makefile.config
 
 ifeq ($(USE_FFTW),true)
-TARGETS += test_spectra test_perturbation
-all: test_spectra test_perturbation
+TARGETS += test_spectra test_perturbation test_four_point_fourier
+all: test_spectra test_perturbation test_four_point_fourier
 endif
 
 ifeq ($(USE_LUA),true)
@@ -42,7 +43,8 @@ INTERNAL_COSMO_OBJS := $(filter-out Spline.o ODESolver.o,$(COSMO_OBJS))
 MODULE_TEST_SOURCES := Baryonification/tests/test_baryonification Baryonification/tests/test_baryonification_odr \
                        ShortRangeGravity/tests/test_short_range ShortRangeGravity/tests/test_yukawa \
                        PhaseSpaceHaloFinder/tests/test_phase_space_halos EnsembleStatistics/tests/test_control \
-                       EnsembleStatistics/tests/test_spectra Morphology/tests/test_morphology
+                       EnsembleStatistics/tests/test_spectra Morphology/tests/test_morphology \
+                       ConnectedFourPoint/tests/test_four_point ConnectedFourPoint/tests/test_four_point_fourier
 define module_test_object
 $(notdir $(1)).o: $(FML_ROOT)/$(1).cpp
 	$$(CC) $$(DEPFLAGS) -c -o $$@ $$< $$(OPTIONS) $$(INC)
@@ -76,6 +78,12 @@ test_mpi_counts: test_mpi_counts.o Global.o
 	$(LINK_EXE)
 
 test_grid_tools: test_grid_tools.o Global.o
+	$(LINK_EXE)
+
+test_four_point: test_four_point.o Global.o
+	$(LINK_EXE)
+
+test_four_point_fourier: test_four_point_fourier.o Global.o
 	$(LINK_EXE)
 
 test_control: test_control.o Global.o
@@ -297,6 +305,8 @@ run: $(TARGETS)
 	  OMP_NUM_THREADS=2 $(RUN) ./test_yukawa; \
 	  echo "== Running test_short_range with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_short_range; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_four_point; \
+	  $(if $(filter true,$(USE_FFTW)),OMP_NUM_THREADS=2 $(RUN) ./test_four_point_fourier,:); \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_control; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_morphology; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_environment; \

@@ -207,3 +207,13 @@ scratch and retained payload buffers, without counting input/output grids again.
 The report does not change cache limits, configuration order, FFT counts,
 normalization or result storage. Cache-aware scheduling in backlog item 12 is
 still waiting.
+
+## Connected four-point extension
+
+The separate [ConnectedFourPoint module](../ConnectedFourPoint/README.md) provides
+explicit Wick subtraction for periodic shell-filtered fourth moments, optional
+external covariance references and connected power-covariance/collapsed-trispectrum
+postprocessing. Its shell outputs report both dimensionless integrated moments
+and volume-scaled ordered-quartet averages. It documents finite-mode plug-in bias
+and applies no automatic connected particle-noise correction. Existing
+`compute_trispectrum` results here remain raw fourth moments.
