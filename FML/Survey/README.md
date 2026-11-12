@@ -138,11 +138,15 @@ on a 7.8 Mpc/h mesh the plain average gave Q4 = +4.4, -0.24, -0.25 in the first
 Each shell therefore uses `mean(G F) - mean(G) [mean(F) - <F>_sphere]` for the pair
 function G and angular factor F of every LOS tensor, which is exact for a pair
 function that is isotropic on the shell; the errors become ~0.005-0.01 (also checked
-for a local LOS against a Monte Carlo pair integral). Within about two cells the
+for a local LOS against a Monte Carlo pair integral). These values are fixture-specific,
+not a general accuracy bound: anisotropic signals still have lattice mixing. Within about two cells the
 shells contain only a few lattice directions and the anisotropy of the pair function
 itself is not resolved there; use separation bins at least one cell wide. The ell > 0
 averages exclude the s = 0 vector. For a local LOS the window costs one FFT per LOS
-tensor (95 for maxell = 8).
+tensor (95 for maxell = 8). The continuous Gaussian [mesh experiment](window_validation/RESULTS.md)
+shows substantial high-ell errors even beyond three cells on coarse meshes.
+Exclude empty bins using `nvectors`, and establish convergence for the actual mask
+and separation interval; a fixed cell-count cut alone is insufficient.
 
 Window estimation requires each catalogue's extent plus CIC support to be below
 half the box along every axis, preventing periodic images from masquerading as
@@ -151,7 +155,11 @@ if the survey's diagonal extent is large, enlarge the padded box accordingly.
 There is no implicit correction for a truncated separation range.
 
 Matrix construction and `apply` are local operations and can be called on rank 0
-only once the collective window estimate is available.
+only once the collective window estimate is available. Estimation checks geometry,
+LOS, normalization, separation edges, multipole order and self-pair choices agree
+across ranks before any FFT. Matrix tables require finite, ordered `s` within their
+own bins, positive finite shell volumes and finite nonnegative `nvectors` when
+present. Nonfinite theory input and arithmetic results are rejected.
 
 `make_window_matrix` evaluates output at specified k nodes. The
 `make_binned_window_matrix` convenience API integrates each output shell with
@@ -162,8 +170,10 @@ The matrix multiplies correlation-function multipoles by Q, using the exact
 Legendre triple-product coefficients, and transforms them back with spherical
 Bessel kernels. Input P is piecewise constant in each k bin; output is at the
 specified k nodes, not a shell average. It uses 16-point quadrature within each
-input k bin and within each separation bin, with xi of the input bandpower evaluated
-at the nodes and Q interpolated linearly between the bin separations `s` (one point
+input k bin and within each smooth segment of each separation bin. The radial
+integration splits at every used interpolation knot `s` to avoid crossing a Q slope
+change with one quadrature rule. Xi of the input bandpower is evaluated at these
+nodes and Q interpolated linearly between the bin separations `s` (one point
 per separation bin is not converged unless k ds << 1: 10-25% errors at
 k = 0.1-0.2 h/Mpc for ds = 10 Mpc/h). The table needs `edges` (filled by
 `estimate_window`). Refine k/separation bins and the mesh to check convergence. For measured bandpowers, use the binned helper or explicitly average fine
@@ -325,8 +335,12 @@ shifted-random spectra and collective invalid-input behavior. These establish
 numerical/convention checks. The optional [power validation experiment](power_validation/README.md)
 now additionally compares raw fixed/local-LOS multipoles to pypower with matched I2/CIC
 conventions, checks independent catalogue-DFT mesh convergence and MPI configuration
-failures; see [its results](power_validation/RESULTS.md). Production-survey mock recovery
-and external pyrecon/window comparisons remain follow-ups.
+failures; see [its results](power_validation/RESULTS.md). The optional
+[window experiment](window_validation/README.md) checks every 0/2/4 matrix block
+against direct angular/Bessel integration, global IC, an actual pypower smooth-model
+comparison and continuous Gaussian mesh/padding/binning convergence; see
+[its results and limits](window_validation/RESULTS.md). Production-survey mock
+recovery, external pyrecon comparisons and target-mask calibration remain follow-ups.
 
 References for the conventions:
 [Bianchi et al. (2015)](https://arxiv.org/abs/1505.05341),

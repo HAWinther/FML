@@ -8,6 +8,41 @@ namespace FML::SURVEY {
         std::vector<std::vector<double>> q;
         double alpha = 0, i2 = 0;
     };
+    namespace detail {
+        inline void agree_window_options(const Geometry & g,
+                                         const std::vector<double> & edges,
+                                         double alpha,
+                                         double i2,
+                                         int maxell,
+                                         bool subtract_self) {
+            std::vector<double> values{double(g.nmesh),
+                                       g.boxsize,
+                                       double(g.local_los),
+                                       alpha,
+                                       i2,
+                                       double(maxell),
+                                       double(subtract_self),
+                                       double(edges.size())};
+            values.insert(values.end(), g.minimum.begin(), g.minimum.end());
+            values.insert(values.end(), g.observer.begin(), g.observer.end());
+            values.insert(values.end(), g.fixed_los.begin(), g.fixed_los.end());
+            values.insert(values.end(), edges.begin(), edges.end());
+            size_t lo = values.size(), hi = lo;
+            FML::MinOverTasks(&lo);
+            FML::MaxOverTasks(&hi);
+            require(lo == hi, "Survey window options have different lengths across MPI ranks");
+            bool finite = true;
+            for (double v : values)
+                finite = finite && std::isfinite(v);
+            require(finite, "Survey window options must be finite");
+#ifdef USE_MPI
+            auto lower = values, upper = values;
+            FML::MinArrayOverTasks(lower.data(), lower.size());
+            FML::MaxArrayOverTasks(upper.data(), upper.size());
+            require(lower == upper, "Survey window geometry/options differ across MPI ranks");
+#endif
+        }
+    } // namespace detail
     /// FFT correlation of the random selection field; mesh-node local LOS.
     /// At fixed order this uses O(Nmesh^3 log Nmesh) work and three mesh buffers.
     inline WindowMultipoles estimate_window(const std::vector<CatalogPoint> & randoms,
@@ -17,6 +52,7 @@ namespace FML::SURVEY {
                                             double i2,
                                             int maxell = 8,
                                             bool subtract_self = true) {
+        detail::agree_window_options(g, edges, alpha, i2, maxell, subtract_self);
         g.validate();
         detail::validate_edges(edges);
         require(alpha > 0 && i2 > 0 && std::isfinite(alpha) && std::isfinite(i2) && maxell >= 0 && maxell <= 8 &&
@@ -227,6 +263,11 @@ namespace FML::SURVEY {
                 result.q[l][b] = n ? result.q[l][b] / n + correction[l][b] : 0;
             }
         }
+        bool finite = true;
+        for (const auto & q : result.q)
+            for (double value : q)
+                finite = finite && std::isfinite(value);
+        require(finite, "Survey window arithmetic produced a nonfinite multipole");
         return result;
     }
     namespace detail {
@@ -299,9 +340,15 @@ namespace FML::SURVEY {
             for (const auto & row : values)
                 if (row.size() != bandpowers.size())
                     throw std::invalid_argument("Window matrix has inconsistent row lengths");
+            for (double value : bandpowers)
+                if (!std::isfinite(value))
+                    throw std::invalid_argument("Window matrix input bandpowers must be finite");
             std::vector<double> result(values.size());
-            for (size_t r = 0; r < result.size(); ++r)
+            for (size_t r = 0; r < result.size(); ++r) {
                 result[r] = std::inner_product(values[r].begin(), values[r].end(), bandpowers.begin(), 0.0);
+                if (!std::isfinite(result[r]))
+                    throw std::overflow_error("Window matrix application produced a nonfinite result");
+            }
             return result;
         }
     };
@@ -334,8 +381,12 @@ namespace FML::SURVEY {
                 valid &= std::isfinite(value);
         }
         detail::validate_ells(w.ells, 8, false);
-        for (size_t i = 0; i < ns; ++i)
-            valid &= std::isfinite(w.s[i]) && w.s[i] >= 0 && w.shell_volume[i] > 0;
+        for (size_t i = 0; i < ns; ++i) {
+            valid &= std::isfinite(w.s[i]) && w.s[i] >= w.edges[i] && w.s[i] <= w.edges[i + 1] &&
+                     (!i || w.s[i] > w.s[i - 1]) && std::isfinite(w.shell_volume[i]) && w.shell_volume[i] > 0;
+            if (!w.nvectors.empty())
+                valid &= std::isfinite(w.nvectors[i]) && w.nvectors[i] >= 0;
+        }
         const int required = *std::max_element(input_ells.begin(), input_ells.end()) +
                              *std::max_element(output_ells.begin(), output_ells.end());
         for (int ell = 0; ell <= required; ell += 2)
@@ -354,12 +405,19 @@ namespace FML::SURVEY {
         std::vector<double> nodes, node_weights;
         for (size_t s = 0; s < ns; ++s) {
             const double lo = w.edges[s], hi = w.edges[s + 1];
-            for (size_t j = 0; j < detail::gx.size(); ++j)
-                for (double sign : {-1.0, 1.0}) {
-                    const double x = .5 * (lo + hi) + sign * .5 * (hi - lo) * detail::gx[j];
-                    nodes.push_back(x);
-                    node_weights.push_back(4 * M_PI * x * x * .5 * (hi - lo) * detail::gw[j]);
-                }
+            // Q is piecewise linear with a slope change at each used w.s knot, generally INSIDE
+            // its separation bin. Split there: otherwise fixed-order quadrature straddles a kink.
+            const bool split = (w.nvectors.empty() || w.nvectors[s] > 0) && w.s[s] > lo && w.s[s] < hi;
+            const std::array<double, 3> bounds{lo, split ? w.s[s] : hi, hi};
+            for (int segment = 0; segment < (split ? 2 : 1); ++segment) {
+                const double a = bounds[segment], b = bounds[segment + 1];
+                for (size_t j = 0; j < detail::gx.size(); ++j)
+                    for (double sign : {-1.0, 1.0}) {
+                        const double x = a + .5 * (b - a) * (1 + sign * detail::gx[j]);
+                        nodes.push_back(x);
+                        node_weights.push_back(4 * M_PI * x * x * .5 * (b - a) * detail::gw[j]);
+                    }
+            }
         }
         const size_t nn = nodes.size();
         // Q_j at the nodes
@@ -436,6 +494,7 @@ namespace FML::SURVEY {
                         double value = 0;
                         for (size_t node = 0; node < nn; ++node)
                             value += kernel[out][k][node] * xi_out[node];
+                        validate(std::isfinite(value), "Window matrix integration produced a nonfinite value");
                         matrix.values[out * output_k.size() + k][l * nin + b] = (ell % 4 ? -1 : 1) * value;
                     }
                 }
@@ -456,12 +515,13 @@ namespace FML::SURVEY {
         std::vector<double> nodes, weights;
         for (size_t b = 0; b < nb; ++b) {
             const double lo = output_edges[b], hi = output_edges[b + 1];
-            const double volume = (hi * hi * hi - lo * lo * lo) / 3;
+            const double ratio = lo / hi;
+            const double norm = 1 + ratio + ratio * ratio;
             for (size_t j = 0; j < detail::gx.size(); ++j)
                 for (double sign : {-1.0, 1.0}) {
-                    const double k = .5 * (lo + hi) + sign * .5 * (hi - lo) * detail::gx[j];
+                    const double k = lo + .5 * (hi - lo) * (1 + sign * detail::gx[j]);
                     nodes.push_back(k);
-                    weights.push_back(.5 * (hi - lo) * detail::gw[j] * k * k / volume);
+                    weights.push_back(1.5 * detail::gw[j] * (k / hi) * (k / hi) / norm);
                 }
         }
         const auto sampled = make_window_matrix(window, input_edges, nodes, input_ells, output_ells, global_ic);

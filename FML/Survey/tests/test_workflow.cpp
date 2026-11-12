@@ -512,6 +512,9 @@ void test_window() {
                          8e-4);
     }
     check(averaged, "binned window matrix integrates the model over output shells");
+    const auto narrow = make_binned_window_matrix(w, kin, {.13, .130000000001}, {0}, {0}, false).apply(model);
+    const auto narrow_point = make_window_matrix(w, kin, {.1300000000005}, {0}, {0}, false).apply(model);
+    check(near(narrow[0], narrow_point[0], 5e-10), "very narrow output shells retain their normalized weight");
     auto ic = make_window_matrix(w, kin, kout, {0}, {0}, true).apply(model);
     check(std::abs(ic[0]) < 1e-10, "global integral-constraint projection nulls convolved monopole at k=0");
     auto no_mix = make_window_matrix(w, {0, .2, .4}, {.1, .3}, {2}, {0}, false).apply({1, 2});
@@ -744,6 +747,70 @@ void test_validation() {
     w.shell_volume = {1, 2};
     check(rejects([&] { make_window_matrix(w, {0, 1}, {.1}); }), "window matrix rejects missing angular multipoles");
     check(!rejects([&] { make_window_matrix(w, {0, 1}, {.1}, {0}, {0}); }), "the same table is valid for ell = 0");
+    auto overflow_randoms = randoms;
+    if (FML::ThisTask == 0 && !overflow_randoms.empty())
+        overflow_randoms[0].weight = 1e200;
+    check(rejects([&] { estimate_window(overflow_randoms, g, {0, 1, 2, 4, 7}, .7, 2.3, 0, false); }),
+          "window arithmetic overflow fails collectively");
+    auto matrix = make_window_matrix(w, {0, .1, .2}, {.05}, {0}, {0}, false);
+    check(rejects([&] { matrix.apply({NAN, 1}); }), "window application rejects nonfinite theory bandpowers");
+    auto invalid_matrix = matrix;
+    invalid_matrix.values[0][0] = INFINITY;
+    bool invalid_result = false;
+    try {
+        invalid_matrix.apply({1, 1});
+    } catch (const std::overflow_error &) {
+        invalid_result = true;
+    }
+    check(invalid_result, "window application rejects a nonfinite result without a second matrix scan");
+    for (int scenario = 0; scenario < 5; ++scenario) {
+        auto bad = w;
+        if (scenario == 0)
+            bad.s[1] = bad.s[0];
+        if (scenario == 1)
+            bad.s[0] = 1.6;
+        if (scenario == 2)
+            bad.nvectors = {1, -1};
+        if (scenario == 3)
+            bad.nvectors = {1, NAN};
+        if (scenario == 4)
+            bad.shell_volume[0] = INFINITY;
+        check(rejects([&] { make_window_matrix(bad, {0, .1}, {.05}, {0}, {0}, false); }),
+              "malformed window interpolation metadata rejected, case " + std::to_string(scenario));
+    }
+    if (FML::NTasks > 1)
+        for (int scenario = 0; scenario < 10; ++scenario) {
+            auto geometry = g;
+            std::vector<double> edges{0, 1, 2, 4, 7};
+            double alpha = .7, i2 = 2.3;
+            int maxell = 8;
+            bool self = true;
+            if (FML::ThisTask == FML::NTasks - 1) {
+                if (scenario == 0)
+                    geometry.nmesh = 32;
+                if (scenario == 1)
+                    geometry.boxsize = 32;
+                if (scenario == 2)
+                    geometry.local_los = false;
+                if (scenario == 3)
+                    edges.pop_back();
+                if (scenario == 4)
+                    edges[1] = .5;
+                if (scenario == 5)
+                    alpha = .8;
+                if (scenario == 6)
+                    i2 = 3;
+                if (scenario == 7)
+                    maxell = 4;
+                if (scenario == 8)
+                    self = false;
+                if (scenario == 9)
+                    geometry.observer[0] += 1;
+            }
+            check(rejects([&] { estimate_window(randoms, geometry, edges, alpha, i2, maxell, self); }),
+                  "rank-dependent survey window schema rejected before FFT/reduction, case " +
+                      std::to_string(scenario));
+        }
     w.shell_volume.clear();
     check(rejects([&] { make_window_matrix(w, {0, 1}, {.1}, {0}, {0}); }),
           "malformed window dimensions throw before indexing arrays");
