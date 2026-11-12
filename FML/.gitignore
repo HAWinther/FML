@@ -141,6 +141,8 @@ tests/test_grids
 tests/test_particles
 tests/test_lpt
 tests/test_nbody
+tests/test_fourier_resampling
+tests/test_testhelpers
 
 # Short-range gravity standalone and main-suite executables
 ShortRangeGravity/tests/test_short_range
