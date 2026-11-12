@@ -1,7 +1,7 @@
 USE_MPI ?= true
 USE_OMP ?= true
 USE_FFTW ?= false
-TARGETS := test_control
+TARGETS := test_control test_coverage
 include ../../Makefile.config
 
 ifeq ($(USE_FFTW),true)
@@ -10,6 +10,8 @@ all: test_spectra
 endif
 FML_MODULES := Global
 test_control: test_control.o Global.o
+	$(LINK_EXE)
+test_coverage: test_coverage.o Global.o
 	$(LINK_EXE)
 test_spectra: test_spectra.o Global.o
 	$(LINK_EXE)
@@ -25,5 +27,6 @@ endif
 run: $(TARGETS)
 	@set -e; for np in $(NP_LIST); do \
 	  OMP_NUM_THREADS=2 OMP_WAIT_POLICY=passive $(RUN) ./test_control; \
+	  OMP_NUM_THREADS=2 OMP_WAIT_POLICY=passive $(RUN) ./test_coverage; \
 	  $(if $(filter true,$(USE_FFTW)),OMP_NUM_THREADS=2 OMP_WAIT_POLICY=passive $(RUN) ./test_spectra,:); \
 	done

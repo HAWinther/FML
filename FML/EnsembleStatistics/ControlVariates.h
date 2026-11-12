@@ -334,6 +334,41 @@ namespace FML::ENSEMBLE {
         const Metadata & metadata() const { return metadata_; }
         const detail::Registry & identities() const { return identities_; }
     };
+    /// Streaming independent cheap ensemble with phase provenance attached to each row.
+    /// Add each independent row on one rank; global() is collective and nonmutating.
+    class ControlMean {
+        Metadata metadata_;
+        RunningCovariance moments;
+        detail::Registry identities;
+
+      public:
+        ControlMean(size_t dimension, Metadata metadata) : metadata_(std::move(metadata)), moments(dimension) {
+            metadata_.validate();
+        }
+        Count count() const { return moments.count(); }
+        void add(const Vector & control, const PhaseKey & key) {
+            detail::require(control.size() == moments.dimension() && detail::finite(control),
+                            "Invalid independent control-mean row");
+            identities.add(key, metadata_);
+            moments.add(control);
+        }
+        ControlMean global() const {
+            Count hash = metadata_.fingerprint();
+            detail::word(hash, moments.dimension());
+            detail::same(hash);
+            auto result = *this;
+            result.identities = identities.global(metadata_);
+            result.moments = moments.global();
+            return result;
+        }
+        MeanEstimate estimate() const {
+            std::vector<PhaseKey> keys;
+            keys.reserve(identities.size());
+            for (const auto & item : identities.keys())
+                keys.push_back(item.second);
+            return MeanEstimate::independent(moments, keys, metadata_);
+        }
+    };
     enum class FitMode { Full, Diagonal };
     struct FitOptions {
         FitMode mode = FitMode::Full;

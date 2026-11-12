@@ -40,19 +40,26 @@ auto estimate = held_out.global().estimate();
 For an independently measured mean:
 
 ```cpp
-RunningCovariance cheap_local(number_of_control_bins);
-std::vector<PhaseKey> all_cheap_keys; // complete global provenance, identical on all ranks
-// Fill cheap_local only with rows owned by this rank; construct all_cheap_keys.
-auto cheap_global = cheap_local.global();
-auto mu = MeanEstimate::independent(cheap_global, all_cheap_keys, tags);
+ControlMean cheap_local(number_of_control_bins, tags);
+// For each independent cheap row owned by this rank:
+// cheap_local.add(control_vector, actual_phase_key);
+auto mu = cheap_local.global().estimate();
 auto model = training.global().fit(mu);
 ```
 
-The caller supplies complete keys corresponding to the moments; moments cannot prove what simulations generated them. Choose globally unique realization IDs and unique `(seed,stream)` phase blocks. The key also records phase-generator backend (`Philox`, `NGenIC`, `External`), fixed-amplitude setting and phase sign. Setting a tag does not change the initial-condition generator. Encode external-generator version and other configuration in metadata. Tags cover cosmology, model versions and observable schema; include redshift, units, mesh, bin centers, tracer selections, shot-noise and assignment corrections, and normalization. Strings are caller-defined and compared exactly; the API cannot verify their scientific truth. `fingerprint()` is a deterministic consistency identifier, not a cryptographic digest or a serialized checkpoint.
+`ControlMean` attaches each phase key when its row is added, rejects duplicate phase
+blocks across ranks, and returns `MeanEstimate` with its sample covariance divided
+by the cheap sample count. It requires at least two independent cheap rows.
+`global()` is a nonmutating snapshot; keep adding to the local object and never
+reduce an already replicated snapshot again. The low-level
+`MeanEstimate::independent(RunningCovariance, keys, tags)` API remains available;
+there the caller supplies complete keys corresponding to the moments. Neither API
+can prove what simulations actually generated the supplied rows. Choose globally unique realization IDs and unique `(seed,stream)` phase blocks. The key also records phase-generator backend (`Philox`, `NGenIC`, `External`), fixed-amplitude setting and phase sign. Setting a tag does not change the initial-condition generator. Encode external-generator version and other configuration in metadata. Tags cover cosmology, model versions and observable schema; include redshift, units, mesh, bin centers, tracer selections, shot-noise and assignment corrections, and normalization. Strings are caller-defined and compared exactly; the API cannot verify their scientific truth. `fingerprint()` is a deterministic consistency identifier, not a cryptographic digest or a serialized checkpoint.
 
 ## Fitting and streaming APIs
 
 - `RunningCovariance(d)`: `add`, `merge`, `global`, `summary`, `reset`. Means and centered second moments use long-double Welford/Chan updates. Covariance uses `N-1`; empty means and covariance with fewer than two rows are NaN. A global reduction uses centered moment arrays and sample counts, never sample values.
+- `ControlMean(d,tags)`: `add(control,key)`, `global()`, `estimate()`, `count()`. It streams an independent cheap ensemble with its provenance, using the same sampling, metadata and one-owner-per-row contracts as training/evaluation.
 - `PairedTraining(n_target,n_control,tags)`: streams joint moments, exposes the joint summary for raw/cross covariance, and fits a frozen `ControlModel`. `Full` fitting uses `B=C_yc C_cc^-1` with controls standardized before a Cholesky solve. The default ridge `1e-8` is dimensionless in those standardized units; tune it on independent validation data for high-dimensional or noisy training. `Diagonal` requires matching widths and fits each corresponding bin separately. Zero-variance controls are ignored. Singular unregularized fits fail explicitly.
 - `ControlEvaluation(model)`: streams held-out corrected rows, enforces independence, returns the mean, residual sample covariance, covariance of the mean and metadata. At least two evaluation rows are required for covariance. `ControlModel::apply` provides individual corrected vectors with the same train/mean disjointness checks; use `ControlEvaluation` to check duplicate evaluation rows too.
 
@@ -89,6 +96,16 @@ mpirun -np 4 ./test_spectra
 
 Clean between configurations. `example/Main.cpp` runs a reproducible correlated Gaussian toy and prints raw/controlled means and error, coefficient, model identifier and variance reduction. It is not an N-body validation or a performance forecast.
 
-Tests independently check hand-computed covariance, large-offset/unequal-count reductions, empty ranks, exact affine coefficients, diagonal/ridge/singular/constant controls, analytic propagation of cheap-mean uncertainty (including its nonshrinking floor), and held-out Gaussian variance reduction. Tests reject training/mean/evaluation overlap, duplicated phase blocks, backend mismatch, unblocked antithetic pairs and inconsistent MPI schemas. Optional FFTW tests use analytically proportional fields and verify auto/cross ratios, coherence, physical box scaling and the morphology field adapter. Production follow-up: calibrate on matched ZA/2LPT/COLA versus N-body ensembles, measure coverage and conditioning versus binning/redshift, and compare total simulation cost at fixed mean error.
+Tests independently check hand-computed covariance, large-offset/unequal-count reductions, empty ranks, exact affine coefficients, diagonal/ridge/singular/constant controls, analytic propagation of cheap-mean uncertainty (including its nonshrinking floor), and held-out Gaussian variance reduction. Tests reject training/mean/evaluation overlap, duplicated phase blocks, backend mismatch, unblocked antithetic pairs and inconsistent MPI schemas. Optional FFTW tests use analytically proportional fields and verify auto/cross ratios, coherence, physical box scaling and the morphology field adapter. The [matched-field experiment](matched_validation/README.md) now evolves small
+EdS PM targets with phase-matched ZA/2LPT controls, checks every reported fit and
+covariance against independent NumPy calculations, measures two output times and
+checks timestep/mesh sensitivity. It also reports the finite cheap-mean uncertainty
+floor, conditioning, phase counts and measured stage costs. The new repeated
+Gaussian coverage test exercises independently fitted coefficients and a measured
+cheap mean across 2048 experiments. See [results and limits](matched_validation/RESULTS.md).
+Production follow-up remains: converged cosmological ZA/2LPT/COLA versus N-body
+ensembles, covariance-estimation extensions, conditioning versus broader binning,
+and total simulation cost at fixed mean error. The small PM target is deliberately
+not claimed to be mesh-converged or a precision N-body reference.
 
 References: [CARPool mean estimation](https://arxiv.org/abs/2009.08970); [separate covariance-estimation extension](https://arxiv.org/abs/2106.11718). Implementation here is independent and deliberately limited to frozen-coefficient mean estimation and streaming sample moments.

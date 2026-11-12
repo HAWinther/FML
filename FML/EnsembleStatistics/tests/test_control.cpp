@@ -145,6 +145,60 @@ void test_mean_uncertainty() {
     check(floor && near(m.mean[0], controlled[0], 1e-10) && near(m.mean[1], controlled[1], 1e-10),
           "independent surrogate-mean uncertainty is propagated and does not shrink with evaluation count");
 }
+void test_control_mean() {
+    ControlMean local(2, meta());
+    for (int i = 0; i < 9; ++i)
+        if (i % FML::NTasks == FML::ThisTask)
+            local.add({double(i), 2.0 * i}, key(6000 + i));
+    const auto global = local.global();
+    const auto mean = global.estimate();
+    check(mean.samples() == 9 && near(mean.mean()[0], 4, 1e-12) && near(mean.covariance_of_mean()[0], 7.5 / 9, 1e-12) &&
+              near(mean.covariance_of_mean()[1], 15.0 / 9, 1e-12),
+          "streaming control mean attaches global phase provenance and propagates covariance");
+    auto rejects = [](auto call) {
+        try {
+            call();
+        } catch (const std::exception &) {
+            return true;
+        }
+        return false;
+    };
+    ControlMean invalid(2, meta());
+    check(rejects([&] {
+              invalid.add({NAN, 1}, key(7000));
+          }) &&
+              invalid.count() == 0,
+          "invalid control-mean row does not reserve a phase identity");
+    invalid.add({1, 2}, key(7000));
+    check(rejects([&] { invalid.estimate(); }) && rejects([&] {
+              invalid.add({3, 4}, key(7000));
+          }) &&
+              invalid.count() == 1,
+          "control mean rejects insufficient samples and duplicate identities");
+    invalid.add({2, 3}, key(7001));
+    auto trained = training();
+    auto model = trained.fit(mean);
+    check(rejects([&] {
+              model.apply({1, 2}, {3, 4}, key(6000), key(6000));
+          }),
+          "streamed control-mean phases remain excluded from evaluation");
+    ControlMean overlap(2, meta());
+    overlap.add({1, 2}, key(0));
+    overlap.add({2, 3}, key(9000));
+    check(rejects([&] { trained.fit(overlap.estimate()); }), "streamed control mean cannot overlap training phases");
+    if (FML::NTasks > 1) {
+        ControlMean duplicate(2, meta());
+        duplicate.add({1, 2}, key(7000));
+        check(rejects([&] { duplicate.global(); }), "control mean detects duplicate phase blocks across ranks");
+        auto tags = meta();
+        if (FML::ThisTask == FML::NTasks - 1)
+            tags.observable_schema = "different";
+        ControlMean mismatch(2, tags);
+        check(rejects([&] { mismatch.global(); }), "control mean rejects rank-dependent metadata before reduction");
+        ControlMean dimensions(FML::ThisTask == FML::NTasks - 1 ? 1 : 2, meta());
+        check(rejects([&] { dimensions.global(); }), "control mean rejects rank-dependent dimensions before reduction");
+    }
+}
 void test_variance_reduction() {
     auto m = meta();
     m.observable_schema = "scalar observable";
@@ -235,6 +289,7 @@ int main() {
     test_moments();
     test_fit();
     test_mean_uncertainty();
+    test_control_mean();
     test_variance_reduction();
     test_validation();
     return FML::TESTS::summary("ensemble");
