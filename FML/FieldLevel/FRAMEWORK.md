@@ -173,10 +173,10 @@ made in this initial release. The shared kernel still allocates some intermediat
 FL-6's profiling/reuse work remains open. No allocation/time speedup is claimed.
 
 Current layout metadata explicitly identifies global mesh/cells and owned start,
-width/cells. This implementation owns a full grid and supports one FML rank only;
-MPI-enabled one-rank hosts work, and multi-rank use rejects before allocation.
-Distributed scalar reductions, HMC state, particle exchange and communication
-adjoints remain stage 4. A local field loop alone is not distributed inference.
+width/cells. `Model` owns a full grid and supports one FML rank only; multi-rank
+construction still rejects before allocation. For distributed linear inference,
+use `DistributedLinearModel` below. Particle exchange and nonlinear communication
+adjoints remain stage 4.
 
 ## Exact linear inference, MAP and HMC
 
@@ -254,3 +254,75 @@ coverage/calibration, full padding at higher cutoffs, time/growth derivatives,
 checkpoint/resume of inference and measured workspace optimization also remain.
 The initial stages 1–3 milestone is a reusable periodic implementation with exact
 linear verification, not a complete LEFTfield/BORG replacement.
+
+## Distributed linear inference (stage 4a, 12 November 2026)
+
+Include `<FML/FieldLevel/DistributedLinear.h>` and set
+`Configuration::evolution = Evolution::Linear` explicitly. Construct
+`DistributedLinearModel` and `DistributedLinearPosterior`; use the same `map` and
+`sample` functions. [example/FrameworkMPI.cpp](example/FrameworkMPI.cpp) is a minimal
+working example. This backend also runs in a serial build for comparison.
+
+The model implements the same normalized periodic linear prediction, generic
+spectrum derivatives, scalar priors, fixed Fourier response, Gaussian noise and
+plane-parallel RSD as `Model`. Its `workspace`, `white_noise`, `mock`, `predict`,
+`pullback`, `apply_field_metric` and `linear_conditional` operate collectively.
+`white_noise` generates the local slab without communication; use the same seed
+and stream on every rank.
+`linear_conditional` returns the local mean/covariance and global log marginal;
+the serial-only `linear_log_marginal` convenience and reconstruction bundle are
+not supplied by this backend yet.
+
+- `cells()` is the number of **owned** real cells, in x/y/z order, with no FFT
+  padding. `layout()` supplies global cells and local x start/width. The latent
+  dimension and whitening factor still use **global** N³. Fourier vectors contain
+  only locally owned retained modes, ordered by local x, y and nonnegative kz.
+  A supplied response vector uses that same local ordering. Zero and Nyquist
+  modes are excluded from the modeled band; unconstrained latent modes retain
+  their unit Gaussian prior.
+- Posterior values and scalar gradients are reduced globally; the scalar priors
+  enter once. `pullback` itself returns local field gradients and **local** scalar
+  contributions, which the posterior reduces. MAP reduces field slopes and norms.
+  `Execution<Forward>` supplies these hooks; serial/custom forwards keep identity
+  reductions unless they opt into a distributed specialization.
+- HMC keeps the field/momentum/mass operations local. It sums field kinetic energy
+  globally and counts replicated scalar kinetic energy once. Counter-based momentum
+  draws use global cell IDs and trajectory index, while the shared control RNG
+  handles scalar momenta, leapfrog jitter and acceptance. Step/mass adaptation and
+  scalar states remain replicated. The field mass is frozen at the initial scalar
+  parameters. `last` contains a local field followed by replicated scalars when
+  varied; recorded scalar rows and global potentials are replicated on all ranks.
+- All ranks in `FML::communicator` must call collective APIs in the same order.
+  Configurations, scalar parameters, seeds and inference controls must agree;
+  spectrum callbacks must implement the same deterministic function on every rank.
+  Config/parameter/control and local state-dimension checks reject collectively.
+  Data/response Hermitian checks use a distributed FFT round trip, including pairs
+  across rank boundaries. Callback exceptions/missing derivatives remain visible
+  errors; unrepresentable numerical proposals return infinite posterior potential.
+- Call the field sink on **every rank**. It receives a local field and replicated
+  parameters. Compute any reductions before a root-only output branch. FFT
+  workspaces and the model must remain alive; do not run collective chains
+  concurrently on the same communicator or construct workspaces in worker threads.
+- The current FFTWGrid contract requires an even mesh divisible by the communicator
+  size and nonempty FFTW slabs. `density_mesh` and bias smoothing do not participate
+  in linear evolution. Double-precision FFTW is the validated configuration.
+
+Build and run (use the local MPI compiler and FFTW-MPI paths as needed):
+
+```sh
+make -C FML/FieldLevel/tests USE_MPI=true framework-mpi
+make -C FML/FieldLevel/example USE_MPI=true framework_mpi
+mpirun -np 4 FML/FieldLevel/example/framework_mpi
+```
+
+The regression checks 1/2/4 ranks against a direct DFT, finite differences,
+adjoint products, exact MAP and exact Gaussian projection moments; a short joint
+field/spectrum/bias/noise chain checks synchronized scalar states. This establishes
+a linear distributed inference foundation, not nonlinear posterior calibration or
+a strong-scaling result. No full fields or mode arrays are gathered by the model.
+Small replicated metadata and repeated safety reductions still have overhead.
+
+Next: distributed 1LPT and then 2LPT evolution/deposition adjoints, nonlinear
+inference validation, and checkpoint/restart. Survey likelihoods remain deferred
+until after the prioritized MPI work. MPI BAO compatibility and PM/COLA are not
+provided by this linear backend. The original single-rank safety checks remain.

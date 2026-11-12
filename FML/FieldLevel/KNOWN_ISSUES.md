@@ -20,6 +20,8 @@ The relevant code is [FieldLevelBAO.h](FieldLevelBAO.h),
   automatic setup and NO_AUTO_FML_SETUP without a second MPI_Init. Frontends
   report unsupported rank counts and return failure before model construction.
   Bounds-checked tests pass on 1/2/4 ranks, with automatic and manual setup.
+  The separate `DistributedLinearModel` added 12 November 2026 supports MPI
+  linear inference; the original BAO and particle-LPT backends keep this guard.
   The historical evidence motivating the fix follows:
 
   The constructor enumerates all global cells/modes as local FFTWGrid entries.

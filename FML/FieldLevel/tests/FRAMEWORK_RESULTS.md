@@ -92,3 +92,46 @@ likelihoods and survey response, self-consistent cosmological growth derivatives
 MPI prediction/adjoint/HMC state, PM/COLA and production nonlinear/model-mismatch
 coverage remain. Workspace ownership is explicit, but some shared-kernel scratch
 still allocates: FL-6's measured allocation/reuse work is not marked complete.
+
+## Distributed linear stage 4a (12 November 2026)
+
+A separate `test_framework_mpi` suite now exercises **actual distributed linear
+inference** on one, two and four OpenMPI ranks. The existing `test_framework` and
+BAO safety suites still test deliberate rejection by the original single-rank
+backends. These are distinct entry points, not contradictory MPI claims.
+
+The new suite checks local ownership, an independent direct DFT with global N³
+normalization, scalar/field finite differences, a forward/reverse dot product,
+nonidentity Fourier response, exact MAP, and fixed-parameter field HMC against an
+exact real cosine-projection mean/variance. It includes collective rejection of a
+one-rank malformed field, cross-rank Hermitian violation, inconsistent config,
+parameters or HMC controls, missing derivatives, and a one-rank callback exception.
+Unrepresentable spectrum proposals reject with infinite potential and cleared
+gradients. Nonlinear evolution is explicitly rejected by this backend.
+
+Apple Clang serial and ASan/UBSan pass 21 checks. OpenMPI/Clang17 passes 21, 46 and
+92 total checks on 1/2/4 ranks (the helper sums per-rank checks; one-rank-only serial
+comparisons and multi-rank-only consistency checks explain differing counts).
+OpenMPI/OpenMP with two threads per rank and `NO_AUTO_FML_SETUP` also passes on
+two ranks. The existing 53-check framework, seven-check resolution, 37-check BAO,
+104-check safety and 23-check standalone HMC regressions pass after the shared
+posterior/sampler changes.
+
+Across the 1/2/4-rank runs, deterministic potential, field-gradient projection,
+scalar gradients and exact log marginal differ by at most 1.14e-13. The fixed-field
+HMC final projection differs by at most 5.52e-13; the short joint chain's final
+scalar values differ by at most 1.79e-9. Floating-point reduction order can affect
+longer trajectories, so rank-count bitwise identity is not promised.
+
+For the fixed-parameter HMC projection, the exact mean/variance are
+0.897204666 / 0.688142439; 1600 draws after 200 warmup steps give mean/variance
+0.907132029 / 0.670479694 and approximately 410 effective samples. Mean acceptance
+is 0.906878 with zero divergences. The short joint field/amplitude/tilt/bias/noise
+run has mean acceptance 0.646138 and zero divergences; it checks synchronized
+execution only and does **not** establish joint posterior calibration.
+
+Fields/momenta and retained mode arrays remain local; only metadata, scalar
+posterior information and sampler controls are replicated. This is not a measured
+strong-scaling claim. Frequent safety collectives and scratch allocations remain.
+Distributed LPT/deposition adjoints, nonlinear coverage and checkpoint/restart are
+still open, with survey likelihoods deferred until after the prioritized MPI work.

@@ -7,6 +7,8 @@
 #include <map>
 namespace FML::FIELDLEVEL::FRAMEWORK {
     using Modes = std::vector<Complex>;
+    // Numerical proposal failure, distinct from a malformed model/callback contract.
+    struct UnrepresentableState : std::domain_error { using std::domain_error::domain_error; };
     enum class Prior { Gaussian, Uniform };
     struct Parameter {
         std::string name;
@@ -492,8 +494,11 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
 
       public:
         template <class ModeList>
-        GaussianFieldLikelihood(const ModeList & modes, double cutoff, double volume, Modes data)
+        GaussianFieldLikelihood(const ModeList & modes, double cutoff, double volume, Modes data,
+                                std::function<void(const Modes &)> distributed_check = {})
             : data_(std::move(data)), weights_(modes.size()), volume_(volume) {
+            if (distributed_check)
+                distributed_check(data_);
             if (data_.size() != modes.size())
                 throw std::invalid_argument("[FieldFramework] Data dimension mismatch");
             std::map<std::array<int, 3>, size_t> lookup;
@@ -504,7 +509,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                     throw std::invalid_argument("[FieldFramework] Nonfinite data");
                 weights_[i] = m.k < cutoff ? m.weight : 0;
             }
-            for (size_t i = 0; i < data_.size(); ++i) {
+            for (size_t i = 0; !distributed_check && i < data_.size(); ++i) {
                 const auto & m = modes[i];
                 if (m.n[2] == 0) {
                     const auto z = std::conj(data_[lookup.at({-m.n[0], -m.n[1], 0})]);
@@ -518,7 +523,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 throw std::invalid_argument("[FieldFramework] Likelihood prediction dimension mismatch");
             const double variance = std::exp(log_noise) / volume_;
             if (!(variance > 0) || !std::isfinite(variance))
-                throw std::domain_error("[FieldFramework] Unrepresentable noise variance");
+                throw UnrepresentableState("[FieldFramework] Unrepresentable noise variance");
             double U = 0;
             noise_gradient = 0;
             g.assign(prediction.size(), 0);
@@ -533,6 +538,21 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             return U;
         }
     };
+    // Specialize for distributed ownership. Default preserves the serial/custom-forward interface.
+    template <class Forward> struct Execution {
+        static void validate(const Forward & m, const Field & s, const std::vector<double> & p) {
+            if (s.size() != m.cells() || p.size() != m.parameters().size())
+                throw std::invalid_argument("[FieldFramework] State dimension mismatch");
+        }
+        static void map_controls(const Forward &, bool, int, double) {}
+        static void hmc_controls(const Forward &, bool, const FML::MCMC::HMCOptions &) {}
+        static double sum(const Forward &, double x) { return x; }
+        static double maximum(const Forward &, double x) { return x; }
+        template <class Likelihood> static Likelihood likelihood(const Forward & m, Modes data) {
+            return {m.modes(), m.configuration().likelihood_cutoff, m.volume(), std::move(data)};
+        }
+        static FML::MCMC::HMCExecution hmc(const Forward &) { return {}; }
+    };
     // A forward model satisfying this interface can replace Model without changing the posterior or sampler.
     template <class Forward, class Likelihood = GaussianFieldLikelihood>
     class BasicPosterior {
@@ -542,7 +562,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
       public:
         BasicPosterior(const Forward & model, Modes data)
             : model_(model),
-              likelihood_(model.modes(), model.configuration().likelihood_cutoff, model.volume(), std::move(data)) {}
+              likelihood_(Execution<Forward>::template likelihood<Likelihood>(model, std::move(data))) {}
         BasicPosterior(const Forward & model, Likelihood likelihood)
             : model_(model), likelihood_(std::move(likelihood)) {}
         BasicPosterior(Forward &&, Modes) = delete;
@@ -554,23 +574,33 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                         Work & w,
                         Field & gs,
                         std::vector<double> & gp) const {
-            if (white.size() != model_.cells() || p.size() != model_.parameters().size())
-                throw std::invalid_argument("[FieldFramework] Posterior dimension mismatch");
+            Execution<Forward>::validate(model_, white, p);
             if (!model_.in_support(p)) {
                 gs.assign(white.size(), 0);
                 gp.assign(p.size(), 0);
                 return HUGE_VAL;
             }
-            const auto & prediction = model_.predict(white, p, w);
-            double noise_gradient = 0;
-            auto & g = w.cotangent_buffer();
-            double U = likelihood_.evaluate(prediction, p.back(), g, noise_gradient);
-            model_.pullback(p, g, w, gs, gp);
+            double noise_gradient = 0, U = 0;
+            try {
+                const auto & prediction = model_.predict(white, p, w);
+                auto & g = w.cotangent_buffer();
+                U = likelihood_.evaluate(prediction, p.back(), g, noise_gradient);
+                model_.pullback(p, g, w, gs, gp);
+            } catch (const UnrepresentableState &) {
+                // A collectively detected numerical domain failure rejects the proposal.
+                // Programming/configuration errors still propagate to the caller.
+                gs.assign(white.size(), 0);
+                gp.assign(p.size(), 0);
+                return HUGE_VAL;
+            }
             gp.back() += noise_gradient;
             for (size_t i = 0; i < white.size(); ++i) {
                 U += .5 * white[i] * white[i];
                 gs[i] += white[i];
             }
+            U = Execution<Forward>::sum(model_, U);
+            for (auto & x : gp)
+                x = Execution<Forward>::sum(model_, x);
             for (size_t j = 0; j < p.size(); ++j) {
                 const auto & prior = model_.parameters()[j];
                 U += prior.penalty(p[j]);
@@ -595,6 +625,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                          bool vary_parameters = true,
                          int max_iterations = 200,
                          double tolerance = 1e-6) {
+        Execution<Forward>::map_controls(posterior.model(), vary_parameters, max_iterations, tolerance);
         if (max_iterations < 0 || tolerance <= 0 || !std::isfinite(tolerance))
             throw std::invalid_argument("[FieldFramework] Invalid MAP controls");
         const auto & model = posterior.model();
@@ -613,6 +644,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 slope += grad[q] * direction[q];
                 norm = std::max(norm, std::abs(grad[q]));
             }
+            slope = Execution<Forward>::sum(model, slope);
+            norm = Execution<Forward>::maximum(model, norm);
             if (vary_parameters)
                 for (size_t j = 0; j < p.size(); ++j) {
                     dp[j] = gp[j] * std::pow(model.parameters()[j].scale(), 2);
@@ -664,6 +697,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                                        bool vary_parameters = true,
                                        FieldSink sink = {}) {
         const auto & model = posterior.model();
+        Execution<Forward>::validate(model, white, p);
+        Execution<Forward>::hmc_controls(model, vary_parameters, options);
         auto w = model.workspace();
         const auto frozen = p;
         const size_t n = model.cells(), np = p.size();
@@ -705,7 +740,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         };
         if (vary_parameters)
             white.insert(white.end(), p.begin(), p.end());
-        return FML::MCMC::run_hmc(potential, std::move(white), std::move(mass), options, recorder);
+        return FML::MCMC::run_hmc(potential, std::move(white), std::move(mass), options, recorder, Execution<Forward>::hmc(model));
     }
 } // namespace FML::FIELDLEVEL::FRAMEWORK
 #endif

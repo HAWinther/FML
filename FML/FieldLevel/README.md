@@ -3,7 +3,9 @@
 The [periodic framework](FRAMEWORK.md) now provides a general spectrum interface,
 linear/Zel'dovich/2LPT forward models, distinct initial/bias/likelihood cutoffs,
 joint field/bias/noise inference, MAP, exact linear references and streamed field
-outputs. See [the saved plan](FRAMEWORK_PLAN.md) for the broader #52 scope.
+outputs. A separate [distributed linear backend](FRAMEWORK.md#distributed-linear-inference-stage-4a-12-november-2026)
+provides MPI predictions, adjoints, exact conditionals, MAP and joint HMC; the
+particle-based LPT backend is still single-rank. See [the saved plan](FRAMEWORK_PLAN.md) for the broader #52 scope.
 
 ## BAO application (prototype)
 

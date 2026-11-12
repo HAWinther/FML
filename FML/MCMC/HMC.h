@@ -31,6 +31,14 @@ namespace FML::MCMC {
         Vector diagonal; // mass of the parameter block (empty: 1); the starting point of the adaptation
     };
 
+    // Optional distributed custom-block operations. Parameters are replicated; their
+    // kinetic energy is counted once. All ranks must use identical options/parameters.
+    // The custom draw must not consume the sampler RNG (which controls shared decisions).
+    struct HMCExecution {
+        std::function<double(double)> sum_custom;
+        std::function<void(std::vector<double> &, std::uint64_t, std::uint64_t)> draw_custom;
+    };
+
     struct HMCOptions {
         int warmup = 500;
         int samples = 1000;
@@ -107,7 +115,8 @@ namespace FML::MCMC {
                              std::vector<double> x,
                              HMCMass mass,
                              const HMCOptions & opt,
-                             const HMCRecorder & record = nullptr) {
+                             const HMCRecorder & record = nullptr,
+                             const HMCExecution & execution = {}) {
         using Vector = std::vector<double>;
         const std::size_t n = x.size(), nc = mass.n_custom, np = n - std::min(n, nc);
         if (nc > n)
@@ -153,7 +162,11 @@ namespace FML::MCMC {
         };
         const auto kinetic = [&](const Vector & p, const Vector & v) {
             double K = 0;
-            for (std::size_t i = 0; i < n; ++i)
+            for (std::size_t i = 0; i < nc; ++i)
+                K += p[i] * v[i];
+            if (execution.sum_custom)
+                K = execution.sum_custom(K);
+            for (std::size_t i = nc; i < n; ++i)
                 K += p[i] * v[i];
             return .5 * K;
         };
@@ -177,8 +190,11 @@ namespace FML::MCMC {
         for (int it = 0; it < opt.warmup + opt.samples; ++it) {
             const bool warm = it < opt.warmup;
             // Momentum p ~ N(0, M)
-            for (std::size_t i = 0; i < nc; ++i)
-                block[i] = gauss(rng);
+            if (execution.draw_custom)
+                execution.draw_custom(block, opt.seed, std::uint64_t(it));
+            else
+                for (std::size_t i = 0; i < nc; ++i)
+                    block[i] = gauss(rng);
             if (nc) {
                 mass.apply_sqrt(block);
                 std::copy(block.begin(), block.end(), p.begin());
