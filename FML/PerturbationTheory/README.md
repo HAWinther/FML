@@ -231,6 +231,8 @@ double T = eisenstein_hu_transfer(kh, eh), Tnw = eisenstein_hu_transfer_nowiggle
 - `nowiggle_gaussian`: P_ref times the Gaussian-smoothed P / P_ref (Vlah et al. 2016; HMcode-2020), with any smooth
   reference shape or the Eisenstein & Hu no-wiggle one.
 - `nowiggle_savgol`: velocileptors' REPT default (order 4, window ln 7 in ln k).
+- `nowiggle_classpt(k, P, h, kout)`: CLASS-PT's DST split (in 1/Mpc: 65536 points over 7e-5 - 7 /Mpc, harmonics
+  120 - 239 removed), used by `EFTofLSS.h` to reproduce CLASS-PT's IR resummation.
 - The Eisenstein & Hu (1998) transfer functions with and without the baryon wiggles (`Cosmology/Spectra/EisensteinHu.h`),
   equal to colossus' to rounding.
 
@@ -243,3 +245,72 @@ h/Mpc but differ by up to 5% around the first wiggle (k = 0.005 - 0.05), where t
 The Savitzky-Golay filter leaves wiggles of ~2% at k = 0.1 - 0.3 h/Mpc. The Gaussian-EH method is the cleanest when
 the cosmology is known; DST needs only P. The Eisenstein & Hu fits are those of `Cosmology/Spectra/EisensteinHu.h`
 (header only), the one copy in FML, also used by HMcode-2020, FieldLevel and the Cosmology spectra.
+
+## Direct loop integrals with redshift-space kernels
+
+`SPTKernels.h` has the EdS kernels F_n, G_n (n <= 3, symmetrized, from the recursion) and the redshift-space kernels
+Z_n of biased tracers (n <= 3, bias basis b1, b2/2 delta^2, bG2 G2, bGamma3 Gamma3) derived mechanically from the
+redshift-space mapping delta_s = sum_m (1/m!) FT[(-i k_z u_z)^m (1 + delta_g)] rather than typed in (Z2 also in closed
+form; the two agree to 1e-15). `LoopIntegrals.h` is the quadrature engine behind TNS and EFTofLSS: P22-type integrals
+over (q, |k - q|) with log Gauss-Legendre segments broken at the kinematic points and Gauss-Chebyshev in the azimuth,
+P13-type integrals as scale-free angular kernels on fixed r = q/k nodes, and the mu dependence as polynomials in mu^2
+recovered from 5 mu nodes. P_lin is a cubic spline in ln P(ln k), zero outside its table: supply it over a wide range
+(e.g. 1e-5 - 50 h/Mpc). Matter P22 and P13 agree with `OneLoop.h` to 1e-5 - 5e-5.
+
+## TNS model
+
+`TNS.h`: the TNS model (Taruya, Nishimichi & Saito 2010, [arXiv:1006.0699](https://arxiv.org/abs/1006.0699)) with
+one-loop SPT and the McDonald & Roy nonlinear bias (as in BOSS fits, Beutler et al. 2014):
+
+```cpp
+#include <FML/PerturbationTheory/TNS.h>
+using namespace FML::PERTURBATION;
+TNS tns(k_lin, P_lin, k_out);                 // all loop tables (bias and f independent) on k_out
+TNS::Parameters p;                            // f, b1, b2, bs2, b3nl, sigma_v [Mpc/h], N, fog, AB
+p.f = 0.76; p.b1 = 2.0; p.b2 = 0.5; p.bs2 = -4.0 / 7.0 * (p.b1 - 1); p.b3nl = 32.0 / 315.0 * (p.b1 - 1);
+p.sigma_v = 4.0; p.fog = TNS::FoG::Lorentzian;  // or Gaussian, None
+auto pkmu = tns.pkmu(0.5, p);                 // P(k, mu)
+auto pell = tns.multipoles(p);                // P_0, P_2, P_4 (Gauss-Legendre in mu)
+auto & T = tns.tables();                      // P22/P13 of dd, dt, tt; bias terms; A_n, B_n by powers of mu
+```
+
+P_s = D_FoG(k mu f sigma_v) [P_g,dd + 2 f mu^2 P_g,dt + f^2 mu^4 P_tt + A + B] + N. A and B are tabulated as
+coefficients of f^n b1^(3-n) mu^(2m) (A) and f^n b1^(4-n) mu^(2m) (B), so f and b1 vary freely without
+recomputing loops. P_b22, P_b2s2, P_bs22 have their k -> 0 constants subtracted. Cost: ~0.2 s for 10 output k.
+
+Validation (`tests/test_tns.cpp`, FAST-PT fixture from `python/generate_fastpt_reference.py`): the one-loop P_dd
+(7e-5 of |P22| + |P13|), the nonlinear bias terms (Pd1d2, Pd2d2, Pd1s2, Pd2s2, Ps2s2: 3e-4; sig3nl 3e-4) and A + B by
+powers of mu (2e-3 of the largest; FAST-PT's own accuracy) against FAST-PT 4.1.1; P22 and P13 of dd and tt against
+`OneLoop.h` (6e-5; tt with custom G2, G3 kernels); P13 of dd, dt, tt against the analytic 1D kernels (9e-5); the
+Kaiser limit; the multipoles without FoG against their exact Legendre moments; the FoG factors.
+
+## EFTofLSS (CLASS-PT)
+
+`EFTofLSS.h`: the one-loop EFTofLSS multipoles of biased tracers in redshift space with IR resummation, the model,
+parameters and conventions of CLASS-PT (Ivanov, Simonovic & Zaldarriaga 2020; Chudaykin et al. 2020,
+[arXiv:2004.10607](https://arxiv.org/abs/2004.10607)):
+
+```cpp
+#include <FML/PerturbationTheory/EFTofLSS.h>
+using namespace FML::PERTURBATION;
+EFTofLSS::Options o;
+o.h = 0.6736;                                 // the ClassPT no-wiggle split works in 1/Mpc
+o.r_bao = o.h * r_drag;                       // BAO scale in Mpc/h (CLASS-PT: the sound horizon at drag)
+EFTofLSS eft(k_lin, P_lin, k_out, f, o);      // the 12 bias-monomial tables and counterterm templates
+EFTofLSS::Bias b;                             // b1, b2, bG2, bGamma3, c0, c2, c4 [(Mpc/h)^2], b4 [(Mpc/h)^4], Pshot, a0, a2
+b.b1 = 2.0; b.b2 = -0.5; b.bG2 = 0.3; b.c0 = 5; b.Pshot = 400;
+auto pell = eft.multipoles(b);                // P_0, P_2, P_4 on k_out (a cheap linear combination)
+auto & table = eft.multipole_table();         // table[l/2][monomial or CT0/CT2/CT4][ik]
+```
+
+The IR resummation reproduces CLASS-PT's (no-wiggle split, Sigma^2 and delta Sigma^2 below k_S = 0.2 h/Mpc, the
+damping of the tree, matter loops, bias loops and counterterms; see the header); `o.nowiggle` can instead use the DST
+split of `NoWiggle.h` or a given P_nw, and `o.ir_resummation = false` gives plain one-loop SPT. k in the counterterm
+and stochastic terms is in h/Mpc: CLASS-PT's python wrapper uses the k of `initialize_output` (usually 1/Mpc) for b4,
+a0, a2, so its b4 is h^2 times this one. The k -> 0 constant of the b2^2 term is subtracted (CLASS-PT's monopole
+differs by a constant that depends on the k grid given to it). Cost: ~0.3 s for 10 output k.
+
+Validation (`tests/test_eftoflss.cpp`, CLASS-PT fixture from `python/generate_classpt_reference.py`): every bias
+monomial in l = 0, 2, 4 against CLASS-PT's pk_gg_l0/2/4 for k = 0.005 - 0.3 h/Mpc, with and without IR resummation, to
+better than 1.3e-3 of the column's largest value (most to 1e-4); the counterterm templates and b4 to 2e-4; the
+Kaiser limit; the bias combination; a given P_nw; convergence against a refined quadrature (5e-5 of P_0).

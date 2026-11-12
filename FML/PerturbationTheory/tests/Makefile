@@ -4,8 +4,8 @@ USE_FFTW ?= true
 TARGETS := test_direct
 include ../../Makefile.config
 ifeq ($(USE_FFTW),true)
-TARGETS += test_perturbation test_lptrsd test_rept test_nowiggle
-all: test_perturbation test_lptrsd test_rept test_nowiggle
+TARGETS += test_perturbation test_lptrsd test_rept test_nowiggle test_tns test_eftoflss
+all: test_perturbation test_lptrsd test_rept test_nowiggle test_tns test_eftoflss
 endif
 test_direct: test_direct.o Global.o
 	$(LINK_EXE)
@@ -24,6 +24,14 @@ test_rept: test_rept.o Global.o
 # Wiggle/no-wiggle splits of the linear P(k)
 test_nowiggle: test_nowiggle.o Global.o
 	$(LINK_EXE)
+
+# One-loop SPT TNS model (compared with FAST-PT, OneLoop.h and analytic kernels)
+test_tns: test_tns.o Global.o
+	$(LINK_EXE)
+
+# CLASS-PT style one-loop EFTofLSS multipoles (compared with CLASS-PT)
+test_eftoflss: test_eftoflss.o Global.o
+	$(LINK_EXE)
 MPIRUN ?= mpirun
 NP_LIST ?= 1 2 4
 ifeq ($(USE_MPI),true)
@@ -40,4 +48,6 @@ run: $(TARGETS)
 	  $(if $(filter true,$(USE_FFTW)),OMP_NUM_THREADS=2 OMP_WAIT_POLICY=passive ./test_lptrsd,:); \
 	  $(if $(filter true,$(USE_FFTW)),OMP_NUM_THREADS=2 OMP_WAIT_POLICY=passive ./test_rept,:); \
 	  $(if $(filter true,$(USE_FFTW)),OMP_NUM_THREADS=2 OMP_WAIT_POLICY=passive ./test_nowiggle,:); \
+	  $(if $(filter true,$(USE_FFTW)),OMP_NUM_THREADS=2 OMP_WAIT_POLICY=passive ./test_tns,:); \
+	  $(if $(filter true,$(USE_FFTW)),OMP_NUM_THREADS=2 OMP_WAIT_POLICY=passive ./test_eftoflss,:); \
 	done

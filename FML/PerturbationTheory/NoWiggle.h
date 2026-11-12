@@ -32,6 +32,7 @@
 ///    P_ref, by default the Eisenstein & Hu no-wiggle fit (Vlah, Seljak, Chu & Feng 2016, arXiv:1509.02120; as in
 ///    HMcode-2020). The cleanest of the three when P_ref is close to the broadband (the residual wiggles of a CAMB
 ///    P are ~5e-4), biased by up to ~1% for a poor reference shape (Omega_m off by 0.06).
+///  - nowiggle_classpt: CLASS-PT's DST split (for its IR resummation, EFTofLSS.h), in 1/Mpc (needs h).
 ///  - The Eisenstein & Hu (1998) transfer functions with and without the wiggles are those of
 ///    Cosmology/Spectra/EisensteinHu.h (also available here).
 ///
@@ -361,6 +362,127 @@ namespace FML::PERTURBATION {
         for (size_t i = 0; i < k.size(); i++)
             out[i] = (k[i] >= opt.kmin and k[i] <= opt.kmax) ? inside[i] : P[i];
         return out;
+    }
+
+    /// The no-wiggle P(k) as CLASS-PT computes it for its IR resummation (Chudaykin et al. 2020, arXiv:2004.10607;
+    /// a port of nonlinear_pt_ir_resummation in CLASS-PT's nonlinear_pt.c): the DST-II of ln(k P) on a linear grid of
+    /// 65536 points in 7e-5 - 7 /Mpc, the coefficients 120 - 239 (odd and even separately) replaced by a natural
+    /// cubic spline through the others, the inverse transform, and a natural cubic spline of P_nw on that grid.
+    /// The transform works in 1/Mpc, so the result depends on h (k in h/Mpc, P in (Mpc/h)^3 here). Input P is
+    /// interpolated as a cubic spline in ln P(ln k) and extrapolated as power laws (the slopes of the end points;
+    /// CLASS-PT uses n_s below its table). Outside 7e-5 - 7 /Mpc P_nw = P.
+    inline std::vector<double> nowiggle_classpt(const std::vector<double> & k,
+                                                const std::vector<double> & P,
+                                                double h,
+                                                const std::vector<double> & kout) {
+        using DVector = std::vector<double>;
+        if (k.size() != P.size() or k.size() < 4 or not(h > 0))
+            throw std::invalid_argument("[nowiggle_classpt] k and P must have the same size (>= 4), h > 0");
+        const int N = 65536, N4 = 4 * N;
+        const double kmin2 = 7e-5, kmax2 = 7.0; // 1/Mpc
+        // ln P(ln k) in Mpc units: natural cubic spline, power-law ends
+        DVector lk(k.size()), lp(k.size());
+        for (size_t i = 0; i < k.size(); i++) {
+            if (not(k[i] > 0 and P[i] > 0))
+                throw std::invalid_argument("[nowiggle_classpt] need k > 0 and P > 0");
+            lk[i] = std::log(k[i] * h);
+            lp[i] = std::log(P[i] / (h * h * h));
+        }
+        auto natural_spline = [](const DVector & x, const DVector & y) {
+            const size_t n = x.size();
+            DVector d2(n, 0.0), u(n, 0.0);
+            for (size_t i = 1; i + 1 < n; i++) {
+                const double sig = (x[i] - x[i - 1]) / (x[i + 1] - x[i - 1]);
+                const double p = sig * d2[i - 1] + 2.0;
+                d2[i] = (sig - 1.0) / p;
+                u[i] = (y[i + 1] - y[i]) / (x[i + 1] - x[i]) - (y[i] - y[i - 1]) / (x[i] - x[i - 1]);
+                u[i] = (6.0 * u[i] / (x[i + 1] - x[i - 1]) - sig * u[i - 1]) / p;
+            }
+            for (size_t i = n - 1; i-- > 0;)
+                d2[i] = d2[i] * d2[i + 1] + u[i];
+            return d2;
+        };
+        auto spline_eval = [](const DVector & x, const DVector & y, const DVector & d2, double xe) {
+            size_t i = size_t(std::upper_bound(x.begin(), x.end(), xe) - x.begin());
+            i = std::min(std::max(i, size_t(1)), x.size() - 1);
+            const double hh = x[i] - x[i - 1], a = (x[i] - xe) / hh, b = 1.0 - a;
+            return a * y[i - 1] + b * y[i] + ((a * a * a - a) * d2[i - 1] + (b * b * b - b) * d2[i]) * hh * hh / 6.0;
+        };
+        const DVector d2p = natural_spline(lk, lp);
+        const size_t nk = lk.size();
+        const double slope_lo = (lp[1] - lp[0]) / (lk[1] - lk[0]);
+        const double slope_hi = (lp[nk - 1] - lp[nk - 2]) / (lk[nk - 1] - lk[nk - 2]);
+        auto lnP = [&](double lnk) {
+            if (lnk < lk.front())
+                return lp.front() + slope_lo * (lnk - lk.front());
+            if (lnk > lk.back())
+                return lp.back() + slope_hi * (lnk - lk.back());
+            return spline_eval(lk, lp, d2p, lnk);
+        };
+
+        // Forward: x[2i+1] = x[4N-2i-1] = (-1)^i ln(k_i P_i), a real even sequence of length 4N
+        std::vector<fftw_complex> in(N4), out(N4);
+        for (auto & c : in)
+            c[0] = c[1] = 0.0;
+        DVector kgrid(N);
+        for (int i = 0; i < N; i++) {
+            kgrid[i] = kmin2 + i * (kmax2 - kmin2) / (N - 1.0);
+            const double val = ((i % 2 == 0) ? 1.0 : -1.0) * (std::log(kgrid[i]) + lnP(std::log(kgrid[i])));
+            in[2 * i + 1][0] = val;
+            in[N4 - 2 * i - 1][0] = val;
+        }
+        fftw_plan plan = fftw_plan_dft_1d(N4, in.data(), out.data(), FFTW_FORWARD, FFTW_ESTIMATE);
+        fftw_execute(plan);
+        DVector cmodd(N / 2), cmeven(N / 2);
+        for (int i = 0; i < N / 2; i++) {
+            cmodd[i] = out[N - 2 * i - 1][0];
+            cmeven[i] = out[N - 2 * i - 2][0];
+        }
+        // Remove the harmonics [Nleft, Nright) (the BAO) and interpolate over them
+        const int Nleft = 120, Nright = 240;
+        DVector inew, odd_nw, even_nw;
+        for (int i = 0; i < N / 2; i++) {
+            if (i >= Nleft and i < Nright)
+                continue;
+            inew.push_back(i + 1.0);
+            odd_nw.push_back(cmodd[i]);
+            even_nw.push_back(cmeven[i]);
+        }
+        const DVector d2o = natural_spline(inew, odd_nw), d2e = natural_spline(inew, even_nw);
+        DVector cmnew(N);
+        for (int i = 0; i < N / 2; i++) {
+            cmnew[2 * i] = spline_eval(inew, odd_nw, d2o, i + 1.0);
+            cmnew[2 * i + 1] = spline_eval(inew, even_nw, d2e, i + 1.0);
+        }
+        // Inverse transform
+        for (auto & c : in)
+            c[0] = c[1] = 0.0;
+        in[0][0] = 0.5 * cmnew[N - 1];
+        in[2 * N][0] = -0.5 * cmnew[N - 1];
+        for (int i = 1; i < N; i++) {
+            const double half = 0.5 * cmnew[N - 1 - i];
+            in[i][0] = half;
+            in[N4 - i][0] = half;
+            in[2 * N - i][0] = -half;
+            in[2 * N + i][0] = -half;
+        }
+        fftw_execute(plan);
+        fftw_destroy_plan(plan);
+        DVector Pnw(N);
+        for (int i = 0; i < N; i++) {
+            const double v = ((i % 2 == 0) ? 1.0 : -1.0) * out[2 * i + 1][0];
+            Pnw[i] = std::exp(v / (2.0 * N)) / kgrid[i];
+        }
+        const DVector d2nw = natural_spline(kgrid, Pnw);
+        DVector result(kout.size());
+        for (size_t i = 0; i < kout.size(); i++) {
+            const double kM = kout[i] * h;
+            if (kM < kmin2 or kM > kmax2)
+                result[i] = std::exp(lnP(std::log(kM))) * h * h * h;
+            else
+                result[i] = spline_eval(kgrid, Pnw, d2nw, kM) * h * h * h;
+        }
+        return result;
     }
 
     /// Options of the Savitzky-Golay method (velocileptors' REPT default with EPTRedshiftSpace's grid)
