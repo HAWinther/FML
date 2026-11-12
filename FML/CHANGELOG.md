@@ -5,6 +5,15 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### LatinHyperCube: Latin hypercube sampling
+- `LatinHyperCube/LatinHyperCube.h` (header only): `FML::SAMPLING::LatinHyperCube`, after
+  `scipy.stats.qmc.LatinHypercube` (scipy 1.18): strength 1 and orthogonal-array strength 2 (n = p^2, p prime),
+  `scramble`, the `random_cd` (centered-discrepancy swaps, O(n d) per proposal) and `lloyd` optimizations, `random`,
+  `integers`, `reset`, `fast_forward`; also `scale` and `centered_discrepancy` (equal to scipy's documented value).
+- Portable seeds (the same points with every standard library, not numpy's). Lloyd uses Monte Carlo centroids of the
+  Voronoi cells clipped to the cube instead of Qhull vertex means. Tests in `LatinHyperCube/tests`, example in
+  `LatinHyperCube/example`.
+
 ### ReACT: native halo-model reaction; the external backend removed
 - `nonlinear = react` now computes the halo-model reaction natively: `SphericalCollapse/ScreenedSphericalCollapse.h`
   (spherical collapse with a screened fifth force: Hu-Sawicki f(R) thin shell, nDGP Vainshtein, the most probable
