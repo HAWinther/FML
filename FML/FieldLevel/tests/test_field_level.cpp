@@ -2,6 +2,7 @@
 // normalisation, HMC against the exact marginal posterior of the linear model, and recovery of beta with 1LPT.
 #include <FML/FieldLevel/FieldLevelBAO.h>
 #include <cstdlib>
+#include "GradientConvergence.h"
 #include <iostream>
 #include <FML/tests/TestHelpers.h>
 
@@ -35,21 +36,17 @@ static void test_gradient(Settings st, const std::string & name) {
     double analytic = 0;
     for (std::size_t c = 0; c < v.size(); ++c)
         analytic += grad[c] * v[c];
-    const double h = 1e-5;
-    auto shifted = [&](double sign) {
+    const auto field_sweep = TESTING::derivative_sweep([&](double h) {
         Field x = s;
         for (std::size_t c = 0; c < x.size(); ++c)
-            x[c] += sign * h * v[c];
+            x[c] += h * v[c];
         return fl.potential(x, beta);
-    };
-    const double numeric = (shifted(1) - shifted(-1)) / (2 * h);
-    const double hb = 1e-6;
-    const double numeric_beta = (fl.potential(s, beta + hb) - fl.potential(s, beta - hb)) / (2 * hb);
-    std::cout << name << ": dU.v analytic " << analytic << " numeric " << numeric << "; dU/dbeta analytic " << grad_beta
-              << " numeric " << numeric_beta << " (relative differences " << std::abs(analytic / numeric - 1) << ", "
-              << std::abs(grad_beta / numeric_beta - 1) << ")\n";
-    check_local(std::abs(analytic - numeric) < 1e-5 * std::abs(numeric), name + " gradient in s");
-    check_local(std::abs(grad_beta - numeric_beta) < 1e-4 * std::abs(numeric_beta) + 1e-6, name + " gradient in beta");
+    }, analytic, .01, name + " field");
+    const auto beta_sweep = TESTING::derivative_sweep([&](double h) {
+        return fl.potential(s, beta + h);
+    }, grad_beta, .01, name + " beta");
+    check_local(field_sweep.resolved(), name + " step-converged gradient in s");
+    check_local(beta_sweep.resolved(), name + " step-converged gradient in beta");
 }
 
 static void test_gradient(Model model, double centering, const std::string & name) {

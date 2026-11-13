@@ -1,7 +1,9 @@
 # FieldLevel review issues and deferred follow-ups
 
 Recorded 29 October 2026; safety status updated 4 November 2026. **FL-1 and FL-2
-were resumed and fixed at the user's request.** FL-4, FL-5 and FL-6 remain deferred.
+were resumed and fixed at the user's request.** FL-4 is now resolved by portable
+step-sweep and CIC-knot tests (13 November 2026). FL-5 has a bounded new
+validation suite; production scientific calibration and FL-6 profiling remain open.
 The general-framework plan and initial periodic stages 1–3 are recorded in
 [FRAMEWORK_PLAN.md](FRAMEWORK_PLAN.md). Safety fixes do not establish production readiness.
 
@@ -57,7 +59,19 @@ The relevant code is [FieldLevelBAO.h](FieldLevelBAO.h),
   access; add negative tests for the public conversions and retain valid-input
   round-trip and gradient checks.
 
-- [ ] **FL-4 (P2): Make the fixed-step CIC gradient test portable.**
+- [x] **FL-4 (P2): Make the fixed-step CIC gradient test portable.**
+  Resolved 13 November 2026: the nine existing field/beta gradient cases now
+  require a resolved interval of central-difference steps and improvement from
+  the coarse step, rather than agreement at one hand-picked step. Two adjacent
+  steps must agree within 2e-6 and the best within 1e-6 (relative with unit
+  absolute floor); no blanket tolerance relaxation was made. Dedicated CIC
+  tests use small deterministic fields away from cell boundaries, including
+  centred/white 1LPT and biased/RSD 2LPT cases. A manufactured cell crossing
+  tests continuity and converged, distinct one-sided slopes separately.
+  A deliberately biased derivative fails the sweep criterion. Both Apple Clang
+  and GCC validation are recorded in [tests/BAO_VALIDATION.md](tests/BAO_VALIDATION.md).
+  Historical evidence follows:
+
   A clean Apple Clang serial double build fails the white 1LPT directional
   check. The reproduced analytic derivative was 43.2638 versus 43.2913 at
   h=1e-5, relative error 6.34e-4 against a 1e-5 tolerance. A step sweep gave
@@ -68,14 +82,15 @@ The relevant code is [FieldLevelBAO.h](FieldLevelBAO.h),
   derivatives, with separate continuity/crossing tests. Seeded normal draws
   differ between standard libraries. Acceptance: meaningful checks pass under
   both Apple Clang and GCC without a blanket tolerance relaxation. GCC passed
-  the full suite after #17; the Clang failure remains unresolved.
+  the full suite after #17; the original Clang failure was unresolved at that time.
 
   Update (29 October 2026): the first 1LPT model started every particle exactly on
   a density-grid node, where CIC responds through |Psi| and the likelihood has a
   kink at Psi = 0 for every particle; this is the likely cause of the fragile
   fixed-step check. CIC particles now start mid-cell, and the default assignment
   is a smooth deconvolved kernel with a continuous gradient (see the README). The
-  Apple Clang run has not been repeated, so this item stays open.
+  Apple Clang run had not been repeated at that point, so this item stayed open
+  until the step-sweep validation above.
 
 ## Scientific and performance follow-ups
 
@@ -97,6 +112,21 @@ The relevant code is [FieldLevelBAO.h](FieldLevelBAO.h),
   z-scores consistent with N(0,1) and uniform posterior quantiles. This covers
   same-model coverage only; the negative control, information checks,
   dispersed chains and model-mismatch tests above remain open.
+
+  Update (13 November 2026): `tests/test_bao_validation.cpp` adds an explicit
+  no-wiggle/prior-only negative control and posterior-width information criterion,
+  two dispersed chains monitoring beta plus low-mode real/imaginary white-field
+  projections and field power, divergence checks and configurable prior-drawn
+  1LPT/2LPT mock ensembles. A test-only field-summary recorder is checked against
+  the public BAO sampler for exactly unchanged trajectories. Independent direct
+  particle Fourier sums test assignment/mesh convergence and reveal low-band
+  changes from omitted higher-k initial modes. The NumPy summary reports empirical
+  credible-interval coverage with binomial uncertainty. See
+  [the validation guide](tests/BAO_VALIDATION.md) for measured results and limits.
+  These stronger checks resolve the old prior-only smoke-test failure mode;
+  the small strengthened-wiggle ensembles, manufactured fields and direct
+  deposition references do not certify production cosmological/model-mismatch
+  inference, joint bias/noise inference or field-posterior coverage.
 
 - [ ] **FL-6: Measure and reduce force-call workspace churn.**
   `potential_and_gradient` recreates its workspace, displacement/adjoint fields
@@ -123,11 +153,11 @@ The relevant code is [FieldLevelBAO.h](FieldLevelBAO.h),
 ## Resuming the work
 
 The FL-1/FL-2 prerequisite is resolved. The initial periodic implementation of stages 1–3
-is described in [the general-framework plan](FRAMEWORK_PLAN.md) and [its guide](FRAMEWORK.md). The deferred FL-4 numerical
-verification, FL-5 scientific validation and measured FL-6 workspace work remain
-separate follow-ups. The current Clang suite passes, but FL-4's portable
-step-convergence acceptance criteria have not been completed. Recheck current
-source before implementing the open entries; historical evidence can become stale.
+is described in [the general-framework plan](FRAMEWORK_PLAN.md) and [its guide](FRAMEWORK.md).
+FL-4's portable step-convergence acceptance criteria are now completed. FL-5
+production scientific validation and measured FL-6 workspace work remain separate
+follow-ups; the bounded FL-5 progress is documented above. Recheck current source
+before implementing open entries; historical evidence can become stale.
 
 ## General framework sampler follow-up
 
