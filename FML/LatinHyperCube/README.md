@@ -81,6 +81,7 @@ How it works:
   full recompute, the LHS and orthogonal-array properties, the seeds, `reset` and `fast_forward`, both
   optimizations, `scale` and `integers`.
 
-References: McKay, Beckman & Conover (1979); Tang (1993), *J. Am. Stat. Assoc.* 88, 1392; Hickernell (1998),
+References: [McKay, Beckman & Conover (1979)](https://doi.org/10.1080/00401706.1979.10489755);
+[Tang (1993)](https://doi.org/10.1080/01621459.1993.10476423), *J. Am. Stat. Assoc.* 88, 1392; Hickernell (1998),
 *Math. Comp.* 67, 299 (centered discrepancy); Jin, Chen & Sudjianto (2005), *J. Stat. Plan. Inference* 134, 268
 (swap updates).

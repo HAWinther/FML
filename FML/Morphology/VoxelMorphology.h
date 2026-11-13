@@ -7,6 +7,9 @@
 #include <cstring>
 #include <limits>
 #include <type_traits>
+// Cubical-complex / integral-geometric morphology: Schmalzing & Buchert (1997),
+// arXiv:astro-ph/9702130; Schmalzing et al. (1999), arXiv:astro-ph/9904384.
+// FML boundary, normalization and threshold conventions: README.md.
 namespace FML::MORPHOLOGY {
     using Count = unsigned long long;
     enum class Boundary { Periodic, Open };

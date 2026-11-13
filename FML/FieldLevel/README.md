@@ -171,3 +171,14 @@ deferred. Engineering #17 resolved the frozen-chain diagnostics finding.
 The saved [general-framework plan](FRAMEWORK_PLAN.md) separates prior/evolution,
 tracers, observations, likelihood and inference. Stages 1–3 now have an initial periodic implementation documented in [FRAMEWORK.md](FRAMEWORK.md);
 backlog #52 remains open until the broader scope is delivered.
+
+## Scientific method references
+
+- [Jasche & Wandelt (2013), BORG](https://arxiv.org/abs/1203.3639): Bayesian initial-condition reconstruction with dynamical evolution.
+- [Stadler, Schmidt & Reinecke, LEFTfield](https://arxiv.org/abs/2409.10937): perturbative field-level forward modeling and numerical convergence.
+- [Field-level BAO inference](https://arxiv.org/abs/2407.01524): joint inference of the initial field and BAO scale, motivating the prototype.
+
+These are scientific reference directions, not code ports or compatibility claims.
+The native periodic framework and its adjoints are tested against exact linear
+results, finite differences and MPI decompositions. These checks do not establish
+nonlinear accuracy against independent simulations or realistic survey validity.

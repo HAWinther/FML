@@ -11,6 +11,8 @@
 #include <string>
 #include <tuple>
 #include <vector>
+// CARPool mean estimation: Chartier et al. (2021), arXiv:2009.08970.
+// Independent frozen-coefficient implementation; phase independence and scope: README.md.
 namespace FML::ENSEMBLE {
     using Vector = std::vector<double>;
     using Count = unsigned long long;

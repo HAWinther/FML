@@ -302,6 +302,6 @@ and Kokron et al. (2021), [arXiv:2101.11014](https://arxiv.org/abs/2101.11014).
 The T-web follows Hahn et al. (2007), [arXiv:astro-ph/0610280](https://arxiv.org/abs/astro-ph/0610280), and
 Forero-Romero et al. (2009), [arXiv:0809.4135](https://arxiv.org/abs/0809.4135). The Gaussian-field Minkowski
 functionals are those of Tomita (1986) and Schmalzing & Buchert (1997),
-[arXiv:astro-ph/9508154](https://arxiv.org/abs/astro-ph/9508154).
+[arXiv:astro-ph/9702130](https://arxiv.org/abs/astro-ph/9702130).
 DTFE follows Schaap & van de Weygaert (2000), [arXiv:astro-ph/0011007](https://arxiv.org/abs/astro-ph/0011007),
 and Cautun & van de Weygaert (2011), [arXiv:1105.0370](https://arxiv.org/abs/1105.0370).

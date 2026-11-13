@@ -113,3 +113,13 @@ Run `make run` in `tests/`. The PyTorch reference values in `tests/TorchReferenc
 - **Finite differences:** the gradient and the Jacobian.
 - **The rest:** bitwise save/load, early stopping, SWA, training a smooth 2D → 2D function to 1%, reproducible
   seeds, and the CSV reader.
+
+## Method references
+
+- Kingma & Ba, [Adam](https://arxiv.org/abs/1412.6980).
+- Izmailov et al., [stochastic weight averaging](https://arxiv.org/abs/1803.05407).
+- Glorot & Bengio (2010), [weight initialization](https://proceedings.mlr.press/v9/glorot10a.html).
+
+The Sesame pipeline linked above supplies the training recipe; PyTorch supplies
+comparison fixtures and the checkpoint source format. The C++ implementation is
+independent. Recipe agreement does not establish emulator accuracy for new data.

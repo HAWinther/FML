@@ -18,6 +18,9 @@
 #include <omp.h>
 #endif
 
+// Adam: Kingma & Ba, arXiv:1412.6980; SWA: Izmailov et al., arXiv:1803.05407.
+// Glorot initialization: https://proceedings.mlr.press/v9/glorot10a.html
+// Sesame training-recipe lineage and PyTorch comparison scope: README.md.
 namespace FML {
     namespace EMULATOR {
 

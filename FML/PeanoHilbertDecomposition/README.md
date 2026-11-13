@@ -92,3 +92,6 @@ ranks. Use `make -C tests run USE_MPI=false` for the serial suite.
 - Use of Peano-Hilbert ordering for cosmological N-body parallelization:
   V. Springel, “The cosmological simulation code GADGET-2,” *MNRAS* **364**,
   1105–1134 (2005), [doi:10.1111/j.1365-2966.2005.09655.x](https://doi.org/10.1111/j.1365-2966.2005.09655.x).
+
+The prefix-histogram partitioning, grid storage and halo exchange are FML's own
+implementation; this citation does not imply integration with particle evolution.

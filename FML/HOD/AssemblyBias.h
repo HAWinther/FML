@@ -4,6 +4,8 @@
 #include <cmath>
 #include <limits>
 
+// Heaviside decorated HOD: Hearin et al. (2016), arXiv:1512.03050.
+// Halotools prescription; marginal-occupation conventions and differences: README.md.
 namespace FML::HOD {
     /// Heaviside decoration of central probability and MARGINAL satellite mean.
     /// At fixed mass, q is a caller-calibrated conditional percentile in [0,1].

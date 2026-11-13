@@ -1,6 +1,8 @@
 #ifndef FML_SURVEY_WINDOW_HEADER
 #define FML_SURVEY_WINDOW_HEADER
 #include <FML/Survey/SurveyPower.h>
+// Window convolution in correlation multipoles: Wilson et al. (2017), arXiv:1511.07799.
+// Independent implementation; finite-band/mesh conventions and pypower checks: window_validation/.
 namespace FML::SURVEY {
     struct WindowMultipoles {
         std::vector<int> ells;

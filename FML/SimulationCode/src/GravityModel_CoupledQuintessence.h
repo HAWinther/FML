@@ -7,6 +7,7 @@
 #include <memory>
 
 //=============================================================================
+/// Method reference: Amendola (2000), https://arxiv.org/abs/astro-ph/9908023.
 /// Coupled quintessence (Wetterich 1995; Amendola 2000): the force and the velocity term of a scalar field coupled to
 /// the CDM, whose particles have the mass m ~ exp(-beta phi). The background (phi(a), the CDM density with the varying
 /// mass) is that of cosmology_model = CoupledQuintessence, which this model requires (it takes beta and phi(a) from

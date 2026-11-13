@@ -2,6 +2,8 @@
 #define FML_COSMOLOGY_BACKGROUND_BACKGROUNDMODEL_DARKSCATTERING_H
 
 // =====================================================================================================================
+// Method references: Simpson (2010), arXiv:1007.1034; Baldi & Simpson (2015), arXiv:1412.1080.
+// Covariant-model N-body reference: Beltran Jimenez et al., arXiv:2510.12551.
 // Dark scattering (Simpson 2010; Baldi & Simpson 2015): elastic scattering of dark matter off the dark energy. Only
 // momentum is exchanged, so the background is wCDM:
 //   rho_DE = Omega_DE a^{-3(1 + w)}

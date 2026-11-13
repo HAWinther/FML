@@ -14,6 +14,9 @@
 
 #include <FML/KDTree/KDTree.h>
 
+// LHS: McKay, Beckman & Conover (1979), doi:10.1080/00401706.1979.10489755.
+// OA-LHS: Tang (1993), doi:10.1080/01621459.1993.10476423.
+// Independent implementation following SciPy; optimization sources and differences: README.md.
 namespace FML {
 
     /// Space-filling designs of experiments (sampling of parameter spaces)

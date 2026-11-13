@@ -3,6 +3,8 @@
 #include <FML/ConnectedFourPoint/Common.h>
 #include <FML/EnsembleStatistics/ControlVariates.h>
 #include <optional>
+// Periodic covariance/trispectrum convention: Scoccimarro, Zaldarriaga & Hui (1999),
+// arXiv:astro-ph/9901099. Wick-reference and finite-sample conventions: README.md.
 namespace FML::FOURPOINT {
     struct FourPointResult {
         unsigned long long samples{};

@@ -98,7 +98,7 @@ Use an external power model or separately calibrated ensemble, not `sum |delta_k
 
 The adapter returns `total`, `gaussian`, `connected=total-gaussian`, and `collapsed_trispectrum=V*connected`. For matter density powers, units are length^6 for covariance and length^9 for collapsed T. A connected covariance may be negative or indefinite and is not itself a covariance suitable for a Gaussian likelihood. No division by the ensemble size or positivity clipping is applied. Gaussian-reference uncertainty is not propagated. Periodic-box assumptions exclude super-sample covariance and survey-window terms. For discrete tracers, subtracting Gaussian covariance alone does not remove all connected Poisson terms; report a discrete-field statistic or supply separately validated noise corrections.
 
-The periodic covariance/trispectrum convention follows [Scoccimarro, Zaldarriaga & Hui, *Power Spectrum Correlations Induced by Non-Linear Clustering*](https://lss.fnal.gov/archive/1999/pub/Pub-99-003-A.pdf). The implementation and tests use the explicit finite-mode formulas above.
+The periodic covariance/trispectrum convention follows [Scoccimarro, Zaldarriaga & Hui, *Power Spectrum Correlations Induced by Non-Linear Clustering*](https://arxiv.org/abs/astro-ph/9901099). The implementation and tests use the explicit finite-mode formulas above.
 
 ## Building and validation
 

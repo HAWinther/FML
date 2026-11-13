@@ -5,6 +5,8 @@
 #include <array>
 #include <limits>
 
+// FFTLog Hankel transforms: Hamilton (2000), arXiv:astro-ph/9905191.
+// FML finite-band, taper and unit conventions: CORRELATION_MULTIPOLES.md.
 namespace FML::PERTURBATION {
     struct CorrelationOptions {
         int fft_samples = 4096;
