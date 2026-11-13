@@ -6,8 +6,10 @@
 // (StandardSpeciesPerturbations), and the CDM with the dark-energy fluid in one block
 // (SpeciesPerturbation_DarkScattering, SpeciesPerturbation_DarkEnergyFluid.h), in general relativity. Parameters as the
 // Einstein-Boltzmann solver: xi = sigma_D / m_c in barn/GeV (>= 0; 0 is wCDM with dark-energy perturbations) and the
-// rest-frame sound speed cs2 > 0; w (from the background) != -1.
+// rest-frame sound speed cs2 > 0; w (from the background) != -1. With DarkScatteringRate::Covariant the covariantised
+// dark Thomson-like scattering (the registry's covariant_dark_scattering) with the dimensionless alpha >= 0 instead of xi.
 //   make_dark_scattering_perturbations(p, w, xi_barn_per_GeV, cs2, r)
+//   make_covariant_dark_scattering_perturbations(p, w, alpha, cs2, r)
 // =====================================================================================================================
 
 #include <FML/Cosmology/Background/BackgroundModel_DarkScattering.h>
@@ -27,12 +29,15 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
 
     class PerturbationModel_DarkScattering : public PerturbationModel {
       public:
+        /// strength: xi in barn/GeV (CrossSection) or alpha (Covariant)
         PerturbationModel_DarkScattering(BACKGROUND::ComponentBackgroundPtr background,
-                                         double xi_barn_per_GeV,
-                                         double cs2)
+                                         double strength,
+                                         double cs2,
+                                         DarkScatteringRate kind = DarkScatteringRate::CrossSection)
             : PerturbationModel(std::move(background)), cdm(find(*bg, BACKGROUND::Component::CDM)),
               de(find(*bg, BACKGROUND::Component::DarkEnergy)), standard(*bg, {cdm}), cs2(cs2),
-              xi(xi_barn_per_GeV * 1e-28 / FML::UTILS::SI::GeV_over_c2) {
+              xi(kind == DarkScatteringRate::Covariant ? strength : strength * 1e-28 / FML::UTILS::SI::GeV_over_c2),
+              kind(kind) {
             if (not bg->field_equations_as<BACKGROUND::GeneralRelativity>())
                 throw std::invalid_argument("[PerturbationModel_DarkScattering] The background is not general "
                                             "relativity");
@@ -41,15 +46,18 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
             if (not(cs2 > 0.0))
                 throw std::invalid_argument("dark energy fluid: need cs2 > 0");
             if (not(xi >= 0.0))
-                throw std::invalid_argument("dark scattering: need xi >= 0");
+                throw std::invalid_argument(kind == DarkScatteringRate::Covariant ? "covariant dark scattering: need alpha >= 0"
+                                                                                  : "dark scattering: need xi >= 0");
         }
-        std::string name() const override { return "dark_scattering"; }
+        std::string name() const override {
+            return kind == DarkScatteringRate::Covariant ? "covariant_dark_scattering" : "dark_scattering";
+        }
 
         SpeciesPerturbationList species_perturbations(const PerturbationContext & ctx) const override {
             check(ctx);
             SpeciesPerturbationList list;
             standard.add_to(ctx, list);
-            list.push_back(std::make_unique<SpeciesPerturbation_DarkScattering>(*cdm, *de, cs2, xi, ctx));
+            list.push_back(std::make_unique<SpeciesPerturbation_DarkScattering>(*cdm, *de, cs2, xi, ctx, kind));
             return list;
         }
         std::unique_ptr<PerturbedFieldEquation>
@@ -62,7 +70,8 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
         const BACKGROUND::Species * cdm;
         const BACKGROUND::Species * de;
         StandardSpeciesPerturbations standard;
-        double cs2, xi; ///< xi in m^2/kg
+        double cs2, xi; ///< xi in m^2/kg (CrossSection) or alpha (Covariant)
+        DarkScatteringRate kind;
 
         /// The one species of a component
         static const BACKGROUND::Species * find(const BACKGROUND::ComponentBackground & bg, BACKGROUND::Component c) {
@@ -88,6 +97,15 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
                                        BACKGROUND::BackgroundRange r = {}) {
         return std::make_shared<const PerturbationModel_DarkScattering>(
             BACKGROUND::make_dark_scattering(p, w, r), xi_barn_per_GeV, cs2);
+    }
+    inline std::shared_ptr<const PerturbationModel_DarkScattering>
+    make_covariant_dark_scattering_perturbations(const BACKGROUND::BackgroundParameters & p,
+                                                 double w,
+                                                 double alpha,
+                                                 double cs2 = 1.0,
+                                                 BACKGROUND::BackgroundRange r = {}) {
+        return std::make_shared<const PerturbationModel_DarkScattering>(
+            BACKGROUND::make_dark_scattering(p, w, r), alpha, cs2, DarkScatteringRate::Covariant);
     }
 
 } // namespace FML::COSMOLOGY::PERTURBATIONS

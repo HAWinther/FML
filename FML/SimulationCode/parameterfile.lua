@@ -53,7 +53,8 @@ end
 ------------------------------------------------------------
 -- Choose the cosmology 
 ------------------------------------------------------------
--- Cosmology: LCDM, w0waCDM, DGP, JBD, Quintessence, EDE, DarkScattering, CoupledQuintessence, Tabulated ... add your own ...
+-- Cosmology: LCDM, w0waCDM, DGP, JBD, Quintessence, EDE, DarkScattering, CovariantDarkScattering, CoupledQuintessence,
+-- Tabulated ... add your own ...
 cosmology_model = "LCDM"
 --- CDM density
 cosmology_OmegaCDM = 0.2685
@@ -117,6 +118,14 @@ if cosmology_model == "DarkScattering" then
   -- (a velocity friction of the dark matter); cs2 only for the IC from the internal solver
   cosmology_ds_w = -0.9
   cosmology_ds_xi = 10.0
+  cosmology_ds_cs2 = 1.0
+end
+if cosmology_model == "CovariantDarkScattering" then
+  -- The covariantised dark Thomson-like scattering Q^mu = alpha_bar (u_DE^mu - u_c^mu): wCDM with w = cosmology_ds_w and
+  -- the dark-matter drag alpha a^3 / (Omega_cdm E(a)) per ln a (alpha = 8 pi G alpha_bar / (3 H0^3)); cs2 only for
+  -- the IC from the internal solver
+  cosmology_ds_w = -0.98
+  cosmology_cds_alpha = 1.0
   cosmology_ds_cs2 = 1.0
 end
 if cosmology_model == "CoupledQuintessence" then

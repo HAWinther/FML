@@ -69,17 +69,25 @@ fluid). With COLA the frame is the CDM+baryon one (friction f_c Gamma); a specie
 that the frame's kick does not have (without it the CDM-baryon split below was -5.6% / -4.5% instead of
 -6.2% / -1.3%). The growth from z = 49 to 0 relative to wCDM (w = -0.9, xi = 50 barn/GeV, 1e-4 times the power,
 32^3 of each species in 1000 Mpc/h, 2x force grid, k < 0.05 h/Mpc), each run against wCDM with the same time
-stepping:
+stepping, and the linear growth of the N-body equations (two fluids with the drag, the dark energy at rest):
 
 | | CDM | baryons | CDM+baryons |
 |---|---|---|---|
-| Two-fluid linear growth | -6.16% | -1.31% | -5.42% |
-| Einstein-Boltzmann solver | -6.17% | -1.52% | -5.45% |
+| Two-fluid linear growth (the N-body equations) | -6.16% | -1.31% | -5.42% |
 | Quinn, 200 logarithmic steps | -6.12% | -1.30% | -5.38% |
 | FastPM, 10 steps | -6.12% | -1.30% | -5.38% |
 | COLA + Quinn, 10 steps | -6.14% | -1.25% | -5.39% |
 | COLA + FastPM, 10 steps | -6.12% | -1.34% | -5.38% |
 | one species (f_c Gamma), Quinn, 200 steps | | | -5.42% |
+
+The Einstein-Boltzmann solver (its transfer functions at z = 49 and 0) agrees with this on small scales but its
+dark energy is not at rest on large scales: the drag also pulls the dark energy along with the dark matter
+(Gamma_DE = Gamma_c R with R = rho_c / ((1 + w) rho_DE) >> 1), which reduces the relative velocity and so the drag.
+CDM / baryons, simulation (Quinn) / solver: -6.16% / -4.90%, -1.32% / -0.64% at k = 0.008 h/Mpc; -6.11% / -5.81%,
+-1.30% / -1.09% at k = 0.032; -5.97% / -5.95%, -1.22% / -1.19% at k = 0.088. The N-body equations (as in
+Baldi & Simpson 2015 and the other N-body work on these models) neglect the velocity of the dark energy, so they
+overestimate the effect on large scales (here k < ~0.05 h/Mpc; more for w closer to -1, see the covariantised model
+below).
 
 Coupled quintessence (`cosmology_model = CoupledQuintessence`, see [MODELS.md](MODELS.md)): the CDM particles feel
 gravity and the fifth force of the CDM density, D^2 Phi_5 = 2 beta^2 1.5 OmegaCDM m(a) a delta_c (a second kick
@@ -90,21 +98,44 @@ from z = 49 to 0 relative to uncoupled quintessence (lambda = 0.5, beta = 0.15, 
 
 | | CDM | baryons | CDM+baryons | delta_b / delta_c at z = 0 |
 |---|---|---|---|---|
-| Einstein-Boltzmann solver | +14.19% | +10.66% | +13.26% | 0.9327 |
+| Einstein-Boltzmann solver | +14.23% | +10.74% | +13.32% | 0.9327 |
 | Quinn, 200 logarithmic steps | +14.10% | +10.58% | +13.18% | 0.9324 |
 | FastPM, 10 steps | +14.11% | +10.59% | +13.18% | 0.9325 |
 | COLA + Quinn, 10 steps | +14.11% | +10.58% | +13.19% | 0.9323 |
 | COLA + FastPM, 10 steps | +14.10% | +10.59% | +13.18% | 0.9325 |
 
-(uncoupled: delta_b / delta_c = 0.9960, solver 0.9961). The growth of the species from z = 49 includes the baryons
+(uncoupled: delta_b / delta_c = 0.9960, solver 0.9961). Per k the simulations agree with the solver to 4-7e-4 at
+k = 0.02-0.03 h/Mpc (one species), with larger differences in the largest-scale bin (4e-3) and towards k_Ny of the
+particles (the resolution, 1-3e-3 at k = 0.05-0.09). The growth of the species from z = 49 includes the baryons
 catching up with the CDM (delta_b / delta_c = 0.865 at z = 49, 0.898 uncoupled), so it is not that of the two-fluid
 growing mode (CDM +14.4%, baryons +7.0%); its D_b / D_c = 0.9355 is the ratio the solver approaches by z = 0.
 
 With the same lattice keep the force grid at most twice the particle grid: a finer grid resolves the attraction
 between the CDM and baryon particles that start at the same point, which damps the CDM-baryon difference the drag
 builds up (CDM / baryons with Quinn: -6.01% / -1.22% with a 1x grid, -6.12% / -1.30% 2x, -5.90% / -2.62% 4x,
--5.55% / -4.63% 8x). The baryons of the Einstein-Boltzmann solver are 0.2% below the two-fluid growth (the
-simulations follow the two-fluid growth).
+-5.55% / -4.63% 8x).
+
+Covariantised dark Thomson-like scattering (`cosmology_model = CovariantDarkScattering`, see [MODELS.md](MODELS.md)):
+as dark scattering with the drag Gamma = alpha a^3 / (Omega_c0 E) of the dark matter. The growth from z = 49 to 0
+relative to alpha = 0 (alpha = 1, w = -0.98, as arXiv:2510.12551; set up as above, k < 0.05 h/Mpc):
+
+| | CDM | baryons | CDM+baryons | delta_b / delta_c at z = 0 |
+|---|---|---|---|---|
+| Two-fluid linear growth (the N-body equations) | -9.13% | -0.32% | -7.77% | 1.0969 (growing mode) |
+| Quinn, 200 logarithmic steps | -9.03% | -0.32% | -7.69% | 1.0915 |
+| FastPM, 10 steps | -9.04% | -0.32% | -7.70% | 1.0915 |
+| COLA + Quinn, 10 steps | -9.07% | -0.57% | -7.76% | 1.0891 |
+| COLA + FastPM, 10 steps | -9.00% | -0.76% | -7.73% | 1.0863 |
+| one species (f_c Gamma), Quinn, 200 steps | | | -7.91% | |
+
+The drag grows as a^3 (Gamma = 3.7 per ln a today, 0.26 at a = 0.5), so it acts mostly at z < 1, and one set of
+CDM+baryon particles (f_c Gamma) overestimates the suppression of the CDM+baryon growth by 2.4e-3 (the momentum-
+weighted one-fluid approximation; with separate particles the CDM and baryons follow the two-fluid growth). With
+w = -0.98 the dark energy is strongly dragged along (R ~ 1/(1 + w)): relative to the solver the N-body suppression
+of the CDM growth is -9.1% / -6.2% at k = 0.008 h/Mpc, -9.0% / -8.5% at k = 0.032 and -8.7% / -8.7% at k >= 0.07
+(v_DE / v_c today in the solver: 0.43 at k = 0.0075, 0.13 at 0.016, 0.03 at 0.033, < 0.01 at k > 0.07 h/Mpc); the
+baryons agree to 1e-4 for k >= 0.05. So the N-body equations (the dark energy at rest, as in the N-body work on this
+model) hold for k > ~0.05 h/Mpc.
 
 Not implemented for two species yet (the code stops with a message): COLA with the Tassev operators, reading the IC from file, NUFFT / sheet densities, force interlacing and the early-time force, the N-body gauge, the lightcone, multipoles and the bispectrum (the full list is the table at the end of [PARAMETERS.md](PARAMETERS.md)). Use `ic_input_redshift = ic_initial_redshift` (the two species are made from the transfer functions at zini).
 

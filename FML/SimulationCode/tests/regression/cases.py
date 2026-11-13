@@ -432,6 +432,27 @@ CASES = {
         ic_input_filename=INPUT + "/transfer_tables/dark_scattering.txt",
         ic_input_redshift=20.0,
     ),
+    # The covariantised dark Thomson-like scattering (the drag alpha a^3 / (Omega_c E)): one fluid with COLA, and CDM
+    # and baryon particles with FastPM
+    "covariant_dark_scattering_cola": dict(
+        cosmology_model="CovariantDarkScattering",
+        cosmology_ds_w=-0.98,
+        cosmology_cds_alpha=1.0,
+        cosmology_ds_cs2=1.0,
+    ),
+    "covariant_dark_scattering_baryons_fastpm": dict(
+        cosmology_model="CovariantDarkScattering",
+        cosmology_ds_w=-0.98,
+        cosmology_cds_alpha=1.0,
+        cosmology_ds_cs2=1.0,
+        particle_baryons=True,
+        particle_baryon_lattice="same",
+        simulation_use_cola=False,
+        timestep_method="FastPM",
+        ic_type_of_input="tables",
+        ic_input_filename=INPUT + "/transfer_tables/covariant_dark_scattering.txt",
+        ic_input_redshift=20.0,
+    ),
     # Coupled quintessence: the CDM+baryon particles as one fluid (G_eff, friction and the CDM mass of the coupling),
     # and with CDM and baryon particles (the fifth force of the CDM on the CDM, the species' own steps)
     "coupled_quintessence_cola": dict(

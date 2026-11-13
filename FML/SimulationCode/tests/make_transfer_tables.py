@@ -3,7 +3,7 @@
 # Regenerate the transfer tables of the tests (input/transfer_tables/*.txt) with the internal
 # Einstein-Boltzmann solver: ./nbody --write-transfers for the cosmology of the regression cases
 # (tests/regression/cases.py BASE) with 0, 0.1, 0.2 and 0.4 eV of massive neutrinos (three degenerate
-# species), in the N-body gauge (0 eV), with dark scattering and coupled quintessence, for ic_initial_redshift = 20 as in the tests (the tables cover
+# species), in the N-body gauge (0 eV), with dark scattering (both kinds) and coupled quintessence, for ic_initial_redshift = 20 as in the tests (the tables cover
 # z <= 41, as those of ic_type_of_input = internal for these runs).
 # The tests read them with ic_type_of_input = tables, which checks that the cosmology is the same.
 #
@@ -33,6 +33,9 @@ TABLES = {
     # Dark matter - dark energy scattering (the regression cases with CDM and baryon particles)
     "dark_scattering": dict(cosmology_model="DarkScattering", cosmology_ds_w=-0.9, cosmology_ds_xi=50.0,
                             cosmology_ds_cs2=1.0),
+    # The covariantised dark Thomson-like scattering (the regression cases with CDM and baryon particles)
+    "covariant_dark_scattering": dict(cosmology_model="CovariantDarkScattering", cosmology_ds_w=-0.98,
+                                      cosmology_cds_alpha=1.0, cosmology_ds_cs2=1.0),
     # Coupled quintessence (the regression cases with CDM and baryon particles)
     "coupled_quintessence": dict(cosmology_model="CoupledQuintessence", gravity_model="CoupledQuintessence",
                                  cosmology_cq_lambda=0.5, cosmology_cq_beta=0.15),

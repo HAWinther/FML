@@ -5,6 +5,32 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Covariantised dark Thomson-like scattering
+- Einstein-Boltzmann solver: `covariant_dark_scattering` (`cds_alpha`, `ds_w`, `ds_cs2`), the interaction
+  Q^mu = alpha_bar (u_DE^mu - u_c^mu) (Beltran Jimenez et al. 2020): the dark-scattering equations with the rate
+  Gamma_c = alpha H0 a^4 / Omega_c0, Gamma_DE = Gamma_c rho_c / ((1 + w) rho_DE) (`DarkScatteringRate::Covariant` in
+  `SpeciesPerturbation_DarkScattering`; wCDM background). Tests (`test_dark_scattering.cpp`): alpha = 0 is wCDM, the
+  Einstein constraints hold, the growth follows the two-fluid growth equations with the drag (to 1e-6), suppression.
+- SimulationCode: `cosmology_model = CovariantDarkScattering` (`cosmology_ds_w`, `cosmology_cds_alpha`,
+  `cosmology_ds_cs2`): the dark-matter drag alpha a^3 / (Omega_c0 E) per ln a
+  (`BACKGROUND::covariant_dark_scattering_cdm_drag`), with one set of CDM+baryon particles and `particle_baryons`.
+- Validated (alpha = 1, w = -0.98, as arXiv:2510.12551): the simulations follow the growth of the N-body equations to
+  1e-3 (separate CDM and baryons; one set of particles overestimates the CDM+baryon suppression by 2.4e-3 with this
+  strong drag) and the solver for k > ~0.05 h/Mpc. On larger scales the solver's dark energy moves with the dark
+  matter (v_DE / v_c = 0.43 at k = 0.0075 h/Mpc), which the N-body equations neglect (as the N-body work on these
+  models): CDM suppression -9.1% (N-body) vs -6.2% (solver) at k = 0.008 h/Mpc.
+- Regression cases `covariant_dark_scattering_cola`, `covariant_dark_scattering_baryons_fastpm` (table
+  `input/transfer_tables/covariant_dark_scattering.txt`).
+
+### Corrections to the validation of dark scattering with baryon particles and of coupled quintessence
+- The "linear theory" column of SimulationCode's P(k) files is P(k, zini) times the growth of the code's gravity model
+  (`linear_pofk_cb`), not the solver's P(k) at the output, so the comparisons with it in the two entries below were
+  against the code's own one-fluid growth. Against the solver's transfer functions directly: coupled quintessence
+  agrees to 4-7e-4 at k = 0.02-0.03 h/Mpc (larger in the largest-scale bin and towards the particle Nyquist
+  frequency); dark scattering (w = -0.9, xi = 50) agrees per species for k > ~0.07 h/Mpc but the solver has less
+  suppression on larger scales (its dark energy moves with the dark matter; CDM -4.9% instead of -6.2% at k = 0.008
+  h/Mpc). MODELS.md and SPECIES.md are corrected.
+
 ### SimulationCode: coupled quintessence
 - `cosmology_model = CoupledQuintessence` (`cosmology_cq_lambda`, `cosmology_cq_beta`): the background and IC of FML's
   `coupled_quintessence`, with the varying CDM mass (rho_c a^3 ~ exp(-beta phi)) in the Poisson normalization

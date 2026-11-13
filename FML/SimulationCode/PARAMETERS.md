@@ -27,7 +27,7 @@ Parameters marked *optional* take the default value if they are not in the param
 
 | Parameter | Type | Default | Used when | Description |
 |---|---|---|---|---|
-| `cosmology_model` | string | `"LCDM"` | always | The cosmology (background evolution). Options: `LCDM`, `w0waCDM`, `DGP`, `JBD`, `Quintessence`, `EDE`, `DarkScattering`, `CoupledQuintessence`, `Tabulated` |
+| `cosmology_model` | string | `"LCDM"` | always | The cosmology (background evolution). Options: `LCDM`, `w0waCDM`, `DGP`, `JBD`, `Quintessence`, `EDE`, `DarkScattering`, `CovariantDarkScattering`, `CoupledQuintessence`, `Tabulated` |
 | `cosmology_Omegab` | double | *required* | always | Baryon density parameter |
 | `cosmology_OmegaMNu` | double | `0` | always | Massive neutrino density parameter (3 equal masses; or use cosmology_neutrino_masses_eV) |
 | `cosmology_neutrino_masses_eV` | double list | `{}` | always | The masses of the (up to 3) neutrinos in eV, e.g. {0.0, 0.0086, 0.05} (0 or not listed: massless). Instead of cosmology_OmegaMNu (which then follows from the masses) |
@@ -55,9 +55,10 @@ Parameters marked *optional* take the default value if they are not in the param
 | `cosmology_ede_n` | double | `3` | cosmology_model = EDE | Early dark energy: V = m^2 f^2 (1 - cos(phi/f))^n |
 | `cosmology_tabulated_filename` | string | *required* | cosmology_model = Tabulated | The file with the background |
 | `cosmology_tabulated_format` | string | *required* | cosmology_model = Tabulated | H: columns z, H/H0. CLASS: a CLASS background file. w: columns a, w(a) of the dark energy. Options: `H`, `CLASS`, `w` |
-| `cosmology_ds_w` | double | *required* | cosmology_model = DarkScattering | Dark scattering: the (constant) equation of state w of the dark energy (!= -1) |
+| `cosmology_ds_w` | double | *required* | cosmology_model in {DarkScattering, CovariantDarkScattering} | Dark scattering: the (constant) equation of state w of the dark energy (!= -1) |
+| `cosmology_ds_cs2` | double | `1` | cosmology_model in {DarkScattering, CovariantDarkScattering} | Dark scattering: the rest-frame sound speed squared of the dark energy (only for the IC from the internal Einstein-Boltzmann solver) |
+| `cosmology_cds_alpha` | double | *required* | cosmology_model = CovariantDarkScattering | Covariantised dark Thomson-like scattering: alpha = 8 pi G alpha_bar / (3 H0^3) of the interaction Q^mu = alpha_bar (u_DE^mu - u_c^mu) (0: wCDM). The dark matter feels the drag alpha a^3 / (Omega_cdm E(a)) per ln a (the CDM+baryon particles f_c = OmegaCDM / OmegaCB of it) |
 | `cosmology_ds_xi` | double | *required* | cosmology_model = DarkScattering | Dark scattering: xi = sigma_D / m_c in barn/GeV (0: wCDM). The dark matter feels the drag (1 + w) c xi rho_DE / H per ln a (the CDM+baryon particles f_c = OmegaCDM / OmegaCB of it) |
-| `cosmology_ds_cs2` | double | `1` | cosmology_model = DarkScattering | Dark scattering: the rest-frame sound speed squared of the dark energy (only for the IC from the internal Einstein-Boltzmann solver) |
 | `cosmology_cq_lambda` | double | *required* | cosmology_model = CoupledQuintessence | Coupled quintessence: the slope lambda of the potential V ~ exp(-lambda phi) (phi in reduced Planck masses) |
 | `cosmology_cq_beta` | double | *required* | cosmology_model = CoupledQuintessence | Coupled quintessence: the coupling beta (Amendola's sqrt(2/3) beta): the CDM particles have the mass m ~ exp(-beta phi) and feel G (1 + 2 beta^2) from the CDM. 0: uncoupled |
 | `cosmology_dgp_OmegaRC` | double | *required* | cosmology_model = DGP | The cross-over scale of the self-accelerating DGP model (Omega_rc = 1/(4 rc^2 H0^2)). A cosmological constant makes up E(0) = 1 (a warning if it is not zero; no dark energy for Omega_rc = (1 - Omega_matter - Omega_radiation)^2/4) |

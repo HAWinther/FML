@@ -13,6 +13,9 @@
 // equation v_c' = ... - Gamma_c/(aH) (v_c - v_DE) of the Einstein-Boltzmann solver (SpeciesPerturbation_DarkScattering
 // in Perturbations/SpeciesPerturbation_DarkEnergyFluid.h) and the velocity friction of the N-body dark matter, where the
 // smooth dark energy does not move (v_DE = 0; SimulationCode's DarkScattering cosmology).
+// covariant_dark_scattering_cdm_drag(bg, alpha, x): the same for the covariantised dark Thomson-like scattering
+// (Beltran Jimenez et al. 2020; the registry's covariant_dark_scattering, the same wCDM background):
+// Gamma_c / (aH) = alpha a^3 / (Omega_c0 E) with the dimensionless alpha (Gamma_c = alpha H0 a^4 / Omega_c0, conformal).
 // =====================================================================================================================
 
 #include <FML/Cosmology/Background/BackgroundParameters.h>
@@ -65,6 +68,19 @@ namespace FML::COSMOLOGY::BACKGROUND {
         const double rho_DE = de->rho(x) * rho_crit_over_h2 * h * h; // kg/m^3
         const double H = H0_over_h * h * bg.E(x);                       // 1/s
         return (1.0 + de->w(x)) * c * xi_SI * rho_DE / H;
+    }
+    inline double covariant_dark_scattering_cdm_drag(const ComponentBackground & bg, double alpha, double x) {
+        const Species * cdm = nullptr;
+        for (const auto & s : bg.species())
+            if (s->component() == Component::CDM) {
+                if (cdm)
+                    throw std::invalid_argument("covariant_dark_scattering_cdm_drag: more than one CDM species");
+                cdm = s.get();
+            }
+        if (not cdm)
+            throw std::invalid_argument("covariant_dark_scattering_cdm_drag: no CDM species");
+        const double a = std::exp(x);
+        return alpha * a * a * a / (cdm->rho(0.0) * bg.E(x));
     }
 
 } // namespace FML::COSMOLOGY::BACKGROUND

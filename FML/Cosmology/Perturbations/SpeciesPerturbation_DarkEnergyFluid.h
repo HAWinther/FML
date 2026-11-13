@@ -17,6 +17,10 @@
 // background is wCDM, Background/BackgroundModel_DarkScattering.h):
 //   v_c' = -v_c - (ck/Hp) Psi + (Gamma_c/Hp)(v_DE - v_c),   u' = ... - (Gamma_DE/Hp)(u - u_c)
 //   Gamma_DE = a c xi rho_c [1/s] (rho_c physical),   Gamma_c = (1 + w) rho_DE/rho_c Gamma_DE
+// The covariantised dark Thomson-like scattering (Beltran Jimenez et al. 2020;
+// DarkScatteringRate::Covariant), Q^mu = alpha_bar (u_DE^mu - u_c^mu), has the same equations with the rate
+//   Gamma_c = alpha H0 a^4 / Omega_c0 [1/s],   Gamma_DE = Gamma_c R,   R = rho_c / ((1 + w) rho_DE)
+// with the dimensionless alpha = 8 pi G alpha_bar / (3 H0^3) (strength = alpha; Omega_c0 = rho_c today / rho_crit).
 // which conserves the total momentum. While Gamma_DE/Hp > 200 (early times) the dark-energy velocity is locked to that
 // of the dark matter (mode 0, three variables; its momentum is negligible then, (1 + w) rho_DE << rho_c), afterwards
 // both are evolved (mode 1). xi = 0: wCDM with dark-energy perturbations (one mode).
@@ -46,16 +50,23 @@
 
 namespace FML::COSMOLOGY::PERTURBATIONS {
 
+    /// The rate of dark scattering: CrossSection (Simpson 2010: xi = sigma_D / m_c) or Covariant (the covariantised dark
+    /// Thomson-like scattering: alpha)
+    enum class DarkScatteringRate { CrossSection, Covariant };
+
     class SpeciesPerturbation_DarkScattering : public SpeciesPerturbation {
       public:
-        /// cdm, dark_energy: the background species (dark_energy has constant w = p/rho); xi [m^2/kg]
+        /// cdm, dark_energy: the background species (dark_energy has constant w = p/rho); xi: the strength, sigma_D / m_c
+        /// [m^2/kg] (CrossSection) or alpha (Covariant)
         SpeciesPerturbation_DarkScattering(const BACKGROUND::Species & cdm,
                                            const BACKGROUND::Species & dark_energy,
                                            double cs2,
                                            double xi,
-                                           const PerturbationContext & ctx)
+                                           const PerturbationContext & ctx,
+                                           DarkScatteringRate kind = DarkScatteringRate::CrossSection)
             : cdm(cdm), de(dark_energy), w(dark_energy.w(0.0)), cs2(cs2), xi(xi),
-              rho_crit0(3.0 * ctx.H0 * ctx.H0 / (8.0 * M_PI * FML::UTILS::SI::G)) {
+              rho_crit0(3.0 * ctx.H0 * ctx.H0 / (8.0 * M_PI * FML::UTILS::SI::G)), kind(kind), H0(ctx.H0),
+              rho_c0(cdm.rho(0.0)) {
             const auto & s = ctx.settings;
             auto r = [&](double x) { return rate_DE(x) / ctx.Hp(x) - lock_ratio; };
             if (xi == 0.0 or r(s.x_start) <= 0.0)
@@ -65,7 +76,10 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
                 x_unlock = r(s.x_end) > 0.0 ? 1e30 : FML::MATH::find_root(r, s.x_start, s.x_end);
             }
         }
-        std::string name() const override { return "dark scattering (CDM + dark energy)"; }
+        std::string name() const override {
+            return kind == DarkScatteringRate::Covariant ? "covariantised dark Thomson-like scattering (CDM + dark energy)"
+                                                         : "dark scattering (CDM + dark energy)";
+        }
         std::string info() const override {
             std::ostringstream os;
             os << name();
@@ -81,8 +95,15 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
         bool locked(int mode) const { return locked_start and mode == 0; }
         int n_vars(int mode) const override { return locked(mode) ? 3 : 4; }
 
-        /// Gamma_DE = a c xi rho_c [1/s]
-        double rate_DE(double x) const { return std::exp(x) * FML::UTILS::SI::c * xi * cdm.rho(x) * rho_crit0; }
+        /// Gamma_DE [1/s]: a c xi rho_c, or (Covariant) Gamma_c R with Gamma_c = alpha H0 a^4 / Omega_c0
+        double rate_DE(double x) const {
+            if (kind == DarkScatteringRate::Covariant) {
+                const double a = std::exp(x);
+                const double rate_c = xi * H0 * a * a * a * a / rho_c0;
+                return rate_c * cdm.rho(x) / ((1.0 + w) * de.rho(x));
+            }
+            return std::exp(x) * FML::UTILS::SI::c * xi * cdm.rho(x) * rho_crit0;
+        }
 
         enum { RC, RDE, GDE, GC, N_CACHE }; // H0^2 a^2 rho_c, H0^2 a^2 rho_DE, Gamma_DE/Hp, Gamma_c/Hp
         int cache_size() const override { return N_CACHE; }
@@ -143,6 +164,8 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
         const BACKGROUND::Species & cdm;
         const BACKGROUND::Species & de;
         double w, cs2, xi, rho_crit0;
+        DarkScatteringRate kind;
+        double H0, rho_c0;
         static constexpr double lock_ratio = 200.0;
         bool locked_start = false;
         double x_unlock = 1e30;

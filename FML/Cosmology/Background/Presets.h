@@ -16,6 +16,7 @@
 //   coupled_quintessence                   BackgroundModel_CoupledQuintessence.h   make_coupled_quintessence
 //   cubic_galileon                         BackgroundModel_CubicGalileon.h         make_cubic_galileon
 //   dark_scattering                        BackgroundModel_DarkScattering.h        make_dark_scattering
+//   covariant_dark_scattering              BackgroundModel_DarkScattering.h        make_dark_scattering (wCDM)
 //   ide                                    BackgroundModel_IDE.h                   make_ide
 //   musigma, fr, horndeski                 the LCDM / w0wa background of the models that modify the perturbations
 //   (not in the registry: BackgroundModel_Tabulated.h, make_tabulated_E / make_tabulated_w, from a table)
@@ -23,7 +24,7 @@
 // Every entry lists the parameters of the background only, with their defaults and descriptions (ModelParameter). A
 // full model (background + perturbations) is an entry of the same name in the perturbation registry
 // (Cosmology/Perturbations/Presets.h), which adds the parameters that only concern the perturbations (mu0, Sigma0,
-// fR0, fR_n, hd_*, ds_xi, ds_cs2, ide_cs2, ide_stability_check); PERTURBATIONS::model_parameters(name) lists all of
+// fR0, fR_n, hd_*, ds_xi, cds_alpha, ds_cs2, ide_cs2, ide_stability_check); PERTURBATIONS::model_parameters(name) lists all of
 // them and PERTURBATIONS::make_model_background(name, params, all model params) builds the background from them.
 //
 // Adding a model: write its Species and/or FieldEquation_<name>.h, a BackgroundModel_<name>.h with its make_ function
@@ -245,6 +246,13 @@ namespace FML::COSMOLOGY::BACKGROUND {
             {"dark_scattering",
              "Dark matter - dark energy scattering: the background is wCDM with w = ds_w (the scattering only affects "
              "the perturbations)",
+             {{"ds_w", -0.9, "equation of state w of the dark energy (constant, != -1)"}},
+             [](const BackgroundParameters & p, const ModelParameters & m, BackgroundRange r) {
+                 return make_dark_scattering(p, m.at("ds_w"), r);
+             }},
+            {"covariant_dark_scattering",
+             "Covariantised dark Thomson-like scattering: the background is wCDM with w = ds_w (the interaction only "
+             "affects the perturbations)",
              {{"ds_w", -0.9, "equation of state w of the dark energy (constant, != -1)"}},
              [](const BackgroundParameters & p, const ModelParameters & m, BackgroundRange r) {
                  return make_dark_scattering(p, m.at("ds_w"), r);

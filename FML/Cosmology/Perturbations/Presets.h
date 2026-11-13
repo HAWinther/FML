@@ -23,6 +23,7 @@
 //   coupled_quintessence                   PerturbationModel_CoupledQuintessence.h
 //   cubic_galileon                         PerturbationModel_CubicGalileon.h
 //   dark_scattering                        PerturbationModel_DarkScattering.h        ds_xi, ds_cs2
+//   covariant_dark_scattering              PerturbationModel_DarkScattering.h        cds_alpha, ds_cs2
 //   ide                                    PerturbationModel_IDE.h                   ide_cs2, ide_stability_check
 // make_perturbation_model(name, background, model params) builds the model on a background made by
 // make_model_background with the same name and parameters (e.g. on another range).
@@ -180,6 +181,15 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
                  return std::make_shared<const PerturbationModel_DarkScattering>(std::move(bg),
                                                                                  m.at("ds_xi"),
                                                                                  m.at("ds_cs2"));
+             }},
+            {"covariant_dark_scattering",
+             "wCDM (dark-energy fluid with perturbations) with the covariantised dark Thomson-like scattering, "
+             "Q^mu = alpha_bar (u_DE^mu - u_c^mu) (Beltran Jimenez et al. 2020); GR",
+             {{"cds_alpha", 1.0, "alpha = 8 pi G alpha_bar / (3 H0^3): the dark-matter rate Gamma = alpha H0 a^4 / Omega_c0 (0: wCDM)"},
+              {"ds_cs2", 1.0, "rest-frame sound speed squared of the dark energy"}},
+             [](BG bg, M m) {
+                 return std::make_shared<const PerturbationModel_DarkScattering>(
+                     std::move(bg), m.at("cds_alpha"), m.at("ds_cs2"), DarkScatteringRate::Covariant);
              }},
             {"ide",
              "dark-energy fluid (w, cs2) exchanging energy with CDM, Q = xi H rho_DE along u_c; GR",

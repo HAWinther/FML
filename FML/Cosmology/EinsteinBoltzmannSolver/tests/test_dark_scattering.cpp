@@ -8,6 +8,8 @@
 //   * Drag: the growth of the dark matter follows the quasi-static two-fluid growth equations with the
 //     momentum transfer to the dark energy (dark-energy velocity from the run)
 //   * Direction: for w > -1 the scattering suppresses the growth, for w < -1 it enhances it
+//   * The covariantised dark Thomson-like scattering (covariant_dark_scattering, the rate Gamma_c = alpha H0 a^4 /
+//     Omega_c0): alpha = 0 is wCDM, the constraints, the drag (two-fluid growth equations), the growth is suppressed
 // (The wCDM part, xi = 0, is compared with CLASS's fluid dark energy in python/compare_class_wcdm.py.)
 // =============================================================================
 
@@ -33,6 +35,12 @@ namespace {
         p.model_params = {{"ds_w", w}, {"ds_xi", xi}};
         return p;
     }
+    CosmologyParameters cds(double w, double alpha) {
+        CosmologyParameters p;
+        p.model = "covariant_dark_scattering";
+        p.model_params = {{"ds_w", w}, {"cds_alpha", alpha}};
+        return p;
+    }
 
     struct Run {
         BackgroundCosmology cosmo;
@@ -55,13 +63,22 @@ namespace {
     Fluid fluid(const BackgroundCosmology & b) {
         const auto & p = b.get_params();
         const double barn_per_GeV = 1e-28 / GeV_over_c2;
-        return {b, p.model_param("ds_w"), p.model_param("ds_xi") * barn_per_GeV,
+        const bool covariant = p.model == "covariant_dark_scattering";
+        return {b, p.model_param("ds_w"), covariant ? 0.0 : p.model_param("ds_xi") * barn_per_GeV,
                 3.0 * b.get_H0() * b.get_H0() / (8.0 * M_PI * G)};
     }
 
-    // Gamma_DE / Hp and Gamma_c / Hp at x
+    // Gamma_DE / Hp and Gamma_c / Hp at x (dark scattering: Gamma_DE = a c xi rho_c; covariantised: Gamma_c = alpha H0
+    // a^4 / Omega_c0, Gamma_DE = Gamma_c rho_c / ((1 + w) rho_DE))
     void rates(const BackgroundCosmology & b, double x, double & gde, double & gc) {
         const auto & f = fluid(b);
+        const auto & p = b.get_params();
+        if (p.model == "covariant_dark_scattering") {
+            const double a = std::exp(x);
+            gc = p.model_param("cds_alpha") * b.get_H0() * a * a * a * a / b.rhoCDM(0.0) / b.Hp_of_x(x);
+            gde = gc * b.rhoCDM(x) / ((1.0 + f.w) * f.rho(x));
+            return;
+        }
         gde = std::exp(x) * c * f.xi * b.rhoCDM(x) * f.rho_crit0 / b.Hp_of_x(x);
         gc = (1.0 + f.w) * f.rho(x) / b.rhoCDM(x) * gde;
     }
@@ -191,6 +208,33 @@ int main() {
                              (rp0.pert.get_delta_cdm(0.0, k) / rp0.pert.get_delta_cdm(x0, k));
         std::cout << "  w = -1.1: " << codep << "\n";
         check(codep > 1.01, "w < -1: scattering enhances the growth");
+    }
+
+    std::cout << "Covariantised dark Thomson-like scattering\n";
+    {
+        const double alpha = 1.0;
+        Run c0(cds(w, 0.0), o), c1(cds(w, alpha), o);
+        double maxdiff = 0.0;
+        for (double k : r0.pert.get_k_array())
+            for (double x : {-3.0, -1.0, 0.0})
+                maxdiff = std::max(maxdiff, std::fabs(c0.pert.get_delta_cdm(x, k) / r0.pert.get_delta_cdm(x, k) - 1.0));
+        check_close(maxdiff, 0.0, 1e-12, "alpha = 0 is wCDM (dark scattering with xi = 0)");
+        double gde, gc;
+        rates(c1.cosmo, 0.0, gde, gc);
+        std::cout << "  today: Gamma_c/Hp = " << gc << ", Gamma_DE/Hp = " << gde << "\n";
+        check_rel(gc, alpha / (c1.cosmo.rhoCDM(0.0) * std::sqrt(c1.cosmo.E2_of_x(0.0))), 1e-12, "Gamma_c / (aH) = alpha / Omega_c0 today");
+        double eP, eM;
+        constraints(c1, eP, eM);
+        check_close(eP, 0.0, 1e-6, "alpha = 1: Poisson constraint");
+        check_close(eM, 0.0, 1e-6, "alpha = 1: momentum constraint (exchange cancels)");
+        const double k = c1.pert.get_k_array().back(), x0 = -3.0;
+        const double code = (c1.pert.get_delta_cdm(0.0, k) / c1.pert.get_delta_cdm(x0, k)) /
+                            (c0.pert.get_delta_cdm(0.0, k) / c0.pert.get_delta_cdm(x0, k));
+        const double ref = growth(c1, k, x0) / growth(c0, k, x0);
+        std::cout << "  growth from z = 19 to 0, alpha = " << alpha << " relative to alpha = 0: " << code
+                  << ", growth equations with drag: " << ref << "\n";
+        check_close(code / ref, 1.0, 5e-4, "covariant: growth with drag = two-fluid growth equations");
+        check(code < 0.99, "covariant: the interaction suppresses the growth");
     }
 
     return FML::TESTS::summary("EBS dark scattering");

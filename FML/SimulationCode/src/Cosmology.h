@@ -44,6 +44,9 @@
 ///                    scattering (Simpson 2010; Baldi & Simpson 2015). The scattering is a velocity friction of the
 ///                    dark matter (velocity_friction(a)); cs2 (the sound speed of the dark energy) is only used by the
 ///                    internal Einstein-Boltzmann solver for the IC
+///   CovariantDarkScattering -> covariant_dark_scattering (cosmology_ds_w, cosmology_cds_alpha, cosmology_ds_cs2):
+///                    wCDM with the covariantised dark Thomson-like scattering (Beltran Jimenez et al. 2020), the
+///                    dark-matter drag Gamma = alpha a^3 / (Omega_c0 E) per ln a (velocity_friction, as DarkScattering)
 ///   CoupledQuintessence -> coupled_quintessence (cosmology_cq_lambda, _beta): a scalar field with V ~ exp(-lambda
 ///                    phi) coupled to the CDM, whose particles have the mass m ~ exp(-beta phi) (Wetterich 1995;
 ///                    Amendola 2000): the background, rho_c(a) = Omega_cdm cdm_mass_factor(a) a^-3. The force and the
@@ -110,6 +113,7 @@ class Cosmology {
         std::string tabulated_filename, tabulated_format;
         double dgp_OmegaRC;
         double ds_w, ds_xi, ds_cs2;
+        double cds_alpha;
         double cq_lambda, cq_beta;
         double As, ns, kpivot_mpc; // The primordial power-spectrum
 
@@ -211,21 +215,32 @@ class Cosmology {
                            "H: columns z, H/H0. CLASS: a CLASS background file. w: columns a, w(a) of the dark energy",
                            {"H", "CLASS", "w"});
             });
-            f.for_cosmology({"DarkScattering"}, [&]() {
+            f.for_cosmology({"DarkScattering", "CovariantDarkScattering"}, [&]() {
                 f.required("cosmology_ds_w",
                            ds_w,
                            -0.9,
                            "Dark scattering: the (constant) equation of state w of the dark energy (!= -1)");
-                f.required("cosmology_ds_xi",
-                           ds_xi,
-                           10.0,
-                           "Dark scattering: xi = sigma_D / m_c in barn/GeV (0: wCDM). The dark matter feels the drag "
-                           "(1 + w) c xi rho_DE / H per ln a (the CDM+baryon particles f_c = OmegaCDM / OmegaCB of it)");
                 f.optional("cosmology_ds_cs2",
                            ds_cs2,
                            1.0,
                            "Dark scattering: the rest-frame sound speed squared of the dark energy (only for the IC "
                            "from the internal Einstein-Boltzmann solver)");
+            });
+            f.for_cosmology({"CovariantDarkScattering"}, [&]() {
+                f.required("cosmology_cds_alpha",
+                           cds_alpha,
+                           1.0,
+                           "Covariantised dark Thomson-like scattering: alpha = 8 pi G alpha_bar / (3 H0^3) of the "
+                           "interaction Q^mu = alpha_bar (u_DE^mu - u_c^mu) (0: wCDM). The dark matter feels the drag "
+                           "alpha a^3 / (Omega_cdm E(a)) per ln a (the CDM+baryon particles f_c = OmegaCDM / OmegaCB "
+                           "of it)");
+            });
+            f.for_cosmology({"DarkScattering"}, [&]() {
+                f.required("cosmology_ds_xi",
+                           ds_xi,
+                           10.0,
+                           "Dark scattering: xi = sigma_D / m_c in barn/GeV (0: wCDM). The dark matter feels the drag "
+                           "(1 + w) c xi rho_DE / H per ln a (the CDM+baryon particles f_c = OmegaCDM / OmegaCB of it)");
             });
             f.for_cosmology({"CoupledQuintessence"}, [&]() {
                 f.required("cosmology_cq_lambda",
@@ -495,7 +510,12 @@ class Cosmology {
     /// do not scatter; momentum conservation of the fluid with v_b = v_c)
     /// (The gravity model uses these by default, GravityModel::velocity_friction; coupled quintessence has its velocity
     /// term in GravityModel_CoupledQuintessence)
-    bool has_velocity_friction() const { return registry_name == "dark_scattering" and ds_xi_SI != 0.0; }
+    /// CovariantDarkScattering: the drag alpha a^3 / (Omega_c0 E) of the dark matter
+    /// (BACKGROUND::covariant_dark_scattering_cdm_drag, the rate of the Einstein-Boltzmann solver)
+    bool has_velocity_friction() const {
+        return (registry_name == "dark_scattering" and ds_xi_SI != 0.0) or
+               (registry_name == "covariant_dark_scattering" and cds_alpha != 0.0);
+    }
     double velocity_friction(double a) const {
         if (not has_velocity_friction())
             return 0.0;
@@ -503,10 +523,12 @@ class Cosmology {
         return f_c * velocity_friction_cdm(a);
     }
     /// The friction of the CDM alone (CDM and baryons as separate particles, particle_baryons; the baryons have none):
-    /// DarkScattering: the full drag of the dark matter. 0 without friction
+    /// DarkScattering, CovariantDarkScattering: the full drag of the dark matter. 0 without friction
     double velocity_friction_cdm(double a) const {
         if (not has_velocity_friction())
             return 0.0;
+        if (registry_name == "covariant_dark_scattering")
+            return FML::COSMOLOGY::BACKGROUND::covariant_dark_scattering_cdm_drag(*bg, cds_alpha, std::log(a));
         return FML::COSMOLOGY::BACKGROUND::dark_scattering_cdm_drag(*bg, ds_xi_SI, std::log(a));
     }
 
@@ -650,6 +672,7 @@ class Cosmology {
             {"Quintessence", &Cosmology::read_quintessence, true},
             {"EDE", &Cosmology::read_ede, true},
             {"DarkScattering", &Cosmology::read_dark_scattering},
+            {"CovariantDarkScattering", &Cosmology::read_covariant_dark_scattering},
             {"CoupledQuintessence", &Cosmology::read_coupled_quintessence},
             {"Tabulated", &Cosmology::read_tabulated, true, false, true},
         };
@@ -684,6 +707,18 @@ class Cosmology {
             throw std::runtime_error("DarkScattering: need cosmology_ds_cs2 > 0");
         ds_xi_SI = FML::COSMOLOGY::BACKGROUND::dark_scattering_xi_SI(xi);
         model_parameters = {{"ds_w", w}, {"ds_xi", xi}, {"ds_cs2", cs2}};
+    }
+    void read_covariant_dark_scattering() {
+        registry_name = "covariant_dark_scattering";
+        const double w = settings.ds_w, alpha = settings.cds_alpha, cs2 = settings.ds_cs2;
+        if (std::fabs(1.0 + w) < 1e-6)
+            throw std::runtime_error("CovariantDarkScattering: need cosmology_ds_w != -1 (no interaction for w = -1)");
+        if (not(alpha >= 0.0))
+            throw std::runtime_error("CovariantDarkScattering: need cosmology_cds_alpha >= 0");
+        if (not(cs2 > 0.0))
+            throw std::runtime_error("CovariantDarkScattering: need cosmology_ds_cs2 > 0");
+        cds_alpha = alpha;
+        model_parameters = {{"ds_w", w}, {"cds_alpha", alpha}, {"ds_cs2", cs2}};
     }
     void read_coupled_quintessence() {
         registry_name = "coupled_quintessence";
@@ -796,6 +831,7 @@ class Cosmology {
     const double N_nu{3};     // Number of neutrinos (3)
     double w0{-1.0}, wa{0.0}; // w0waCDM (for the nonlinear boost)
     double ds_xi_SI{0.0};     // DarkScattering: xi = sigma_D / m_c in m^2/kg
+    double cds_alpha{0.0};    // CovariantDarkScattering: alpha
     // CoupledQuintessence: the background solution of the field and the CDM (owned by bg)
     const FML::COSMOLOGY::BACKGROUND::CoupledDarkSector * cq_sector{nullptr};
     std::string tabulated_filename, tabulated_format;
