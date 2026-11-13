@@ -1,7 +1,7 @@
 USE_MPI ?= false
 USE_OMP ?= true
 USE_FFTW ?= true
-TARGETS := survey_mpi fieldlevel calibration framework framework_mpi checkpoint_mpi
+TARGETS := survey_checkpoint_mpi survey_mpi fieldlevel calibration framework framework_mpi checkpoint_mpi
 include ../../Makefile.config
 FML_MODULES := Global
 Global.o: $(FML_ROOT)/Global/Global.cpp
@@ -21,4 +21,7 @@ checkpoint_mpi: CheckpointMPI.o Global.o
 	$(LINK_EXE)
 
 survey_mpi: SurveyMPI.o Global.o
+	$(LINK_EXE)
+
+survey_checkpoint_mpi: SurveyCheckpointMPI.o Global.o
 	$(LINK_EXE)

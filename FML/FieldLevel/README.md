@@ -10,7 +10,9 @@ adds particle/mesh communication, the quadratic EdS source and matching bias/RSD
 adjoints. [Distributed reconstruction outputs](FRAMEWORK.md#distributed-reconstruction-outputs-stage-4d-13-november-2026)
 now include initial/matter density and Lagrangian displacement/velocity samples.
 [Same-rank checkpoint/restart](FRAMEWORK.md#checkpointrestart-stage-4e-13-november-2026)
-now preserves complete HMC/adaptation state. The original BAO/LPT backend stays
+now preserves complete HMC/adaptation state. [Survey restart support](SURVEY.md#same-rank-survey-checkpointrestart)
+adds full likelihood input identities; schema-1 checkpoints require their original
+code/build after the prior-family identity fix. The original BAO/LPT backend stays
 single-rank. An initial [Cartesian survey layer](SURVEY.md) now supplies masked
 Gaussian-field and positive-link Poisson-count likelihoods with MPI adjoints. A
 [bounded nonlinear validation pass](tests/SURVEY_RESULTS.md) is recorded; production

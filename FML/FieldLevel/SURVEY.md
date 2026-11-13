@@ -170,6 +170,80 @@ This is an initial Cartesian survey likelihood, not a survey ingestion pipeline,
 lightcone/wide-angle evolution, correlated-noise model or production survey
 calibration. Pixelization/selection convergence, independent-survey mock recovery,
 mean-density nuisance treatment and multiple correlated datasets remain work.
-The existing exact periodic linear conditionals and the default-Gaussian
-checkpoint identity are not survey-likelihood implementations; survey checkpoint
-support requires its own target identity extension. Backlog #52 remains open.
+Exact periodic linear conditionals are not survey-likelihood implementations.
+Same-rank survey checkpoint/restart is now provided by `SurveyCheckpoint.h` as
+described below. Backlog #52 remains open.
+
+
+## Same-rank survey checkpoint/restart
+
+Include `SurveyCheckpoint.h` to register the Gaussian-voxel and Poisson-count
+likelihood identities and use the existing checkpoint API:
+
+```cpp
+#include <FML/FieldLevel/SurveyCheckpoint.h>
+// Construct model, immutable input data/window, and the survey posterior first.
+FF::CheckpointOptions io;
+io.directory = "survey-chain-v2";
+io.problem_id = "my-analysis-v1:physics-and-external-inputs";
+io.every = 20;
+io.max_iterations = 40; // Per-job budget, including warmup.
+auto first = FF::sample_checkpointed(posterior, model.white_noise(12), parameters,
+                                    options, io, false);
+// Another process reloads the same model, likelihood, full HMC schedule and data.
+io.resume = true;
+auto next = FF::sample_checkpointed(posterior, {}, {}, options, io, false);
+```
+
+Both fixed-parameter and joint field/scalar sampling are supported. The original
+frozen field metric, adaptation, cached force/potential, RNG/distribution caches
+and global stream indices are preserved. Returned rows belong to the current
+invocation; acceptance/divergence statistics and iteration counts are cumulative.
+The rank count, ownership, build/precision/thread configuration and full schedule
+must match. The same shared-filesystem, atomic-generation publication and
+one-writer contracts as [periodic checkpoints](FRAMEWORK.md#checkpointrestart-stage-4e-13-november-2026)
+apply; old/incomplete generations remain for caller cleanup, with no fsync or
+transactional output-sink guarantee.
+
+Identity checking includes the likelihood family/law version, mask, selection,
+geometry origin, and active Gaussian data/relative variance or active Poisson
+counts/exposure/link offset. Ignored masked input values are canonicalized, so
+NaN payloads or other ignored placeholders can change without changing the
+identity. Mask and selection metadata themselves remain strict. Arrays are
+fingerprinted, not stored as observations in the checkpoint: applications must
+reload them. Voxel inputs are streamed through a roughly 4 KiB hash buffer rather
+than duplicated in full for hashing. Existing per-mode metadata/state encoding
+buffers remain; this is not a zero-copy or fully streamed checkpoint format.
+Checksums detect accidental changes/corruption, not authenticated tampering.
+
+`sample_checkpointed` is now generic over the likelihood, with an explicit
+`CHECKPOINT::LikelihoodIdentity<Likelihood>::append(Codec::Encoder &, const
+Likelihood &)` registration. Unsupported likelihoods fail at compile time;
+there is no fallback assuming a Fourier Gaussian target. A custom registration
+must include a versioned probability-law tag and all fixed target inputs.
+Version callback physics, code and external inputs in `problem_id`; compiler
+metadata/type names are not an executable-code hash.
+
+**Target-identity compatibility:** identity schema 2 includes the prior family
+as well as prior values and the likelihood identity. The previous schema omitted
+the prior family; changing Gaussian to uniform at its center could preserve the
+cached potential and force while changing the posterior elsewhere. Schema-1
+checkpoints (including older periodic checkpoints) are therefore rejected by
+this API rather than silently resumed. Continue those chains with their original
+code/build. Use a new directory for a new schema-2 chain; no automatic migration
+preserving the exact old trajectory is provided. The shard/manifest/HMC codec
+framing itself is unchanged.
+
+```sh
+make -C FML/FieldLevel/example USE_MPI=true survey_checkpoint_mpi
+mpirun -np 2 FML/FieldLevel/example/survey_checkpoint_mpi chain gaussian start 40
+mpirun -np 2 FML/FieldLevel/example/survey_checkpoint_mpi chain gaussian resume 100
+# Use another directory for Poisson data.
+make -C FML/FieldLevel/tests USE_MPI=true survey-checkpoint-mpi
+```
+
+The example keeps a 60-warmup/80-sample schedule and immutable analytic toy
+observations. The Make target runs separate prepare/resume processes for each
+requested rank count; set `TMPDIR` to a shared filesystem for multi-node tests.
+[Checkpoint results](tests/SURVEY_CHECKPOINT_RESULTS.md) record the validation,
+including large-proposal Hermitian checks and the schema-1 rejection test.

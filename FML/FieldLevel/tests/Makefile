@@ -1,12 +1,14 @@
 USE_MPI ?= false
 USE_OMP ?= false
 USE_FFTW ?= true
-TARGETS := test_survey_likelihood_mpi test_bao_gradients test_bao_validation test_field_level test_field_level_safety test_framework test_framework_resolution test_framework_mpi test_framework_lpt_mpi test_framework_reconstruction_mpi test_framework_checkpoint_mpi
+TARGETS := test_survey_checkpoint_mpi test_survey_likelihood_mpi test_bao_gradients test_bao_validation test_field_level test_field_level_safety test_framework test_framework_resolution test_framework_mpi test_framework_lpt_mpi test_framework_reconstruction_mpi test_framework_checkpoint_mpi
 include ../../Makefile.config
 FML_MODULES := Global
 # Do not reuse a VPATH object compiled with another module's MPI/precision flags.
 Global.o: $(FML_ROOT)/Global/Global.cpp
 	$(CC) $(DEPFLAGS) -c -o $@ $< $(OPTIONS) $(INC)
+test_survey_checkpoint_mpi: test_survey_checkpoint_mpi.o Global.o
+	$(LINK_EXE)
 test_survey_likelihood_mpi: test_survey_likelihood_mpi.o Global.o
 	$(LINK_EXE)
 test_framework_nonlinear_mpi: test_framework_nonlinear_mpi.o Global.o
@@ -41,7 +43,16 @@ NP_LIST = 1
 SAFETY_RUN =
 SINGLE_RUN =
 endif
-.PHONY: run safety survey-mpi framework-nonlinear-mpi bao-gradients bao-validation framework framework-mpi framework-lpt-mpi framework-reconstruction-mpi framework-checkpoint-mpi
+.PHONY: run safety survey-checkpoint-mpi survey-mpi framework-nonlinear-mpi bao-gradients bao-validation framework framework-mpi framework-lpt-mpi framework-reconstruction-mpi framework-checkpoint-mpi
+# Each prepare/resume is a separate process; each rank count gets its own directory.
+# Set TMPDIR to a shared filesystem for multi-node MPI test jobs.
+survey-checkpoint-mpi: test_survey_checkpoint_mpi
+	@set -e; survey_tmp=$$(mktemp -d "$${TMPDIR:-/tmp}/fml-survey-checkpoint.XXXXXX"); trap 'rm -rf "$$survey_tmp"' EXIT; \
+	for np in $(NP_LIST); do \
+	  $(SAFETY_RUN) ./test_survey_checkpoint_mpi "$$survey_tmp/np$$np" prepare; \
+	  $(SAFETY_RUN) ./test_survey_checkpoint_mpi "$$survey_tmp/np$$np" resume; \
+	done
+
 survey-mpi: test_survey_likelihood_mpi
 	@set -e; for np in $(NP_LIST); do $(SAFETY_RUN) ./test_survey_likelihood_mpi; done
 framework-nonlinear-mpi: test_framework_nonlinear_mpi
@@ -68,6 +79,6 @@ framework-reconstruction-mpi: test_framework_reconstruction_mpi
 	@set -e; for np in $(NP_LIST); do $(SAFETY_RUN) ./test_framework_reconstruction_mpi; done
 framework-checkpoint-mpi: test_framework_checkpoint_mpi
 	@set -e; for np in $(NP_LIST); do $(SAFETY_RUN) ./test_framework_checkpoint_mpi; done
-run: $(TARGETS) survey-mpi bao-gradients safety framework framework-mpi framework-lpt-mpi framework-reconstruction-mpi framework-checkpoint-mpi
+run: $(TARGETS) survey-checkpoint-mpi survey-mpi bao-gradients safety framework framework-mpi framework-lpt-mpi framework-reconstruction-mpi framework-checkpoint-mpi
 	$(SINGLE_RUN) ./test_field_level
 	$(SINGLE_RUN) ./test_bao_validation

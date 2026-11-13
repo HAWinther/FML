@@ -57,7 +57,8 @@ field or positive-link Poisson count likelihoods, including their adjoints and
 MAP/HMC integration. [SURVEY.md](SURVEY.md) specifies coordinates, exposure,
 noise and normalization, the unused Gaussian-noise scalar for counts, ownership
 and limits. Wider survey calibration, pixelization/mean-density nuisance work,
-additional likelihood nuisances and survey checkpoint identities remain open;
+additional likelihood nuisances remain open. Same-rank survey checkpoints now
+register full likelihood identities and prior families in identity schema 2;
 this initial stage 5a does not complete #52.
 
 ## Aim and posterior

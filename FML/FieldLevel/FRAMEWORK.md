@@ -252,8 +252,9 @@ Initial distributed inference, reconstruction and checkpointing are available in
 stages 4a–4e below; initial Cartesian survey/count observations are documented in
 [stage 5a](SURVEY.md). PM/COLA adjoints, broader physical models, production
 nonlinear/survey calibration, full high-cutoff padding, time/growth derivatives
-and measured workspace optimization remain open. Survey checkpoint identities
-and additional likelihood nuisances remain explicit extensions.
+and measured workspace optimization remain open. Same-rank survey checkpoints
+are now available in [SurveyCheckpoint.h](SURVEY.md#same-rank-survey-checkpointrestart);
+additional likelihood nuisances remain explicit extensions.
 The initial stages 1–3 milestone is a reusable periodic implementation with exact
 linear verification, not a complete LEFTfield/BORG replacement.
 
@@ -603,7 +604,8 @@ Fields and gradients remain local and are never gathered by checkpoint I/O. The
 state contains no full sample history. Serialization temporarily buffers local
 state, with additional per-call state/result storage; no peak-memory or I/O-scaling
 improvement is claimed. A trajectory budget also bounds returned per-call scalar
-history. Custom likelihood checkpoint identities, rank-changing restore, sample-
+history. Survey likelihood identities are registered in `SurveyCheckpoint.h`;
+other custom likelihoods require explicit identity registration. Rank-changing restore, sample-
 schedule extension and automatic checkpoint pruning are future extensions.
 
 ```sh
@@ -629,3 +631,15 @@ See [SURVEY.md](SURVEY.md) for masks, selection, coordinates, Gaussian voxel noi
 positive-link Poisson counts, normalization, MPI adjoints and MAP/HMC examples.
 [Bounded nonlinear and survey validation](tests/SURVEY_RESULTS.md) records the
 1/2/4-rank engineering evidence and the remaining scientific scope.
+
+
+## Survey checkpoints and identity schema 2 (13 November 2026)
+
+`sample_checkpointed` now accepts explicitly fingerprinted likelihood types;
+include [SurveyCheckpoint.h](SurveyCheckpoint.h) for Cartesian Gaussian and
+Poisson survey targets. See [the survey restart guide](SURVEY.md#same-rank-survey-checkpointrestart).
+Schema 2 includes prior family and likelihood law/inputs. Older schema-1 periodic
+checkpoints require their original code/build and are rejected by this version;
+there is no silent legacy-prior assumption or automatic trajectory migration.
+The existing shard/manifest framing, full HMC state and MPI publication protocol
+are unchanged. New schema-2 periodic and survey restarts are tested separately.

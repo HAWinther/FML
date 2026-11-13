@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <chrono>
 #include <typeinfo>
+#include <type_traits>
 
 namespace FML::FIELDLEVEL::FRAMEWORK {
     struct CheckpointOptions {
@@ -58,13 +59,38 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
 #endif
             return value;
         }
-        template <class Forward>
-        std::string identity(const BasicPosterior<Forward> & posterior, const std::string & problem_id) {
+        // Unsupported likelihoods fail at compile time: never silently fingerprint
+        // a custom target as the periodic Gaussian. Specializations append all
+        // fixed target inputs and a versioned likelihood-law tag.
+        template <class Likelihood>
+        struct LikelihoodIdentity {
+            static void append(Codec::Encoder &, const Likelihood &) {
+                static_assert(!std::is_same_v<Likelihood, Likelihood>,
+                              "Checkpoint likelihood requires a LikelihoodIdentity specialization; "
+                              "include SurveyCheckpoint.h for built-in survey likelihoods");
+            }
+        };
+        template <>
+        struct LikelihoodIdentity<GaussianFieldLikelihood> {
+            static void append(Codec::Encoder & e, const GaussianFieldLikelihood & likelihood) {
+                e.text("FML Fourier Gaussian likelihood 1");
+                e.real(likelihood.volume());
+                e.vector(likelihood.weights());
+                e.integer(likelihood.data().size());
+                for (auto z : likelihood.data()) {
+                    e.real(z.real());
+                    e.real(z.imag());
+                }
+            }
+        };
+        template <class Forward, class Likelihood>
+        std::string identity(const BasicPosterior<Forward, Likelihood> & posterior, const std::string & problem_id) {
             Codec::Encoder e;
             const auto & m = posterior.model();
             const auto & c = m.configuration();
             const auto l = m.layout();
-            e.text("FML field target 1");
+            e.text("FML field target 2");
+            e.text(typeid(Likelihood).name());
             e.text(Codec::build_tag());
             e.text(problem_id);
             e.text(typeid(Forward).name());
@@ -98,14 +124,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 e.real(mode.weight);
             }
             e.vector(m.response());
-            const auto & likelihood = posterior.likelihood();
-            e.real(likelihood.volume());
-            e.vector(likelihood.weights());
-            e.integer(likelihood.data().size());
-            for (auto z : likelihood.data()) {
-                e.real(z.real());
-                e.real(z.imag());
-            }
+            LikelihoodIdentity<Likelihood>::append(e, posterior.likelihood());
             return std::to_string(Codec::checksum(e.bytes));
         }
         inline void replicas(const State & state) {
@@ -230,11 +249,11 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             return state;
         }
     } // namespace CHECKPOINT
-    // Same rank count/layout/build/thread configuration; Gaussian built-in model target.
+    // Same rank count/layout/build/thread configuration; explicitly fingerprinted likelihood.
     // Returned rows/potentials are this invocation's suffix. Acceptance/divergences
     // are cumulative over all completed sampling trajectories, including previous calls.
-    template <class Forward>
-    inline FML::MCMC::HMCResult sample_checkpointed(const BasicPosterior<Forward> & posterior,
+    template <class Forward, class Likelihood>
+    inline FML::MCMC::HMCResult sample_checkpointed(const BasicPosterior<Forward, Likelihood> & posterior,
                                                     Field white,
                                                     std::vector<double> parameters,
                                                     FML::MCMC::HMCOptions options,

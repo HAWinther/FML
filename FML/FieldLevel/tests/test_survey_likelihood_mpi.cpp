@@ -83,6 +83,24 @@ static void reference_tests() {
     check_local(m.maximum(mode_error(bar, expected)) < 2e-11,
                 "survey reverse matches independent direct DFT with N^3 normalization");
     check_local(rel(m.sum(left), m.sum(right)) < 1e-12, "survey forward/reverse full-Hermitian dot product");
+    auto large = prediction;
+    for (auto & z : large)
+        z *= 1e12;
+    const auto large_image = obs.synthesize(large);
+    double large_error = 0;
+    for (size_t q = 0; q < large_image.size(); ++q)
+        large_error = std::max(large_error, std::abs(large_image[q] / 1e12 - delta(coordinate(global(m, q), N), N)));
+    check_local(m.maximum(large_error) < 1e-12, "large valid Hermitian input tolerates FFT roundoff in zero modes");
+    check_local(FML::TESTS::throws([&] {
+                    auto malformed = large;
+                    for (size_t i = 0; i < malformed.size(); ++i) {
+                        const auto & k = m.modes()[i];
+                        if (k.n[0] == 1 && k.n[1] == 0 && k.n[2] == 0)
+                            malformed[i] += Complex(1e9, 0);
+                    }
+                    obs.synthesize(malformed);
+                }),
+                "large malformed Hermitian input still fails collectively");
     auto active = [&](auto xyz) { return xyz[0] < 6 && xyz[2] != 0; };
     auto selection = [&](auto xyz) { return .6 + .002 * (-50 + 12.5 * xyz[1]); };
     auto data_value = [&](auto xyz) { return .02 * std::cos(2 * M_PI * xyz[1] / N); };

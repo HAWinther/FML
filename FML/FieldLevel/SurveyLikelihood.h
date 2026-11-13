@@ -96,9 +96,20 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             grid_.set_grid_status_real(false);
             grid_.fftw_c2r();
             grid_.fftw_r2c();
-            for (size_t i = 0; i < prediction.size(); ++i)
-                valid &= std::abs(Complex(grid_.get_fourier_from_index(model_->modes()[i].fourier_index)) -
-                                  prediction[i]) <= 1e-10 * std::max(1., std::abs(prediction[i]));
+            // Roundoff from a large retained mode leaks into nominally zero
+            // modes during the round trip. Scale by the communicator-wide input
+            // norm, not by each individual (possibly zero) coefficient.
+            double amplitude = 1;
+            for (auto z : prediction)
+                amplitude = std::max({amplitude, std::abs(z.real()), std::abs(z.imag())});
+            amplitude = model_->maximum(amplitude);
+            bool finite_roundtrip = true;
+            for (size_t i = 0; i < prediction.size(); ++i) {
+                const Complex z = grid_.get_fourier_from_index(model_->modes()[i].fourier_index);
+                finite_roundtrip &= std::isfinite(z.real()) && std::isfinite(z.imag());
+                valid &= std::abs(z - prediction[i]) <= 1e-10 * amplitude;
+            }
+            representable(finite_roundtrip);
             require(valid, "[Survey observation] Prediction must preserve Hermitian symmetry");
             grid_.fill_fourier_grid(FML::GRID::ComplexType(0));
             for (size_t i = 0; i < prediction.size(); ++i)
@@ -175,6 +186,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             FML::COMMUNICATION::collective_try([&] { bar_.resize(model.cells()); }, "Survey Gaussian scratch");
         }
         const auto & observation() const { return observation_; }
+        const Field & data() const { return data_; }
+        const Field & relative_variance() const { return relative_variance_; }
         Field expected_field(const Modes & prediction) const {
             auto field = observation_.synthesize(prediction);
             const auto & win = observation_.window();
@@ -245,6 +258,9 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 "Survey Poisson normalization");
         }
         const auto & observation() const { return observation_; }
+        const auto & counts() const { return counts_; }
+        const Field & exposure() const { return exposure_; }
+        double offset() const { return offset_; }
         Field expected_counts(const Modes & prediction) const {
             auto delta = observation_.synthesize(prediction);
             const auto & win = observation_.window();

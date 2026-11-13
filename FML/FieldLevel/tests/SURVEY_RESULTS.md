@@ -108,8 +108,17 @@ final validation includes the finite-origin/offset and Hermitian failure tests.
 Realistic survey mock recovery, selection/pixelization convergence, wide-angle
 or lightcone evolution, correlated voxel noise, survey mean-density nuisances,
 parameterized exposure/selection, additional likelihood parameters, multiple
-correlated datasets and survey checkpoint identities remain explicit extensions.
+correlated datasets remain explicit extensions. Same-rank survey checkpoint
+identities are now implemented; see [checkpoint validation](SURVEY_CHECKPOINT_RESULTS.md).
 Poisson data do not constrain the existing Gaussian-noise scalar; its posterior
 remains its independent prior when all scalar parameters are sampled. This is
 stated in the API guide and exercised by the full-posterior derivative checks.
 No production forward/sampler formula or prior normalization was changed.
+
+
+The subsequent checkpoint validation found that large valid proposals could fail
+Hermitian round-trip validation because roundoff leaked into zero coefficients.
+The check now uses the communicator-wide input scale and classifies nonfinite
+FFT results as numerical proposal failures. Additional large-valid and
+large-malformed regression cases pass; the updated likelihood suite has 55
+checks per rank. Historical stage-5a results above retain their original counts.
