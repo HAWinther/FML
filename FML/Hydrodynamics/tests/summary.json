@@ -1,0 +1,198 @@
+{
+  "smooth": {
+    "advect1d": {
+      "n": [
+        64,
+        128,
+        256
+      ],
+      "density_l1_over_amplitude": [
+        0.0015768406061642914,
+        0.0003679625979040265,
+        8.733264225426482e-05
+      ],
+      "observed_order": [
+        2.0994057996723963,
+        2.0749662341103745
+      ]
+    },
+    "advect2d": {
+      "n": [
+        24,
+        48
+      ],
+      "density_l1_over_amplitude": [
+        0.024232067664566356,
+        0.0072354887195195065
+      ],
+      "observed_order": [
+        1.7437551400850402
+      ]
+    },
+    "advect3d": {
+      "n": [
+        16,
+        32
+      ],
+      "density_l1_over_amplitude": [
+        0.04504250203332472,
+        0.01597056323529342
+      ],
+      "observed_order": [
+        1.4958717755635929
+      ]
+    },
+    "sound": {
+      "n": [
+        64,
+        128
+      ],
+      "density_l1_over_amplitude": [
+        0.001853553814341954,
+        0.0004331747480540828
+      ],
+      "observed_order": [
+        2.097272953096144
+      ]
+    }
+  },
+  "riemann": {
+    "sod-128": {
+      "l1_density_velocity_pressure": [
+        0.0035105999527316445,
+        0.007185103496616706,
+        0.0027388442869183387
+      ],
+      "minimum_density": 0.125,
+      "minimum_pressure": 0.1,
+      "riemann_fallbacks": 0.0,
+      "low_order_stages": 0.0,
+      "retries": 0.0
+    },
+    "sod-256": {
+      "l1_density_velocity_pressure": [
+        0.0016976050734270605,
+        0.0031402769176089662,
+        0.0012583714657378952
+      ],
+      "minimum_density": 0.125,
+      "minimum_pressure": 0.1,
+      "riemann_fallbacks": 0.0,
+      "low_order_stages": 0.0,
+      "retries": 0.0
+    },
+    "sod-512": {
+      "l1_density_velocity_pressure": [
+        0.0011149731917555498,
+        0.0013746905692250708,
+        0.0006319259129568961
+      ],
+      "minimum_density": 0.125,
+      "minimum_pressure": 0.1,
+      "riemann_fallbacks": 0.0,
+      "low_order_stages": 0.0,
+      "retries": 0.0
+    },
+    "lax-256": {
+      "l1_density_velocity_pressure": [
+        0.007632337781566832,
+        0.004251205670846241,
+        0.005115235840158827
+      ],
+      "minimum_density": 0.3427872560776086,
+      "minimum_pressure": 0.571,
+      "riemann_fallbacks": 0.0,
+      "low_order_stages": 0.0,
+      "retries": 0.0
+    },
+    "strong-256": {
+      "l1_density_velocity_pressure": [
+        0.057410053903201655,
+        0.12073623339749122,
+        2.6481064441779787
+      ],
+      "minimum_density": 0.5671608883434556,
+      "minimum_pressure": 0.01,
+      "riemann_fallbacks": 0.0,
+      "low_order_stages": 0.0,
+      "retries": 0.0
+    },
+    "rarefaction-256": {
+      "l1_density_velocity_pressure": [
+        0.00302372318748187,
+        0.010969765318755284,
+        0.0015507359044072341
+      ],
+      "minimum_density": 0.025637008024830252,
+      "minimum_pressure": 0.004708458196144834,
+      "riemann_fallbacks": 8.0,
+      "low_order_stages": 0.0,
+      "retries": 0.0
+    },
+    "vacuum-256": {
+      "l1_density_velocity_pressure": [
+        0.00641883393668421,
+        0.05902846990102508,
+        0.0063496063536272905
+      ],
+      "minimum_density": 0.003954074980244346,
+      "minimum_pressure": 0.002065879067359355,
+      "riemann_fallbacks": 11.0,
+      "low_order_stages": 0.0,
+      "retries": 0.0
+    }
+  },
+  "conservation": {
+    "advect1d-64": {
+      "mass_relative_error": 1.1102230246251565e-16,
+      "energy_relative_error": 0.0
+    },
+    "advect1d-128": {
+      "mass_relative_error": 2.220446049250313e-16,
+      "energy_relative_error": 6.661338147750939e-16
+    },
+    "advect1d-256": {
+      "mass_relative_error": 1.5543122344752192e-15,
+      "energy_relative_error": 4.440892098500626e-16
+    },
+    "advect2d-24": {
+      "mass_relative_error": 6.661338147750939e-16,
+      "energy_relative_error": 2.220446049250313e-16
+    },
+    "advect2d-48": {
+      "mass_relative_error": 5.329070518200751e-15,
+      "energy_relative_error": 4.440892098500626e-16
+    },
+    "advect3d-16": {
+      "mass_relative_error": 0.0,
+      "energy_relative_error": 6.661338147750939e-16
+    },
+    "advect3d-32": {
+      "mass_relative_error": 0.0,
+      "energy_relative_error": 7.549516567451064e-15
+    },
+    "sound-64": {
+      "mass_relative_error": 6.661338147750939e-16,
+      "energy_relative_error": 2.220446049250313e-16
+    },
+    "sound-128": {
+      "mass_relative_error": 4.440892098500626e-16,
+      "energy_relative_error": 1.1102230246251565e-16
+    },
+    "blast2d-64": {
+      "mass_relative_error": 1.5543122344752192e-15,
+      "energy_relative_error": 1.7763568394002505e-15
+    },
+    "blast3d-16": {
+      "mass_relative_error": 5.329070518200751e-15,
+      "energy_relative_error": 1.1213252548714081e-14
+    }
+  },
+  "replay": {
+    "mpi1-advect2d-24": 0.0,
+    "mpi2-advect2d-24": 0.0,
+    "mpi4-advect2d-24": 0.0,
+    "mpi2-sod-128": 0.0,
+    "mpi2-blast3d-16": 0.0
+  }
+}

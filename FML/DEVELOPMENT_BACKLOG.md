@@ -1,6 +1,6 @@
 # FML remaining-work backlog
 
-Updated 13 November 2026 (items 25–26, 28, 32, 34–35, 50, 52 and 55), including completed Engineering items 1–7, 10, 14, 17 and 19–21, and tested initial implementations of items 25–32, 34–38, 49 and 54–55. This consolidates the original review and subsequent work in this chat. The user intends to work through the full backlog over time. These initial implementations and their remaining production-validation work are recorded below; KD-tree work remains deferred. Effort estimates are relative; performance gains need measurements. Remaining new science entries are proposals from the original review and need a focused capability check before implementation.
+Updated 13 November 2026 (items 25–26, 28, 32, 34–35, 50–52 and 55), including completed Engineering items 1–7, 10, 14, 17 and 19–21, and tested initial implementations of items 25–32, 34–38, 49 and 54–55. This consolidates the original review and subsequent work in this chat. The user intends to work through the full backlog over time. These initial implementations and their remaining production-validation work are recorded below; KD-tree work remains deferred. Effort estimates are relative; performance gains need measurements. Remaining new science entries are proposals from the original review and need a focused capability check before implementation.
 
 ## Completed in this sequence
 
@@ -180,7 +180,7 @@ Common-timestep short-range forces are now enabled with the existing 1LPT/2LPT C
 |---|---|---|---|
 | 49 | Spectral solver for ultralight axion / fuzzy dark matter (initial implementation) | Nonrelativistic Schrödinger–Poisson evolution with full complex wavefunction storage and complex-to-complex FFTs, symmetric split-step kinetic/potential evolution and a periodic Poisson solve. Specify axion mass, wavefunction/density normalization, units and zero-mode conventions. Start in a non-expanding periodic box; then derive cosmological variables/time factors and initial conditions, and add optional CDM/particle-gravity coupling. Reuse FFT workspaces, support MPI complex-field layouts and versioned checkpoints, and measure memory/FFT costs. Validate free-wave dispersion, interference, norm conservation, static energy, a stationary soliton reference and timestep/de Broglie-resolution convergence; derive an appropriate cosmological energy diagnostic. Treat self-interactions and isolated boundaries as later explicit extensions. Reference: [PyUltraLight](https://arxiv.org/abs/1807.04037). | Very large |
 | 50 | Smoothed particle hydrodynamics (SPH; initial implementation) | A conservative gas-particle formulation with kernel density estimates, adaptive smoothing lengths and consistent grad-h terms, pressure forces, energy/entropy evolution and an EOS interface. Add controlled artificial viscosity/conductivity, shock/shear switches and Courant/acceleration timestep criteria. Begin with adiabatic ideal gas. Design symmetric variable-support neighbor interactions, reusable per-thread buffers and multi-slab MPI ghosts without full particle replication; reuse existing spatial backends without resuming deferred KD-tree optimizations. Couple gas/collisionless gravity with explicit cosmological source and time conventions. Validate uniform gas, sound waves, Sod shocks, Sedov blasts, shear/contact tests and gravitational collapse, including conservation and resolution/rank/thread convergence. Share gas/EOS interfaces with item 51. Reference: [conservative SPH](https://arxiv.org/abs/1007.1245). | Very large |
-| 51 | Riemann solvers and conservative finite-volume hydrodynamics | Reusable Euler primitives: primitive/conserved conversions, EOS and sound-speed interfaces, Rusanov/HLLE baselines, HLLC fluxes and an exact 1D reference where applicable. Specify wave-speed estimates, entropy/vacuum treatment and positivity-preserving fallback behavior. Add limited reconstruction, second-order Godunov evolution, CFL control and periodic/outflow/reflecting boundaries, progressing from 1D verification to conservative multidimensional finite-volume evolution. Include high-Mach/dual-energy handling, MPI halos and explicit gravity/cosmological source coupling. Check common gas conventions against SPH; add thermal physics or meshless/Godunov variants only as separately validated extensions. Validate shock tubes, contacts, rarefactions, blasts, smooth advection/sound waves and self-gravitating/cosmological gas, measuring conservation and resolution/rank/thread convergence. Reference: [HLLC construction](https://doi.org/10.1007/BF01414629). | Very large |
+| 51 | Riemann solvers and conservative finite-volume hydrodynamics (initial implementation) | Reusable Euler primitives: primitive/conserved conversions, EOS and sound-speed interfaces, Rusanov/HLLE baselines, HLLC fluxes and an exact 1D reference where applicable. Specify wave-speed estimates, entropy/vacuum treatment and positivity-preserving fallback behavior. Add limited reconstruction, second-order Godunov evolution, CFL control and periodic/outflow/reflecting boundaries, progressing from 1D verification to conservative multidimensional finite-volume evolution. Include high-Mach/dual-energy handling, MPI halos and explicit gravity/cosmological source coupling. Check common gas conventions against SPH; add thermal physics or meshless/Godunov variants only as separately validated extensions. Validate shock tubes, contacts, rarefactions, blasts, smooth advection/sound waves and self-gravitating/cosmological gas, measuring conservation and resolution/rank/thread convergence. Reference: [HLLC construction](https://doi.org/10.1007/BF01414629). | Very large |
 
 ## Field-level forward modeling and inference
 
@@ -192,7 +192,7 @@ The general framework's architecture and staged implementation are saved in [Fie
 
 Item 49 now has an initial implementation in `WaveDarkMatter/`: full complex FFTW grids with nonempty/empty MPI slab support; reusable-buffer symmetric split-step Schrödinger–Poisson evolution; explicit axion-mass/code-unit conversion and comoving normalization; static or prescribed cosmological time integrals; density/phase and velocity-potential initializers; mass, static energy, spectral-tail and cosmological energy-balance diagnostics; external comoving-density and particle-acceleration hooks; and checksummed versioned checkpoints with changed-rank readback. Tests include independent direct DFTs and adaptive ODE evolution, analytic free waves/Poisson/interference, nonlinear second-order convergence, a separately solved radial soliton with mesh/volume checks, expanding energy balance, restart and corruption handling. See `WaveDarkMatter/README.md` and `tests/RESULTS.md` for units, allocation/FFT costs and limits. Self-consistent live-CDM integration, direct axion transfer-function IC preparation, production cosmological/halo calibration, self-interactions and isolated/absorbing boundaries remain extensions.
 
-Items 50–52 remain open beyond their implemented milestones. Item 50 now has the bounded SPH module described below; item 51 remains future work, sharing the new ideal-gas primitive. Item 52 has the staged implementation and validation described above. Reuse existing gravity, LPT/PM, survey and statistical modules where their contracts apply.
+Items 50–52 remain open beyond their implemented milestones. Item 50 now has the bounded SPH module described below; item 51 now has the bounded finite-volume/Riemann implementation described below, sharing the ideal-gas primitive. Item 52 has the staged implementation and validation described above. Reuse existing gravity, LPT/PM, survey and statistical modules where their contracts apply.
 
 Item 48 has an initial independent single-snapshot implementation in `PhaseSpaceHaloFinder/`: adaptive six-dimensional hierarchy and seed merging, isolated Newtonian unbinding, exclusive/inclusive bound masses, resolved circular-velocity estimates and a documented bound-extent host rule. Distributed parent FoF labels converge across periodic slabs, complete parents route to one owner without full particle replication, and particle assignments return to input ranks. SO seeds, explicit HOD mass/radius conversion and exclusive halo-history adapters are available. See its README for conventions and limits. A controlled external ROCKSTAR Plummer comparison passes, and on a COLA snapshot 96-99% of hosts above 100 particles match ROCKSTAR both ways with Vmax (ROCKSTAR-like by default) within 2.4% (`tests/RESULTS.md`); a real N-body (subhalo) comparison, production completeness/purity calibration, temporal stabilization and stronger halo-boundary definitions remain follow-ups; this is not a drop-in ROCKSTAR replacement.
 
@@ -237,7 +237,7 @@ remain open. See [FieldLevel/survey_validation/RESULTS.md](FieldLevel/survey_val
 smoothing lengths, grad-h pressure/work, viscosity and a Balsara shear limiter,
 optional conservative artificial conductivity, global RK2/CFL control, slab MPI
 ghosts/migration and OpenMP targets. `Hydrodynamics/EquationOfState.h` supplies
-shared gas primitives for future item 51. Explicit physical/comoving variables,
+shared gas primitives also used by item 51. Explicit physical/comoving variables,
 Hubble terms and an external gravity callback define the initial coupling API.
 Independent variational/all-pair, conservation, dissipation, safety and serial/MPI
 checks accompany sound/Sod/blast examples and plots. See
@@ -247,3 +247,21 @@ coupling, production cosmological and Sedov/shear/contact/collapse calibration,
 alternative-kernel/neighbor convergence, checkpoints and larger MPI performance
 studies remain. The initial 3D sound-wave refinement shows weaker velocity
 convergence than the 1D test; no general 3D convergence order is claimed.
+
+### Item 51: initial finite-volume Euler and Riemann solvers (13 November 2026)
+
+`Hydrodynamics/` now supplies reusable primitive/conserved conversions, Rusanov,
+HLLE and guarded HLLC fluxes, an exact positive-state 1D reference including
+generated vacuum, and uniform Cartesian 1D/2D/3D finite-volume evolution. Limited
+reconstruction, SSPRK2, collective positivity fallback/retries, periodic/outflow/
+reflecting boundaries, two-layer slab MPI halos, OpenMP and optional accounted
+dual energy are included. Gravity/prescribed-expansion callbacks use explicit
+physical/comoving conventions and share the ideal-gas EOS with SPH. Tests and
+independent exact cell-average, smooth-refinement, shock/vacuum, blast and MPI
+replay experiments are documented in [Hydrodynamics/README.md](Hydrodynamics/README.md)
+and [Hydrodynamics/tests/RESULTS.md](Hydrodynamics/tests/RESULTS.md). This initial
+scope does not complete #51: native SimulationCode gas/Poisson/species coupling,
+production cosmological/high-Mach calibration, hydrostatic/collapse and Sedov
+tests, general EOS, checkpoints and broader performance work remain. The measured
+coarse multidimensional refinement rates are below nominal second order and are
+reported explicitly; no universal convergence-order claim is made.
