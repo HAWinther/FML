@@ -234,6 +234,11 @@ namespace FML {
             AdaptiveMPIGrid(int levelmin, int levelmax, std::array<bool, NDIM> periodic);
             AdaptiveMPIGrid(int levelmin, int levelmax, bool periodic = true)
                 : AdaptiveMPIGrid(levelmin, levelmax, filled_array(periodic)) {}
+            /// Create a uniform grid at levelmin split as the domain (NDIM = 3: a PeanoHilbertDomain, e.g. that of the
+            /// particles or of another grid; its boundaries must fall on cells at levelmin)
+            AdaptiveMPIGrid(int levelmin, int levelmax, std::array<bool, NDIM> periodic, const FML::Domain & domain);
+            AdaptiveMPIGrid(int levelmin, int levelmax, bool periodic, const FML::Domain & domain)
+                : AdaptiveMPIGrid(levelmin, levelmax, filled_array(periodic), domain) {}
 
             //======================================================================
             // Access
@@ -259,7 +264,8 @@ namespace FML {
             const std::vector<key_type> & get_domain_start() const { return _domain_start; }
 
             /// The decomposition as an FML::Domain (3D only: a PeanoHilbertDomain with LMAX = 21 bits, the same keys),
-            /// e.g. for particles that follow the grid: [ grid.load_balance(); particles.set_domain(grid.get_domain()); ]
+            /// e.g. for particles that follow the grid:
+            /// [ grid.load_balance(); particles.set_domain(grid.get_domain()); ]
             /// A position x in [0,1)^3 is owned by the task that owns the leaf containing x
             FML::Domain get_domain() const {
                 static_assert(NDIM == 3, "AdaptiveMPIGrid::get_domain: only for NDIM = 3 (PeanoHilbertDomain is 3D)");
@@ -358,6 +364,8 @@ namespace FML {
             static CellRef search(const std::vector<Cell> & v, key_type k, CellRef::Type type);
             bool wrap(std::array<int64_t, NDIM> & x) const;
             void update_domain_start();
+            void check_levels() const;
+            void create_uniform(std::vector<key_type> start);
             void build_ghost_pattern();
             template <class U>
             using SparseBuffers = std::map<int, std::vector<U>>; // task -> buffer, only tasks we talk to
@@ -404,29 +412,65 @@ namespace FML {
         template <int NDIM, class T>
         AdaptiveMPIGrid<NDIM, T>::AdaptiveMPIGrid(int levelmin, int levelmax, std::array<bool, NDIM> periodic)
             : _levelmin(levelmin), _levelmax(levelmax), _periodic(periodic) {
-            assert_mpi(levelmin >= 1 and levelmin <= levelmax and levelmax <= LMAX,
-                       "AdaptiveMPIGrid: need 1 <= levelmin <= levelmax <= LMAX");
-            for (int d = 0; d < NDIM; d++)
-                assert_mpi(not periodic[d] or levelmin >= 2,
-                           "AdaptiveMPIGrid: periodic axes need levelmin >= 2 (at least 4 cells per dimension)");
-
+            check_levels();
             // Uniform grid at levelmin split into equal parts of the curve
             const key_type ncells = key_type(1) << (NDIM * levelmin);
-            const key_type istart = key_type((__uint128_t(ncells) * FML::ThisTask) / FML::NTasks);
-            const key_type iend = key_type((__uint128_t(ncells) * (FML::ThisTask + 1)) / FML::NTasks);
             const int shift = NDIM * (LMAX - levelmin);
+            std::vector<key_type> start(FML::NTasks + 1);
+            for (int r = 0; r <= FML::NTasks; r++)
+                start[r] = key_type((__uint128_t(ncells) * r) / FML::NTasks) << shift;
+            start[FML::NTasks] = KEY_END;
+            create_uniform(std::move(start));
+        }
 
-            _cells.reserve(iend - istart);
-            for (key_type i = istart; i < iend; i++)
-                _cells.push_back(make_cell_from_key(i << shift, levelmin));
+        template <int NDIM, class T>
+        AdaptiveMPIGrid<NDIM, T>::AdaptiveMPIGrid(int levelmin,
+                                                  int levelmax,
+                                                  std::array<bool, NDIM> periodic,
+                                                  const FML::Domain & domain)
+            : _levelmin(levelmin), _levelmax(levelmax), _periodic(periodic) {
+            static_assert(NDIM == 3, "AdaptiveMPIGrid: a domain only for NDIM = 3 (PeanoHilbertDomain is 3D)");
+            check_levels();
+            assert_mpi(domain.holds<FML::PeanoHilbertDomain>(),
+                       "AdaptiveMPIGrid: the domain must be a PeanoHilbertDomain (the grid is split along the curve)");
+            assert_mpi(domain.ntasks() == FML::NTasks, "AdaptiveMPIGrid: the domain is not made for NTasks tasks");
+            const auto & ph = domain.get<FML::PeanoHilbertDomain>();
+            assert_mpi(int(ph.bits()) <= LMAX, "AdaptiveMPIGrid: the domain has more bits than LMAX");
+
+            // The boundaries in the grid's keys (LMAX bits: the same curve, refined) must fall on levelmin cells
+            const int shift = NDIM * (LMAX - int(ph.bits()));
+            std::vector<key_type> start(FML::NTasks + 1);
+            bool on_cells = true;
+            for (int r = 0; r <= FML::NTasks; r++) {
+                start[r] = r == FML::NTasks ? KEY_END : key_type(ph.key_begin(r)) << shift;
+                on_cells = on_cells and start[r] % key_range(levelmin) == 0;
+            }
+            assert_mpi(on_cells, "AdaptiveMPIGrid: the boundaries of the domain must fall on cells at levelmin");
+            create_uniform(std::move(start));
+        }
+
+        template <int NDIM, class T>
+        void AdaptiveMPIGrid<NDIM, T>::check_levels() const {
+            assert_mpi(_levelmin >= 1 and _levelmin <= _levelmax and _levelmax <= LMAX,
+                       "AdaptiveMPIGrid: need 1 <= levelmin <= levelmax <= LMAX");
+            for (int d = 0; d < NDIM; d++)
+                assert_mpi(not _periodic[d] or _levelmin >= 2,
+                           "AdaptiveMPIGrid: periodic axes need levelmin >= 2 (at least 4 cells per dimension)");
+        }
+
+        template <int NDIM, class T>
+        void AdaptiveMPIGrid<NDIM, T>::create_uniform(std::vector<key_type> start) {
+            // The cells at levelmin in this task's part of the curve
+            _domain_start = std::move(start);
+            const key_type step = key_range(_levelmin);
+            const key_type kbegin = _domain_start[FML::ThisTask];
+            const key_type kend = _domain_start[FML::ThisTask + 1];
+            _cells.clear();
+            _cells.reserve((kend - kbegin) / step);
+            for (key_type k = kbegin; k < kend; k += step)
+                _cells.push_back(make_cell_from_key(k, _levelmin));
             _data.assign(_cells.size(), T{});
             _flags.assign(_cells.size(), KEEP);
-
-            _domain_start.resize(FML::NTasks + 1);
-            for (int r = 0; r <= FML::NTasks; r++)
-                _domain_start[r] = key_type((__uint128_t(ncells) * r) / FML::NTasks) << shift;
-            _domain_start[FML::NTasks] = KEY_END;
-
             build_ghost_pattern();
         }
 

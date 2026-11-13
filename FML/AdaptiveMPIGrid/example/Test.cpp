@@ -359,6 +359,40 @@ void test_domain_and_particles() {
         if (FML::ThisTask == 0)
             std::cout << "  step " << step << " ncells " << ncells << "\n";
     }
+
+    // A grid made on a given domain: the load-balanced Peano-Hilbert domain of the particles (at levelmin bits, so
+    // the boundaries fall on cells at levelmin)
+    const int levelmin = 3;
+    std::vector<FML::PeanoHilbertDomain::Key> keys;
+    for (auto & p : particles)
+        keys.push_back(FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT::key_from_position({p.pos[0], p.pos[1], p.pos[2]},
+                                                                                     levelmin));
+    const auto domain = FML::Domain::peano_hilbert(FML::PeanoHilbertDomain::build(keys, levelmin, 3 * levelmin));
+    Grid grid2(levelmin, 5, true, domain);
+    bool ok = grid2.check_invariants();
+    for (IndexInt i = 0; i < grid2.get_n_local(); i++)
+        ok = ok and domain.owner(grid2.get_cell_center(grid2.get_cell(i)).data()) == FML::ThisTask;
+    std::mt19937 gen_points(7);
+    for (int i = 0; i < 1000; i++) {
+        std::array<double, 3> x{U(gen_points), U(gen_points), U(gen_points)};
+        ok = ok and grid2.get_domain().owner(x.data()) == domain.owner(x.data());
+    }
+    particles.set_domain(domain);
+    long long n = 0;
+    for (auto & p : particles) {
+        ok = ok and grid2.find_leaf(std::array<double, 3>{p.pos[0], p.pos[1], p.pos[2]}).is_local();
+        n++;
+    }
+    FML::SumOverTasks(&n);
+    CHECK(not FML::GRID::AMRDETAIL::allreduce_or(not ok) and n == ntot,
+          "a grid on a given domain (the particles' load-balanced Peano-Hilbert domain): ownership and particles");
+    const auto ncells2 = grid2.get_n_global();
+    IndexInt nmin = grid2.get_n_local(), nmax = grid2.get_n_local();
+    FML::MinOverTasks(&nmin);
+    FML::MaxOverTasks(&nmax);
+    if (FML::ThisTask == 0)
+        std::cout << "  grid on the particles' domain: ncells " << ncells2 << ", per task " << nmin << " - " << nmax
+                  << "\n";
 }
 
 int main(int argc, char ** argv) {

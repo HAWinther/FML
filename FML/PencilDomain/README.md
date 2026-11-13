@@ -18,8 +18,14 @@ class that takes a `Domain`). It is not yet used by the rest of FML. Needs `USE_
   (so any `Nmesh` works, unlike `FFTWGrid` which needs `NTasks` to divide it). `get_domain().particle_domain()` is the domain for `MPIParticles` (a Slab when `P1 = 1`), so that
   particles live on the task of their cells.
 - The transform: r2c along the last axis, then (3D) a transpose in the row (`p0` fixed) and an FFT along y, then a
-  transpose in the column (`p1` fixed) and an FFT along x (`MPI_Alltoallw` with derived datatypes, FFTW's guru
-  interface). The copies of a grid share the communicators, datatypes and plans.
+  transpose in the column (`p1` fixed) and an FFT along x (FFTW's guru interface). A transpose packs the block for
+  each task (cache-blocked copies), exchanges them with `MPI_Alltoallv` and unpacks; with one task in the row or column
+  the block is copied directly. The grid and one work array of about the same size take turns as source and
+  destination. The copies of a grid share the communicators, the work array and the plans (so they must not be
+  transformed at the same time from different threads).
+- Speed: `tests/benchmark_pencil_grid` times a forward and an inverse FFT against `FFTWGrid` (`mpirun -np P
+  ./benchmark_pencil_grid [Nmesh ...]`). On 2 tasks (2 cores) at Nmesh = 64 - 256: 0.9 - 1.3 times FFTWGrid's time;
+  on 1 task 1 - 1.9 times (FFTW avoids the two transposes there).
 
 ## Interface (as FFTWGrid)
 
@@ -57,7 +63,8 @@ The methods have the names and meaning of `FFTWGrid`: `get_index_real`, `get_coo
   through a Fourier transform (the Fourier data uses the same memory): call `communicate_boundaries` after.
   `add_contribution_from_extra_cells` adds them to the cells of the neighbors they belong to (after assigning
   particles) and sets them to zero.
-- No 1D, no wisdom (the plans are made with `FFTW_ESTIMATE`), no dump/load.
+- No 1D, no wisdom files, no dump/load. The plans use FML's planner flag (`FML::GRID::set_fftw_planner_flag`, as
+  `FFTWGrid`; `FFTW_ESTIMATE` by default), made when the grid is constructed.
 
 ## Example and tests
 

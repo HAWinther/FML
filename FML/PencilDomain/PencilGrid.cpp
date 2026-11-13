@@ -127,77 +127,149 @@ namespace FML {
                     free_complex(reinterpret_cast<my_fftw_complex *>(p));
             }
 
-            // FFTW-aligned scratch memory for a transform
-            struct Scratch {
-                explicit Scratch(size_t n) : data(allocate_complex(n)) {}
-                ~Scratch() { free_complex_array(data); }
-                Scratch(const Scratch &) = delete;
-                Scratch & operator=(const Scratch &) = delete;
-                ComplexType * data;
+            //=====================================================================
+            // The transposes: blocks of a 3D index space copied between strided layouts
+            //=====================================================================
+
+            // The elements offset + i * stride[0] + j * stride[1] + k * stride[2] for i < n[0], j < n[1], k < n[2] (in
+            // units of complex numbers)
+            struct BlockView {
+                ptrdiff_t offset{0};
+                std::array<ptrdiff_t, 3> stride{};
+                std::array<int, 3> n{};
+                size_t count() const { return size_t(n[0]) * size_t(n[1]) * size_t(n[2]); }
+                // The same block stored contiguously (in this order) at offset
+                static BlockView contiguous(std::array<int, 3> n, ptrdiff_t offset = 0) {
+                    return {offset, {ptrdiff_t(n[1]) * n[2], n[2], 1}, n};
+                }
             };
 
-            //=====================================================================
-            // MPI datatypes for the transposes (in units of complex numbers)
-            //=====================================================================
+            // Copy a block from one layout to another. When the two layouts are contiguous along different indices
+            // (a transpose) the copy is done in tiles, so that both are read / written a cache line at a time
+            void copy_block(ComplexType * dst, const BlockView & d, const ComplexType * src, const BlockView & s) {
+                const auto & n = s.n;
+                if (n[0] == 0 or n[1] == 0 or n[2] == 0)
+                    return;
+                // The index along which a layout is contiguous (the smallest stride among the indices with n > 1)
+                auto fastest = [&](const std::array<ptrdiff_t, 3> & stride) {
+                    int best = -1;
+                    for (int i = 0; i < 3; i++)
+                        if (n[i] > 1 and (best < 0 or std::abs(stride[i]) < std::abs(stride[best])))
+                            best = i;
+                    return best < 0 ? 2 : best;
+                };
+                const int si = fastest(s.stride), di = fastest(d.stride);
+                ComplexType * d0 = dst + d.offset;
+                const ComplexType * s0 = src + s.offset;
 
-            // A block of a C-ordered array
-            template <int R>
-            MPI_Datatype
-            subarray_type(std::array<int, R> sizes, std::array<int, R> subsizes, std::array<int, R> starts) {
-                MPI_Datatype type;
-                MPI_Type_create_subarray(R,
-                                         sizes.data(),
-                                         subsizes.data(),
-                                         starts.data(),
-                                         MPI_ORDER_C,
-                                         mpi_complex_type,
-                                         &type);
-                MPI_Type_commit(&type);
-                return type;
+                if (si == di) {
+                    // The same fast index: copy lines
+                    const int a = si == 0 ? 1 : 0, b = 3 - si - a;
+                    const ptrdiff_t ds = d.stride[si], ss = s.stride[si];
+#ifdef USE_OMP
+#pragma omp parallel for collapse(2) schedule(static)
+#endif
+                    for (int i = 0; i < n[a]; i++)
+                        for (int j = 0; j < n[b]; j++) {
+                            ComplexType * dp = d0 + i * d.stride[a] + j * d.stride[b];
+                            const ComplexType * sp = s0 + i * s.stride[a] + j * s.stride[b];
+                            if (ds == 1 and ss == 1)
+                                std::copy(sp, sp + n[si], dp);
+                            else
+                                for (int k = 0; k < n[si]; k++)
+                                    dp[k * ds] = sp[k * ss];
+                        }
+                    return;
+                }
+
+                // A transpose of the indices si and di (o the third one): tiles of tile x tile
+                constexpr int tile = 32;
+                const int o = 3 - si - di;
+                const int ntiles = (n[di] + tile - 1) / tile;
+#ifdef USE_OMP
+#pragma omp parallel for collapse(2) schedule(static)
+#endif
+                for (int io = 0; io < n[o]; io++)
+                    for (int td = 0; td < ntiles; td++) {
+                        const int a_end = std::min(n[di], (td + 1) * tile);
+                        for (int b0 = 0; b0 < n[si]; b0 += tile) {
+                            const int b_end = std::min(n[si], b0 + tile);
+                            for (int a = td * tile; a < a_end; a++) {
+                                ComplexType * dp = d0 + io * d.stride[o] + a * d.stride[di];
+                                const ComplexType * sp = s0 + io * s.stride[o] + a * s.stride[di];
+                                for (int b = b0; b < b_end; b++)
+                                    dp[b * d.stride[si]] = sp[b * s.stride[si]];
+                            }
+                        }
+                    }
             }
 
-            // The elements start + i * stride_outer + j * stride_middle + k * stride_inner for i < n_outer,
-            // j < n_middle, k < n_inner, in this order (k fastest)
-            MPI_Datatype strided_type(int n_outer,
-                                      MPI_Aint stride_outer,
-                                      int n_middle,
-                                      MPI_Aint stride_middle,
-                                      int n_inner,
-                                      MPI_Aint stride_inner,
-                                      MPI_Aint start) {
-                const MPI_Aint bytes = sizeof(ComplexType);
-                MPI_Datatype inner, inner_resized, middle, middle_resized, outer, type;
-                MPI_Type_create_hvector(n_inner, 1, stride_inner * bytes, mpi_complex_type, &inner);
-                MPI_Type_create_resized(inner, 0, stride_middle * bytes, &inner_resized);
-                MPI_Type_contiguous(n_middle, inner_resized, &middle);
-                MPI_Type_create_resized(middle, 0, stride_outer * bytes, &middle_resized);
-                MPI_Type_contiguous(n_outer, middle_resized, &outer);
-                int one = 1;
-                MPI_Aint displacement = start * bytes;
-                MPI_Type_create_hindexed(1, &one, &displacement, outer, &type);
-                MPI_Type_commit(&type);
-                for (auto * t : {&inner, &inner_resized, &middle, &middle_resized, &outer})
-                    MPI_Type_free(t);
-                return type;
-            }
+            // One all-to-all redistribution between the tasks of a communicator. For every partner p: send[p] is
+            // where the data this task sends to p is in the source, recv[p] where the data from p goes in the
+            // destination, both with the indices in the order the sender packs them. The reverse redistribution
+            // (backward transform) swaps the two
+            struct Exchange {
+                MPI_Comm comm{MPI_COMM_NULL};
+                int size{1};
+                std::vector<BlockView> send, recv;
+                std::vector<int> send_counts, send_displacements, recv_counts, recv_displacements;
+                size_t send_total{0}, recv_total{0};
 
-            // Every task sends one of its datatypes to every task of the communicator
-            void alltoallw(const ComplexType * send,
-                           const std::vector<MPI_Datatype> & send_types,
-                           ComplexType * recv,
-                           const std::vector<MPI_Datatype> & recv_types,
-                           MPI_Comm comm) {
-                const int n = int(send_types.size());
-                std::vector<int> counts(n, 1), displacements(n, 0);
-                MPI_Alltoallw(send,
-                              counts.data(),
-                              displacements.data(),
-                              send_types.data(),
-                              recv,
-                              counts.data(),
-                              displacements.data(),
-                              recv_types.data(),
-                              comm);
+                void finalize() {
+                    auto layout = [](const std::vector<BlockView> & views,
+                                     std::vector<int> & counts,
+                                     std::vector<int> & displacements) {
+                        size_t total = 0;
+                        for (const auto & v : views) {
+                            assert_mpi(v.count() <= size_t(std::numeric_limits<int>::max()) and
+                                           total <= size_t(std::numeric_limits<int>::max()),
+                                       "[PencilGrid] A transpose block is too large for MPI (int counts)");
+                            counts.push_back(int(v.count()));
+                            displacements.push_back(int(total));
+                            total += v.count();
+                        }
+                        return total;
+                    };
+                    send_total = layout(send, send_counts, send_displacements);
+                    recv_total = layout(recv, recv_counts, recv_displacements);
+                }
+            };
+
+            // Redistribute from src to dst (reverse: the backward direction): pack into send_buffer, exchange into
+            // recv_buffer, unpack. With one task the block is copied directly (if src and dst differ)
+            void run_exchange(const Exchange & ex,
+                              bool reverse,
+                              const ComplexType * src,
+                              ComplexType * dst,
+                              ComplexType * send_buffer,
+                              ComplexType * recv_buffer) {
+                const auto & from = reverse ? ex.recv : ex.send;
+                const auto & to = reverse ? ex.send : ex.recv;
+                if (ex.size == 1 and src != dst) {
+                    copy_block(dst, to[0], src, from[0]);
+                    return;
+                }
+                const auto & scounts = reverse ? ex.recv_counts : ex.send_counts;
+                const auto & sdispl = reverse ? ex.recv_displacements : ex.send_displacements;
+                const auto & rcounts = reverse ? ex.send_counts : ex.recv_counts;
+                const auto & rdispl = reverse ? ex.send_displacements : ex.recv_displacements;
+                for (int p = 0; p < ex.size; p++)
+                    copy_block(send_buffer, BlockView::contiguous(from[p].n, sdispl[p]), src, from[p]);
+                const ComplexType * received = send_buffer;
+                if (ex.size > 1) {
+                    MPI_Alltoallv(send_buffer,
+                                  scounts.data(),
+                                  sdispl.data(),
+                                  mpi_complex_type,
+                                  recv_buffer,
+                                  rcounts.data(),
+                                  rdispl.data(),
+                                  mpi_complex_type,
+                                  ex.comm);
+                    received = recv_buffer;
+                }
+                for (int p = 0; p < ex.size; p++)
+                    copy_block(dst, to[p], received, BlockView::contiguous(to[p].n, rdispl[p]));
             }
 
             // MPI_Sendrecv of a buffer of any size (in chunks whose count fits in an int)
@@ -268,16 +340,16 @@ namespace FML {
         // The communicators, datatypes and plans of a layout (shared by copies)
         //=========================================================================
         struct PencilTransforms {
-            // Row: the tasks with the same p0 (rank p1), column: the tasks with the same p1 (rank p0)
-            MPI_Comm row{MPI_COMM_NULL};
-            MPI_Comm column{MPI_COMM_NULL};
-            // Real (after the r2c) -> y-pencils, and y-pencils -> x-pencils (3D); real -> x-pencils (2D)
-            std::vector<MPI_Datatype> send_row, recv_row, send_column, recv_column;
+            // 3D: real pencils (after the r2c) -> y-pencils in the row (the tasks with the same p0), y-pencils ->
+            // x-pencils in the column (the same p1). 2D: real slabs -> x-pencils in the column (all tasks)
+            Exchange row, column;
             my_fftw_plan r2c{nullptr}, c2r{nullptr};
             my_fftw_plan y_forward{nullptr}, y_backward{nullptr};
             my_fftw_plan x_forward{nullptr}, x_backward{nullptr};
-            // The number of complex numbers of scratch memory a transform needs
-            size_t nscratch{0};
+            // FFTW-aligned work memory of the transforms (kept: shared by the grids with this layout, so they must not
+            // be transformed at the same time from different threads)
+            ComplexType * work{nullptr};
+            size_t nwork{0};
 
             PencilTransforms() = default;
             PencilTransforms(const PencilTransforms &) = delete;
@@ -286,14 +358,12 @@ namespace FML {
                 for (auto p : {r2c, c2r, y_forward, y_backward, x_forward, x_backward})
                     if (p != nullptr)
                         destroy_plan(p);
+                free_complex_array(work);
                 int finalized = 0;
                 MPI_Finalized(&finalized);
                 if (finalized)
                     return;
-                for (auto * types : {&send_row, &recv_row, &send_column, &recv_column})
-                    for (auto & t : *types)
-                        MPI_Type_free(&t);
-                for (auto * comm : {&row, &column})
+                for (auto * comm : {&row.comm, &column.comm})
                     if (*comm != MPI_COMM_NULL)
                         MPI_Comm_free(comm);
             }
@@ -364,8 +434,10 @@ namespace FML {
                 slice_stride = row_stride;
                 real_offset = n_extra_left * slice_stride;
             }
+            // The grid also receives the blocks of the transposes (3D: the y-pencils [Local_nx][Local_nkz][Nmesh])
             const ptrdiff_t ncomplex_real = (Local_nx + n_extra_left + n_extra_right) * slice_stride / 2;
-            NComplexAlloc = std::max(ncomplex_real, get_ntot_fourier());
+            const ptrdiff_t ncomplex_ypencils = N == 3 ? Local_nx * Local_nkz * Nmesh : 0;
+            NComplexAlloc = std::max({ncomplex_real, ncomplex_ypencils, get_ntot_fourier()});
 
             allocate();
             fill_real_grid(0.0);
@@ -379,82 +451,80 @@ namespace FML {
             const auto p = domain.coords_of(FML::ThisTask);
             const int nx = int(Local_nx), ny = int(Local_ny), nky = int(Local_nky), nkz = int(Local_nkz);
             const int nl = n_extra_left;
+            const int nlast = Nmesh / 2 + 1;
             const auto xcells = cell_edges(domain.x_edges(), Nmesh, "x");
 
             transforms = std::make_shared<PencilTransforms>();
             auto & t = *transforms;
-            MPI_Comm_split(FML::communicator, p[0], p[1], &t.row);
-            MPI_Comm_split(FML::communicator, p[1], p[0], &t.column);
+            MPI_Comm_split(FML::communicator, p[0], p[1], &t.row.comm);
+            MPI_Comm_split(FML::communicator, p[1], p[0], &t.column.comm);
+            t.row.size = P[1];
+            t.column.size = P[0];
 
-            // The plans are made with FFTW_ESTIMATE (the data is not touched) on FFTW-aligned memory, and executed
-            // on the memory of any grid with this layout (the same alignment)
-            const unsigned flags = FFTW_ESTIMATE;
-            FloatType * real = reinterpret_cast<FloatType *>(data) + real_offset;
-            my_fftw_complex * complex = as_fftw(data) + real_offset / 2;
-
+            // The layouts (complex numbers). The real grid after the r2c: (ix, iy, kz) at
+            // (ix + nl) * slice + (iy + nl) * row + kz (2D: (ix, ky) at (ix + nl) * row + ky)
+            const ptrdiff_t row = row_stride / 2, slice = slice_stride / 2;
             if constexpr (N == 3) {
                 const auto ycells = cell_edges(domain.y_edges(), Nmesh, "y");
-                const int nzc = Nmesh / 2 + 1;
-                const int nxa = nx + n_extra_left + n_extra_right;
-                const int nya = ny + n_extra_left + n_extra_right;
-
-                // Row transpose: the real pencils [nxa][nya][nzc] (after the r2c) -> y-pencils [nx][nkz][Nmesh]
+                // Row: (ix, iy, kz) of the real pencils -> the y-pencils (ix, kz, y) at (ix * nkz + kz) * Nmesh + y
                 for (int j = 0; j < P[1]; j++) {
-                    const auto kz = split(nzc, P[1], j);
-                    const int ystart = int(ycells[j]);
+                    const auto kz = split(nlast, P[1], j);
                     const int ny_j = int(ycells[j + 1] - ycells[j]);
-                    t.send_row.push_back(subarray_type<3>({nxa, nya, nzc}, {nx, ny, int(kz[1])}, {nl, nl, int(kz[0])}));
-                    t.recv_row.push_back(strided_type(nx, MPI_Aint(nkz) * Nmesh, ny_j, 1, nkz, Nmesh, ystart));
+                    t.row.send.push_back({nl * slice + nl * row + kz[0], {slice, row, 1}, {nx, ny, int(kz[1])}});
+                    t.row.recv.push_back({ptrdiff_t(ycells[j]), {ptrdiff_t(nkz) * Nmesh, 1, Nmesh}, {nx, ny_j, nkz}});
                 }
-                // Column transpose: the y-pencils [nx][nkz][Nmesh] -> x-pencils [nky][nkz][Nmesh]
+                // Column: (ix, kz, ky) of the y-pencils -> the x-pencils (ky, kz, x) at (ky * nkz + kz) * Nmesh + x
                 for (int i = 0; i < P[0]; i++) {
                     const auto ky = split(Nmesh, P[0], i);
-                    const int xstart = int(xcells[i]);
                     const int nx_i = int(xcells[i + 1] - xcells[i]);
-                    t.send_column.push_back(
-                        subarray_type<3>({nx, nkz, Nmesh}, {nx, nkz, int(ky[1])}, {0, 0, int(ky[0])}));
-                    t.recv_column.push_back(strided_type(nx_i, 1, nkz, Nmesh, nky, MPI_Aint(nkz) * Nmesh, xstart));
+                    t.column.send.push_back({ky[0], {ptrdiff_t(nkz) * Nmesh, Nmesh, 1}, {nx, nkz, int(ky[1])}});
+                    t.column.recv.push_back(
+                        {ptrdiff_t(xcells[i]), {1, Nmesh, ptrdiff_t(nkz) * Nmesh}, {nx_i, nkz, nky}});
                 }
-                t.nscratch = size_t(nx) * nkz * Nmesh;
-                Scratch scratch(t.nscratch);
+                t.row.finalize();
+                t.column.finalize();
+                // The work memory holds the packed blocks and the y-pencils (the grid the received blocks)
+                t.nwork = std::max({t.row.send_total, size_t(nx) * nkz * Nmesh, t.column.recv_total});
+            } else {
+                // Column: (1, ix, ky) of the real slabs -> the x-pencils (ky, x) at ky * Nmesh + x
+                for (int i = 0; i < P[0]; i++) {
+                    const auto ky = split(nlast, P[0], i);
+                    const int nx_i = int(xcells[i + 1] - xcells[i]);
+                    t.column.send.push_back({nl * row + ky[0], {0, row, 1}, {1, nx, int(ky[1])}});
+                    t.column.recv.push_back({ptrdiff_t(xcells[i]), {0, 1, Nmesh}, {1, nx_i, nky}});
+                }
+                t.column.finalize();
+                // The work memory holds the packed blocks to send and the received ones
+                t.nwork = t.column.send_total + t.column.recv_total;
+            }
+            t.work = allocate_complex(t.nwork);
 
-                fftw_iodim_type dim{Nmesh, 1, 1};
+            // The plans are made with FML's planner flag (FML::GRID::get_fftw_planner_flag(), as FFTWGrid;
+            // FFTW_ESTIMATE by default) on FFTW-aligned memory, before the grid is filled (the other flags overwrite
+            // the arrays), and executed on the memory of any grid with this layout (the same alignment)
+            const unsigned flags = FML::GRID::get_fftw_planner_flag();
+            FloatType * real = reinterpret_cast<FloatType *>(data) + real_offset;
+            my_fftw_complex * complex = as_fftw(data) + real_offset / 2;
+            fftw_iodim_type dim{Nmesh, 1, 1};
+            if constexpr (N == 3) {
                 fftw_iodim_type forward[2] = {{nx, int(slice_stride), int(slice_stride / 2)},
                                               {ny, int(row_stride), int(row_stride / 2)}};
                 fftw_iodim_type backward[2] = {{nx, int(slice_stride / 2), int(slice_stride)},
                                                {ny, int(row_stride / 2), int(row_stride)}};
                 t.r2c = plan_r2c(&dim, 2, forward, real, complex, flags);
                 t.c2r = plan_c2r(&dim, 2, backward, complex, real, flags);
-                t.y_forward = plan_many(Nmesh, nx * nkz, as_fftw(scratch.data), FFTW_FORWARD, flags);
-                t.y_backward = plan_many(Nmesh, nx * nkz, as_fftw(scratch.data), FFTW_BACKWARD, flags);
-                t.x_forward = plan_many(Nmesh, nky * nkz, as_fftw(data), FFTW_FORWARD, flags);
-                t.x_backward = plan_many(Nmesh, nky * nkz, as_fftw(data), FFTW_BACKWARD, flags);
-                assert_mpi(t.r2c and t.c2r and t.y_forward and t.y_backward and t.x_forward and t.x_backward,
-                           "[PencilGrid] FFTW failed to make a plan");
+                t.y_forward = plan_many(Nmesh, nx * nkz, as_fftw(t.work), FFTW_FORWARD, flags);
+                t.y_backward = plan_many(Nmesh, nx * nkz, as_fftw(t.work), FFTW_BACKWARD, flags);
             } else {
-                const int nyc = Nmesh / 2 + 1;
-                const int nxa = nx + n_extra_left + n_extra_right;
-
-                // Column transpose: the real slabs [nxa][nyc] (after the r2c) -> x-pencils [nky][Nmesh]
-                for (int i = 0; i < P[0]; i++) {
-                    const auto ky = split(nyc, P[0], i);
-                    const int xstart = int(xcells[i]);
-                    const int nx_i = int(xcells[i + 1] - xcells[i]);
-                    t.send_column.push_back(subarray_type<2>({nxa, nyc}, {nx, int(ky[1])}, {nl, int(ky[0])}));
-                    t.recv_column.push_back(strided_type(nx_i, 1, 1, 1, nky, Nmesh, xstart));
-                }
-                t.nscratch = size_t(nky) * Nmesh;
-                Scratch scratch(t.nscratch);
-
-                fftw_iodim_type dim{Nmesh, 1, 1};
                 fftw_iodim_type forward[1] = {{nx, int(row_stride), int(row_stride / 2)}};
                 fftw_iodim_type backward[1] = {{nx, int(row_stride / 2), int(row_stride)}};
                 t.r2c = plan_r2c(&dim, 1, forward, real, complex, flags);
                 t.c2r = plan_c2r(&dim, 1, backward, complex, real, flags);
-                t.x_forward = plan_many(Nmesh, nky, as_fftw(scratch.data), FFTW_FORWARD, flags);
-                t.x_backward = plan_many(Nmesh, nky, as_fftw(scratch.data), FFTW_BACKWARD, flags);
-                assert_mpi(t.r2c and t.c2r and t.x_forward and t.x_backward, "[PencilGrid] FFTW failed to make a plan");
             }
+            t.x_forward = plan_many(Nmesh, nky * nkz, as_fftw(data), FFTW_FORWARD, flags);
+            t.x_backward = plan_many(Nmesh, nky * nkz, as_fftw(data), FFTW_BACKWARD, flags);
+            assert_mpi(t.r2c and t.c2r and t.x_forward and t.x_backward and (N == 2 or (t.y_forward and t.y_backward)),
+                       "[PencilGrid] FFTW failed to make a plan");
         }
 
         template <int N>
@@ -525,25 +595,23 @@ namespace FML {
         // Fourier transforms
         //=========================================================================
 
+        // The forward transform: r2c along the last axis, then (3D) the row transpose and the FFT along y, then the
+        // column transpose and the FFT along x. The grid (D) and the work memory (W) take turns: each transpose packs
+        // from one into the other, exchanges back, and unpacks into the other again
         template <int N>
         void PencilGrid<N>::fftw_r2c() {
             assert_mpi(data != nullptr, "[PencilGrid::fftw_r2c] The grid is not allocated");
             auto & t = *transforms;
-            Scratch scratch(t.nscratch);
-            FloatType * real = get_real_grid();
-            my_fftw_complex * complex = as_fftw(data) + real_offset / 2;
-
-            execute_r2c(t.r2c, real, complex);
+            ComplexType * W = t.work;
+            execute_r2c(t.r2c, get_real_grid(), as_fftw(data) + real_offset / 2);
             if constexpr (N == 3) {
-                alltoallw(data, t.send_row, scratch.data, t.recv_row, t.row);
-                execute_dft(t.y_forward, as_fftw(scratch.data));
-                alltoallw(scratch.data, t.send_column, data, t.recv_column, t.column);
-                execute_dft(t.x_forward, as_fftw(data));
+                run_exchange(t.row, false, data, W, W, data);
+                execute_dft(t.y_forward, as_fftw(W));
+                run_exchange(t.column, false, W, data, data, W);
             } else {
-                alltoallw(data, t.send_column, scratch.data, t.recv_column, t.column);
-                execute_dft(t.x_forward, as_fftw(scratch.data));
-                std::copy(scratch.data, scratch.data + get_ntot_fourier(), data);
+                run_exchange(t.column, false, data, data, W, W + t.column.send_total);
             }
+            execute_dft(t.x_forward, as_fftw(data));
             FML::PERFORMANCE::record(FML::PERFORMANCE::Counter::ForwardFFTs);
             grid_is_in_real_space = false;
 
@@ -557,25 +625,21 @@ namespace FML {
                 data[i] *= norm;
         }
 
+        // The backward transform: the same steps in reverse
         template <int N>
         void PencilGrid<N>::fftw_c2r() {
             assert_mpi(data != nullptr, "[PencilGrid::fftw_c2r] The grid is not allocated");
             auto & t = *transforms;
-            Scratch scratch(t.nscratch);
-            FloatType * real = get_real_grid();
-            my_fftw_complex * complex = as_fftw(data) + real_offset / 2;
-
+            ComplexType * W = t.work;
+            execute_dft(t.x_backward, as_fftw(data));
             if constexpr (N == 3) {
-                execute_dft(t.x_backward, as_fftw(data));
-                alltoallw(data, t.recv_column, scratch.data, t.send_column, t.column);
-                execute_dft(t.y_backward, as_fftw(scratch.data));
-                alltoallw(scratch.data, t.recv_row, data, t.send_row, t.row);
+                run_exchange(t.column, true, data, W, W, data);
+                execute_dft(t.y_backward, as_fftw(W));
+                run_exchange(t.row, true, W, data, data, W);
             } else {
-                std::copy(data, data + get_ntot_fourier(), scratch.data);
-                execute_dft(t.x_backward, as_fftw(scratch.data));
-                alltoallw(scratch.data, t.recv_column, data, t.send_column, t.column);
+                run_exchange(t.column, true, data, data, W, W + t.column.recv_total);
             }
-            execute_c2r(t.c2r, complex, real);
+            execute_c2r(t.c2r, as_fftw(data) + real_offset / 2, get_real_grid());
             FML::PERFORMANCE::record(FML::PERFORMANCE::Counter::InverseFFTs);
             grid_is_in_real_space = true;
         }

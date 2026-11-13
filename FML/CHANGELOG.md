@@ -5,6 +5,16 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### PencilGrid: faster transposes, FML's planner flag, a benchmark
+- The transposes pack each task's block with cache-blocked copies and exchange contiguous buffers with
+  `MPI_Alltoallv` (with one task in the row / column the block is copied directly), instead of `MPI_Alltoallw` with
+  nested strided datatypes (copied one complex number at a time: 80% of the transform). The work array is kept
+  (shared by the grids of a layout) and the grid itself receives the blocks, so no allocation per transform.
+- The plans use FML's planner flag (`set_fftw_planner_flag`, as FFTWGrid) instead of always `FFTW_ESTIMATE`.
+- `PencilDomain/tests/benchmark_pencil_grid`: forward + inverse FFT against FFTWGrid. At Nmesh = 64 - 256 PencilGrid
+  on slabs went from 1.6 - 3.8 times FFTWGrid's time to 0.9 - 1.3 on 2 tasks (1 - 1.9 on 1 task). The tests pass on
+  1 - 6 tasks.
+
 ### The Peano-Hilbert domain, DistributedGrid3D and AdaptiveMPIGrid use FML's communicator
 - `PeanoHilbertDomain::build(keys, bits, histogram_bits)` and `DistributedGrid3D::exchange_halo()` /
   `fetch_remote_cells(cells)` no longer take a communicator (it defaulted to `MPI_COMM_WORLD`; the module was
@@ -20,6 +30,9 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
   `grid.load_balance(); particles.set_domain(grid.get_domain());`. Tested in the AdaptiveMPIGrid test on 1 - 6 tasks
   (refinement and load balancing around a particle cluster): the domain owns every local leaf and agrees with
   `owner_of_key`, and after `set_domain` every particle is in a local leaf and none is lost.
+- `AdaptiveMPIGrid<3>(levelmin, levelmax, periodic, domain)`: start on a given `PeanoHilbertDomain` (its boundaries
+  on cells at levelmin; any bits <= 21) instead of equal parts of the curve. Tested with the load-balanced domain of
+  the particles; the default constructor gives the same grid as before (the same global hashes).
 
 ### PencilGrid<N> with the interface of FFTWGrid; PencilDomain is only the pencils
 - `PencilGrid<N>` (N = 2, 3) rewritten to look like `FFTWGrid<N>` (the aim: one grid class that takes a `Domain`):

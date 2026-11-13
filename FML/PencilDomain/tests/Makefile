@@ -2,12 +2,17 @@ USE_MPI ?= true
 USE_FFTW ?= true
 USE_OMP ?= false
 TARGETS := test_pencil_grid
+EXTRA_CLEAN += benchmark_pencil_grid
 
 include ../../Makefile.config
 
 FML_MODULES := Global
 
 test_pencil_grid: test_pencil_grid.o PencilGrid.o Global.o
+	$(LINK_EXE)
+
+# FFT timings against FFTWGrid (not run by `make run`): mpirun -np P ./benchmark_pencil_grid [Nmesh ...]
+benchmark_pencil_grid: benchmark_pencil_grid.o PencilGrid.o Global.o
 	$(LINK_EXE)
 
 PencilGrid.o: $(FML_ROOT)/PencilDomain/PencilGrid.cpp
