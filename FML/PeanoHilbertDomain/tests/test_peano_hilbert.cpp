@@ -31,8 +31,7 @@ namespace {
     }
 
     template <class Grid>
-    std::vector<Key> reference_halo(const Grid & grid, uint32_t width, HaloConnectivity connectivity,
-                                   bool periodic) {
+    std::vector<Key> reference_halo(const Grid & grid, uint32_t width, HaloConnectivity connectivity, bool periodic) {
         const int64_t n = grid.cells_per_dimension();
         std::vector<Key> result;
         for (size_t local = 0; local < grid.local_size(); ++local) {
@@ -45,8 +44,7 @@ namespace {
                         const int nchanged = int(dx != 0) + int(dy != 0) + int(dz != 0);
                         if (connectivity == HaloConnectivity::Faces && nchanged != 1)
                             continue;
-                        int64_t c[3] = {int64_t(center[0]) + dx, int64_t(center[1]) + dy,
-                                        int64_t(center[2]) + dz};
+                        int64_t c[3] = {int64_t(center[0]) + dx, int64_t(center[1]) + dy, int64_t(center[2]) + dz};
                         bool inside = true;
                         for (int axis = 0; axis < 3; ++axis) {
                             if (periodic) {
@@ -59,8 +57,8 @@ namespace {
                         }
                         if (!inside)
                             continue;
-                        const Key key = key_from_grid_coordinate(
-                            {uint32_t(c[0]), uint32_t(c[1]), uint32_t(c[2])}, grid.decomposition().bits());
+                        const Key key = key_from_grid_coordinate({uint32_t(c[0]), uint32_t(c[1]), uint32_t(c[2])},
+                                                                 grid.decomposition().bits());
                         if (grid.owner(uint32_t(c[0]), uint32_t(c[1]), uint32_t(c[2])) != grid.rank())
                             result.push_back(key);
                     }
@@ -81,19 +79,14 @@ namespace {
 } // namespace
 
 int main(int argc, char ** argv) {
+    // MPI is initialized and finalized by FML (Global.cpp, FMLSetup); the domain and the grid are collective over
+    // FML::communicator
+    (void)argc;
+    (void)argv;
+    rank = FML::ThisTask;
+    const int nranks = FML::NTasks;
 #ifdef USE_MPI
-    // (MPI is initialized and finalized by FML: Global.cpp, FMLSetup)
-    (void)argc;
-    (void)argv;
-    MPI_Comm comm = MPI_COMM_WORLD;
-    int nranks = 1;
-    MPI_Comm_rank(comm, &rank);
-    MPI_Comm_size(comm, &nranks);
-#else
-    (void)argc;
-    (void)argv;
-    const int comm = 0;
-    const int nranks = 1;
+    MPI_Comm comm = FML::communicator;
 #endif
 
     // Exhaustive small-grid checks: bijection, inverse mapping and curve adjacency.
@@ -113,8 +106,7 @@ int main(int argc, char ** argv) {
                     }
                     check(grid_coordinate_from_key(key, bits) == std::array<uint32_t, 3>{i, j, k},
                           "coordinate/key round trip");
-                    const Position center{(double(i) + 0.5) / n, (double(j) + 0.5) / n,
-                                           (double(k) + 0.5) / n};
+                    const Position center{(double(i) + 0.5) / n, (double(j) + 0.5) / n, (double(k) + 0.5) / n};
                     check(key_from_position(center, bits) == key, "position encoder agrees with grid encoder");
                 }
         for (size_t key = 0; key < nkeys; ++key) {
@@ -122,14 +114,13 @@ int main(int argc, char ** argv) {
             check(seen[key], "every key is represented");
             if (key > 0) {
                 const auto previous = grid_coordinate_from_key(Key(key - 1), bits);
-                const int distance = std::abs(int(c[0]) - int(previous[0])) +
-                                     std::abs(int(c[1]) - int(previous[1])) +
+                const int distance = std::abs(int(c[0]) - int(previous[0])) + std::abs(int(c[1]) - int(previous[1])) +
                                      std::abs(int(c[2]) - int(previous[2]));
-                check(distance == 1, "consecutive keys " + std::to_string(key - 1) + " and " +
-                                          std::to_string(key) + " are not face-adjacent: (" +
-                                          std::to_string(previous[0]) + "," + std::to_string(previous[1]) + "," +
-                                          std::to_string(previous[2]) + ") -> (" + std::to_string(c[0]) + "," +
-                                          std::to_string(c[1]) + "," + std::to_string(c[2]) + ")");
+                check(distance == 1,
+                      "consecutive keys " + std::to_string(key - 1) + " and " + std::to_string(key) +
+                          " are not face-adjacent: (" + std::to_string(previous[0]) + "," +
+                          std::to_string(previous[1]) + "," + std::to_string(previous[2]) + ") -> (" +
+                          std::to_string(c[0]) + "," + std::to_string(c[1]) + "," + std::to_string(c[2]) + ")");
             }
         }
     }
@@ -141,7 +132,7 @@ int main(int argc, char ** argv) {
     std::vector<Key> distributed_keys;
     for (Key key = Key(rank); key < key_limit; key += Key(nranks))
         distributed_keys.push_back(key);
-    const auto decomposition = PeanoHilbertDomain::build(distributed_keys, comm, bits, 3 * bits);
+    const auto decomposition = PeanoHilbertDomain::build(distributed_keys, bits, 3 * bits);
 
     std::vector<Key> starts(static_cast<size_t>(nranks));
     std::vector<Key> ends(static_cast<size_t>(nranks));
@@ -193,12 +184,11 @@ int main(int argc, char ** argv) {
         const auto c = grid.local_coordinate(0);
         queries.push_back(c);
     }
-    const auto fetched = grid.fetch_remote_cells(queries, comm);
+    const auto fetched = grid.fetch_remote_cells(queries);
     check(fetched.size() == queries.size(), "remote fetch preserves query count");
     for (size_t q = 0; q < queries.size(); ++q) {
         check(fetched[q] == field_value(queries[q]), "remote fetch returns requested cell value");
-        check(grid.at(queries[q][0], queries[q][1], queries[q][2]) == fetched[q],
-              "remote fetch populates at() cache");
+        check(grid.at(queries[q][0], queries[q][1], queries[q][2]) == fetched[q], "remote fetch populates at() cache");
     }
 
     const std::array<std::tuple<uint32_t, HaloConnectivity, bool>, 4> halo_cases = {
@@ -215,11 +205,11 @@ int main(int argc, char ** argv) {
         const auto expected = reference_halo(grid, width, connectivity, periodic);
         grid.build_halo(width, connectivity, periodic);
         check(grid.halo_keys() == expected, "halo key list matches reference stencil geometry");
-        grid.exchange_halo(comm);
+        grid.exchange_halo();
         check_ghost_values(grid, 0.0, "initial halo exchange");
         for (size_t local = 0; local < grid.local_size(); ++local)
             grid[local] += 1000.0;
-        grid.exchange_halo(comm);
+        grid.exchange_halo();
         check_ghost_values(grid, 1000.0, "refreshed halo exchange");
     }
 
@@ -228,7 +218,7 @@ int main(int argc, char ** argv) {
     std::vector<Key> concentrated_keys;
     if (rank == 0)
         concentrated_keys.assign(64, 0);
-    const auto concentrated = PeanoHilbertDomain::build(concentrated_keys, comm, bits, 3 * bits);
+    const auto concentrated = PeanoHilbertDomain::build(concentrated_keys, bits, 3 * bits);
     DistributedGrid3D<double> sparse_grid(n, concentrated, 0.0);
     sparse_grid.initialize([](const Position & center) {
         const uint32_t i = uint32_t(center[0] * n);
@@ -250,12 +240,12 @@ int main(int argc, char ** argv) {
     std::vector<DistributedGrid3D<double>::Coordinate> sparse_queries;
     if (sparse_grid.owner(0, 0, 0) != rank)
         sparse_queries.push_back({0, 0, 0});
-    const auto sparse_fetched = sparse_grid.fetch_remote_cells(sparse_queries, comm);
+    const auto sparse_fetched = sparse_grid.fetch_remote_cells(sparse_queries);
     check(sparse_fetched.size() == sparse_queries.size(), "empty-query ranks join remote fetch collective");
     for (const double value : sparse_fetched)
         check(value == field_value({0, 0, 0}), "empty-rank remote fetch returns correct value");
     sparse_grid.build_halo(1, HaloConnectivity::Full, true);
-    sparse_grid.exchange_halo(comm);
+    sparse_grid.exchange_halo();
     check_ghost_values(sparse_grid, 0.0, "halo exchange with empty ranks");
 
     int global_failures = failures;
@@ -268,8 +258,8 @@ int main(int argc, char ** argv) {
     global_checks = size_t(summed_checks);
 #endif
     if (rank == 0)
-        std::cout << "PeanoHilbertDomain tests: " << global_checks << " checks, " << global_failures
-                  << " failures on " << nranks << " rank(s)\n";
+        std::cout << "PeanoHilbertDomain tests: " << global_checks << " checks, " << global_failures << " failures on "
+                  << nranks << " rank(s)\n";
 
     return global_failures == 0 ? 0 : 1;
 }

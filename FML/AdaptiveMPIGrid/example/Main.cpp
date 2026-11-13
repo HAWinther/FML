@@ -78,7 +78,7 @@ int main() {
         compute_laplacian(i);
 
 #ifdef USE_MPI
-    MPI_Allreduce(MPI_IN_PLACE, &n_coarse_fine, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE, &n_coarse_fine, 1, MPI_LONG_LONG, MPI_SUM, FML::communicator);
 #endif
     if (grid.check_invariants() and FML::ThisTask == 0)
         std::cout << "Grid is valid. Coarse/fine faces: " << n_coarse_fine << "\n";

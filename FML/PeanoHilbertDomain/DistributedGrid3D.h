@@ -22,11 +22,13 @@ namespace FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT {
 
     /// Distributed cubic grid with local values and a cache of remotely owned
     /// cells fetched collectively from their Peano-Hilbert owner.
-    template <class T> class DistributedGrid3D {
+    template <class T>
+    class DistributedGrid3D {
       public:
         using Coordinate = std::array<uint32_t, 3>;
 
-        DistributedGrid3D(uint32_t cells_per_dimension, const PeanoHilbertDomain & decomposition,
+        DistributedGrid3D(uint32_t cells_per_dimension,
+                          const PeanoHilbertDomain & decomposition,
                           const T & initial_value = T{})
             : n_(cells_per_dimension), decomposition_(decomposition) {
             if (decomposition_.nranks() < 1)
@@ -63,8 +65,7 @@ namespace FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT {
         Position local_cell_center(size_t local_index) const {
             const auto c = local_coordinate(local_index);
             const double inv_n = 1.0 / double(n_);
-            return {(double(c[0]) + 0.5) * inv_n, (double(c[1]) + 0.5) * inv_n,
-                    (double(c[2]) + 0.5) * inv_n};
+            return {(double(c[0]) + 0.5) * inv_n, (double(c[1]) + 0.5) * inv_n, (double(c[2]) + 0.5) * inv_n};
         }
 
         /// Return the rank owning a global cell, without communicating.
@@ -106,22 +107,16 @@ namespace FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT {
 
         /// Initialize local cells from their center positions. The callback is
         /// evaluated only for cells owned by this rank.
-        template <class Function> void initialize(Function && function) {
+        template <class Function>
+        void initialize(Function && function) {
             for (size_t i = 0; i < values_.size(); ++i)
                 values_[i] = function(local_cell_center(i));
         }
 
         /// Collectively fetch arbitrary cells from their owners and cache remote
-        /// results. Every rank in comm calls this method, but query counts and
-        /// coordinates may differ between ranks. T must be trivially copyable.
-        std::vector<T> fetch_remote_cells(
-            const std::vector<Coordinate> & coordinates,
-#ifdef USE_MPI
-            MPI_Comm comm = MPI_COMM_WORLD
-#else
-            int comm = 0
-#endif
-        ) {
+        /// results. Every task calls this method (collective over FML::communicator), but query counts and
+        /// coordinates may differ between tasks. T must be trivially copyable.
+        std::vector<T> fetch_remote_cells(const std::vector<Coordinate> & coordinates) {
             std::vector<Key> keys;
             keys.reserve(coordinates.size());
             bool valid = true;
@@ -133,16 +128,16 @@ namespace FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT {
                     keys.push_back(key_from_grid_coordinate(c, decomposition_.bits()));
                 }
             }
-            collective_require(valid, "A rank requested a grid cell outside the global grid", comm);
-            auto result = fetch_keys(keys, comm);
+            collective_require(valid, "A rank requested a grid cell outside the global grid");
+            auto result = fetch_keys(keys);
             cache_remote_values(keys, result);
             return result;
         }
 
         /// Build the unique remote-cell list for the requested stencil radius.
         /// This operation is local; call exchange_halo collectively afterwards.
-        void build_halo(uint32_t width = 1, HaloConnectivity connectivity = HaloConnectivity::Full,
-                        bool periodic = true) {
+        void
+        build_halo(uint32_t width = 1, HaloConnectivity connectivity = HaloConnectivity::Full, bool periodic = true) {
             std::vector<Key> requested;
             const int64_t n = int64_t(n_);
             const int64_t w = int64_t(width);
@@ -156,8 +151,7 @@ namespace FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT {
                             if (connectivity == HaloConnectivity::Faces &&
                                 (int(di != 0) + int(dj != 0) + int(dk != 0) != 1))
                                 continue;
-                            int64_t c[3] = {int64_t(center[0]) + di, int64_t(center[1]) + dj,
-                                            int64_t(center[2]) + dk};
+                            int64_t c[3] = {int64_t(center[0]) + di, int64_t(center[1]) + dj, int64_t(center[2]) + dk};
                             bool inside = true;
                             for (int axis = 0; axis < 3; ++axis) {
                                 if (periodic) {
@@ -171,8 +165,8 @@ namespace FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT {
                             }
                             if (!inside)
                                 continue;
-                            const Key key = key_from_grid_coordinate(
-                                {uint32_t(c[0]), uint32_t(c[1]), uint32_t(c[2])}, decomposition_.bits());
+                            const Key key = key_from_grid_coordinate({uint32_t(c[0]), uint32_t(c[1]), uint32_t(c[2])},
+                                                                     decomposition_.bits());
                             if (decomposition_.owner_of_key(key) != rank())
                                 requested.push_back(key);
                         }
@@ -186,15 +180,9 @@ namespace FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT {
         }
 
         /// Refresh all cells collected by build_halo. This is collective over
-        /// comm. Call it after owners update their local grid values.
-        void exchange_halo(
-#ifdef USE_MPI
-            MPI_Comm comm = MPI_COMM_WORLD
-#else
-            int comm = 0
-#endif
-        ) {
-            const auto values = fetch_keys(halo_keys_, comm);
+        /// FML::communicator. Call it after owners update their local grid values.
+        void exchange_halo() {
+            const auto values = fetch_keys(halo_keys_);
             cache_remote_values(halo_keys_, values);
         }
 
@@ -206,51 +194,26 @@ namespace FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT {
         const PeanoHilbertDomain & decomposition() const { return decomposition_; }
 
       private:
+        // Throw on every task if the condition fails on any task
+        static void collective_require(bool valid, const char * message) {
 #ifdef USE_MPI
-        static void collective_require(bool valid, const char * message, MPI_Comm comm) {
             int local = valid ? 1 : 0;
             int global = 0;
-            MPI_Allreduce(&local, &global, 1, MPI_INT, MPI_MIN, comm);
-            if (!global)
-                throw std::runtime_error(message);
-        }
-#else
-        static void collective_require(bool valid, const char * message, int) {
+            MPI_Allreduce(&local, &global, 1, MPI_INT, MPI_MIN, FML::communicator);
+            valid = global != 0;
+#endif
             if (!valid)
                 throw std::runtime_error(message);
         }
-#endif
 
-        std::vector<T> fetch_keys(
-            const std::vector<Key> & keys,
-#ifdef USE_MPI
-            MPI_Comm comm
-#else
-            int comm
-#endif
-        ) {
+        std::vector<T> fetch_keys(const std::vector<Key> & keys) {
             static_assert(std::is_trivially_copyable_v<T>,
                           "MPI remote grid access requires a trivially copyable cell value");
-            const int comm_rank = [&]() {
 #ifdef USE_MPI
-                int r = 0;
-                MPI_Comm_rank(comm, &r);
-                return r;
-#else
-                return 0;
+            MPI_Comm comm = FML::communicator;
 #endif
-            }();
-            const int comm_size = [&]() {
-#ifdef USE_MPI
-                int s = 1;
-                MPI_Comm_size(comm, &s);
-                return s;
-#else
-                return 1;
-#endif
-            }();
-            collective_require(comm_rank == rank() && comm_size == nranks(),
-                               "Grid decomposition and halo communicator do not match", comm);
+            collective_require(FML::ThisTask == rank() && FML::NTasks == nranks(),
+                               "The grid's Peano-Hilbert domain is not made for FML's tasks");
 
             std::vector<std::vector<std::pair<Key, size_t>>> grouped(static_cast<size_t>(nranks()));
             bool keys_valid = true;
@@ -262,7 +225,7 @@ namespace FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT {
                 const int owner_rank = decomposition_.owner_of_key(keys[q]);
                 grouped[size_t(owner_rank)].emplace_back(keys[q], q);
             }
-            collective_require(keys_valid, "A rank supplied an invalid Peano-Hilbert grid key", comm);
+            collective_require(keys_valid, "A rank supplied an invalid Peano-Hilbert grid key");
 
             std::vector<size_t> send_counts_size(static_cast<size_t>(nranks()));
             for (int p = 0; p < nranks(); ++p)
@@ -270,7 +233,7 @@ namespace FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT {
             std::vector<int> send_counts, send_displacements;
             size_t send_total = 0;
             bool send_layout_valid = make_mpi_layout(send_counts_size, send_counts, send_displacements, send_total);
-            collective_require(send_layout_valid, "Grid request counts exceed MPI int limits", comm);
+            collective_require(send_layout_valid, "Grid request counts exceed MPI int limits");
 
 #ifdef USE_MPI
             std::vector<int> recv_counts(size_t(nranks()), 0), recv_displacements;
@@ -280,7 +243,7 @@ namespace FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT {
                 recv_counts_size[size_t(p)] = size_t(recv_counts[size_t(p)]);
             size_t recv_total = 0;
             bool recv_layout_valid = make_mpi_layout(recv_counts_size, recv_counts, recv_displacements, recv_total);
-            collective_require(recv_layout_valid, "Grid receive request counts exceed MPI int limits", comm);
+            collective_require(recv_layout_valid, "Grid receive request counts exceed MPI int limits");
 
             std::vector<Key> send_keys(send_total), recv_keys(recv_total);
             std::vector<size_t> original_positions(send_total);
@@ -292,8 +255,15 @@ namespace FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT {
                     ++cursor;
                 }
             }
-            MPI_Alltoallv(send_keys.data(), send_counts.data(), send_displacements.data(), MPI_UINT64_T,
-                          recv_keys.data(), recv_counts.data(), recv_displacements.data(), MPI_UINT64_T, comm);
+            MPI_Alltoallv(send_keys.data(),
+                          send_counts.data(),
+                          send_displacements.data(),
+                          MPI_UINT64_T,
+                          recv_keys.data(),
+                          recv_counts.data(),
+                          recv_displacements.data(),
+                          MPI_UINT64_T,
+                          comm);
 
             std::vector<T> response_send(recv_total);
             bool requests_owned = true;
@@ -306,7 +276,7 @@ namespace FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT {
                     response_send[q] = values_[size_t(key - decomposition_.key_begin(rank()))];
                 }
             }
-            collective_require(requests_owned, "Grid request was routed to a non-owner rank", comm);
+            collective_require(requests_owned, "Grid request was routed to a non-owner rank");
 
             std::vector<size_t> response_send_counts_size(static_cast<size_t>(nranks()));
             std::vector<size_t> response_recv_counts_size(static_cast<size_t>(nranks()));
@@ -318,16 +288,27 @@ namespace FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT {
             std::vector<int> response_recv_counts, response_recv_displacements;
             size_t response_send_total = 0, response_recv_total = 0;
             bool response_layout_valid = sizeof(T) <= size_t(INT_MAX) &&
-                make_mpi_layout(response_send_counts_size, response_send_counts, response_send_displacements,
-                                response_send_total, sizeof(T)) &&
-                make_mpi_layout(response_recv_counts_size, response_recv_counts, response_recv_displacements,
-                                response_recv_total, sizeof(T));
-            collective_require(response_layout_valid, "Grid value exchange exceeds MPI int byte limits", comm);
+                                         make_mpi_layout(response_send_counts_size,
+                                                         response_send_counts,
+                                                         response_send_displacements,
+                                                         response_send_total,
+                                                         sizeof(T)) &&
+                                         make_mpi_layout(response_recv_counts_size,
+                                                         response_recv_counts,
+                                                         response_recv_displacements,
+                                                         response_recv_total,
+                                                         sizeof(T));
+            collective_require(response_layout_valid, "Grid value exchange exceeds MPI int byte limits");
             std::vector<T> response_recv(send_total);
-            MPI_Alltoallv(reinterpret_cast<const char *>(response_send.data()), response_send_counts.data(),
-                          response_send_displacements.data(), MPI_BYTE,
-                          reinterpret_cast<char *>(response_recv.data()), response_recv_counts.data(),
-                          response_recv_displacements.data(), MPI_BYTE, comm);
+            MPI_Alltoallv(reinterpret_cast<const char *>(response_send.data()),
+                          response_send_counts.data(),
+                          response_send_displacements.data(),
+                          MPI_BYTE,
+                          reinterpret_cast<char *>(response_recv.data()),
+                          response_recv_counts.data(),
+                          response_recv_displacements.data(),
+                          MPI_BYTE,
+                          comm);
 
             std::vector<T> result(keys.size());
             for (size_t q = 0; q < send_total; ++q)
@@ -344,8 +325,11 @@ namespace FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT {
 #endif
         }
 
-        static bool make_mpi_layout(const std::vector<size_t> & counts, std::vector<int> & mpi_counts,
-                                    std::vector<int> & displacements, size_t & total, size_t scale = 1) {
+        static bool make_mpi_layout(const std::vector<size_t> & counts,
+                                    std::vector<int> & mpi_counts,
+                                    std::vector<int> & displacements,
+                                    size_t & total,
+                                    size_t scale = 1) {
             mpi_counts.assign(counts.size(), 0);
             displacements.assign(counts.size(), 0);
             size_t offset = 0;

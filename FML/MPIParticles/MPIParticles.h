@@ -126,6 +126,8 @@ namespace FML {
             bool domain_given{false};
             // The domain to use when creating particles: the given one, else the global one (collective)
             void set_domain_for_create();
+            // The domain is made for NTasks tasks and (Pencil, PeanoHilbert) the particles have its dimension
+            static void check_domain(const FML::Domain & d);
             // Bring the coordinates the domain uses into [0,1) (x = 1.0 just below; a tiny negative x to 0)
             void wrap_boundary_positions(T & particle) const;
 
@@ -242,6 +244,11 @@ namespace FML {
             /// The domain of the particles (once created or loaded; else the one given to the constructor, or the
             /// global one)
             const FML::Domain & get_domain() const { return domain ? *domain : FML::domain; }
+
+            /// Change the domain of the particles and move them to their new owners (collective; made for NTasks
+            /// tasks). For particles that follow a grid whose decomposition changes, e.g. after a load balance:
+            /// [ grid.load_balance(); particles.set_domain(grid.get_domain()); ]
+            void set_domain(const FML::Domain & new_domain);
 
             // Has the mpiparticles been created?
             explicit operator bool() const;
@@ -641,19 +648,36 @@ namespace FML {
         }
 
         template <class T>
-        MPIParticles<T>::MPIParticles(const FML::Domain & particle_domain_in)
-            : domain(particle_domain_in), domain_given(true) {
-            const std::string msg = "[MPIParticles] The particle domain is made for " +
-                                    std::to_string(domain->ntasks()) + " tasks, but we have " +
-                                    std::to_string(FML::NTasks);
-            assert_mpi(domain->ntasks() == FML::NTasks, msg.c_str());
-            if (not domain->is_slab()) {
+        void MPIParticles<T>::check_domain(const FML::Domain & d) {
+            const std::string msg = "[MPIParticles] The particle domain is made for " + std::to_string(d.ntasks()) +
+                                    " tasks, but we have " + std::to_string(FML::NTasks);
+            assert_mpi(d.ntasks() == FML::NTasks, msg.c_str());
+            if (not d.is_slab()) {
                 T tmp{};
                 try {
-                    domain->check_ndim(mpiparticles_ndim(tmp));
+                    d.check_ndim(mpiparticles_ndim(tmp));
                 } catch (const std::exception & e) {
                     assert_mpi(false, e.what());
                 }
+            }
+        }
+
+        template <class T>
+        void MPIParticles<T>::set_domain(const FML::Domain & new_domain) {
+            check_domain(new_domain);
+            // (has_value is the same on all tasks: set by the constructor, create and load)
+            const bool communicate = domain.has_value();
+            domain = new_domain;
+            domain_given = true;
+            if (communicate)
+                communicate_particles();
+        }
+
+        template <class T>
+        MPIParticles<T>::MPIParticles(const FML::Domain & particle_domain_in)
+            : domain(particle_domain_in), domain_given(true) {
+            check_domain(*domain);
+            if (not domain->is_slab()) {
                 if (FML::ThisTask == 0)
                     std::cout << "WARNING: MPIParticles with the " << domain->type_name()
                               << " particle domain: the rest of FML (grids, density assignment, ...) assumes the "

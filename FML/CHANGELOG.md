@@ -5,6 +5,22 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### The Peano-Hilbert domain, DistributedGrid3D and AdaptiveMPIGrid use FML's communicator
+- `PeanoHilbertDomain::build(keys, bits, histogram_bits)` and `DistributedGrid3D::exchange_halo()` /
+  `fetch_remote_cells(cells)` no longer take a communicator (it defaulted to `MPI_COMM_WORLD`; the module was
+  standalone): they are collective over `FML::communicator`, so the owner ranks are FML's tasks, as `MPIParticles` and
+  the rest of `Domain` assume. The `int comm` stand-in without MPI and `communicator_rank` / `communicator_size`
+  (`HilbertCurve.h`) are removed. The example, the module test and `test_domain` updated; tested on 1 - 4 tasks and
+  without MPI.
+- `AdaptiveMPIGrid` (and its example): `FML::communicator` instead of `MPI_COMM_WORLD` in all its MPI calls (it
+  already took the rank and the number of tasks from FML); its test and example run on 1 - 4 tasks.
+- `AdaptiveMPIGrid<3>::get_domain()`: the partition of the curve as an `FML::Domain` (a `PeanoHilbertDomain` with the
+  same keys and 21 bits), and `MPIParticles::set_domain(domain)`: change the domain and move the particles to their
+  new owners (collective). So particles follow the grid through load balancing:
+  `grid.load_balance(); particles.set_domain(grid.get_domain());`. Tested in the AdaptiveMPIGrid test on 1 - 6 tasks
+  (refinement and load balancing around a particle cluster): the domain owns every local leaf and agrees with
+  `owner_of_key`, and after `set_domain` every particle is in a local leaf and none is lost.
+
 ### PencilGrid<N> with the interface of FFTWGrid; PencilDomain is only the pencils
 - `PencilGrid<N>` (N = 2, 3) rewritten to look like `FFTWGrid<N>` (the aim: one grid class that takes a `Domain`):
   `PencilGrid<N>(Nmesh, n_extra_left, n_extra_right[, PencilDomain])`, range loops over indices

@@ -157,38 +157,6 @@ namespace FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT {
                 throw std::out_of_range("Peano-Hilbert key is outside its configured resolution");
             return FML::GRID::HilbertCurve<3>::coord_from_key(key, int(bits));
         }
-
-        inline int communicator_rank(
-#ifdef USE_MPI
-            MPI_Comm comm
-#else
-            int
-#endif
-        ) {
-#ifdef USE_MPI
-            int rank = 0;
-            MPI_Comm_rank(comm, &rank);
-            return rank;
-#else
-            return 0;
-#endif
-        }
-
-        inline int communicator_size(
-#ifdef USE_MPI
-            MPI_Comm comm
-#else
-            int
-#endif
-        ) {
-#ifdef USE_MPI
-            int size = 1;
-            MPI_Comm_size(comm, &size);
-            return size;
-#else
-            return 1;
-#endif
-        }
     } // namespace detail
 
     /// Map a point in the unit periodic cube [0,1)^3 to a Hilbert key.

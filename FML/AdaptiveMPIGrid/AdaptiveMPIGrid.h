@@ -258,6 +258,14 @@ namespace FML {
 
             const std::vector<key_type> & get_domain_start() const { return _domain_start; }
 
+            /// The decomposition as an FML::Domain (3D only: a PeanoHilbertDomain with LMAX = 21 bits, the same keys),
+            /// e.g. for particles that follow the grid: [ grid.load_balance(); particles.set_domain(grid.get_domain()); ]
+            /// A position x in [0,1)^3 is owned by the task that owns the leaf containing x
+            FML::Domain get_domain() const {
+                static_assert(NDIM == 3, "AdaptiveMPIGrid::get_domain: only for NDIM = 3 (PeanoHilbertDomain is 3D)");
+                return FML::Domain::peano_hilbert(_domain_start, unsigned(LMAX));
+            }
+
             //======================================================================
             // Geometry
             //======================================================================
@@ -375,7 +383,7 @@ namespace FML {
             inline bool allreduce_or(bool b) {
 #ifdef USE_MPI
                 int v = b ? 1 : 0;
-                MPI_Allreduce(MPI_IN_PLACE, &v, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+                MPI_Allreduce(MPI_IN_PLACE, &v, 1, MPI_INT, MPI_MAX, FML::communicator);
                 return v != 0;
 #else
                 return b;
@@ -426,7 +434,7 @@ namespace FML {
         IndexInt AdaptiveMPIGrid<NDIM, T>::get_n_global() const {
             IndexInt n = get_n_local();
 #ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, &n, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, &n, 1, MPI_LONG_LONG, MPI_SUM, FML::communicator);
 #endif
             return n;
         }
@@ -641,7 +649,7 @@ namespace FML {
                 for (auto & [r, buf] : send)
                     if (r != FML::ThisTask)
                         nsend[r] = int(buf.size());
-                MPI_Alltoall(nsend.data(), 1, MPI_INT, nrecv.data(), 1, MPI_INT, MPI_COMM_WORLD);
+                MPI_Alltoall(nsend.data(), 1, MPI_INT, nrecv.data(), 1, MPI_INT, FML::communicator);
                 std::vector<MPI_Request> req;
                 for (int r = 0; r < FML::NTasks; r++) {
                     if (nrecv[r] == 0)
@@ -649,13 +657,13 @@ namespace FML {
                     auto & buf = recv[r];
                     buf.resize(nrecv[r]);
                     req.emplace_back();
-                    MPI_Irecv(buf.data(), nrecv[r], mtype.type, r, tag, MPI_COMM_WORLD, &req.back());
+                    MPI_Irecv(buf.data(), nrecv[r], mtype.type, r, tag, FML::communicator, &req.back());
                 }
                 for (auto & [r, buf] : send) {
                     if (r == FML::ThisTask or buf.empty())
                         continue;
                     req.emplace_back();
-                    MPI_Isend(buf.data(), int(buf.size()), mtype.type, r, tag, MPI_COMM_WORLD, &req.back());
+                    MPI_Isend(buf.data(), int(buf.size()), mtype.type, r, tag, FML::communicator, &req.back());
                 }
                 MPI_Waitall(int(req.size()), req.data(), MPI_STATUSES_IGNORE);
                 return recv;
@@ -666,7 +674,7 @@ namespace FML {
                 if (r == FML::ThisTask or buf.empty())
                     continue;
                 sreq.emplace_back();
-                MPI_Issend(buf.data(), int(buf.size()), mtype.type, r, tag, MPI_COMM_WORLD, &sreq.back());
+                MPI_Issend(buf.data(), int(buf.size()), mtype.type, r, tag, FML::communicator, &sreq.back());
             }
 
             MPI_Request barrier;
@@ -675,13 +683,13 @@ namespace FML {
             while (not done) {
                 int flag = 0;
                 MPI_Status status;
-                MPI_Iprobe(MPI_ANY_SOURCE, tag, MPI_COMM_WORLD, &flag, &status);
+                MPI_Iprobe(MPI_ANY_SOURCE, tag, FML::communicator, &flag, &status);
                 if (flag) {
                     int count = 0;
                     MPI_Get_count(&status, mtype.type, &count);
                     auto & buf = recv[status.MPI_SOURCE];
                     buf.resize(count);
-                    MPI_Recv(buf.data(), count, mtype.type, status.MPI_SOURCE, tag, MPI_COMM_WORLD,
+                    MPI_Recv(buf.data(), count, mtype.type, status.MPI_SOURCE, tag, FML::communicator,
                              MPI_STATUS_IGNORE);
                 }
                 if (barrier_active) {
@@ -693,7 +701,7 @@ namespace FML {
                     int sdone = 0;
                     MPI_Testall(int(sreq.size()), sreq.data(), &sdone, MPI_STATUSES_IGNORE);
                     if (sdone) {
-                        MPI_Ibarrier(MPI_COMM_WORLD, &barrier);
+                        MPI_Ibarrier(FML::communicator, &barrier);
                         barrier_active = true;
                     }
                 }
@@ -719,14 +727,15 @@ namespace FML {
             int nreq = 0;
             for (size_t j = 0; j < _recv_ranks.size(); j++)
                 MPI_Irecv(ghost.data() + _recv_offset[j], int(_recv_count[j]), h._type, _recv_ranks[j], tag,
-                          MPI_COMM_WORLD, &h._req[nreq++]);
+                          FML::communicator, &h._req[nreq++]);
             h._sendbuf.resize(_send_ranks.size());
             for (size_t j = 0; j < _send_ranks.size(); j++) {
                 auto & buf = h._sendbuf[j];
                 buf.reserve(_send_indices[j].size());
                 for (auto i : _send_indices[j])
                     buf.push_back(local[i]);
-                MPI_Isend(buf.data(), int(buf.size()), h._type, _send_ranks[j], tag, MPI_COMM_WORLD, &h._req[nreq++]);
+                MPI_Isend(
+                    buf.data(), int(buf.size()), h._type, _send_ranks[j], tag, FML::communicator, &h._req[nreq++]);
             }
 #else
             (void)local;
@@ -801,7 +810,7 @@ namespace FML {
             key_type first = _cells.empty() ? KEY_END : _cells.front().key;
             _domain_start.assign(FML::NTasks + 1, KEY_END);
 #ifdef USE_MPI
-            MPI_Allgather(&first, 1, MPI_UINT64_T, _domain_start.data(), 1, MPI_UINT64_T, MPI_COMM_WORLD);
+            MPI_Allgather(&first, 1, MPI_UINT64_T, _domain_start.data(), 1, MPI_UINT64_T, FML::communicator);
 #else
             _domain_start[0] = first;
 #endif
@@ -947,10 +956,10 @@ namespace FML {
                 wlocal += x;
             double wbefore = 0.0, wtot = wlocal;
 #ifdef USE_MPI
-            MPI_Exscan(&wlocal, &wbefore, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Exscan(&wlocal, &wbefore, 1, MPI_DOUBLE, MPI_SUM, FML::communicator);
             if (FML::ThisTask == 0)
                 wbefore = 0.0;
-            MPI_Allreduce(MPI_IN_PLACE, &wtot, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, &wtot, 1, MPI_DOUBLE, MPI_SUM, FML::communicator);
 #endif
 
             // Each cell goes to the task whose equal share of the total weight contains its midpoint.
@@ -1106,7 +1115,7 @@ namespace FML {
                 vol += key_range(c.level);
             uint64_t vol_lo = uint64_t(vol);
 #ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, &vol_lo, 1, MPI_UINT64_T, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, &vol_lo, 1, MPI_UINT64_T, MPI_SUM, FML::communicator);
 #endif
             if (vol_lo != KEY_END)
                 fail("leaves do not cover the domain");
@@ -1120,7 +1129,7 @@ namespace FML {
             for (auto & c : _cells)
                 h += AMRDETAIL::splitmix64(c.key ^ (uint64_t(c.level) << 1) ^ AMRDETAIL::splitmix64(c.level));
 #ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, &h, 1, MPI_UINT64_T, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, &h, 1, MPI_UINT64_T, MPI_SUM, FML::communicator);
 #endif
             return h;
         }
@@ -1144,11 +1153,11 @@ namespace FML {
             IndexInt nmin = get_n_local(), nmax = get_n_local(), nghost = get_n_ghost();
             IndexInt nboundary = IndexInt(_boundary_cells.size());
 #ifdef USE_MPI
-            MPI_Allreduce(MPI_IN_PLACE, count.data(), int(count.size()), MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, &nmin, 1, MPI_LONG_LONG, MPI_MIN, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, &nmax, 1, MPI_LONG_LONG, MPI_MAX, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, &nghost, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
-            MPI_Allreduce(MPI_IN_PLACE, &nboundary, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, count.data(), int(count.size()), MPI_LONG_LONG, MPI_SUM, FML::communicator);
+            MPI_Allreduce(MPI_IN_PLACE, &nmin, 1, MPI_LONG_LONG, MPI_MIN, FML::communicator);
+            MPI_Allreduce(MPI_IN_PLACE, &nmax, 1, MPI_LONG_LONG, MPI_MAX, FML::communicator);
+            MPI_Allreduce(MPI_IN_PLACE, &nghost, 1, MPI_LONG_LONG, MPI_SUM, FML::communicator);
+            MPI_Allreduce(MPI_IN_PLACE, &nboundary, 1, MPI_LONG_LONG, MPI_SUM, FML::communicator);
 #endif
             if (FML::ThisTask == 0) {
                 IndexInt ntot = 0;

@@ -237,17 +237,12 @@ namespace FML {
 
         PeanoHilbertDomain() = default;
 
-        /// Build from each rank's local particle keys. All ranks in comm call this collectively with identical bits
-        /// and histogram_bits. histogram_bits controls the memory/quantile resolution (default 16, at most 20). It
-        /// is a prefix histogram over the full Hilbert key. Points with identical keys cannot be split across ranks.
-        static PeanoHilbertDomain build(const std::vector<Key> & local_keys,
-#ifdef USE_MPI
-                                        MPI_Comm comm = MPI_COMM_WORLD,
-#else
-                                        int comm = 0,
-#endif
-                                        unsigned bits = 21,
-                                        unsigned histogram_bits = 16);
+        /// Build from each task's local particle keys: collective over FML::communicator, with identical bits and
+        /// histogram_bits on all tasks. histogram_bits controls the memory/quantile resolution (default 16, at most
+        /// 20). It is a prefix histogram over the full Hilbert key. Points with identical keys cannot be split across
+        /// tasks.
+        static PeanoHilbertDomain
+        build(const std::vector<Key> & local_keys, unsigned bits = 21, unsigned histogram_bits = 16);
 
         /// From the key boundaries (ntasks + 1 increasing keys from 0 to 2^(3 bits)); rank: this task
         static PeanoHilbertDomain
@@ -610,19 +605,14 @@ namespace FML {
         return *this;
     }
 
-    inline PeanoHilbertDomain PeanoHilbertDomain::build(const std::vector<Key> & local_keys,
-#ifdef USE_MPI
-                                                        MPI_Comm comm,
-#else
-                                                        int comm,
-#endif
-                                                        unsigned bits,
-                                                        unsigned histogram_bits) {
+    inline PeanoHilbertDomain
+    PeanoHilbertDomain::build(const std::vector<Key> & local_keys, unsigned bits, unsigned histogram_bits) {
         namespace PHD = DOMAIN_DECOMPOSITION::PEANO_HILBERT::detail;
-        const int nranks = PHD::communicator_size(comm);
-        const int rank = PHD::communicator_rank(comm);
-        if (nranks < 1)
-            throw std::runtime_error("Peano-Hilbert decomposition requires at least one MPI rank");
+        const int nranks = FML::NTasks;
+        const int rank = FML::ThisTask;
+#ifdef USE_MPI
+        MPI_Comm comm = FML::communicator;
+#endif
 
 #ifdef USE_MPI
         int local_config[2] = {int(bits), int(histogram_bits)};

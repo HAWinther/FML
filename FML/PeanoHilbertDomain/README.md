@@ -13,7 +13,8 @@ The implementation has these layers:
 1. `key_from_position` and `key_from_grid_coordinate` map 3D coordinates to a
    64-bit Hilbert key (`HilbertCurve<3>`) using at most 21 bits per coordinate.
 2. `PeanoHilbertDomain::build` reduces a distributed prefix histogram and chooses
-   approximately equal-particle contiguous key ranges. `owner_of_key` and
+   approximately equal-particle contiguous key ranges (collective over
+   `FML::communicator`, like everything here: rank i is FML's task i). `owner_of_key` and
    `owner_of_position` map a key or position to its rank.
 3. `DistributedGrid3D<T>` stores the grid values for cells in the local key
    interval. Its compact local storage follows Hilbert-key order, so a rank's
@@ -27,11 +28,7 @@ The implementation has these layers:
 using namespace FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT;
 std::vector<Key> local_keys;
 // Fill local_keys with key_from_position({x, y, z}, 21) for local particles.
-#ifdef USE_MPI
-auto domains = PeanoHilbertDomain::build(local_keys, MPI_COMM_WORLD, 21, 16);
-#else
-auto domains = PeanoHilbertDomain::build(local_keys, 0, 21, 16);
-#endif
+auto domains = PeanoHilbertDomain::build(local_keys, 21, 16); // collective over FML::communicator
 int owner = domains.owner_of_key(local_keys.front());
 Key begin = domains.key_begin(domains.rank());
 Key end = domains.key_end(domains.rank()); // half-open [begin, end)

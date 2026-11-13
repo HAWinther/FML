@@ -5,23 +5,10 @@
 #include <cmath>
 #include <string>
 
+// MPI is initialized and finalized by FML (Global.cpp, FMLSetup); everything is collective over FML::communicator
 int main(int argc, char ** argv) {
-#ifdef USE_MPI
-    // (MPI is initialized and finalized by FML: Global.cpp, FMLSetup)
-    (void)argc;
-    (void)argv;
-    MPI_Comm comm = MPI_COMM_WORLD;
-#else
-    (void)argc;
-    (void)argv;
-    const int comm = 0;
-#endif
-
     using namespace FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT;
-    int rank = 0;
-#ifdef USE_MPI
-    MPI_Comm_rank(comm, &rank);
-#endif
+    const int rank = FML::ThisTask;
 
     const bool concentrated = argc > 1 && std::string(argv[1]) == "concentrated";
     // A deterministic sample distribution; replace with keys from local particles.
@@ -34,13 +21,13 @@ int main(int argc, char ** argv) {
             local_keys.push_back(key_from_position({x, y, z}, 5));
         }
 
-    const auto decomposition = PeanoHilbertDomain::build(local_keys, comm, 5, 12);
+    const auto decomposition = PeanoHilbertDomain::build(local_keys, 5, 12);
     DistributedGrid3D<double> grid(32, decomposition, 0.0);
     grid.initialize([](const Position & center) { return center[0] + center[1] + center[2]; });
     grid.build_halo(1, HaloConnectivity::Full, true);
-    grid.exchange_halo(comm);
+    grid.exchange_halo();
     const std::vector<DistributedGrid3D<double>::Coordinate> remote_query{{0, 0, 0}};
-    const auto queried_value = grid.fetch_remote_cells(remote_query, comm);
+    const auto queried_value = grid.fetch_remote_cells(remote_query);
 
     int local_errors = 0;
     auto expected_value = [](const DistributedGrid3D<double>::Coordinate & c) {
@@ -64,15 +51,13 @@ int main(int argc, char ** argv) {
         }
     }
     int global_errors = local_errors;
-#ifdef USE_MPI
-    MPI_Allreduce(&local_errors, &global_errors, 1, MPI_INT, MPI_SUM, comm);
-#endif
+    FML::SumOverTasks(&global_errors);
     if (rank == 0)
         std::cout << "runtime validation errors: " << global_errors << "\n";
     std::cout << "rank " << rank << " owns Hilbert keys [" << decomposition.key_begin(rank) << ", "
               << decomposition.key_end(rank) << "), " << grid.local_size() << " of " << grid.global_size()
-              << " grid cells, and " << decomposition.total_particles() << " particles; cell (0,0,0)="
-              << queried_value.front() << ", ghosts=" << grid.halo_keys().size() << "\n";
+              << " grid cells, and " << decomposition.total_particles()
+              << " particles; cell (0,0,0)=" << queried_value.front() << ", ghosts=" << grid.halo_keys().size() << "\n";
 
     return global_errors == 0 ? 0 : 1;
 }

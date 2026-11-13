@@ -291,7 +291,7 @@ int main() {
         for (auto & q : part)
             keys.push_back(PH::key_from_position({below1(q.pos[0]), below1(q.pos[1]), below1(q.pos[2])}, 10));
 #ifdef USE_MPI
-        const auto dec = PH::PeanoHilbertDomain::build(keys, FML::communicator, 10, 8);
+        const auto dec = PH::PeanoHilbertDomain::build(keys, 10, 8);
         check_communication<Particle3>(FML::Domain::peano_hilbert(dec), "PeanoHilbert (load-balanced)");
 #endif
     }

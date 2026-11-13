@@ -1,5 +1,6 @@
 #include <FML/AdaptiveMPIGrid/AdaptiveMPIGrid.h>
 #include <FML/Global/Global.h>
+#include <FML/MPIParticles/MPIParticles.h>
 
 #include <cstdlib>
 #include <map>
@@ -272,6 +273,94 @@ void test_grid(int levelmin, int levelmax, std::array<bool, NDIM> periodic, int 
     grid.info();
 }
 
+//==========================================================================================
+// The grid's decomposition as an FML::Domain, and particles that follow it through load balancing
+//==========================================================================================
+struct FollowParticle {
+    double pos[3];
+    long long id;
+    double * get_pos() { return pos; }
+    constexpr int get_ndim() const { return 3; }
+};
+
+void test_domain_and_particles() {
+    if (FML::ThisTask == 0)
+        std::cout << "Domain test: get_domain and MPIParticles::set_domain through load balancing\n";
+    using Grid = AdaptiveMPIGrid<3, TestData>;
+    Grid grid(2, 5, true);
+
+    // Particles: each task makes its own (different) random ones, then they follow the grid
+    const long long npart_per_task = 2000;
+    std::mt19937 gen(1234 + FML::ThisTask);
+    std::uniform_real_distribution<double> U(0.0, 1.0);
+    std::vector<FollowParticle> part;
+    for (long long i = 0; i < npart_per_task; i++) {
+        // Clustered around (0.3, 0.6, 0.2) half of the time, so the load balance moves the boundaries a lot
+        FollowParticle p{{U(gen), U(gen), U(gen)}, FML::ThisTask * npart_per_task + i};
+        if (i % 2 == 0)
+            for (int d = 0; d < 3; d++)
+                p.pos[d] = std::fmod(std::array<double, 3>{0.3, 0.6, 0.2}[d] + 0.05 * U(gen) + 1.0, 1.0);
+        part.push_back(p);
+    }
+    const long long ntot = npart_per_task * FML::NTasks;
+    const long long idsum0 = ntot * (ntot - 1) / 2;
+    FML::PARTICLE::MPIParticles<FollowParticle> particles;
+    particles.create(part, 4 * npart_per_task, FML::PARTICLE::Input::Distributed);
+
+    for (int step = 0; step < 3; step++) {
+        // Refine where the particles are (the cells holding particles cost more in the load balance)
+        for (IndexInt i = 0; i < grid.get_n_local(); i++) {
+            const auto x = grid.get_cell_center(grid.get_cell(i));
+            double r2 = 0.0;
+            for (int d = 0; d < 3; d++) {
+                double dx = x[d] - std::array<double, 3>{0.325, 0.625, 0.225}[d];
+                r2 += dx * dx;
+            }
+            grid.set_flag(i, r2 < 0.04 ? 1 : 0);
+        }
+        grid.adapt();
+        grid.load_balance([&](IndexInt i) { return 1.0 + std::pow(2.0, grid.get_cell(i).level); });
+
+        // The domain owns the cells of the tasks: the corner and the center of every local leaf
+        const FML::Domain domain = grid.get_domain();
+        bool ok = domain.holds<FML::PeanoHilbertDomain>() and domain.ntasks() == FML::NTasks;
+        for (IndexInt i = 0; i < grid.get_n_local(); i++) {
+            const auto & c = grid.get_cell(i);
+            ok = ok and domain.owner(grid.get_cell_center(c).data()) == FML::ThisTask and
+                 domain.owner(grid.get_cell_corner(c).data()) == FML::ThisTask;
+        }
+        // ... and the same owner as the grid for any point
+        std::mt19937 gen_points(99 + step);
+        for (int i = 0; i < 1000; i++) {
+            std::array<double, 3> x{U(gen_points), U(gen_points), U(gen_points)};
+            Grid::Coord coord;
+            for (int d = 0; d < 3; d++)
+                coord[d] = Grid::coord_type(std::ldexp(x[d], Grid::LMAX));
+            ok = ok and domain.owner(x.data()) == grid.owner_of_key(Grid::HC::key_from_coord(coord));
+        }
+        CHECK(not FML::GRID::AMRDETAIL::allreduce_or(not ok),
+              "get_domain: owns the local leaves and agrees with owner_of_key, step " << step);
+
+        // The particles follow: every particle is in a local leaf, none lost
+        particles.set_domain(domain);
+        ok = particles.get_domain() == domain;
+        long long n = 0, idsum = 0;
+        for (auto & p : particles) {
+            std::array<double, 3> x{p.pos[0], p.pos[1], p.pos[2]};
+            ok = ok and grid.find_leaf(x).is_local();
+            n++;
+            idsum += p.id;
+        }
+        FML::SumOverTasks(&n);
+        FML::SumOverTasks(&idsum);
+        CHECK(not FML::GRID::AMRDETAIL::allreduce_or(not ok) and n == ntot and idsum == idsum0,
+              "MPIParticles::set_domain: every particle in a local leaf, none lost, step " << step);
+        const auto ncells = grid.get_n_global();
+        if (FML::ThisTask == 0)
+            std::cout << "  step " << step << " ncells " << ncells << "\n";
+    }
+}
+
 int main(int argc, char ** argv) {
     // "./amrtest nbx" forces the NBX sparse exchange, "./amrtest dense" the Alltoall variant
     const std::string mode = argc > 1 ? argv[1] : "default";
@@ -295,6 +384,7 @@ int main(int argc, char ** argv) {
     test_grid<2>(3, 7, {true, false}, 6, true);
     test_grid<3>(2, 5, {true, true, true}, 4, false);
     test_grid<3>(2, 5, {false, true, false}, 4, true);
+    test_domain_and_particles();
 
     if (FML::ThisTask == 0)
         std::cout << (nfail == 0 ? "ALL TESTS PASSED\n" : "SOME TESTS FAILED\n");
