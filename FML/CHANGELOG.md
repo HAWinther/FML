@@ -5,6 +5,23 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### PencilGrid<N> with the interface of FFTWGrid; PencilDomain is only the pencils
+- `PencilGrid<N>` (N = 2, 3) rewritten to look like `FFTWGrid<N>` (the aim: one grid class that takes a `Domain`):
+  `PencilGrid<N>(Nmesh, n_extra_left, n_extra_right[, PencilDomain])`, range loops over indices
+  (`get_real_range`, `get_real_range_of_rows`, `get_fourier_range`), `get_coord_from_index` / `get_index_real`,
+  `get_real` / `set_real` / `add_real` (and `_from_index`) and the Fourier versions, positions in [0,1), wave-vectors
+  2 pi n, the forward transform normalized by 1/Nmesh^N (it was the backward one), coordinates in axis order in both
+  spaces, the free `fftw_r2c` / `fftw_c2r`, `communicate_boundaries` and `add_contribution_from_extra_cells` (the
+  extra cells in x and, in 3D, y), `nan_in_grids`, `info`. The cell structs, the duplicate getters, the physical
+  units and the 1D (all-gather) path are gone.
+- The grid layout (mesh, box size, communicators, FFT workspace, cell and mode ranges) moved from `PencilDomain` into
+  `PencilGrid`: `PencilDomain` is the process grid and the edges, like `SlabDomain` (the edges of a grid's domain
+  must lie on its cells; the default pencils put them on cells as evenly as possible, so any Nmesh works).
+  `PencilIndexRange`, `PencilWorkspace` and the `FML::GRID::PencilDomain` alias are removed.
+- Tested on 1 - 6 tasks (also with OpenMP and bounds checks): the Fourier transform equals `FFTWGrid`'s, the round
+  trip, the layout and indices, the extra cells with the corners and their contribution back, copies, the particle
+  domain; 2D and 3D, every process grid, uneven pencils, odd meshes.
+
 ### MPIParticles: creation by the domain, cleanup, versioned dump files
 - `create(part, n, nallocate, Input, keep = {})` (pointer or vector): `Input::Replicated` (every task has the same
   particles: each keeps those it owns), `Input::Distributed` (different particles anywhere: sent to their owners in

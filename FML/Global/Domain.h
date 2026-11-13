@@ -11,9 +11,8 @@
 //                       FML::xmax_domain)
 //   PencilDomain        a P0 x P1 process grid in (x, y): the task with process coordinates (ix, iy) is rank
 //                       ix * P1 + iy and owns [x_edges[ix], x_edges[ix+1]) x [y_edges[iy], y_edges[iy+1]) x [0,1).
-//                       Needs NDIM >= 2. Made from a mesh (USE_MPI and USE_FFTW) it is also the layout of a pencil
-//                       grid (PencilDomain/PencilGrid.h): cells and Fourier modes of each rank, the Cartesian, row and
-//                       column communicators and the FFT workspace, shared by its copies
+//                       Needs NDIM >= 2. The decomposition of a PencilGrid (PencilDomain/PencilGrid.h), whose edges
+//                       lie on its cells
 //   PeanoHilbertDomain  contiguous ranges of the Peano-Hilbert key (HilbertCurve<3> of PeanoHilbertDomain/
 //                       HilbertCurve.h, `bits` bits per coordinate): task i owns the keys [boundaries[i],
 //                       boundaries[i+1]). Built load-balanced from particle keys (build), or from boundaries. Needs
@@ -149,34 +148,6 @@ namespace FML {
     // PencilDomain
     //==================================================================================================================
 
-    /// A range of indices [start, start + count)
-    struct PencilIndexRange {
-        int start{0};
-        int count{0};
-        int end() const { return start + count; }
-        bool contains(int i) const { return i >= start && i < end(); }
-    };
-
-#if defined(USE_MPI) && defined(USE_FFTW)
-    /// FFTW-aligned scratch memory of the transposes, shared by the grids of a PencilDomain
-    class PencilWorkspace {
-      public:
-        PencilWorkspace() = default;
-        ~PencilWorkspace();
-        PencilWorkspace(const PencilWorkspace &) = delete;
-        PencilWorkspace & operator=(const PencilWorkspace &) = delete;
-        void reserve(size_t ncomplex);
-        GRID::ComplexType * data() { return data_; }
-        const GRID::ComplexType * data() const { return data_; }
-        size_t size() const { return size_; }
-        size_t bytes() const { return size_ * sizeof(GRID::ComplexType); }
-
-      private:
-        GRID::ComplexType * data_{nullptr};
-        size_t size_{0};
-    };
-#endif
-
     class PencilDomain {
       public:
         /// One task
@@ -234,101 +205,15 @@ namespace FML {
         bool contains(int task, const Pos * pos) const {
             return owner(pos) == task;
         }
-        /// The same pencils (the grid layout is not compared)
+        /// The same pencils
         bool operator==(const PencilDomain & o) const {
             return process_grid_ == o.process_grid_ and xedges == o.xedges and yedges == o.yedges;
         }
 
-        /// The domain of particles that matches these pencils: a SlabDomain in x if P1 = 1 (every 1D and 2D grid;
+        /// The domain of particles that matches these pencils: a SlabDomain in x if P1 = 1 (e.g. a 2D PencilGrid;
         /// supported by all of FML), else this PencilDomain. For MPIParticles, so that particles live on the rank of
         /// their cells
         Domain particle_domain() const;
-
-        /// The split of n indices over parts (the first n % parts get one more) and the part of an index
-        static PencilIndexRange split(int n, int parts, int part);
-        static int split_owner(int n, int parts, int index);
-
-#if defined(USE_MPI) && defined(USE_FFTW)
-        //========================================================
-        // The layout of a pencil grid (made from a mesh)
-        //========================================================
-
-        /// `ndim` active axes; inactive mesh axes are set to one. For NDIM=1/2, ranks are arranged as `nranks x 1`;
-        /// the 1D Fourier result is replicated. The pencils (owner of positions) are those of the cells of the
-        /// ranks. A copy shares the communicators and the workspace (freed with the last copy)
-        PencilDomain(std::array<int, 3> mesh,
-                     double boxsize,
-                     std::array<int, 2> process_grid = {0, 0},
-                     MPI_Comm communicator = FML::communicator,
-                     int ndim = 3);
-        PencilDomain(std::array<int, 3> mesh,
-                     double boxsize,
-                     int ndim,
-                     std::array<int, 2> process_grid = {0, 0},
-                     MPI_Comm communicator = FML::communicator);
-
-        /// Made from a mesh (the grid methods below need it)
-        bool has_grid() const { return comms_ != nullptr; }
-        const std::array<int, 3> & mesh() const { return mesh_; }
-        int mesh(int axis) const { return mesh_.at(size_t(axis)); }
-        int fourier_last_size() const { return mesh_[2] / 2 + 1; }
-        double boxsize() const { return boxsize_; }
-        int ndim() const { return ndim_; }
-        double cell_size(int axis) const { return boxsize_ / mesh(axis); }
-        std::array<int, 2> process_coords() const { return process_coords_; }
-        int rank() const { return rank_; }
-        int nranks() const { return ntasks(); }
-
-        PencilIndexRange x_range() const { return x_range_of(process_coords_[0]); }
-        PencilIndexRange y_range() const { return y_range_of(process_coords_[1]); }
-        PencilIndexRange ky_range() const { return ky_range_of(process_coords_[0]); }
-        PencilIndexRange kz_range() const { return kz_range_of(process_coords_[1]); }
-        std::array<double, 2> x_bounds() const;
-        std::array<double, 2> y_bounds() const;
-
-        PencilIndexRange x_range_of(int process_x) const;
-        PencilIndexRange y_range_of(int process_y) const;
-        PencilIndexRange ky_range_of(int process_x) const;
-        PencilIndexRange kz_range_of(int process_y) const;
-
-        int owner_of_cell(int ix, int iy, int iz = 0) const;
-        /// The rank that owns a position (periodic; in units of the box): owner() of the position / boxsize
-        int owner_of_position(double x, double y, double z = 0.0) const;
-        bool is_local_cell(int ix, int iy, int iz = 0) const { return owner_of_cell(ix, iy, iz) == rank_; }
-        bool is_local_position(double x, double y, double z = 0.0) const { return owner_of_position(x, y, z) == rank_; }
-        int cell_of_position(double position, int axis) const;
-        int owner_of_mode(int kx, int ky, int kz) const;
-
-        int neighbour(int axis, int direction) const;
-        MPI_Comm communicator() const { return comms().cartesian; }
-        MPI_Comm row_communicator() const { return comms().row; }
-        MPI_Comm column_communicator() const { return comms().column; }
-        MPI_Comm parent_communicator() const { return comms().parent; }
-
-        PencilWorkspace & workspace() const { return *workspace_; }
-        void print_info() const;
-
-      private:
-        struct Communicators {
-            MPI_Comm parent{MPI_COMM_NULL}, cartesian{MPI_COMM_NULL}, row{MPI_COMM_NULL}, column{MPI_COMM_NULL};
-            Communicators() = default;
-            Communicators(const Communicators &) = delete;
-            Communicators & operator=(const Communicators &) = delete;
-            ~Communicators();
-        };
-        const Communicators & comms() const {
-            if (not comms_)
-                throw std::logic_error("[PencilDomain] Not made from a mesh: no grid layout");
-            return *comms_;
-        }
-        std::array<int, 3> mesh_{1, 1, 1};
-        int ndim_{3};
-        double boxsize_{1.0};
-        std::array<int, 2> process_coords_{0, 0};
-        int rank_{0};
-        std::shared_ptr<Communicators> comms_{};
-        std::shared_ptr<PencilWorkspace> workspace_{};
-#endif
 
       private:
         static int wrap(int i, int n) {
@@ -725,20 +610,6 @@ namespace FML {
         return *this;
     }
 
-    inline PencilIndexRange PencilDomain::split(int n, int parts, int part) {
-        if (n < 0 || parts < 1 || part < 0 || part >= parts)
-            throw std::invalid_argument("PencilDomain::split: invalid arguments");
-        const int base = n / parts, rem = n % parts;
-        return {part * base + std::min(part, rem), base + (part < rem ? 1 : 0)};
-    }
-
-    inline int PencilDomain::split_owner(int n, int parts, int index) {
-        if (parts < 1 || n < parts || index < 0 || index >= n)
-            throw std::out_of_range("PencilDomain::split_owner: invalid index or empty partition");
-        const int base = n / parts, rem = n % parts, large = rem * (base + 1);
-        return index < large ? index / (base + 1) : rem + (index - large) / base;
-    }
-
     inline PeanoHilbertDomain PeanoHilbertDomain::build(const std::vector<Key> & local_keys,
 #ifdef USE_MPI
                                                         MPI_Comm comm,
@@ -838,14 +709,6 @@ namespace FML {
         /// (the class was in this namespace)
         using FML::PeanoHilbertDomain;
     } // namespace DOMAIN_DECOMPOSITION::PEANO_HILBERT
-    namespace GRID {
-        /// (the pencil layout was in this namespace)
-        using FML::PencilDomain;
-        using FML::PencilIndexRange;
-#if defined(USE_MPI) && defined(USE_FFTW)
-        using FML::PencilWorkspace;
-#endif
-    } // namespace GRID
 
 } // namespace FML
 

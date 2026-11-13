@@ -48,8 +48,8 @@ namespace FML {
 #include <FML/Timing/Timings.h>
 
 namespace FML {
-    // The decomposition of the box over the tasks (Domain.h, included at the end of this file: it uses FML::GRID
-    // types declared below)
+    // The decomposition of the box over the tasks (Domain.h, included at the end of this file: it uses the
+    // declarations below)
     class Domain;
 } // namespace FML
 

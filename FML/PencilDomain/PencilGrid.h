@@ -2,21 +2,13 @@
 #define FML_PENCIL_GRID_H
 
 #include <FML/FFTWGrid/FFTWGrid.h>
+#include <FML/Global/Global.h>
 
 #include <array>
 #include <cstddef>
 #include <functional>
 #include <memory>
-#include <stdexcept>
-#include <vector>
-
-// =====================================================================================================================
-// PencilGrid: the real and Fourier data of a grid distributed in pencils, FFTs by MPI transposes, ghost layers. Its
-// layout is a PencilDomain made from the mesh (Global/Domain.h: the cells and Fourier modes of each rank, the
-// communicators and the FFT workspace, shared by the grids made with it; also the domain of the particles that go
-// with the grid, particle_domain()).
-// =====================================================================================================================
-
+#include <string>
 
 #ifndef USE_MPI
 #error "PencilGrid requires USE_MPI=true"
@@ -25,226 +17,319 @@
 #error "PencilGrid requires USE_FFTW=true"
 #endif
 
-namespace FML::GRID {
+namespace FML {
+    namespace GRID {
 
-    struct PencilRealCell {
-        int i{0}, j{0}, k{0};
-        size_t index{0};
-    };
-    struct PencilFourierCell {
-        int a{0}, b{0}, ix{0};
-        size_t index{0};
-    };
+        // The communicators, MPI datatypes and FFTW plans of a pencil grid layout (PencilGrid.cpp). Shared by the
+        // copies of a grid
+        struct PencilTransforms;
 
-    class PencilRealRange {
-      public:
-        class iterator {
+        /// Range iterator over the (local) indices of the real cells of a PencilGrid: the rows (lines of cells
+        /// along the last dimension) have padding at the end and in 3D the extra cells in y lie between them, both
+        /// are skipped. Like RealRange of FFTWGrid
+        class PencilRealRange {
           public:
-            iterator(PencilRealCell cell, int j0, int j1, int nz, size_t row_skip, size_t plane_skip)
-                : cell_(cell), j0_(j0), j1_(j1), nz_(nz), row_skip_(row_skip), plane_skip_(plane_skip) {}
-            iterator(PencilRealCell cell, int nz, size_t row, size_t row_end, int ny,
-                     int nyg, int nghost_x, int nghost_y, int nzpad)
-                : cell_(cell), nz_(nz), linear_(true), row_(row), row_end_(row_end), ny_(ny),
-                  nyg_(nyg), nghost_x_(nghost_x), nghost_y_(nghost_y), nzpad_(nzpad) {}
-            const PencilRealCell & operator*() const { return cell_; }
-            iterator & operator++();
-            bool operator==(const iterator & rhs) const {
-                return linear_ ? row_ == rhs.row_ && cell_.k == rhs.cell_.k : cell_.index == rhs.cell_.index;
+            class iterator {
+              public:
+                iterator(IndexIntType row, IndexIntType index, int column, int row_in_slice)
+                    : row(row), index(index), column(column), row_in_slice(row_in_slice) {}
+                const IndexIntType & operator*() const { return index; }
+                bool operator!=(const iterator & other) const { return row != other.row or column != other.column; }
+                iterator & operator++() {
+                    ++index;
+                    if (++column == nlast) {
+                        column = 0;
+                        ++row;
+                        index += row_stride - nlast;
+                        if (++row_in_slice == rows_per_slice) {
+                            row_in_slice = 0;
+                            index += slice_stride - IndexIntType(rows_per_slice) * row_stride;
+                        }
+                    }
+                    return *this;
+                }
+
+              private:
+                friend class PencilRealRange;
+                IndexIntType row, index;
+                int column, row_in_slice;
+                int nlast{0}, rows_per_slice{1};
+                IndexIntType row_stride{0}, slice_stride{0};
+            };
+
+            /// The rows [row_begin, row_end): nlast cells per row, rows_per_slice rows per x-slice, the strides (in
+            /// reals) from row to row and from x-slice to x-slice
+            PencilRealRange(IndexIntType row_begin,
+                            IndexIntType row_end,
+                            int nlast,
+                            int rows_per_slice,
+                            IndexIntType row_stride,
+                            IndexIntType slice_stride)
+                : row_begin(row_begin), row_end(row_end), nlast(nlast), rows_per_slice(rows_per_slice),
+                  row_stride(row_stride), slice_stride(slice_stride) {}
+            iterator begin() const { return make(row_begin); }
+            iterator end() const { return make(row_end); }
+
+          private:
+            iterator make(IndexIntType row) const {
+                const int row_in_slice = int(row % rows_per_slice);
+                iterator it(row, (row / rows_per_slice) * slice_stride + row_in_slice * row_stride, 0, row_in_slice);
+                it.nlast = nlast;
+                it.rows_per_slice = rows_per_slice;
+                it.row_stride = row_stride;
+                it.slice_stride = slice_stride;
+                return it;
             }
-            bool operator!=(const iterator & rhs) const { return !(*this == rhs); }
-
-          private:
-            PencilRealCell cell_{};
-            int j0_{0}, j1_{0}, nz_{0};
-            size_t row_skip_{0}, plane_skip_{0};
-            bool linear_{false};
-            size_t row_{0}, row_end_{0};
-            int ny_{0}, nyg_{0}, nghost_x_{0}, nghost_y_{0}, nzpad_{0};
+            IndexIntType row_begin, row_end;
+            int nlast, rows_per_slice;
+            IndexIntType row_stride, slice_stride;
         };
 
-        PencilRealRange(int i0, int i1, int j0, int j1, int nz, int nzpad, int nyg, int nghost_x, int nghost_y);
-        PencilRealRange(size_t row_begin, size_t row_end, int nx, int ny, int nz,
-                        int nzpad, int nyg, int nghost_x, int nghost_y);
-        iterator begin() const;
-        iterator end() const;
-        size_t size() const { return (linear_ ? row_end_ - row_begin_ : size_t(i1_ - i0_) * size_t(j1_ - j0_)) * size_t(nz_); }
+        //==========================================================================
+        ///
+        /// A grid distributed in pencils (a PencilDomain: P0 x P1 tasks) with in-place real-to-complex FFTs by MPI
+        /// transposes. The same interface and conventions as FFTWGrid (positions in [0,1), wave-vectors 2 pi n, the
+        /// forward transform normalized by 1/Nmesh^N, local integer coordinates and indices into the grid, range
+        /// loops over indices).
+        ///
+        /// N = 3: task (p0, p1) has the cells x in its x-range, y in its y-range and all z (a pencil along z). In
+        /// Fourier space it has all kx, the ky in its part of [0, Nmesh) (split over P0) and the kz in its part of
+        /// [0, Nmesh/2] (split over P1). Real coordinates (ix, iy, iz) are local in x and y; Fourier coordinates
+        /// (kx, iky, ikz) are global in kx and local in ky and kz (see get_local_ky_start, get_local_kz_start).
+        ///
+        /// N = 2: the domain has P1 = 1, so task p0 has the x in its x-range and all y (a slab). In Fourier space it
+        /// has all kx and the ky in its part of [0, Nmesh/2] (split over P0). Coordinates (ix, iy) and (kx, iky).
+        ///
+        /// The x (and in 3D y) range of each task are given by the domain, whose edges must lie on cells. The extra
+        /// cells (n_extra_left / n_extra_right) are added on both sides in x (and in 3D in y) and filled by
+        /// communicate_boundaries. They are not kept through a Fourier transform: the Fourier data uses the same
+        /// memory.
+        ///
+        //==========================================================================
 
-      private:
-        int i0_, i1_, j0_, j1_, nz_, nzpad_, nyg_, nghost_x_, nghost_y_;
-        bool linear_{false};
-        size_t row_begin_{0}, row_end_{0};
-        int nx_{0}, ny_{0};
-        iterator make(int i) const;
-    };
+        template <int N>
+        class PencilGrid {
+            static_assert(N == 2 or N == 3, "PencilGrid: only N = 2 and N = 3 are supported");
 
-    class PencilFourierRange {
-      public:
-        class iterator {
           public:
-            iterator(PencilFourierCell cell, int nkz, int nx) : cell_(cell), nkz_(nkz), nx_(nx) {}
-            iterator(PencilFourierCell cell, size_t row, size_t row_end, int nkz, int nx)
-                : cell_(cell), nkz_(nkz), nx_(nx), linear_(true), row_(row), row_end_(row_end) {}
-            const PencilFourierCell & operator*() const { return cell_; }
-            iterator & operator++();
-            bool operator==(const iterator & rhs) const { return linear_ ? row_ == rhs.row_ && cell_.ix == rhs.cell_.ix : cell_.index == rhs.cell_.index; }
-            bool operator!=(const iterator & rhs) const { return !(*this == rhs); }
+            PencilGrid() = default;
+
+            /// A grid with the default pencils: the process grid N = 3: that of FML::pencil_domain()
+            /// (MPI_Dims_create), N = 2: NTasks x 1, with edges on cells as even as possible
+            /// @param[in] Nmesh Number of grid-cells per dimension
+            /// @param[in] n_extra_left Number of extra cells to the left in x (and in 3D in y)
+            /// @param[in] n_extra_right Number of extra cells to the right in x (and in 3D in y)
+            PencilGrid(int Nmesh, int n_extra_left = 0, int n_extra_right = 0);
+            /// A grid on the given pencils (made for NTasks tasks; edges on cells; N = 2: P1 = 1)
+            PencilGrid(int Nmesh, int n_extra_left, int n_extra_right, const PencilDomain & domain);
+
+            PencilGrid(const PencilGrid & rhs);
+            PencilGrid & operator=(const PencilGrid & rhs);
+            PencilGrid(PencilGrid && rhs) noexcept;
+            PencilGrid & operator=(PencilGrid && rhs) noexcept;
+            ~PencilGrid();
+
+            /// Has the grid been allocated
+            explicit operator bool() const { return data != nullptr; }
+            /// Free all the memory associated with the grid (as if default constructed)
+            void free();
+
+            /// The real grid (the cell with local coordinate 0; the extra cells are at negative indices and past
+            /// the main grid)
+            FloatType * get_real_grid();
+            /// The Fourier grid
+            ComplexType * get_fourier_grid() { return data; }
+            /// The fftw_complex cast of get_fourier_grid
+            my_fftw_complex * get_fftw_grid() { return reinterpret_cast<my_fftw_complex *>(data); }
+
+            /// Perform real-to-complex fourier transform (normalized by 1/Nmesh^N)
+            void fftw_r2c();
+            /// Perform complex-to-real fourier transform
+            void fftw_c2r();
+
+            /// Fill the whole real-grid with a constant value
+            void fill_real_grid(const FloatType val);
+            /// Fill the whole fourier-grid with a constant value
+            void fill_fourier_grid(const ComplexType val);
+            /// Fill the main grid from a function specifying the value at a given position
+            void fill_real_grid(const std::function<FloatType(std::array<double, N> &)> & func);
+            /// Fill the main grid from a function specifying the value at a given fourier wave-vector
+            void fill_fourier_grid(const std::function<ComplexType(std::array<double, N> &)> & func);
+
+            /// Get the (local) cell coordinates from a local index
+            std::array<int, N> get_coord_from_index(const IndexIntType index_real) const;
+            /// Get the (local) Fourier coordinates from a local index
+            std::array<int, N> get_fourier_coord_from_index(const IndexIntType index_fourier) const;
+            /// From (local) coordinate of a cell (extra cells: -n_extra_left <= ix < Local_nx + n_extra_right,
+            /// likewise for y in 3D) to the index in the real grid
+            IndexIntType get_index_real(const std::array<int, N> & coord) const;
+            /// From (local) coordinate in the Fourier grid to the index in the Fourier grid
+            IndexIntType get_index_fourier(const std::array<int, N> & coord) const;
+
+            /// Fetch value in grid by (local) integer coordinate
+            FloatType get_real(const std::array<int, N> & coord) const;
+            /// Fetch value in grid by (local) index
+            FloatType get_real_from_index(const IndexIntType index) const;
+            /// Fetch value in fourier grid by (local) integer coordinate
+            ComplexType get_fourier(const std::array<int, N> & coord) const;
+            /// Fetch value in fourier grid by (local) index
+            ComplexType get_fourier_from_index(const IndexIntType index) const;
+
+            /// Set value in grid from (local) integer coordinate
+            void set_real(const std::array<int, N> & coord, const FloatType value);
+            /// Set value in grid from (local) index
+            void set_real_from_index(const IndexIntType index, const FloatType value);
+            /// Add to value in grid
+            void add_real(const std::array<int, N> & coord, const FloatType value);
+            /// Set value of cell in fourier grid using (local) coordinate
+            void set_fourier(const std::array<int, N> & coord, const ComplexType value);
+            /// Set value of cell in fourier grid using (local) index
+            void set_fourier_from_index(const IndexIntType index, const ComplexType value);
+
+            /// The (global) position of a real grid-cell in [0,1)^N
+            std::array<double, N> get_real_position(const std::array<int, N> & coord) const;
+            /// Get the wave-vector of a grid-cell in Fourier space (for physical [k] multiply by 1/Boxsize)
+            std::array<double, N> get_fourier_wavevector(const std::array<int, N> & coord) const;
+            /// Get the wave-vector of a grid-cell in Fourier space (for physical [k] multiply by 1/Boxsize)
+            std::array<double, N> get_fourier_wavevector_from_index(const IndexIntType index) const;
+            /// The integer wave-vector (in [-Nmesh/2, Nmesh/2] and the last component in [0, Nmesh/2])
+            std::array<int, N> get_fourier_integer_wavevector_from_index(const IndexIntType index) const;
+            /// From index in the grid get the k-vector and the magnitude of it
+            void get_fourier_wavevector_and_norm_by_index(const IndexIntType index,
+                                                          std::array<double, N> & kvec,
+                                                          double & kmag) const;
+            /// From index in the grid get the k-vector and the norm of it (square magnitude)
+            void get_fourier_wavevector_and_norm2_by_index(const IndexIntType index,
+                                                           std::array<double, N> & kvec,
+                                                           double & kmag2) const;
+
+            /// Number of extra cells to the left in x (and in 3D in y)
+            int get_n_extra_slices_left() const { return n_extra_left; }
+            /// Number of extra cells to the right in x (and in 3D in y)
+            int get_n_extra_slices_right() const { return n_extra_right; }
+            /// Number of grid-cells per dimension
+            int get_nmesh() const { return Nmesh; }
+            /// Dimension of the grid
+            int get_ndim() const { return N; }
+            /// The pencils
+            const PencilDomain & get_domain() const { return domain; }
+
+            /// Number of local x-slices in the real grid and the first one
+            ptrdiff_t get_local_nx() const { return Local_nx; }
+            ptrdiff_t get_local_x_start() const { return Local_x_start; }
+            /// Number of local y-values in the real grid and the first one (N = 2: Nmesh and 0)
+            ptrdiff_t get_local_ny() const { return Local_ny; }
+            ptrdiff_t get_local_y_start() const { return Local_y_start; }
+            /// Number of local ky-values in the Fourier grid and the first one
+            ptrdiff_t get_local_nky() const { return Local_nky; }
+            ptrdiff_t get_local_ky_start() const { return Local_ky_start; }
+            /// Number of local kz-values in the Fourier grid and the first one (N = 3)
+            ptrdiff_t get_local_nkz() const { return Local_nkz; }
+            ptrdiff_t get_local_kz_start() const { return Local_kz_start; }
+
+            /// The number of active real cells (with padding)
+            ptrdiff_t get_ntot_real() const { return get_local_nrows() * row_stride; }
+            /// Total number of active Fourier space grid-nodes
+            ptrdiff_t get_ntot_fourier() const { return Local_nky * Local_nkz * Nmesh; }
+            /// Total number of complex numbers allocated
+            ptrdiff_t get_ntot_fourier_alloc() const { return NComplexAlloc; }
+            /// The allocated memory
+            size_t allocated_storage_bytes() const { return size_t(NComplexAlloc) * sizeof(ComplexType); }
+
+            /// Range iterator over all the active cells of the main real grid by index
+            /// [ e.g. for(auto && real_index : grid.get_real_range()) ]
+            PencilRealRange get_real_range() const { return get_real_range_of_rows(0, get_local_nrows()); }
+            /// Range iterator over all the active cells of the Fourier grid by index
+            FourierRange get_fourier_range() const { return FourierRange(0, get_ntot_fourier()); }
+
+            /// The number of local rows: lines of cells along the last dimension (real: Local_nx * Local_ny in 3D,
+            /// Local_nx in 2D). Parallelize loops over rows
+            /// [ #pragma omp parallel for
+            ///   for (IndexIntType irow = 0; irow < grid.get_local_nrows(); irow++)
+            ///       for (auto && real_index : grid.get_real_range_of_rows(irow, irow + 1)) ... ]
+            IndexIntType get_local_nrows() const { return IndexIntType(Local_nx) * (N == 3 ? Local_ny : 1); }
+            /// Range iterator over the real grid cells of the rows [row_begin, row_end)
+            PencilRealRange get_real_range_of_rows(IndexIntType row_begin, IndexIntType row_end) const {
+                return PencilRealRange(row_begin, row_end, Nmesh, N == 3 ? int(Local_ny) : 1, row_stride, slice_stride);
+            }
+            /// The number of rows of the Fourier grid (lines along kx: Local_nky * Local_nkz)
+            IndexIntType get_local_nrows_fourier() const { return IndexIntType(Local_nky) * Local_nkz; }
+            /// Range iterator over the Fourier grid cells of the rows [row_begin, row_end) (rows along kx)
+            FourierRange get_fourier_range_of_rows(IndexIntType row_begin, IndexIntType row_end) const {
+                return FourierRange(row_begin * Nmesh, row_end * Nmesh);
+            }
+
+            /// Check if we have NaN or Inf in the active cells
+            bool nan_in_grids() const;
+
+            /// Fill the extra cells with the cells of the neighboring tasks (periodic)
+            void communicate_boundaries();
+            /// The reverse: add the extra cells to the cells of the neighboring tasks they belong to (e.g. after
+            /// assigning particles to the grid) and set them to zero
+            void add_contribution_from_extra_cells();
+
+            /// Print some info about the grid
+            void info() const;
+
+            /// Get the status of the grid: is it currently a real grid or a fourier grid?
+            bool get_grid_status_real() const { return grid_is_in_real_space; }
+            /// Set the status of the grid: is it currently a real grid or a fourier grid?
+            void set_grid_status_real(bool grid_is_a_real_grid) { grid_is_in_real_space = grid_is_a_real_grid; }
+
+            /// For memory logging / info: add a label to the grid
+            void add_memory_label(std::string label) { name = std::move(label); }
 
           private:
-            PencilFourierCell cell_{};
-            int nkz_{0}, nx_{0};
-            bool linear_{false};
-            size_t row_{0}, row_end_{0};
+            int Nmesh{0};
+            int n_extra_left{0};
+            int n_extra_right{0};
+            PencilDomain domain{};
+
+            // The real cells: x in [Local_x_start, + Local_nx), y in [Local_y_start, + Local_ny) (2D: all y)
+            ptrdiff_t Local_nx{0};
+            ptrdiff_t Local_x_start{0};
+            ptrdiff_t Local_ny{0};
+            ptrdiff_t Local_y_start{0};
+            // The Fourier cells: all kx, ky in [Local_ky_start, + Local_nky), kz in [Local_kz_start, + Local_nkz)
+            // (2D: Local_nkz = 1)
+            ptrdiff_t Local_nky{0};
+            ptrdiff_t Local_ky_start{0};
+            ptrdiff_t Local_nkz{1};
+            ptrdiff_t Local_kz_start{0};
+
+            // The real layout (in reals): rows of Nmesh cells and padding, rows_per_slice rows per x-slice (3D: the
+            // y-values with the extra ones)
+            IndexIntType row_stride{0};
+            IndexIntType slice_stride{0};
+            // The offset of the main grid in the real data (the extra cells before it)
+            IndexIntType real_offset{0};
+
+            ComplexType * data{nullptr};
+            ptrdiff_t NComplexAlloc{0};
+            bool grid_is_in_real_space{true};
+            std::string name{"PencilGrid"};
+            std::shared_ptr<PencilTransforms> transforms{};
+
+            void allocate();
+            void exchange_x(bool add);
+            void exchange_y(bool add);
         };
 
-        PencilFourierRange(int nky, int nkz, int nx) : nky_(nky), nkz_(nkz), nx_(nx) {}
-        PencilFourierRange(size_t row_begin, size_t row_end, int nky, int nkz, int nx)
-            : nky_(nky), nkz_(nkz), nx_(nx), linear_(true), row_begin_(row_begin), row_end_(row_end) {}
-        iterator begin() const;
-        iterator end() const;
-        size_t size() const { return (linear_ ? row_end_ - row_begin_ : size_t(nky_) * size_t(nkz_)) * size_t(nx_); }
-
-      private:
-        int nky_, nkz_, nx_;
-        bool linear_{false};
-        size_t row_begin_{0}, row_end_{0};
-    };
-
-    /// In-place 1D, 2D, or 3D real/Fourier grid on a 2D Cartesian decomposition.
-    /// 1D uses a distributed real slab and an all-gather/full-complex FFT; 2D/3D
-    /// use the pencil transpose path.
-    class PencilGrid {
-      public:
-        enum class Status { Real, Fourier };
-
-        explicit PencilGrid(std::shared_ptr<const PencilDomain> decomposition, int nghost = 0,
-                            unsigned fftw_flags = FFTW_MEASURE);
-        ~PencilGrid();
-        PencilGrid(const PencilGrid & other);
-        PencilGrid(PencilGrid && other) noexcept;
-        PencilGrid & operator=(PencilGrid other) noexcept { swap(other); return *this; }
-        void swap(PencilGrid & other) noexcept;
-
-        void fftw_r2c();
-        void fftw_c2r();
-        void communicate_boundaries();
-        void add_ghosts_to_owners();
-
-        PencilRealRange get_real_range() const { return PencilRealRange(0, nx_, 0, ny_, mesh_[2], nzpad_, nyg_, nghost_, nghost_y_); }
-        PencilRealRange get_real_range_with_ghosts() const {
-            return PencilRealRange(-nghost_, nx_ + nghost_, -nghost_y_, ny_ + nghost_y_, mesh_[2], nzpad_, nyg_, nghost_, nghost_y_);
+        /// Perform a real-to-complex FFT from one grid to another
+        template <int N>
+        void fftw_r2c(const PencilGrid<N> & in_grid, PencilGrid<N> & out_grid) {
+            out_grid = in_grid;
+            out_grid.fftw_r2c();
         }
-        PencilFourierRange get_fourier_range() const { return PencilFourierRange(nky_, nkz_, mesh_[0]); }
-        PencilRealRange real_range() const { return get_real_range(); }
-        PencilRealRange real_range_with_ghosts() const { return get_real_range_with_ghosts(); }
-        PencilFourierRange fourier_range() const { return get_fourier_range(); }
 
-        FloatType & operator[](const PencilRealCell & cell);
-        const FloatType & operator[](const PencilRealCell & cell) const;
-        ComplexType & operator[](const PencilFourierCell & cell);
-        const ComplexType & operator[](const PencilFourierCell & cell) const;
-        FloatType & real(int i, int j, int k);
-        const FloatType & real(int i, int j, int k) const;
-        ComplexType & fourier(int a, int b, int ix);
-        const ComplexType & fourier(int a, int b, int ix) const;
+        /// Perform a complex-to-real FFT from one grid to another
+        template <int N>
+        void fftw_c2r(const PencilGrid<N> & in_grid, PencilGrid<N> & out_grid) {
+            out_grid = in_grid;
+            out_grid.fftw_c2r();
+        }
 
-        FloatType * get_real_grid();
-        const FloatType * get_real_grid() const;
-        ComplexType * get_fourier_grid();
-        const ComplexType * get_fourier_grid() const;
-        my_fftw_complex * get_fftw_grid();
-
-        size_t get_index_real(const std::array<int, 3> & coord) const;
-        size_t get_index_fourier(const std::array<int, 3> & coord) const;
-        std::array<int, 3> get_coord_from_index(size_t index) const;
-        std::array<int, 3> get_fourier_coord_from_index(size_t index) const;
-        FloatType get_real(const std::array<int, 3> & coord) const;
-        FloatType get_real_from_index(size_t index) const;
-        void set_real(const std::array<int, 3> & coord, FloatType value);
-        void set_real_from_index(size_t index, FloatType value);
-        void add_real(const std::array<int, 3> & coord, FloatType value);
-        ComplexType get_fourier(const std::array<int, 3> & coord) const;
-        ComplexType get_fourier_from_index(size_t index) const;
-        void set_fourier(const std::array<int, 3> & coord, ComplexType value);
-        void set_fourier_from_index(size_t index, ComplexType value);
-
-        std::array<int, 3> global_cell(const PencilRealCell & cell) const;
-        std::array<double, 3> get_real_position(const std::array<int, 3> & coord) const;
-        std::array<double, 3> position(const PencilRealCell & cell) const { return get_real_position({cell.i, cell.j, cell.k}); }
-        std::array<int, 3> get_fourier_integer_wavevector(const std::array<int, 3> & coord) const;
-        std::array<double, 3> get_fourier_wavevector(const std::array<int, 3> & coord) const;
-        std::array<double, 3> get_fourier_wavevector_from_index(size_t index) const;
-        double hermitian_weight(const PencilFourierCell & cell) const;
-        void get_fourier_wavevector_and_norm_by_index(size_t index, std::array<double, 3> & wavevector,
-                                                      double & magnitude) const;
-
-        void fill_real_grid(FloatType value);
-        void fill_real_grid(const std::function<FloatType(std::array<double, 3> &)> & function);
-        void fill_fourier_grid(ComplexType value);
-        void fill_fourier_grid(const std::function<ComplexType(std::array<double, 3> &)> & function);
-
-        explicit operator bool() const { return main_ != nullptr; }
-        const PencilDomain & decomposition() const { return *decomposition_; }
-        std::shared_ptr<const PencilDomain> decomposition_ptr() const { return decomposition_; }
-        int nghost() const { return nghost_; }
-        int nghost(int axis) const { return axis == 0 ? nghost_ : (axis == 1 ? nghost_y_ : 0); }
-        Status status() const { return status_; }
-        void set_status(Status status) { status_ = status; }
-        void set_grid_status_real(bool is_real) { status_ = is_real ? Status::Real : Status::Fourier; }
-        bool get_grid_status_real() const { return status_ == Status::Real; }
-        std::array<int, 3> get_mesh() const { return mesh_; }
-        int get_nmesh(int axis) const { return mesh_.at(size_t(axis)); }
-        int get_ndim() const { return decomposition_ ? decomposition_->ndim() : 3; }
-        int get_local_nx() const { return nx_; }
-        int get_local_ny() const { return ny_; }
-        int get_local_x_start() const { return xs_; }
-        int get_local_y_start() const { return ys_; }
-        int get_local_nky() const { return nky_; }
-        int get_local_nkz() const { return nkz_; }
-        int get_local_ky_start() const { return kys_; }
-        int get_local_kz_start() const { return kzs_; }
-        size_t get_ntot_real() const { return size_t(nx_) * size_t(ny_) * size_t(nzpad_); }
-        size_t get_ntot_fourier() const { return size_t(nky_) * size_t(nkz_) * size_t(mesh_[0]); }
-        size_t get_ntot_fourier_alloc() const { return nmain_; }
-        size_t allocated_storage_bytes() const { return nmain_ * sizeof(ComplexType); }
-        PencilRealRange get_real_range_of_rows(size_t row_begin, size_t row_end) const;
-        PencilFourierRange get_fourier_range_of_rows(size_t row_begin, size_t row_end) const;
-        size_t get_local_nrows() const { return size_t(nx_) * size_t(nky_); }
-        void info() const;
-        void free();
-
-      private:
-        std::shared_ptr<const PencilDomain> decomposition_;
-        int nghost_{0};
-        int nghost_y_{0};
-        unsigned fftw_flags_{FFTW_MEASURE};
-        std::array<int, 3> mesh_{};
-        int nzc_{0}, nzpad_{0};
-        int xs_{0}, nx_{0}, ys_{0}, ny_{0};
-        int kys_{0}, nky_{0}, kzs_{0}, nkz_{0};
-        int nxg_{0}, nyg_{0};
-        ComplexType * main_{nullptr};
-        size_t nmain_{0};
-        size_t nscratch_{0};
-        my_fftw_plan plan_r2c_{nullptr}, plan_c2r_{nullptr}, plan_y_forward_{nullptr}, plan_y_backward_{nullptr};
-        my_fftw_plan plan_x_forward_{nullptr}, plan_x_backward_{nullptr};
-        std::vector<MPI_Datatype> type_a_, type_b_row_, type_b_column_, type_c_;
-        std::array<MPI_Datatype, 10> ghost_types_{};
-        Status status_{Status::Real};
-
-        FloatType * real_data() { return reinterpret_cast<FloatType *>(main_); }
-        const FloatType * real_data() const { return reinterpret_cast<const FloatType *>(main_); }
-        size_t real_offset(int i, int j, int k) const;
-        size_t fourier_offset(int a, int b, int ix) const;
-        void check_real(int i, int j, int k) const;
-        void check_fourier(int a, int b, int ix) const;
-        void setup();
-        void create_plans();
-        void create_datatypes();
-        void release();
-        static int fold(int k, int n) { return k <= n / 2 ? k : k - n; }
-        static int wrap(int i, int n) { i %= n; return i < 0 ? i + n : i; }
-    };
-
-} // namespace FML::GRID
+    } // namespace GRID
+} // namespace FML
 
 #endif

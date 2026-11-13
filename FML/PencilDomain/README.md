@@ -1,72 +1,67 @@
-# Pencil decomposition and grid
+# PencilGrid: a grid on a pencil decomposition
 
-This is a standalone 1D/2D/3D MPI grid module. It does not change or
-replace `FFTWGrid`, and it is not connected to `SimulationCode`.
+`PencilGrid<N>` (N = 2, 3; `PencilGrid.h`) is a distributed grid with in-place real-to-complex FFTs, like
+`FFTWGrid<N>` but on a `PencilDomain` (`Global/Domain.h`) of `P0 x P1` tasks instead of slabs. It has the same
+interface and conventions as `FFTWGrid`, so code written for one reads the same for the other (the aim is one grid
+class that takes a `Domain`). It is not yet used by the rest of FML. Needs `USE_MPI` and `USE_FFTW`.
 
-The decomposition is a periodic 2D Cartesian process grid `P0 x P1`:
+## Layout
 
-- Real cells are distributed over `x` (`P0`) and `y` (`P1`), with complete `z`.
-- Hermitian Fourier modes are distributed over `ky` (`P0`) and nonnegative
-  `kz` (`P1`), with complete `kx`.
-- `PencilDomain` (in `PencilGrid.h`) exposes rank/coordinate mappings, cell and
-  mode ownership, physical bounds, neighbors, and row/column communicators. The
-  ownership of positions is that of `particle_domain()`, an `FML::Domain`
-  (`Global/Domain.h`) with the edges of each rank's cells: a Slab in `x` when
-  `P1 = 1` (every 1D and 2D grid), else a Pencil. Give it to `MPIParticles` so
-  particles live on the rank that holds their cells.
-- `PencilGrid` stores real and Fourier data in one FFTW-aligned allocation and
-  transposes with `MPI_Alltoallw`. Ghost layers are periodic in `x` and `y`.
+- **3D**: the task with process coordinates `(p0, p1)` (rank `p0 * P1 + p1`) has the cells with x in its x-range, y
+  in its y-range and all z. In Fourier space it has all kx, its part of ky in `[0, Nmesh)` (split over `P0`) and its
+  part of kz in `[0, Nmesh/2]` (split over `P1`).
+- **2D**: the domain has `P1 = 1` (slabs in x). Task `p0` has its x-range and all y; in Fourier space all kx and its
+  part of ky in `[0, Nmesh/2]`.
+- The x- and y-ranges are those of the domain, whose edges must lie on cells (`edge * Nmesh` an integer; with
+  `PencilDomain::uniform` `P0` and `P1` must divide `Nmesh`). Without a domain: the process grid of
+  `FML::pencil_domain()` (`MPI_Dims_create`) in 3D, `NTasks x 1` in 2D, with the edges on cells as even as possible
+  (so any `Nmesh` works, unlike `FFTWGrid` which needs `NTasks` to divide it). `get_domain().particle_domain()` is the domain for `MPIParticles` (a Slab when `P1 = 1`), so that
+  particles live on the task of their cells.
+- The transform: r2c along the last axis, then (3D) a transpose in the row (`p0` fixed) and an FFT along y, then a
+  transpose in the column (`p1` fixed) and an FFT along x (`MPI_Alltoallw` with derived datatypes, FFTW's guru
+  interface). The copies of a grid share the communicators, datatypes and plans.
 
-Set `ndim` to 1, 2, or 3 when constructing the decomposition. Supply only the
-active mesh sizes; inactive axes are set to one. In 2D the process grid is
-`P0 x 1` and the FFT performs the `y` and `x` transforms with a trivial `z`
-axis. In 1D real `x` slabs are distributed, then gathered for a full-complex
-FFT; the resulting spectrum is replicated on each rank. `owner_of_mode()`
-returns rank 0 as the canonical owner for those replicated 1D Fourier modes.
-
-## Basic use
-
-Build the example from this directory with `make`; FFTW and MPI are required.
-The example runs a normalized real-to-Fourier-to-real round trip:
+## Interface (as FFTWGrid)
 
 ```cpp
-auto domain = std::make_shared<FML::GRID::PencilDomain>(
-    std::array<int, 3>{128, 128, 128}, 500.0);
-FML::GRID::PencilGrid grid(domain, /*nghost=*/2);
-grid.fill_real_grid([](std::array<double, 3>& x) { return field(x); });
-grid.fftw_r2c();
-// Access local modes using grid.get_fourier_range() and grid[fourier_cell].
+FML::GRID::PencilGrid<3> grid(Nmesh, n_extra_left, n_extra_right);        // or (..., PencilDomain domain)
+grid.fill_real_grid(func);                                               // func(std::array<double,3> & x), x in [0,1)
+for (auto && index : grid.get_real_range()) {                            // or get_real_range_of_rows(irow, irow + 1)
+    auto coord = grid.get_coord_from_index(index);                        // local (ix, iy, iz)
+    auto x = grid.get_real_position(coord);
+    grid.set_real_from_index(index, value);
+}
+grid.fftw_r2c();                                                         // normalized by 1/Nmesh^N
+for (auto && index : grid.get_fourier_range()) {
+    std::array<double, 3> kvec;
+    double kmag;
+    grid.get_fourier_wavevector_and_norm_by_index(index, kvec, kmag);    // 2 pi n (multiply by 1/Boxsize)
+    grid.set_fourier_from_index(index, grid.get_fourier_from_index(index) * f(kmag));
+}
 grid.fftw_c2r();
 grid.communicate_boundaries();
 ```
 
-For lower dimensions, use `PencilDomain({128, 1, 1}, 500.0, 1)` or
-`PencilDomain({128, 128, 1}, 500.0, 2)`. Ghost layers are allocated
-only along active axes.
+The methods have the names and meaning of `FFTWGrid`: `get_index_real`, `get_coord_from_index`, `get_real`,
+`set_real`, `add_real` (and `_from_index`), the Fourier versions, `get_real_position`, `get_fourier_wavevector`
+(`_from_index`, `get_fourier_integer_wavevector_from_index`), `get_fourier_wavevector_and_norm(2)_by_index`,
+`fill_real_grid`, `fill_fourier_grid`, `get_local_nrows`, `get_real_range_of_rows`, `get_local_nx`,
+`get_local_x_start`, `get_nmesh`, `get_ntot_real`, `get_ntot_fourier`, `get_grid_status_real`, `nan_in_grids`,
+`info`, `free`, and the free functions `fftw_r2c(in, out)`, `fftw_c2r(in, out)`. The differences:
 
-`get_real_range()` and `get_fourier_range()` provide the same index-and-offset
-iteration style as `FFTWGrid`. `get_real_range_with_ghosts()` includes ghost
-cells. FFT transforms change `status()`; accessors check status and bounds.
-Fourier wavevectors use physical units `2 pi n / boxsize`. The inverse transform
-is normalized, so the round trip is the identity.
+- Real coordinates are local in x and y (`get_local_y_start`, `get_local_ny`), Fourier coordinates `(kx, iky, ikz)`
+  are global in kx and local in ky and kz (`get_local_ky_start`, `get_local_nky`, `get_local_kz_start`,
+  `get_local_nkz`).
+- The Fourier rows are lines along kx: loop over `get_local_nrows_fourier()` rows with `get_fourier_range_of_rows`.
+- The extra cells (`n_extra_left`, `n_extra_right`) are in x and, in 3D, in y (corners included). They are not kept
+  through a Fourier transform (the Fourier data uses the same memory): call `communicate_boundaries` after.
+  `add_contribution_from_extra_cells` adds them to the cells of the neighbors they belong to (after assigning
+  particles) and sets them to zero.
+- No 1D, no wisdom (the plans are made with `FFTW_ESTIMATE`), no dump/load.
 
-Choose the process-grid dimensions explicitly with the constructor's third
-argument `{P0, P1}`, or pass `{0, 0}` for `MPI_Dims_create`. Each real and
-Fourier pencil must contain at least one plane. Ghost width cannot exceed the
-smallest real pencil width. A decomposition borrows the supplied communicator;
-the caller must keep it alive until after the decomposition is destroyed.
+## Example and tests
 
-## Implementation references
-
-The transposed distributed FFT is based on the standard pencil decomposition
-used by FFTW-MPI and the supplied in-tree prototype `PencilGrid.h/.cpp` and
-`Domain.h/.cpp`. The implementation uses FFTW's guru interface for local
-transforms and MPI derived datatypes for the all-to-all layouts.
-
-## Validation
-
-Run `make -C tests run` to build the checks and execute NDIM=1, 2, and 3 with
-1, 2, and 4 MPI ranks. The test covers ownership/range mappings, FFT round trips,
-real and Fourier row slices, periodic ghost copies including corners, and
-accumulation of ghost contributions back onto their owners. Override the rank
-list with `NP_LIST="1 2 4 8"` where the MPI runtime has enough resources.
+`make` builds the example (an FFT round trip); `make -C tests run` runs the tests on 1, 2 and 4 tasks (`NP_LIST`):
+the layout, indices and coordinates, the Fourier transform against `FFTWGrid`, the round trip, the extra cells (with
+the corners) and their contribution back, copies, and the particle domain, for 2D and 3D, every process grid, uneven
+pencils and odd meshes.
