@@ -11,7 +11,11 @@ adjoints. [Distributed reconstruction outputs](FRAMEWORK.md#distributed-reconstr
 now include initial/matter density and Lagrangian displacement/velocity samples.
 [Same-rank checkpoint/restart](FRAMEWORK.md#checkpointrestart-stage-4e-13-november-2026)
 now preserves complete HMC/adaptation state. The original BAO/LPT backend stays
-single-rank; scientific nonlinear validation and survey extensions remain open. See [the saved plan](FRAMEWORK_PLAN.md) for the broader #52 scope.
+single-rank. An initial [Cartesian survey layer](SURVEY.md) now supplies masked
+Gaussian-field and positive-link Poisson-count likelihoods with MPI adjoints. A
+[bounded nonlinear validation pass](tests/SURVEY_RESULTS.md) is recorded; production
+nonlinear/survey calibration remains open. See [the saved plan](FRAMEWORK_PLAN.md)
+for the broader #52 scope.
 
 ## BAO application (prototype)
 

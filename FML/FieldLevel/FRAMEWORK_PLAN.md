@@ -25,7 +25,8 @@ open. The user authorized the MPI/input-safety prerequisite first, followed by s
 ## MPI priority and stages 4a–4e (updated 13 November 2026)
 
 At the user's request, prioritize MPI before the proposed survey likelihood.
-No survey-likelihood implementation was started; retain it as stage 5 work.
+The survey likelihood was deferred during the MPI work; its initial stage 5a
+Cartesian implementation is now recorded below.
 The first MPI increment is a distributed periodic linear-Gaussian model in
 [DistributedLinear.h](DistributedLinear.h), using the generic posterior/MAP/HMC
 with global reductions, local FFT slabs and counter-based field momenta. Exact
@@ -42,6 +43,22 @@ This is the initial periodic MPI engineering milestone; nonlinear scientific
 validation and performance/memory profiling remain open. Survey observations can
 now follow as the next planned extension. See [FRAMEWORK.md](FRAMEWORK.md) for ownership, collective-call contracts and current
 limits.
+
+## Bounded nonlinear validation and stage 5a (13 November 2026)
+
+A bounded same-model ZA/2LPT inference pass now checks two dispersed chains for
+initial-field information, reconstruction error and field-summary mixing on
+1/2/4 ranks. It keeps nuisance values fixed and is not production posterior
+calibration. See [tests/SURVEY_RESULTS.md](tests/SURVEY_RESULTS.md).
+
+[SurveyLikelihood.h](SurveyLikelihood.h) now composes MPI forward models with
+Cartesian masked/selected voxel observations and distinct normalized Gaussian
+field or positive-link Poisson count likelihoods, including their adjoints and
+MAP/HMC integration. [SURVEY.md](SURVEY.md) specifies coordinates, exposure,
+noise and normalization, the unused Gaussian-noise scalar for counts, ownership
+and limits. Wider survey calibration, pixelization/mean-density nuisance work,
+additional likelihood nuisances and survey checkpoint identities remain open;
+this initial stage 5a does not complete #52.
 
 ## Aim and posterior
 
@@ -147,9 +164,9 @@ The milestone is stages 1–3 below; it does not require survey geometry or PM a
    memory/recomputation strategy. Add higher-order LPT/bias and additional data types
    through the established interfaces rather than changing the posterior/sampler API.
 
-The remaining prototype gradient-portability, scientific-validation and measured
-workspace issues are tracked in [KNOWN_ISSUES.md](KNOWN_ISSUES.md). They are not
-implicitly completed by storing this plan or by fixing its safety prerequisite.
+The prototype scientific-validation and measured-workspace follow-ups are tracked
+in [KNOWN_ISSUES.md](KNOWN_ISSUES.md); portable step-converged gradient tests are
+now resolved there. The bounded checks do not complete production calibration.
 
 ## Existing starting points and references
 

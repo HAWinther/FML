@@ -145,7 +145,7 @@ below the supported Nyquist band.
 `FourierResponse` is a separate fixed real multiplier per retained mode. Empty means
 identity. It can represent a declared periodic transfer/smoothing response and has
 its own adjoint. It is not a survey mask, a completeness probability or an implicit
-noise correction. General survey/count observations belong to stage 5.
+noise correction. Initial Cartesian survey/count observations are available in [stage 5a](SURVEY.md).
 
 ## Composition and workspaces
 
@@ -175,8 +175,8 @@ FL-6's profiling/reuse work remains open. No allocation/time speedup is claimed.
 Current layout metadata explicitly identifies global mesh/cells and owned start,
 width/cells. `Model` owns a full grid and supports one FML rank only; multi-rank
 construction still rejects before allocation. For distributed linear inference,
-use `DistributedLinearModel` below. Particle exchange and nonlinear communication
-adjoints remain stage 4.
+use `DistributedLinearModel` below; `DistributedLPTModel` supplies the particle
+exchange and nonlinear adjoints in stages 4b–4c.
 
 ## Exact linear inference, MAP and HMC
 
@@ -248,10 +248,12 @@ bias and BAO shape; exact linear MAP/covariance; normalized sampled noise; no-da
 information limits; nuisance inference against exact-marginal quadrature; BAO
 compatibility; reconstruction semantics; malformed dimensions and unsupported MPI.
 
-Stages 4–6 remain open: distributed inference, survey observations and count
-likelihoods, PM/COLA adjoints and broader physical models. Production nonlinear
-coverage/calibration, full padding at higher cutoffs, time/growth derivatives,
-checkpoint/resume of inference and measured workspace optimization also remain.
+Initial distributed inference, reconstruction and checkpointing are available in
+stages 4a–4e below; initial Cartesian survey/count observations are documented in
+[stage 5a](SURVEY.md). PM/COLA adjoints, broader physical models, production
+nonlinear/survey calibration, full high-cutoff padding, time/growth derivatives
+and measured workspace optimization remain open. Survey checkpoint identities
+and additional likelihood nuisances remain explicit extensions.
 The initial stages 1–3 milestone is a reusable periodic implementation with exact
 linear verification, not a complete LEFTfield/BORG replacement.
 
@@ -325,8 +327,8 @@ Small replicated metadata and repeated safety reductions still have overhead.
 Distributed 1LPT and 2LPT are available in stages 4b–4c below. Next:
 nonlinear inference validation and performance profiling. Same-rank checkpoint/restart is
 available in stage 4e below. Reconstruction outputs are
-available in stage 4d below. Survey likelihoods remain deferred
-until after the prioritized MPI work. MPI BAO compatibility and PM/COLA are not
+available in stage 4d below. Initial Cartesian survey likelihoods are available
+in [stage 5a](SURVEY.md). MPI BAO compatibility and PM/COLA are not
 provided by this linear backend. The original single-rank safety checks remain.
 
 ## Distributed 1LPT (stage 4b, 12 November 2026)
@@ -405,7 +407,7 @@ MAP, joint-HMC synchronization, sanitizers and MPI/OpenMP/manual initialization.
 Distributed 2LPT and reconstruction outputs are available in stages 4c–4d below.
 Same-rank checkpoint/restart is available in stage 4e below. Measured
 workspace/communication optimization and nonlinear scientific validation remain open.
-Survey likelihoods remain deferred until after the prioritized MPI work.
+Initial Cartesian survey likelihoods are now available in [stage 5a](SURVEY.md).
 
 ## Distributed 2LPT (stage 4c, 12 November 2026)
 
@@ -458,8 +460,8 @@ nonlinear posterior calibration.
 
 Distributed reconstruction outputs are available in stage 4d below.
 Same-rank checkpoint/restart is available in stage 4e below. Scientific nonlinear
-validation and workspace/communication profiling remain open. Survey likelihoods
-are still deferred until after the prioritized MPI work; #52 is not complete.
+validation and workspace/communication profiling remain open. Initial Cartesian
+survey likelihoods are available in [stage 5a](SURVEY.md); #52 is not complete.
 
 ## Distributed reconstruction outputs (stage 4d, 13 November 2026)
 
@@ -524,7 +526,8 @@ to the existing workspace and reconstruction temporaries. Output selection,
 recomputation-memory policies and parallel scientific-file export are not added
 here. The method does not run automatically inside force/posterior evaluations.
 Same-rank checkpoint/restart is now available in stage 4e below. Nonlinear scientific
-validation remains open; the MPI foundation is ready for the subsequent survey work.
+validation remains open; initial Cartesian survey observations are now documented
+in [stage 5a](SURVEY.md).
 
 ## Checkpoint/restart (stage 4e, 13 November 2026)
 
@@ -617,5 +620,12 @@ only codec; see [MCMC/README.md](../MCMC/README.md#hmc-checkpoint-state).
 
 This completes an initial periodic MPI engineering foundation, not production
 nonlinear calibration. Scientific nonlinear validation and performance/memory
-profiling remain open. The previously deferred survey likelihood is the next
-planned observation-model extension; #52 remains open.
+profiling remain open. The previously deferred survey likelihood has an initial
+Cartesian implementation in [stage 5a](SURVEY.md); #52 remains open.
+
+## Cartesian survey likelihoods (stage 5a, 13 November 2026)
+
+See [SURVEY.md](SURVEY.md) for masks, selection, coordinates, Gaussian voxel noise,
+positive-link Poisson counts, normalization, MPI adjoints and MAP/HMC examples.
+[Bounded nonlinear and survey validation](tests/SURVEY_RESULTS.md) records the
+1/2/4-rank engineering evidence and the remaining scientific scope.
