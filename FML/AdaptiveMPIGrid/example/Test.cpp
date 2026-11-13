@@ -272,9 +272,18 @@ void test_grid(int levelmin, int levelmax, std::array<bool, NDIM> periodic, int 
     grid.info();
 }
 
-int main() {
+int main(int argc, char ** argv) {
+    // "./amrtest nbx" forces the NBX sparse exchange, "./amrtest dense" the Alltoall variant
+    const std::string mode = argc > 1 ? argv[1] : "default";
+    if (mode == "nbx") {
+        AdaptiveMPIGrid<2, TestData>::nbx_min_tasks = 0;
+        AdaptiveMPIGrid<3, TestData>::nbx_min_tasks = 0;
+    } else if (mode == "dense") {
+        AdaptiveMPIGrid<2, TestData>::nbx_min_tasks = 1 << 30;
+        AdaptiveMPIGrid<3, TestData>::nbx_min_tasks = 1 << 30;
+    }
     if (FML::ThisTask == 0)
-        std::cout << "Running on " << FML::NTasks << " tasks\n";
+        std::cout << "Running on " << FML::NTasks << " tasks (exchange mode: " << mode << ")\n";
 
     for (int bits = 1; bits <= 5; bits++)
         test_hilbert<2>(bits);

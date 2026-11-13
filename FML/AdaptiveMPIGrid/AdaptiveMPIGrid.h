@@ -8,6 +8,7 @@
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <map>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -92,6 +93,12 @@ namespace FML {
 
             enum Flag : int8_t { COARSEN = -1, KEEP = 0, REFINE = 1 };
 
+            /// Irregular exchanges (ghost-pattern setup, migration) use the NBX algorithm when running on
+            /// at least this many tasks, otherwise an MPI_Alltoall of counts. NBX avoids the O(NTasks)
+            /// collective but polls, so on few (or oversubscribed) tasks the collective is faster.
+            /// Set to 0 to always use NBX.
+            static inline int nbx_min_tasks = 64;
+
             /// Prolongation: value in a child from the parent value
             using ProlongFunction = std::function<T(const T & parent_value, const Cell & parent, const Cell & child)>;
             /// Restriction: value in the parent from the NCHILD children (in key order)
@@ -139,6 +146,7 @@ namespace FML {
             // Tag counter so several exchanges can be in flight at the same time. begin calls are
             // made in the same order on all tasks, so the counters agree.
             mutable int _tag_counter{0};
+            mutable int _nbx_counter{0};
 
           public:
             //==========================================================================================
@@ -344,7 +352,9 @@ namespace FML {
             void update_domain_start();
             void build_ghost_pattern();
             template <class U>
-            std::vector<std::vector<U>> alltoallv_sparse(const std::vector<std::vector<U>> & send) const;
+            using SparseBuffers = std::map<int, std::vector<U>>; // task -> buffer, only tasks we talk to
+            template <class U>
+            SparseBuffers<U> alltoallv_sparse(const SparseBuffers<U> & send) const;
         };
 
         //==========================================================================================
@@ -602,36 +612,92 @@ namespace FML {
         // Communication
         //==========================================================================================
 
+        //==========================================================================================
+        /// Sparse personalized exchange: every task sends a buffer to a few other tasks and does not
+        /// know who will send to it. Uses the NBX algorithm (Hoefler, Siebert & Lumsdaine, PPoPP 2010):
+        /// synchronous sends + probing for incoming messages + a non-blocking barrier that is entered
+        /// once all our sends have been matched. No O(NTasks) collective or O(NTasks) memory is
+        /// needed; cost scales with the number of tasks we actually talk to.
+        /// Buffers to ourselves are copied locally. Empty buffers are not sent.
+        /// Below nbx_min_tasks tasks a dense count exchange is used instead (see nbx_min_tasks).
+        //==========================================================================================
         template <int NDIM, class T>
         template <class U>
-        std::vector<std::vector<U>>
-        AdaptiveMPIGrid<NDIM, T>::alltoallv_sparse(const std::vector<std::vector<U>> & send) const {
-            std::vector<std::vector<U>> recv(FML::NTasks);
+        typename AdaptiveMPIGrid<NDIM, T>::template SparseBuffers<U>
+        AdaptiveMPIGrid<NDIM, T>::alltoallv_sparse(const SparseBuffers<U> & send) const {
+            SparseBuffers<U> recv;
+            auto self = send.find(FML::ThisTask);
+            if (self != send.end() and not self->second.empty())
+                recv[FML::ThisTask] = self->second;
 #ifdef USE_MPI
-            std::vector<int> nsend(FML::NTasks), nrecv(FML::NTasks);
-            for (int r = 0; r < FML::NTasks; r++)
-                nsend[r] = int(send[r].size());
-            MPI_Alltoall(nsend.data(), 1, MPI_INT, nrecv.data(), 1, MPI_INT, MPI_COMM_WORLD);
-
+            // Unique tag per call: a task leaving one exchange may start the next while others are
+            // still probing for the previous one. Calls happen in the same order on all tasks.
+            const int tag = 31000 + (_nbx_counter++ % 1000);
             AMRDETAIL::MPIType<U> mtype;
-            std::vector<MPI_Request> req;
-            for (int r = 0; r < FML::NTasks; r++) {
-                recv[r].resize(nrecv[r]);
-                if (nrecv[r] > 0 and r != FML::ThisTask) {
+
+            if (FML::NTasks < nbx_min_tasks) {
+                // Dense variant: exchange counts with a collective, then point-to-point
+                std::vector<int> nsend(FML::NTasks, 0), nrecv(FML::NTasks, 0);
+                for (auto & [r, buf] : send)
+                    if (r != FML::ThisTask)
+                        nsend[r] = int(buf.size());
+                MPI_Alltoall(nsend.data(), 1, MPI_INT, nrecv.data(), 1, MPI_INT, MPI_COMM_WORLD);
+                std::vector<MPI_Request> req;
+                for (int r = 0; r < FML::NTasks; r++) {
+                    if (nrecv[r] == 0)
+                        continue;
+                    auto & buf = recv[r];
+                    buf.resize(nrecv[r]);
                     req.emplace_back();
-                    MPI_Irecv(recv[r].data(), nrecv[r], mtype.type, r, 0, MPI_COMM_WORLD, &req.back());
+                    MPI_Irecv(buf.data(), nrecv[r], mtype.type, r, tag, MPI_COMM_WORLD, &req.back());
+                }
+                for (auto & [r, buf] : send) {
+                    if (r == FML::ThisTask or buf.empty())
+                        continue;
+                    req.emplace_back();
+                    MPI_Isend(buf.data(), int(buf.size()), mtype.type, r, tag, MPI_COMM_WORLD, &req.back());
+                }
+                MPI_Waitall(int(req.size()), req.data(), MPI_STATUSES_IGNORE);
+                return recv;
+            }
+
+            std::vector<MPI_Request> sreq;
+            for (auto & [r, buf] : send) {
+                if (r == FML::ThisTask or buf.empty())
+                    continue;
+                sreq.emplace_back();
+                MPI_Issend(buf.data(), int(buf.size()), mtype.type, r, tag, MPI_COMM_WORLD, &sreq.back());
+            }
+
+            MPI_Request barrier;
+            bool barrier_active = false;
+            bool done = false;
+            while (not done) {
+                int flag = 0;
+                MPI_Status status;
+                MPI_Iprobe(MPI_ANY_SOURCE, tag, MPI_COMM_WORLD, &flag, &status);
+                if (flag) {
+                    int count = 0;
+                    MPI_Get_count(&status, mtype.type, &count);
+                    auto & buf = recv[status.MPI_SOURCE];
+                    buf.resize(count);
+                    MPI_Recv(buf.data(), count, mtype.type, status.MPI_SOURCE, tag, MPI_COMM_WORLD,
+                             MPI_STATUS_IGNORE);
+                }
+                if (barrier_active) {
+                    int bdone = 0;
+                    MPI_Test(&barrier, &bdone, MPI_STATUS_IGNORE);
+                    done = bdone != 0;
+                } else {
+                    // Synchronous sends complete only once matched by a receive on the other side
+                    int sdone = 0;
+                    MPI_Testall(int(sreq.size()), sreq.data(), &sdone, MPI_STATUSES_IGNORE);
+                    if (sdone) {
+                        MPI_Ibarrier(MPI_COMM_WORLD, &barrier);
+                        barrier_active = true;
+                    }
                 }
             }
-            for (int r = 0; r < FML::NTasks; r++) {
-                if (nsend[r] > 0 and r != FML::ThisTask) {
-                    req.emplace_back();
-                    MPI_Isend(send[r].data(), nsend[r], mtype.type, r, 0, MPI_COMM_WORLD, &req.back());
-                }
-            }
-            recv[FML::ThisTask] = send[FML::ThisTask];
-            MPI_Waitall(int(req.size()), req.data(), MPI_STATUSES_IGNORE);
-#else
-            recv[0] = send[0];
 #endif
             return recv;
         }
@@ -671,7 +737,7 @@ namespace FML {
         template <int NDIM, class T>
         void AdaptiveMPIGrid<NDIM, T>::build_ghost_pattern() {
             const int me = FML::ThisTask;
-            std::vector<std::vector<IndexInt>> sendlists(FML::NTasks);
+            SparseBuffers<IndexInt> sendlists;
 
             // A local leaf is a ghost on every other task whose part of the curve intersects one of the
             // boxes (one level finer) touching the leaf. Under 2:1 balance this is exactly the set of
@@ -684,15 +750,16 @@ namespace FML {
                     for (int r = rlo; r <= rhi; r++) {
                         if (r == me or _domain_start[r] == _domain_start[r + 1])
                             continue;
-                        if (sendlists[r].empty() or sendlists[r].back() != i)
-                            sendlists[r].push_back(i);
+                        auto & list = sendlists[r];
+                        if (list.empty() or list.back() != i)
+                            list.push_back(i);
                     }
                 });
             }
 
             // Boundary leaves are those sent to someone (touching relation is symmetric under 2:1 balance)
             std::vector<char> is_boundary(_cells.size(), 0);
-            for (auto & list : sendlists)
+            for (auto & [r, list] : sendlists)
                 for (auto i : list)
                     is_boundary[i] = 1;
             _boundary_cells.clear();
@@ -701,16 +768,15 @@ namespace FML {
                 (is_boundary[i] ? _boundary_cells : _interior_cells).push_back(i);
 
             // Send the cell descriptions
-            std::vector<std::vector<Cell>> sendcells(FML::NTasks);
+            SparseBuffers<Cell> sendcells;
             _send_ranks.clear();
             _send_indices.clear();
-            for (int r = 0; r < FML::NTasks; r++) {
-                if (sendlists[r].empty())
-                    continue;
+            for (auto & [r, list] : sendlists) {
                 _send_ranks.push_back(r);
-                for (auto i : sendlists[r])
-                    sendcells[r].push_back(_cells[i]);
-                _send_indices.push_back(std::move(sendlists[r]));
+                auto & buf = sendcells[r];
+                for (auto i : list)
+                    buf.push_back(_cells[i]);
+                _send_indices.push_back(std::move(list));
             }
             auto recvcells = alltoallv_sparse(sendcells);
 
@@ -720,13 +786,11 @@ namespace FML {
             _recv_ranks.clear();
             _recv_offset.clear();
             _recv_count.clear();
-            for (int r = 0; r < FML::NTasks; r++) {
-                if (recvcells[r].empty())
-                    continue;
+            for (auto & [r, buf] : recvcells) {
                 _recv_ranks.push_back(r);
                 _recv_offset.push_back(IndexInt(_ghost_cells.size()));
-                _recv_count.push_back(IndexInt(recvcells[r].size()));
-                _ghost_cells.insert(_ghost_cells.end(), recvcells[r].begin(), recvcells[r].end());
+                _recv_count.push_back(IndexInt(buf.size()));
+                _ghost_cells.insert(_ghost_cells.end(), buf.begin(), buf.end());
             }
             _ghost_data.assign(_ghost_cells.size(), T{});
         }
@@ -891,9 +955,9 @@ namespace FML {
 
             // Each cell goes to the task whose equal share of the total weight contains its midpoint.
             // This is monotone along the curve so tasks get contiguous segments.
-            std::vector<std::vector<Cell>> sendcells(FML::NTasks);
-            std::vector<std::vector<T>> senddata(FML::NTasks);
-            std::vector<std::vector<int8_t>> sendflags(FML::NTasks);
+            SparseBuffers<Cell> sendcells;
+            SparseBuffers<T> senddata;
+            SparseBuffers<int8_t> sendflags;
             double wcum = wbefore;
             for (IndexInt i = 0; i < n; i++) {
                 const double mid = wcum + 0.5 * w[i];
@@ -911,8 +975,9 @@ namespace FML {
             _cells.clear();
             _data.clear();
             _flags.clear();
-            for (int r = 0; r < FML::NTasks; r++) {
-                _cells.insert(_cells.end(), recvcells[r].begin(), recvcells[r].end());
+            // Maps are ordered by task, and tasks are ordered along the curve
+            for (auto & [r, buf] : recvcells) {
+                _cells.insert(_cells.end(), buf.begin(), buf.end());
                 _data.insert(_data.end(), recvdata[r].begin(), recvdata[r].end());
                 _flags.insert(_flags.end(), recvflags[r].begin(), recvflags[r].end());
             }
@@ -929,9 +994,9 @@ namespace FML {
                 int prev = me - 1;
                 while (prev >= 0 and _domain_start[prev] == _domain_start[prev + 1])
                     prev--;
-                std::vector<std::vector<Cell>> sc(FML::NTasks);
-                std::vector<std::vector<T>> sd(FML::NTasks);
-                std::vector<std::vector<int8_t>> sf(FML::NTasks);
+                SparseBuffers<Cell> sc;
+                SparseBuffers<T> sd;
+                SparseBuffers<int8_t> sf;
                 size_t nmove = 0;
                 if (not _cells.empty() and prev >= 0) {
                     const Cell & first = _cells.front();
@@ -952,10 +1017,10 @@ namespace FML {
                 auto rd = alltoallv_sparse(sd);
                 auto rf = alltoallv_sparse(sf);
                 // Received leaves come from tasks later on the curve, so they are appended
-                for (int r = 0; r < FML::NTasks; r++) {
+                for (auto & [r, buf] : rc) {
                     if (r == me)
                         continue;
-                    _cells.insert(_cells.end(), rc[r].begin(), rc[r].end());
+                    _cells.insert(_cells.end(), buf.begin(), buf.end());
                     _data.insert(_data.end(), rd[r].begin(), rd[r].end());
                     _flags.insert(_flags.end(), rf[r].begin(), rf[r].end());
                 }

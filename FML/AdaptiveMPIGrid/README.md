@@ -35,6 +35,7 @@ grid.find_leaf(std::array<double,3>{x, y, z});   // the leaf containing any poin
 - **Partition.** Every task holds `domain_start[NTasks+1]`, and the owner of a key is found by binary search. Partition cuts never fall inside a sibling family, so any family can always be coarsened, and the leaf set is **independent of the number of tasks**. The tests check this with a global hash.
 - **2:1 balance** is enforced across faces, edges and corners. It uses iterative target-level propagation with ghost exchange until a global `Allreduce` reports no change.
 - **Ghosts.** One layer: every remote leaf touching a local leaf by face, edge or corner, at its own level. A leaf is sent to every task whose key range intersects one of its "touching boxes" one level finer. Under 2:1 balance this set is exact. The communication pattern is cached and rebuilt after `adapt`/`load_balance`. The same pass splits the local leaves into *boundary* leaves (touching a remote leaf) and *interior* leaves, so the exchange can overlap the interior work. The exchange handle is move-only and waits in its destructor if you forget to. Neighbours across a periodic boundary that are owned by the same task are local leaves, so there are no self-ghosts.
+- **Irregular exchanges** (ghost-pattern setup, load-balance migration) use sparse buffers keyed by task. Each call costs only as much as the tasks it actually talks to. From `nbx_min_tasks` tasks upwards (default 64) the NBX algorithm is used (Hoefler, Siebert & Lumsdaine, PPoPP 2010): synchronous sends, probing for incoming messages, and a non-blocking barrier. That means no O(NTasks) collective. Below the threshold an `MPI_Alltoall` of counts is used instead, because NBX polls and is slower on few or oversubscribed tasks. Set `AdaptiveMPIGrid<NDIM,T>::nbx_min_tasks = 0` to always use NBX. The only O(NTasks) state left is the replicated splitter array (8 bytes per task), which is updated with an `Allgather` after load balancing.
 - **Coarsening** requires a complete local family, every member flagged, and that the resulting parent does not break 2:1 balance (checked conservatively against neighbour target levels).
 
 ## Tests
@@ -47,15 +48,17 @@ grid.find_leaf(std::array<double,3>{x, y, z});   // the leaf containing any poin
 
 Verified identical leaf sets on 1, 2, 3, 4, 5, 7, 8, 13, 16 and 24 tasks (24 > number of initial cells, so some tasks start empty), and clean under AddressSanitizer.
 
+Both exchange paths are tested (`./amrtest dense`, `./amrtest nbx`) and give identical grids. They were also checked on 48 tasks and without MPI (`USE_MPI=false`).
+
 ```
-cd example && make FML_INCLUDE=/path/to/folder/containing/FML && mpirun -np 4 ./amrtest
+cd example && make FML_INCLUDE=/path/to/folder/containing/FML && mpirun -np 4 ./amrtest [nbx|dense]
 ```
 
 ## Known limitations / next steps
 
 - `adapt` changes each leaf by at most one level per call. Call it repeatedly to reach deep levels.
 - Balance and ghost-pattern construction do 4^NDIM - 2^NDIM key lookups per leaf (56 in 3D). This is fine for now; it can be restricted to cells near changes later.
-- Ghost-pattern construction uses one `MPI_Alltoall` of counts (O(NTasks)). A sparse/NBX exchange would scale better at very large task counts.
+- The NBX threshold is a guess. Tune `nbx_min_tasks` on a real cluster.
 - No ghost "image shift" is stored. For positions across a periodic boundary, use the minimum-image convention.
 - Message counts are `int` elements of `sizeof(T)` bytes per pair of tasks.
 - No OpenMP yet.
