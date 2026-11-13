@@ -13,7 +13,14 @@ for (IndexInt i = 0; i < grid.get_n_local(); i++) {
 }
 grid.adapt(prolong, restrict);   // 2:1 balance + refine/coarsen + rebuild and fill ghosts
 grid.load_balance(weight);       // repartition the curve by weight + migrate + rebuild ghosts
-grid.exchange_ghosts();          // after changing data
+grid.exchange_ghosts();          // after changing data (blocking)
+
+// Overlap communication with computation
+auto h = grid.begin_exchange_ghosts();               // values are packed here
+for (auto i : grid.get_interior_cells()) ...;        // all neighbours are local
+h.wait();                                            // (or poll with h.test())
+for (auto i : grid.get_boundary_cells()) ...;        // may use ghosts
+// begin_communicate_ghosts(local, ghost) does the same for any per-cell vector; several can be in flight
 
 auto nb = grid.get_face_neighbors(i, dim, +1);   // relation: BOUNDARY / COARSER / SAME / FINER
 for (int j = 0; j < nb.n; j++) grid.get_data(nb.cells[j]);   // local or ghost, transparently
@@ -27,15 +34,16 @@ grid.find_leaf(std::array<double,3>{x, y, z});   // the leaf containing any poin
 - **Lookup by containment.** `find_leaf(point)` computes the key of the point and binary-searches for the leaf whose range contains it, among the local leaves or the ghosts. A neighbour that is coarser or finer is therefore found exactly like a same-level one.
 - **Partition.** Every task holds `domain_start[NTasks+1]`, and the owner of a key is found by binary search. Partition cuts never fall inside a sibling family, so any family can always be coarsened, and the leaf set is **independent of the number of tasks**. The tests check this with a global hash.
 - **2:1 balance** is enforced across faces, edges and corners. It uses iterative target-level propagation with ghost exchange until a global `Allreduce` reports no change.
-- **Ghosts.** One layer: every remote leaf touching a local leaf by face, edge or corner, at its own level. A leaf is sent to every task whose key range intersects one of its "touching boxes" one level finer. Under 2:1 balance this set is exact. The communication pattern is cached and rebuilt after `adapt`/`load_balance`. Neighbours across a periodic boundary that are owned by the same task are local leaves, so there are no self-ghosts.
+- **Ghosts.** One layer: every remote leaf touching a local leaf by face, edge or corner, at its own level. A leaf is sent to every task whose key range intersects one of its "touching boxes" one level finer. Under 2:1 balance this set is exact. The communication pattern is cached and rebuilt after `adapt`/`load_balance`. The same pass splits the local leaves into *boundary* leaves (touching a remote leaf) and *interior* leaves, so the exchange can overlap the interior work. The exchange handle is move-only and waits in its destructor if you forget to. Neighbours across a periodic boundary that are owned by the same task are local leaves, so there are no self-ghosts.
 - **Coarsening** requires a complete local family, every member flagged, and that the resulting parent does not break 2:1 balance (checked conservatively against neighbour target levels).
 
 ## Tests
 
 `example/Test.cpp` covers the following:
 - Hilbert bijection, adjacency of consecutive keys, hierarchy, and full-depth round trips.
+- Overlapped exchange: the interior is computed while ghosts still hold stale values and must match the blocking result. Two exchanges are in flight at once, finished in reverse order. A deliberately wrong ordering (boundary before `wait`) makes the test fail.
 - 2D and 3D grids with periodic, non-periodic and mixed boundaries, driven by a moving shell and by random flags.
-- After every `adapt`/`load_balance`: sorted and contiguous leaves, full coverage, ownership, ghost completeness, 2:1 balance, ghost values, and face-neighbour areas.
+- After every `adapt`/`load_balance`: sorted and contiguous leaves, full coverage, ownership, ghost completeness, 2:1 balance, the boundary/interior split, ghost values, and face-neighbour areas.
 
 Verified identical leaf sets on 1, 2, 3, 4, 5, 7, 8, 13, 16 and 24 tasks (24 > number of initial cells, so some tasks start empty), and clean under AddressSanitizer.
 
@@ -46,7 +54,6 @@ cd example && make FML_INCLUDE=/path/to/folder/containing/FML && mpirun -np 4 ./
 ## Known limitations / next steps
 
 - `adapt` changes each leaf by at most one level per call. Call it repeatedly to reach deep levels.
-- Ghost data is exchanged with nonblocking point-to-point messages, but the API is blocking. Split it into `begin`/`end` to overlap with interior work.
 - Balance and ghost-pattern construction do 4^NDIM - 2^NDIM key lookups per leaf (56 in 3D). This is fine for now; it can be restricted to cells near changes later.
 - Ghost-pattern construction uses one `MPI_Alltoall` of counts (O(NTasks)). A sparse/NBX exchange would scale better at very large task counts.
 - No ghost "image shift" is stored. For positions across a periodic boundary, use the minimum-image convention.

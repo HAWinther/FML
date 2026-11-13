@@ -146,6 +146,69 @@ bool check_face_neighbors(const AdaptiveMPIGrid<NDIM, TestData> & grid) {
     return not FML::GRID::AMRDETAIL::allreduce_or(not ok);
 }
 
+// Stencil (sum over face neighbours) computed with a blocking exchange vs. overlapped with the
+// exchange (interior first, then boundary). Also two exchanges in flight at once, finished in
+// reverse order, one of them via test().
+template <int NDIM>
+bool check_overlap(AdaptiveMPIGrid<NDIM, TestData> & grid) {
+    const IndexInt n = grid.get_n_local();
+    auto stencil = [&](IndexInt i) {
+        double s = 0.0;
+        for (int dim = 0; dim < NDIM; dim++)
+            for (int sign = -1; sign <= 1; sign += 2) {
+                auto nb = grid.get_face_neighbors(i, dim, sign);
+                for (int j = 0; j < nb.n; j++)
+                    s += grid.get_data(nb.cells[j]).value * (j + 1) * (dim + 2) * (sign + 3);
+            }
+        return s;
+    };
+    auto set_values = [&](double offset) {
+        for (IndexInt i = 0; i < n; i++) {
+            auto & c = grid.get_cell(i);
+            grid.get_data(i) = TestData{c.key, c.level, offset + double(c.key % 99991) + c.level};
+        }
+    };
+
+    bool ok = true;
+
+    // Ghosts first hold stale values (offset 1). Then new values (offset 2) are sent while the
+    // interior is computed: if an interior cell used a ghost, its result would be wrong.
+    set_values(1.0);
+    grid.exchange_ghosts();
+    set_values(2.0);
+    std::vector<double> res(n);
+    {
+        auto h = grid.begin_exchange_ghosts();
+        for (auto i : grid.get_interior_cells())
+            res[i] = stencil(i);
+        h.wait();
+        for (auto i : grid.get_boundary_cells())
+            res[i] = stencil(i);
+    }
+    grid.exchange_ghosts(); // reference: blocking exchange of the same values
+    for (IndexInt i = 0; i < n; i++)
+        if (res[i] != stencil(i))
+            ok = false;
+
+    // Two exchanges in flight at once, finished in reverse order
+    std::vector<int64_t> a(n), ga;
+    std::vector<int8_t> b(n), gb;
+    for (IndexInt i = 0; i < n; i++) {
+        a[i] = int64_t(grid.get_cell(i).key);
+        b[i] = int8_t(grid.get_cell(i).level);
+    }
+    auto ha = grid.begin_communicate_ghosts(a, ga);
+    auto hb = grid.begin_communicate_ghosts(b, gb);
+    std::fill(a.begin(), a.end(), -1); // allowed: values were packed at begin
+    while (not hb.test()) {
+    }
+    ha.wait();
+    for (IndexInt i = 0; i < grid.get_n_ghost(); i++)
+        if (ga[i] != int64_t(grid.get_ghost_cell(i).key) or gb[i] != grid.get_ghost_cell(i).level)
+            ok = false;
+    return not FML::GRID::AMRDETAIL::allreduce_or(not ok);
+}
+
 template <int NDIM>
 void test_grid(int levelmin, int levelmax, std::array<bool, NDIM> periodic, int nsteps, bool random_flags) {
     if (FML::ThisTask == 0) {
@@ -199,6 +262,7 @@ void test_grid(int levelmin, int levelmax, std::array<bool, NDIM> periodic, int 
         CHECK(grid.check_invariants(), "invariants after load balance step " << step);
         CHECK(check_ghost_values(grid), "ghost values after load balance step " << step);
         CHECK(check_face_neighbors(grid), "face neighbours step " << step);
+        CHECK(check_overlap(grid), "overlapped ghost exchange step " << step);
 
         auto hash = grid.global_hash();
         auto ntot = grid.get_n_global();

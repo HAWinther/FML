@@ -44,13 +44,10 @@ int main() {
         grid.info();
     }
 
-    // Ghosts are filled by adapt/load_balance; after changing data call exchange_ghosts()
-    grid.exchange_ghosts();
-
     // Laplacian using face neighbours (coarser: one cell, same: one cell, finer: 2^(NDIM-1) cells)
     std::vector<double> laplacian(grid.get_n_local());
     IndexInt n_coarse_fine = 0;
-    for (IndexInt i = 0; i < grid.get_n_local(); i++) {
+    auto compute_laplacian = [&](IndexInt i) {
         auto & c = grid.get_cell(i);
         const double h = grid.get_cell_size(c.level);
         double lap = 0.0;
@@ -68,7 +65,17 @@ int main() {
             }
         }
         laplacian[i] = lap;
-    }
+    };
+
+    // Overlap the ghost exchange with the interior: start sending, compute cells that only have
+    // local neighbours, wait, then compute the cells that need ghosts.
+    // (adapt/load_balance already fill the ghosts; this is what a time step would look like.)
+    auto exchange = grid.begin_exchange_ghosts();
+    for (auto i : grid.get_interior_cells())
+        compute_laplacian(i);
+    exchange.wait();
+    for (auto i : grid.get_boundary_cells())
+        compute_laplacian(i);
 
 #ifdef USE_MPI
     MPI_Allreduce(MPI_IN_PLACE, &n_coarse_fine, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);

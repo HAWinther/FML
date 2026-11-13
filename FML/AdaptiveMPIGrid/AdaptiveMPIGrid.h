@@ -67,6 +67,12 @@ namespace FML {
         ///   grid.load_balance();   // repartition the curve + migrate + rebuild ghosts
         ///   grid.exchange_ghosts(); // whenever the data has changed
         ///
+        /// Overlapping communication with computation:
+        ///   auto h = grid.begin_exchange_ghosts();
+        ///   for (auto i : grid.get_interior_cells()) ...  // neighbours are all local
+        ///   h.wait();
+        ///   for (auto i : grid.get_boundary_cells()) ...  // may use ghosts
+        ///
         //==========================================================================================
         template <int NDIM, class T>
         class AdaptiveMPIGrid {
@@ -126,7 +132,94 @@ namespace FML {
             std::vector<IndexInt> _recv_offset;
             std::vector<IndexInt> _recv_count;
 
+            // Local leaves touching a remote leaf (need ghosts for a stencil) and the rest
+            std::vector<IndexInt> _boundary_cells;
+            std::vector<IndexInt> _interior_cells;
+
+            // Tag counter so several exchanges can be in flight at the same time. begin calls are
+            // made in the same order on all tasks, so the counters agree.
+            mutable int _tag_counter{0};
+
           public:
+            //==========================================================================================
+            /// Handle for a ghost exchange in flight (returned by begin_communicate_ghosts).
+            /// Move-only. The destructor waits if wait() was never called, so an exchange is never
+            /// left dangling. Values are packed when the exchange starts, so the local vector may be
+            /// changed afterwards, but the ghost vector must not be resized, read or destroyed until
+            /// wait() (or a successful test()) returns.
+            //==========================================================================================
+            template <class U>
+            class GhostExchange {
+                friend class AdaptiveMPIGrid;
+                std::vector<std::vector<U>> _sendbuf;
+#ifdef USE_MPI
+                std::vector<MPI_Request> _req;
+                MPI_Datatype _type{};
+#endif
+                bool _active{false};
+
+              public:
+                GhostExchange() = default;
+                GhostExchange(const GhostExchange &) = delete;
+                GhostExchange & operator=(const GhostExchange &) = delete;
+                GhostExchange(GhostExchange && o) noexcept { *this = std::move(o); }
+                GhostExchange & operator=(GhostExchange && o) noexcept {
+                    if (this != &o) {
+                        wait();
+                        _sendbuf = std::move(o._sendbuf);
+#ifdef USE_MPI
+                        _req = std::move(o._req);
+                        _type = o._type;
+#endif
+                        _active = o._active;
+                        o._active = false;
+                    }
+                    return *this;
+                }
+                ~GhostExchange() { wait(); }
+
+                /// Is the exchange still in flight (wait() not yet called)?
+                bool active() const { return _active; }
+
+                /// Non-blocking check. Returns true (and completes the exchange) if all messages arrived.
+                bool test() {
+                    if (not _active)
+                        return true;
+#ifdef USE_MPI
+                    int flag = 0;
+                    MPI_Testall(int(_req.size()), _req.data(), &flag, MPI_STATUSES_IGNORE);
+                    if (not flag)
+                        return false;
+                    finish();
+#else
+                    _active = false;
+#endif
+                    return true;
+                }
+
+                /// Block until the ghost vector is filled
+                void wait() {
+                    if (not _active)
+                        return;
+#ifdef USE_MPI
+                    MPI_Waitall(int(_req.size()), _req.data(), MPI_STATUSES_IGNORE);
+                    finish();
+#else
+                    _active = false;
+#endif
+                }
+
+              private:
+                void finish() {
+#ifdef USE_MPI
+                    MPI_Type_free(&_type);
+#endif
+                    _sendbuf.clear();
+                    _active = false;
+                }
+            };
+
+
             AdaptiveMPIGrid() = default;
 
             /// Create a uniform grid at levelmin with refinement allowed up to levelmax
@@ -200,12 +293,34 @@ namespace FML {
             //======================================================================
             // Ghosts
             //======================================================================
-            /// Fill the ghost data from the owners
+            /// Fill the ghost data from the owners (blocking)
             void exchange_ghosts() { communicate_ghosts(_data, _ghost_data); }
 
-            /// Communicate any per-cell quantity to the ghost layer
+            /// Start filling the ghost data. Overlap with work on get_interior_cells(), then call
+            /// wait() on the handle before touching get_boundary_cells():
+            ///   auto h = grid.begin_exchange_ghosts();
+            ///   for (auto i : grid.get_interior_cells()) ...;   // only local neighbours
+            ///   h.wait();
+            ///   for (auto i : grid.get_boundary_cells()) ...;   // may use ghosts
+            /// Do not modify the cell data until wait() has returned.
+            GhostExchange<T> begin_exchange_ghosts() { return begin_communicate_ghosts(_data, _ghost_data); }
+
+            /// Communicate any per-cell quantity to the ghost layer (blocking)
             template <class U>
-            void communicate_ghosts(const std::vector<U> & local, std::vector<U> & ghost) const;
+            void communicate_ghosts(const std::vector<U> & local, std::vector<U> & ghost) const {
+                begin_communicate_ghosts(local, ghost).wait();
+            }
+
+            /// Start communicating any per-cell quantity to the ghost layer (non-blocking).
+            /// The values are packed immediately, so local may be modified right after this returns.
+            template <class U>
+            GhostExchange<U> begin_communicate_ghosts(const std::vector<U> & local, std::vector<U> & ghost) const;
+
+            /// Local leaves that touch at least one remote leaf (sorted). These need ghosts for a stencil.
+            const std::vector<IndexInt> & get_boundary_cells() const { return _boundary_cells; }
+            /// Local leaves whose neighbours are all local (sorted). These can be processed while
+            /// a ghost exchange is in flight.
+            const std::vector<IndexInt> & get_interior_cells() const { return _interior_cells; }
 
             //======================================================================
             // Diagnostics
@@ -523,27 +638,34 @@ namespace FML {
 
         template <int NDIM, class T>
         template <class U>
-        void AdaptiveMPIGrid<NDIM, T>::communicate_ghosts(const std::vector<U> & local, std::vector<U> & ghost) const {
+        typename AdaptiveMPIGrid<NDIM, T>::template GhostExchange<U>
+        AdaptiveMPIGrid<NDIM, T>::begin_communicate_ghosts(const std::vector<U> & local, std::vector<U> & ghost) const {
+            static_assert(std::is_trivially_copyable<U>::value, "communicate_ghosts: U must be trivially copyable");
+            assert_mpi(local.size() == _cells.size(), "communicate_ghosts: local vector has wrong size");
             ghost.resize(_ghost_cells.size());
+            GhostExchange<U> h;
+            h._active = true;
 #ifdef USE_MPI
-            AMRDETAIL::MPIType<U> mtype;
-            std::vector<MPI_Request> req(_recv_ranks.size() + _send_ranks.size());
+            const int tag = 100 + (_tag_counter++ % 30000);
+            MPI_Type_contiguous(int(sizeof(U)), MPI_BYTE, &h._type);
+            MPI_Type_commit(&h._type);
+            h._req.resize(_recv_ranks.size() + _send_ranks.size());
             int nreq = 0;
             for (size_t j = 0; j < _recv_ranks.size(); j++)
-                MPI_Irecv(ghost.data() + _recv_offset[j], int(_recv_count[j]), mtype.type, _recv_ranks[j], 1,
-                          MPI_COMM_WORLD, &req[nreq++]);
-            std::vector<std::vector<U>> sendbuf(_send_ranks.size());
+                MPI_Irecv(ghost.data() + _recv_offset[j], int(_recv_count[j]), h._type, _recv_ranks[j], tag,
+                          MPI_COMM_WORLD, &h._req[nreq++]);
+            h._sendbuf.resize(_send_ranks.size());
             for (size_t j = 0; j < _send_ranks.size(); j++) {
-                sendbuf[j].reserve(_send_indices[j].size());
+                auto & buf = h._sendbuf[j];
+                buf.reserve(_send_indices[j].size());
                 for (auto i : _send_indices[j])
-                    sendbuf[j].push_back(local[i]);
-                MPI_Isend(sendbuf[j].data(), int(sendbuf[j].size()), mtype.type, _send_ranks[j], 1, MPI_COMM_WORLD,
-                          &req[nreq++]);
+                    buf.push_back(local[i]);
+                MPI_Isend(buf.data(), int(buf.size()), h._type, _send_ranks[j], tag, MPI_COMM_WORLD, &h._req[nreq++]);
             }
-            MPI_Waitall(nreq, req.data(), MPI_STATUSES_IGNORE);
 #else
             (void)local;
 #endif
+            return h;
         }
 
         template <int NDIM, class T>
@@ -567,6 +689,16 @@ namespace FML {
                     }
                 });
             }
+
+            // Boundary leaves are those sent to someone (touching relation is symmetric under 2:1 balance)
+            std::vector<char> is_boundary(_cells.size(), 0);
+            for (auto & list : sendlists)
+                for (auto i : list)
+                    is_boundary[i] = 1;
+            _boundary_cells.clear();
+            _interior_cells.clear();
+            for (IndexInt i = 0; i < get_n_local(); i++)
+                (is_boundary[i] ? _boundary_cells : _interior_cells).push_back(i);
 
             // Send the cell descriptions
             std::vector<std::vector<Cell>> sendcells(FML::NTasks);
@@ -880,17 +1012,27 @@ namespace FML {
                     fail("ghost owned by self");
             }
 
-            // Every leaf touching a local leaf is available and 2:1 balance holds
+            // Every leaf touching a local leaf is available and 2:1 balance holds. Interior leaves touch
+            // only local leaves, boundary leaves touch at least one ghost.
+            if (IndexInt(_boundary_cells.size() + _interior_cells.size()) != n)
+                fail("boundary + interior != local cells");
+            std::vector<char> is_boundary(n, 0);
+            for (auto i : _boundary_cells)
+                is_boundary[i] = 1;
             for (IndexInt i = 0; i < n; i++) {
+                bool touches_ghost = false;
                 for_each_touching_box(_cells[i], [&](const Coord & x, int) {
                     CellRef r = find_leaf(x);
                     if (not r) {
                         fail("missing neighbour (local or ghost)");
                         return;
                     }
+                    touches_ghost = touches_ghost or r.is_ghost();
                     if (std::abs(int(get_cell(r).level) - int(_cells[i].level)) > 1)
                         fail("2:1 balance violated");
                 });
+                if (touches_ghost != bool(is_boundary[i]))
+                    fail("boundary/interior classification wrong");
             }
 
             // Global coverage: total volume in units of the finest cell must be KEY_END
@@ -935,11 +1077,13 @@ namespace FML {
             for (auto & c : _cells)
                 count[c.level]++;
             IndexInt nmin = get_n_local(), nmax = get_n_local(), nghost = get_n_ghost();
+            IndexInt nboundary = IndexInt(_boundary_cells.size());
 #ifdef USE_MPI
             MPI_Allreduce(MPI_IN_PLACE, count.data(), int(count.size()), MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
             MPI_Allreduce(MPI_IN_PLACE, &nmin, 1, MPI_LONG_LONG, MPI_MIN, MPI_COMM_WORLD);
             MPI_Allreduce(MPI_IN_PLACE, &nmax, 1, MPI_LONG_LONG, MPI_MAX, MPI_COMM_WORLD);
             MPI_Allreduce(MPI_IN_PLACE, &nghost, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, &nboundary, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
 #endif
             if (FML::ThisTask == 0) {
                 IndexInt ntot = 0;
@@ -949,7 +1093,7 @@ namespace FML {
                     ntot += count[l];
                 }
                 std::cout << " | total " << ntot << " | per task min/max " << nmin << "/" << nmax << " | ghosts "
-                          << nghost << "\n";
+                          << nghost << " | boundary cells " << nboundary << "\n";
             }
         }
 
