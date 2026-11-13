@@ -51,6 +51,12 @@
 ///                    phi) coupled to the CDM, whose particles have the mass m ~ exp(-beta phi) (Wetterich 1995;
 ///                    Amendola 2000): the background, rho_c(a) = Omega_cdm cdm_mass_factor(a) a^-3. The force and the
 ///                    velocity term of the CDM are in the gravity model CoupledQuintessence (needs this cosmology)
+///   IDE           -> ide (cosmology_ide_w, _xi, _cs2): interacting dark energy, the energy exchange Q = xi H rho_DE
+///                    along the dark-matter 4-velocity (Valiviita, Majerotto & Maartens 2008). The CDM particles have
+///                    their own masses: each gains xi/3 rho_DE times the change of its physical volume
+///                    (Simulation::update_ide_masses); their velocities are not changed. Mean mass cdm_mass_factor(a)
+///   CubicGalileon -> cubic_galileon: the cubic Galileon on its tracker (no free parameter beyond those of LCDM; the
+///                    dark energy is the Galileon). The force is the gravity model CubicGalileon (needs this cosmology)
 ///   Tabulated     -> a tabulated dark energy (BackgroundModel_Tabulated.h; cosmology_tabulated_filename, _format
 ///                    = H (z, H/H0), CLASS (a CLASS background file) or w (a, w))
 ///
@@ -115,6 +121,7 @@ class Cosmology {
         double ds_w, ds_xi, ds_cs2;
         double cds_alpha;
         double cq_lambda, cq_beta;
+        double ide_w, ide_xi, ide_cs2;
         double As, ns, kpivot_mpc; // The primordial power-spectrum
 
         /// The parameters of the background and of the models
@@ -254,6 +261,24 @@ class Cosmology {
                            "Coupled quintessence: the coupling beta (Amendola's sqrt(2/3) beta): the CDM particles have "
                            "the mass m ~ exp(-beta phi) and feel G (1 + 2 beta^2) from the CDM. 0: uncoupled");
             });
+            f.for_cosmology({"IDE"}, [&]() {
+                f.required("cosmology_ide_w",
+                           ide_w,
+                           -0.9,
+                           "Interacting dark energy: the (constant) equation of state w of the dark energy (!= -1)");
+                f.required("cosmology_ide_xi",
+                           ide_xi,
+                           -0.1,
+                           "Interacting dark energy: the coupling xi of the energy exchange Q = xi H rho_DE along the "
+                           "dark-matter 4-velocity (> 0: energy flows to the dark matter; 0: wCDM). Needs the doom "
+                           "factor xi / (3 (1 + w)) <= 0 (xi < 0 for w > -1, xi > 0 for w < -1)");
+                f.optional(
+                    "cosmology_ide_cs2",
+                    ide_cs2,
+                    1.0,
+                    "Interacting dark energy: the rest-frame sound speed squared of the dark energy (only for the "
+                    "IC from the internal Einstein-Boltzmann solver)");
+            });
             f.for_cosmology({"DGP"}, [&]() {
                 f.required("cosmology_dgp_OmegaRC",
                            dgp_OmegaRC,
@@ -356,6 +381,15 @@ class Cosmology {
             for (const auto & s : bg->species())
                 if (const auto * field = dynamic_cast<const BG::CoupledFieldSpecies *>(s.get()))
                     cq_sector = &field->sector();
+        ide_cdm = nullptr;
+        ide_de = nullptr;
+        if (registry_name == "ide")
+            for (const auto & s : bg->species()) {
+                if (const auto * c = dynamic_cast<const BG::InteractingCDMSpecies *>(s.get()))
+                    ide_cdm = c;
+                if (const auto * d = dynamic_cast<const BG::InteractingDarkEnergySpecies *>(s.get()))
+                    ide_de = d;
+            }
         massive_neutrinos.clear();
         for (double m : params().m_nu_eV)
             massive_neutrinos.emplace_back(m, params());
@@ -541,12 +575,29 @@ class Cosmology {
     double cq_beta() const { return cq_sector ? cq_sector->beta : 0.0; }
     /// dphi/dlna of the field (0 for the other models)
     double cq_dphidlna(double a) const { return cq_sector ? cq_sector->dphidx(std::log(a)) : 0.0; }
-    /// The CDM mass relative to today, m(a) / m(1) = rho_c(a) a^3 / Omega_cdm (= exp(-beta (phi(a) - phi(1))))
+    /// The CDM mass relative to today, m(a) / m(1) = rho_c(a) a^3 / Omega_cdm (coupled quintessence: exp(-beta (phi(a)
+    /// - phi(1))); interacting dark energy: the mean mass, which also changes with the local expansion)
     double cdm_mass_factor(double a) const {
-        if (not cq_sector)
-            return 1.0;
-        return cq_sector->rho_c(std::log(a)) * a * a * a / get_OmegaCDM();
+        if (cq_sector)
+            return cq_sector->rho_c(std::log(a)) * a * a * a / get_OmegaCDM();
+        if (ide_cdm)
+            return ide_cdm->rho(std::log(a)) * a * a * a / get_OmegaCDM();
+        return 1.0;
     }
+    /// The CDM mass changes with time (coupled quintessence, interacting dark energy)
+    bool cdm_mass_varies() const { return cq_sector != nullptr or ide_cdm != nullptr; }
+
+    //========================================================================
+    // Interacting dark energy (IDE): energy exchange Q = xi H rho_DE along the dark-matter 4-velocity. The CDM momentum
+    // is not changed (no velocity term) and the mass a CDM particle gains is xi/3 rho_DE times the change of its
+    // physical volume (the exchange follows the local expansion of the dark matter), see Simulation::
+    // update_ide_masses. The CDM mass factors above are the background, rho_c(a) a^3 / Omega_cdm
+    //========================================================================
+    bool is_ide() const { return ide_cdm != nullptr; }
+    /// The coupling xi (0 for the other models)
+    double ide_xi() const { return ide_de ? ide_de->xi : 0.0; }
+    /// rho_DE(a) a^3 in units of rho_crit today (0 for the other models)
+    double ide_rho_de_a3(double a) const { return ide_de ? ide_de->rho(std::log(a)) * a * a * a : 0.0; }
     /// The CDM fraction of the CDM+baryon density at a, rho_c(a) / (rho_c(a) + rho_b(a))
     double cdm_fraction_cb(double a) const {
         const double c = get_OmegaCDM() * cdm_mass_factor(a);
@@ -555,14 +606,14 @@ class Cosmology {
     /// rho_m(a) a^3 / OmegaM of the clustering matter: the time dependence of the Poisson source 1.5 OmegaM a delta
     /// from the CDM mass (exactly 1 except for coupled quintessence)
     double clustering_mass_factor(double a) const {
-        if (not cq_sector)
+        if (not cdm_mass_varies())
             return 1.0;
         return (get_OmegaCDM() * cdm_mass_factor(a) + get_Omegab() + get_OmegaMNu()) / get_OmegaM();
     }
     /// rho_cb(a) a^3 / OmegaCB: the mass of the CDM+baryon particles relative to today (exactly 1 except for coupled
     /// quintessence)
     double cb_mass_factor(double a) const {
-        if (not cq_sector)
+        if (not cdm_mass_varies())
             return 1.0;
         return (get_OmegaCDM() * cdm_mass_factor(a) + get_Omegab()) / (get_OmegaCDM() + get_Omegab());
     }
@@ -674,6 +725,8 @@ class Cosmology {
             {"DarkScattering", &Cosmology::read_dark_scattering},
             {"CovariantDarkScattering", &Cosmology::read_covariant_dark_scattering},
             {"CoupledQuintessence", &Cosmology::read_coupled_quintessence},
+            {"IDE", &Cosmology::read_ide},
+            {"CubicGalileon", &Cosmology::read_cubic_galileon},
             {"Tabulated", &Cosmology::read_tabulated, true, false, true},
         };
         return list;
@@ -726,6 +779,19 @@ class Cosmology {
             throw std::runtime_error("CoupledQuintessence: need finite cosmology_cq_lambda and cosmology_cq_beta");
         model_parameters = {{"cq_lambda", settings.cq_lambda}, {"cq_beta", settings.cq_beta}};
     }
+    void read_ide() {
+        registry_name = "ide";
+        const double w = settings.ide_w, xi = settings.ide_xi, cs2 = settings.ide_cs2;
+        if (std::fabs(1.0 + w) < 1e-6)
+            throw std::runtime_error("IDE: need cosmology_ide_w != -1");
+        if (xi / (3.0 * (1.0 + w)) > 0.0)
+            throw std::runtime_error("IDE: the doom factor xi / (3 (1 + w)) > 0 (large-scale instability of the dark "
+                                     "energy perturbations): need xi <= 0 for w > -1 and xi >= 0 for w < -1");
+        if (not(cs2 > 0.0))
+            throw std::runtime_error("IDE: need cosmology_ide_cs2 > 0");
+        model_parameters = {{"ide_w", w}, {"ide_xi", xi}, {"ide_cs2", cs2}};
+    }
+    void read_cubic_galileon() { registry_name = "cubic_galileon"; }
     void read_dgp() {
         registry_name = "dgp";
         model_parameters = {{"Omega_rc", settings.dgp_OmegaRC}, {"dgp_branch", 1.0}};
@@ -834,6 +900,9 @@ class Cosmology {
     double cds_alpha{0.0};    // CovariantDarkScattering: alpha
     // CoupledQuintessence: the background solution of the field and the CDM (owned by bg)
     const FML::COSMOLOGY::BACKGROUND::CoupledDarkSector * cq_sector{nullptr};
+    // IDE: the interacting CDM and dark energy (owned by bg)
+    const FML::COSMOLOGY::BACKGROUND::InteractingCDMSpecies * ide_cdm{nullptr};
+    const FML::COSMOLOGY::BACKGROUND::InteractingDarkEnergySpecies * ide_de{nullptr};
     std::string tabulated_filename, tabulated_format;
 
     // zeta(3), zeta(4), zeta(5): the non-relativistic neutrino mass relation and the sound speed

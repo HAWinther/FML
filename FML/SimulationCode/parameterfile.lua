@@ -54,7 +54,7 @@ end
 -- Choose the cosmology 
 ------------------------------------------------------------
 -- Cosmology: LCDM, w0waCDM, DGP, JBD, Quintessence, EDE, DarkScattering, CovariantDarkScattering, CoupledQuintessence,
--- Tabulated ... add your own ...
+-- IDE, CubicGalileon, Tabulated ... add your own ...
 cosmology_model = "LCDM"
 --- CDM density
 cosmology_OmegaCDM = 0.2685
@@ -135,6 +135,15 @@ if cosmology_model == "CoupledQuintessence" then
   cosmology_cq_lambda = 0.5
   cosmology_cq_beta = 0.05
 end
+if cosmology_model == "IDE" then
+  -- Interacting dark energy: the energy exchange Q = xi H rho_DE along the dark-matter 4-velocity (xi > 0: energy flows
+  -- to the dark matter), a dark energy with constant w. Needs xi / (3 (1 + w)) <= 0. The CDM particles carry their own
+  -- masses (they change with the volume of the particle); cs2 only for the IC from the internal solver
+  cosmology_ide_w = -0.9
+  cosmology_ide_xi = -0.1
+  cosmology_ide_cs2 = 1.0
+end
+-- CubicGalileon: the cubic Galileon on its tracker (no parameters; use it with gravity_model = "CubicGalileon")
 if cosmology_model == "Tabulated" then
   -- The background from a file: H (columns z, H/H0), CLASS (a CLASS background file) or w (columns a, w(a))
   cosmology_tabulated_filename = "input/class_background_w0wa.dat"
@@ -170,7 +179,8 @@ end
 ------------------------------------------------------------
 -- Choose the gravity model
 ------------------------------------------------------------
--- Gravity model: GR, f(R), DGP, JBD, Symmetron, Dilaton, mbeta, mu, CoupledQuintessence ... add your own ...
+-- Gravity model: GR, f(R), DGP, CubicGalileon, JBD, Symmetron, Dilaton, mbeta, mu, CoupledQuintessence ... add your
+-- own ...
 -- (JBD needs cosmology_model = "JBD": it takes phi(a) from the background; CoupledQuintessence goes together with
 -- cosmology_model = "CoupledQuintessence": the force and velocity term of the coupled CDM)
 gravity_model = "GR"
@@ -356,11 +366,30 @@ if gravity_model == "DGP" then
   multigrid_nsweeps_first_step = 2
 end
 
--- The multigrid solver of the exact equations (f(R), Symmetron, Dilaton, DGP with *_exact_solution = true)
-if gravity_model_fofr_exact_solution or gravity_model_symmetron_exact_solution or gravity_model_dilaton_exact_solution or gravity_model_dgp_exact_solution then
+-- The cubic Galileon (needs cosmology_model = "CubicGalileon"): the DGP equation with the Galileon's r_c(a), beta(a)
+if gravity_model == "CubicGalileon" then
+  -- Solve the exact equation with DGP's multigrid solver (slow and mainly for testing)
+  gravity_model_cubic_galileon_exact_solution = false
+  -- Approximate screening model (otherwise linear)
+  gravity_model_screening = true
+  gravity_model_screening_efficiency = 1.0
+  gravity_model_screening_enforce_largescale_linear = true
+  gravity_model_screening_linear_scale_hmpc = 0.1
+  -- Options for the multigrid solver in case we solve exact equation:
+  multigrid_solver_residual_convergence = 1e-5
+  multigrid_nsweeps = 3
+  multigrid_nsweeps_first_step = 20
+end
+
+-- The multigrid solver of the exact equations (f(R), Symmetron, Dilaton, DGP, CubicGalileon with *_exact_solution =
+-- true)
+if gravity_model_fofr_exact_solution or gravity_model_symmetron_exact_solution or gravity_model_dilaton_exact_solution or gravity_model_dgp_exact_solution or gravity_model_cubic_galileon_exact_solution then
   -- Converged when the rms residual is below multigrid_solver_residual_convergence (residual) or below it times
   -- the rms of the linear source of the equation (relative; the residual scale changes a lot during a simulation)
   multigrid_convergence_criterion = "residual"
+  if gravity_model == "CubicGalileon" then
+    multigrid_convergence_criterion = "relative"
+  end
   -- Solve the field equation on a grid coarser by this factor than the force grid (1: the force grid)
   multigrid_coarse_factor = 1
   -- With multigrid_coarse_factor > 1: the density on the coarse grid is its Fourier modes below the coarse

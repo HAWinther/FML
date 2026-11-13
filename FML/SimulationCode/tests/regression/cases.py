@@ -485,6 +485,52 @@ CASES = {
         ic_input_filename=INPUT + "/transfer_tables/coupled_quintessence.txt",
         ic_input_redshift=20.0,
     ),
+    # Interacting dark energy: the CDM+baryon particles as one fluid with their own masses (the energy exchange with the
+    # change of their volume; the mass growth in the growth factors and the COLA frame), and CDM particles with
+    # masses and baryon particles (no COLA, Quinn)
+    "ide_cola": dict(
+        cosmology_model="IDE",
+        cosmology_ide_w=-0.9,
+        cosmology_ide_xi=-0.1,
+        cosmology_ide_cs2=1.0,
+    ),
+    "ide_baryons_quinn": dict(
+        cosmology_model="IDE",
+        cosmology_ide_w=-0.9,
+        cosmology_ide_xi=-0.1,
+        cosmology_ide_cs2=1.0,
+        particle_baryons=True,
+        particle_baryon_lattice="same",
+        simulation_use_cola=False,
+        timestep_method="Quinn",
+        ic_type_of_input="tables",
+        ic_input_filename=INPUT + "/transfer_tables/ide.txt",
+        ic_input_redshift=20.0,
+    ),
+    # The cubic Galileon (its tracker background and the force of the DGP form with r_c(a), beta(a)): the screening
+    # approximation with COLA, and the exact field equation (DGP's multigrid solver)
+    "cubic_galileon_cola": dict(
+        cosmology_model="CubicGalileon",
+        gravity_model="CubicGalileon",
+        gravity_model_cubic_galileon_exact_solution=False,
+        gravity_model_screening=True,
+        gravity_model_screening_efficiency=1.0,
+        gravity_model_screening_enforce_largescale_linear=False,
+        gravity_model_screening_linear_scale_hmpc=0.1,
+    ),
+    "cubic_galileon_exact_multigrid": dict(
+        cosmology_model="CubicGalileon",
+        gravity_model="CubicGalileon",
+        gravity_model_cubic_galileon_exact_solution=True,
+        gravity_model_screening=True,
+        gravity_model_screening_efficiency=1.0,
+        gravity_model_screening_enforce_largescale_linear=False,
+        gravity_model_screening_linear_scale_hmpc=0.1,
+        multigrid_solver_residual_convergence=1e-7,
+        multigrid_nsweeps=5,
+        multigrid_nsweeps_first_step=10,
+        multigrid_coarse_factor=1,
+    ),
     # CDM and baryons as separate particles (same lattice), BullFrog, IC from the transfer functions at zini
     "two_species_bullfrog": dict(
         particle_baryons=True,

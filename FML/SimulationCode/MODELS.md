@@ -68,6 +68,31 @@ add a model is in [DEVELOPING.md](DEVELOPING.md#adding-a-model).
   source `clustering_mass_factor`). Needs `gravity_model = CoupledQuintessence` (the force and the velocity term of the
   CDM, below).
 
+* IDE: interacting dark energy (Valiviita, Majerotto & Maartens 2008), the internal solver's `ide`: a dark-energy
+  fluid with a constant `cosmology_ide_w` (!= -1) and the energy exchange Q = xi H rho_DE along the dark-matter
+  4-velocity (`cosmology_ide_xi`; > 0: energy flows to the dark matter; the doom factor xi / (3 (1 + w)) must be <= 0;
+  `cosmology_ide_cs2` for the IC). The CDM density follows rho_c' = -3 rho_c + xi rho_DE (`cdm_mass_factor`). As in
+  the solver the exchange is perturbed by the local expansion of the dark matter, so on sub-horizon scales a CDM
+  particle gains xi/3 rho_DE times the change of its volume and keeps its momentum: the particles carry their own
+  masses (`Simulation::update_ide_masses`, before the force of every step; the volume from the number density of the
+  particles, CIC on the particle grid). This dilution term (delta_c' = delta_n' (1 - q/3) - q delta_c, q = xi
+  rho_DE / rho_c) is most of the effect: xi = -0.1, w = -0.9 gives 10% more growth of delta_cb from z = 49 to 0 than
+  xi = 0, but only 2% if all the masses changed alike. The growth factors include the mass perturbation (the source
+  (1 + m1) delta_n, `GravityModel::ide_mass_growth`), so the COLA frame follows the particles. Tested against the
+  solver (xi = -0.1, w = -0.9, 1e-4 times the power, 32^3 particles in 1000 Mpc/h): the extra growth over xi = 0
+  agrees to 6e-4 for k < 0.02 h/Mpc (CDM 7e-4, baryons 1e-4 with `particle_baryons = true`), and is too small by
+  8e-3 for k < 0.05 h/Mpc (k_N/2 of the particle grid: the volume is smoothed on the scale of the particle grid;
+  deconvolving that is unstable in the nonlinear regime); COLA (30 steps) as Quinn (200 steps). Q does not depend on
+  rho_c, so in voids the dark matter can run out (xi < 0; the masses stop at zero, the CDM+baryon particles at their
+  baryons): the nonlinear regime of the model is extreme (P(k) relative to xi = 0 at z = 0 is 5% below the linear
+  ratio on large scales in a 256 Mpc/h box). Not with massive neutrinos; with `particle_baryons` only with
+  `particle_baryon_relative_mode = displacement` and not with BullFrog. The particles need a mass (the default
+  particle type has one; it is 120 bytes in 3D).
+
+* CubicGalileon: the cubic Galileon on its tracker (the internal solver's `cubic_galileon`; no parameter beyond those
+  of ΛCDM, the dark energy is the Galileon with Omega = 1 - the other species). Use it with `gravity_model =
+  CubicGalileon` (with `gravity_model = GR` it is the background alone).
+
 For Quintessence, EDE and Tabulated the dark energy is smooth (no perturbations) and the gravity model is GR (they can be combined with the other gravity models, but those use the background only through H(a)). The backgrounds were checked against an independent solution (scipy): H(a) agrees to < 1e-4 and w(a) to < 1e-5 for a < 1, and the EDE peak fraction and redshift to < 1e-3.
 
 ## Gravity models
@@ -85,6 +110,23 @@ For Quintessence, EDE and Tabulated the dark energy is smooth (no perturbations)
   cosmology it is the normal branch, with the DGP cosmology the original self-accelerating model.
 
 * JBD: Jordan–Brans–Dicke. The gravity model of the cosmology with the same name (and it needs that cosmology).
+
+* CubicGalileon: the force of the cubic Galileon (needs `cosmology_model = CubicGalileon`). Its quasi-static field
+  equation is that of the DGP brane-bending mode with a time-dependent cross-over scale, (r_c H0/c)^2 = E^2 / (2
+  Omega_phi(a) Omega_phi0), and beta = (1 - 2 dlnH/dlna - Omega_phi(a)) / (3 Omega_phi(a))
+  (`FML/Cosmology/Perturbations/QuasiStaticGravity_CubicGalileon.h`): G_eff/G = 1 + 1/(3 beta) (1.03 at z = 1, 1.77
+  today; it agrees with the Einstein-Boltzmann solver to 0.1%), the 2LPT source and the Vainshtein screening of DGP
+  with these r_c(a) and beta(a) (approximate screening: the spherical top-hat factor of the local density, also in
+  underdense regions; exact: `gravity_model_cubic_galileon_exact_solution`, DGP's multigrid solver). In deep voids
+  (delta < -0.6 today) the equation has no real solution: the screening factor and the multigrid solver use the
+  limit there (a zero discriminant; the number of such cells is printed), as Barreira et al. 2013 (arXiv:1306.3219),
+  who found the same for a > ~0.8. The multigrid solver then stalls at a residual of ~1e-4 (it stops after
+  1000 V-cycles, slow). Tested: linear growth from z = 49 to 0 over GR on the same background +2.03% (linear,
+  screening and multigrid alike) vs +2.07% from the quasi-static growth equation; at normal amplitude (256 Mpc/h, 64^3
+  particles, COLA 30 steps) P(k)/P_GR at z = 0 is 1.04-1.21 for k = 0.03-1.5 h/Mpc without screening, 1.04-1.065
+  with the exact equation and 1.03-1.06 with the screening approximation (without
+  `gravity_model_screening_enforce_largescale_linear`, which restores the linear 1.04 on large scales); Barreira et
+  al. found <~8% more power in the nonlinear regime.
 
 * Symmetron: a symmetron with V = -(φ/φ*)^N/N + (φ/φ*)^M/M (symmetry breaking at `gravity_model_symmetron_assb`).
 
@@ -111,11 +153,11 @@ For Quintessence, EDE and Tabulated the dark energy is smooth (no perturbations)
 
 * mu: Phenomenological modified gravity, the Poisson equation with G_eff/G = mu(a,k) and no screening (as in linear theory, also on small scales): `gravity_model_mu_parametrization = "DE"` with mu = 1 + mu0 Omega_DE(a)/Omega_DE(a=1) (the "late-time" parametrisation used by Planck and DES), `"BZ"` with mu = (1 + beta1 lambda1^2 k^2 a^s) / (1 + lambda1^2 k^2 a^s) (Bertschinger & Zukin 2008; k in h/Mpc, lambda1 in Mpc/h), or `"table"` with mu(a) or mu(a,k) from a file with rows `a mu` or `a k mu` on a regular grid (e.g. computed with hi_class; splined in log a and log k, the closest value outside the table; example: `input/mu_table_BZ_example.txt`). The growth factors (1LPT-3LPT) are solved with mu(a,k), so a k-dependent mu gives scale-dependent growth (use scale-dependent COLA, or COLA with the large-scale growth and the rest from the PM part). Only the potential that moves the particles is modified (Sigma, the lensing potential, is not used: the lightcone potential maps are GR). Test (`tests/check_mu_gravity.py`: 64^3 particles, 256 Mpc/h, 2x grid, linear amplitude, IC from GR growth at z = 19): P_mu/P_GR at z = 0 agrees with (D_mu/D_GR)^2 from an independent solution of the growth equation to 0.05% for k <= 0.1 h/Mpc (mu0 = 0.5: P_mu/P_GR = 1.131; BZ with beta1 = 4/3, lambda1 = 10 Mpc/h, s = 4: 1.002-1.18 for k = 0.03-0.6) and to 0.2-1.2% up to k = 0.6 h/Mpc (the force resolution of the PM grid), with and without scale-dependent COLA; the tables reproduce the parametrisations to 0.001%. At normal amplitude COLA (30 steps, scale-dependent for BZ) gives the same response P_mu/P_GR as 200 Quinn steps to 0.02% for k < 0.6 h/Mpc.
 
-The theory of f(R), DGP, JBD, the symmetron, (m(a), beta(a)) and mu (the DE parametrisation) - G_eff(k,a)/G, the f(R) scalaron mass and f_R(a), the DGP beta(a) and its second-order (2LPT) source, and the screening (its type, potential or density, its threshold and the screening factor) - is not defined here but in `FML/Cosmology/Perturbations/QuasiStaticGravity_*.h`, on the run's background, and is the same as in FML's Einstein-Boltzmann solver and the hybrid bias one-loop kernels. Applying the screening to the density field and the multigrid solvers are here (the f(R) solver takes the background curvature R(a) of the theory). The growth factors are solved by `FML/Cosmology/Growth/LPTGrowthFactors.h`.
+The theory of f(R), DGP, the cubic Galileon, JBD, the symmetron, (m(a), beta(a)) and mu (the DE parametrisation) - G_eff(k,a)/G, the f(R) scalaron mass and f_R(a), the DGP beta(a) and its second-order (2LPT) source, and the screening (its type, potential or density, its threshold and the screening factor) - is not defined here but in `FML/Cosmology/Perturbations/QuasiStaticGravity_*.h`, on the run's background, and is the same as in FML's Einstein-Boltzmann solver and the hybrid bias one-loop kernels. Applying the screening to the density field and the multigrid solvers are here (the f(R) solver takes the background curvature R(a) of the theory). The growth factors are solved by `FML/Cosmology/Growth/LPTGrowthFactors.h`.
 
 ## Screening
 
-For the models with screening (f(R), DGP, the symmetron, the dilaton and (m(a), β(a))) there are four ways to
+For the models with screening (f(R), DGP, the cubic Galileon, the symmetron, the dilaton and (m(a), β(a))) there are four ways to
 include the nonlinear evolution of the scalar field:
 
 * Linear: simulate with the linearised field equations. Fast, and agrees with linear theory on large scales.

@@ -6,8 +6,8 @@
 // linear perturbations of a theory of gravity, on a Background. It is the one definition of the theory's mu, Sigma
 // (and the second-order source) used by
 //   the Einstein-Boltzmann solver   PerturbedFieldEquation_MuSigma and its subclasses (HuSawicky, DGP)
-//   SimulationCode                  GravityModel_fofr, _DGP, _JBD, _mu (linear growth, LPT, the linear part of the
-//                                   force; the N-body side - screening, multigrid - stays in SimulationCode)
+//   SimulationCode                  GravityModel_fofr, _DGP, _CubicGalileon, _JBD, _mu (linear growth, LPT, the linear
+//                                   part of the force; the N-body side - screening, multigrid - stays in SimulationCode)
 // With the comoving density rho Delta of all species (Planck sign of the spatial potential, Phi_P):
 //   k^2 Psi           = -4 pi G a^2 mu(k, a)    rho Delta
 //   k^2 (Phi_P + Psi) = -8 pi G a^2 Sigma(k, a) rho Delta
@@ -32,8 +32,8 @@
 // the code that has the grid.
 //
 // The object keeps a reference to the background: the background must outlive it.
-// Theories: QuasiStaticGravity_MuSigma.h (Planck/DES), _HuSawicky.h (f(R)), _DGP.h, _BransDicke.h, _Symmetron.h,
-// _MBeta.h (the (m(a), beta(a)) parametrisation of chameleon-like theories).
+// Theories: QuasiStaticGravity_MuSigma.h (Planck/DES), _HuSawicky.h (f(R)), _DGP.h, _CubicGalileon.h, _BransDicke.h,
+// _Symmetron.h, _MBeta.h (the (m(a), beta(a)) parametrisation of chameleon-like theories).
 // =====================================================================================================================
 
 #include <FML/Cosmology/Background/Background.h>

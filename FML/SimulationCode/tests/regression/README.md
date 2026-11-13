@@ -29,11 +29,13 @@ all the main code paths of the solver:
 | `covariant_dark_scattering_cola`, `covariant_dark_scattering_baryons_fastpm` | The covariantised dark Thomson-like scattering (one fluid with COLA; CDM and baryon particles with FastPM) |
 | `coupled_quintessence_cola` | Coupled quintessence with the CDM+baryon particles as one fluid (G_eff, friction, the varying CDM mass) |
 | `coupled_quintessence_baryons_cola`, `coupled_quintessence_baryons_fastpm` | Coupled quintessence with CDM and baryon particles: the fifth force of the CDM on the CDM, the species' own steps |
+| `ide_cola`, `ide_baryons_quinn` | Interacting dark energy: the particle masses from the energy exchange (CDM+baryons as one fluid with COLA and the mass growth in the growth factors; CDM and baryon particles with Quinn) |
+| `cubic_galileon_cola`, `cubic_galileon_exact_multigrid` | The cubic Galileon: tracker background, the screening approximation with COLA, and the exact field equation (DGP's multigrid solver with r_c(a), beta(a)) |
 | `dark_scattering_baryons_cola`, `dark_scattering_baryons_fastpm` | Dark scattering with CDM and baryon particles: the species' own kick, drift and velocity factors, the COLA correction (COLA + Quinn; FastPM with the two-fluid growth) |
 | `dark_scattering_cola`, `dark_scattering_fastpm` | Dark matter - dark energy scattering: the velocity friction in the growth factors and the kick/drift factors (COLA + Quinn; FastPM without COLA) |
 
-The cases are defined in `cases.py`. The transfer functions of the cases with massive neutrinos, two species, dark scattering (both kinds) and coupled
-quintessence with two species and the N-body gauge are the tables in `input/transfer_tables` (made by `tests/make_transfer_tables.py` with the internal
+The cases are defined in `cases.py`. The transfer functions of the cases with massive neutrinos, two species, dark scattering (both kinds), coupled
+quintessence and interacting dark energy with two species and the N-body gauge are the tables in `input/transfer_tables` (made by `tests/make_transfer_tables.py` with the internal
 Einstein-Boltzmann solver).
 
 ## Usage

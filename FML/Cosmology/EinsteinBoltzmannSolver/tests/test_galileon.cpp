@@ -9,6 +9,8 @@
 //     it contains all the braiding terms (python/derive_cubic_galileon.py)
 //   * Sub-horizon limit: the growth follows the quasi-static G_eff of the same equations,
 //       mu = 1 / (1 - F1^4 g3^2 / (2 a^2 (2 g3 (F1 H + F2) + a^2 c2)))   (conformal time, H0 = 1)
+//   * QuasiStaticGravity_CubicGalileon (the theory of SimulationCode's force: the DGP form with r_c(a), beta(a)) has the
+//     same mu, Sigma = mu, and its r_c, beta give mu = 1 + 1/(3 beta) and the 2LPT source of DGP
 // =============================================================================
 
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
@@ -17,6 +19,7 @@
 #include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
 #include <FML/Cosmology/Perturbations/PerturbationModel_CubicGalileon.h>
+#include <FML/Cosmology/Perturbations/QuasiStaticGravity_CubicGalileon.h>
 
 #include <cmath>
 #include <functional>
@@ -160,6 +163,21 @@ int main() {
         std::cout << "  mu_QS today = " << mu_qs(cs, g, 0.0) << "; growth from z = 54 relative to LCDM: " << ratio
                   << ", quasi-static growth equation: " << ref << "\n";
         check_close(ratio / ref, 1.0, 1e-3, "sub-horizon growth = quasi-static growth equation");
+
+        const PT::QuasiStaticGravity_CubicGalileon qs(cs.background());
+        double emu = 0.0, eS = 0.0, e2 = 0.0;
+        for (double x : {-3.0, -1.5, -0.7, -0.3, 0.0, 0.5}) {
+            const double m = qs.mu(x, 0.0), b = qs.beta(x), rc2 = qs.rcH0_squared(x), E = cs.background().E(x);
+            emu = std::max(emu, std::fabs(m / mu_qs(cs, g, x) - 1.0));
+            eS = std::max({eS, std::fabs(qs.Sigma(x, 0.0) / m - 1.0), std::fabs(1.0 + 1.0 / (3.0 * b) - m)});
+            const double dgp = 1.0 - 2.0 * rc2 * cs.background().Omega_m(x) * E * E / (9.0 * b * b * b * m);
+            e2 = std::max(e2, std::fabs(qs.second_order_source(x, 0.0) - dgp));
+        }
+        std::cout << "  QuasiStaticGravity_CubicGalileon: mu today " << qs.mu(0.0, 0.0) << ", 2LPT source "
+                  << qs.second_order_source(0.0, 0.0) << "\n";
+        check_close(emu, 0.0, 1e-8, "QuasiStaticGravity_CubicGalileon mu = the solver's quasi-static mu");
+        check_close(eS, 0.0, 1e-12, "Sigma = mu = 1 + 1/(3 beta)");
+        check_close(e2, 0.0, 1e-12, "2LPT source = DGP's with r_c(a), beta(a)");
     }
 
     return FML::TESTS::summary("EBS galileon");

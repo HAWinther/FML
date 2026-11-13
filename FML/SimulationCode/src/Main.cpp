@@ -177,7 +177,9 @@ int run(int argc, char ** argv) {
     // Sheet interpolation needs the Lagrangian position q
     const bool need_q = params.force.density_method == "sheet" or params.force.density_method == "sheet_nufft";
     // The mass-encoded baryon-CDM relative mode needs a mass in the particles (density assignment only, so no q)
-    const bool need_mass = params.particle.baryons and params.particle.baryon_relative_mode != "displacement";
+    // and interacting dark energy the masses of the CDM particles
+    const bool need_mass =
+        (params.particle.baryons and params.particle.baryon_relative_mode != "displacement") or cosmo->is_ide();
     if (need_mass) {
         if (scaledependent_cola)
             run_simulation<ParticleWithMass<ParticleCOLAScaleDep<NDIM>>>(param, params, cosmo, grav);

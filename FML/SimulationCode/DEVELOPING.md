@@ -43,10 +43,12 @@ date).
 ## Particle types
 
 By default the simulation is compiled for one particle type that can run every configuration (position, velocity,
-ID, the 1LPT and 2LPT displacements for COLA, the Lagrangian position and a mass: 112 bytes per particle in 3D, see
+ID, the 1LPT and 2LPT displacements for COLA, the Lagrangian position, a mass and a volume (interacting dark energy):
+120 bytes per particle in 3D, see
 `src/Particles.h`). Compile with `make clean && make USE_MINIMAL_PARTICLES=true` to compile it for all the particle
 types and use the smallest one a run needs (56 bytes per particle without COLA, 80 bytes with scale-independent COLA
-and 104 bytes with scale-dependent COLA; 7 times the compile time). The results are the same.
+and 104 bytes with scale-dependent COLA, 16 more with particle masses (the mass-encoded baryon mode, interacting dark
+energy); 7 times the compile time). The results are the same.
 Scale-dependent COLA is only used when the growth is scale-dependent (see [COLA](EVOLUTION.md#cola)).
 
 The particles are stored in `MPIParticles`, which holds any particle type with a position (`get_pos`). Particles

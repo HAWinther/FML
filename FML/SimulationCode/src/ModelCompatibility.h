@@ -53,6 +53,24 @@ namespace SIMCODE {
                      "Quinn, Tassev or FastPM (BullFrog follows the growth of one fluid)");
         }
 
+        // The cubic Galileon force needs the background of the Galileon (the cosmology CubicGalileon with gravity_model
+        // = GR is the background alone)
+        if (grav.get_name() == "CubicGalileon" and cosmo.get_name() != "CubicGalileon")
+            fail(
+                "gravity_model = CubicGalileon needs cosmology_model = CubicGalileon (the background of the Galileon)");
+
+        // Interacting dark energy: the CDM particles carry their own masses (Simulation::update_ide_masses)
+        if (cosmo.is_ide()) {
+            if (cosmo.get_OmegaMNu() != 0.0)
+                fail("cosmology_model = IDE is not implemented with massive neutrinos");
+            if (params.particle.baryons and params.particle.baryon_relative_mode != "displacement")
+                fail("cosmology_model = IDE needs particle_baryon_relative_mode = displacement (the particle masses "
+                     "are those of the energy exchange)");
+            if (params.particle.baryons and params.timestep.method == FML::NBODY::TimestepMethod::BullFrog)
+                fail("cosmology_model = IDE with particle_baryons = true needs timestep_method = Quinn, Tassev or "
+                     "FastPM (BullFrog follows the growth of one fluid)");
+        }
+
         // Velocity friction (GravityModel::velocity_friction): on the CDM+baryon fluid, or with particle_baryons on the
         // CDM particles alone (their own steps, SpeciesTimeStepping.h; not with BullFrog). Not with neutrino particles
         if (grav.has_velocity_friction() and params.particle.neutrinos)

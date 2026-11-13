@@ -221,6 +221,10 @@ void NBodySimulation<NDIM, T>::step(const Step & s) {
     set_force_settings_for_step(s.apos);
     const auto & force = current_force;
 
+    // Interacting dark energy: the CDM masses at the time of the force
+    if (s.delta_time_kick != 0.0)
+        update_ide_masses(s.apos);
+
     // Force interlacing: average the force over copies of the particles shifted relative to the grid
     const auto nleftright = FML::INTERPOLATION::get_extra_slices(force.density_assignment_method);
     if (force.interlacing_order > 1 and s.delta_time_kick != 0.0 and not sim.enforce_LPT_trajectories) {

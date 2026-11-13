@@ -77,9 +77,9 @@ CMake finds GSL, Lua, MPI, OpenMP and HDF5 with its own modules and `CMAKE_PREFI
 `FFTW_ROOT`, and HEALPix with `HEALPIX_ROOT` and `CFITSIO_ROOT`. The CMake and Makefile builds give bit-identical
 results on the regression cases (`tests/regression`).
 
-By default the code is compiled for one particle type that can run every configuration. That type takes 112 bytes per
+By default the code is compiled for one particle type that can run every configuration. That type takes 120 bytes per
 particle in 3D. `USE_MINIMAL_PARTICLES=true` (or `-DFML_USE_MINIMAL_PARTICLES=ON`) compiles all the particle types
-and uses the smallest one a run needs, between 56 and 104 bytes. The results are the same, but compiling takes 7
+and uses the smallest one a run needs, between 56 and 104 bytes (up to 120 with particle masses). The results are the same, but compiling takes 7
 times longer. See [DEVELOPING.md](DEVELOPING.md#particle-types).
 
 ## Running

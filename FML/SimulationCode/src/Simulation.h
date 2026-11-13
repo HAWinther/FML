@@ -199,7 +199,7 @@ class NBodySimulation {
     /// Do the CDM+baryon particles carry masses (the mass-encoded relative mode, particle_baryon_relative_mode = mass
     /// or mass_ini)? Otherwise their masses (if the particle type has them) are 1
     bool particles_have_masses() const {
-        return params.particle.baryons and params.particle.baryon_relative_mode != "displacement";
+        return (params.particle.baryons and params.particle.baryon_relative_mode != "displacement") or cosmo->is_ide();
     }
     /// Massive neutrinos as particles (delta-f method)?
     bool has_neutrino_particles() const { return params.particle.neutrinos; }
@@ -231,9 +231,9 @@ class NBodySimulation {
                 f(part_neutrinos.particles(), info);
     }
     /// The weight of a CDM+baryon species in delta_cb at a: Omega_i / OmegaCB (info.weight_cb), or with a varying CDM
-    /// mass (coupled quintessence) rho_i(a) / rho_cb(a)
+    /// mass (coupled quintessence, interacting dark energy) rho_i(a) / rho_cb(a)
     double cb_weight(const SIMCODE::SpeciesInfo & info, double a) const {
-        if (not cosmo->is_coupled_quintessence() or info.is(SIMCODE::ParticleSpecies::CDMBaryon))
+        if (not cosmo->cdm_mass_varies() or info.is(SIMCODE::ParticleSpecies::CDMBaryon))
             return info.weight_cb;
         const double f_c = cosmo->cdm_fraction_cb(a);
         return info.is(SIMCODE::ParticleSpecies::CDM) ? f_c : 1.0 - f_c;
@@ -381,6 +381,9 @@ class NBodySimulation {
     bool cdm_fifth_force_separate() const { return grav->has_cdm_fifth_force() and has_baryons(); }
     void kick_cdm_fifth_force(const Step & s, FFTWGrid<NDIM> & density, std::array<FFTWGrid<NDIM>, NDIM> & force);
     void step(const Step & s);
+    /// Interacting dark energy: the masses of the CDM (or CDM+baryon) particles at a (SimulationIDE.h)
+    void update_ide_masses(double a);
+    double ide_masses_a{-1.0}; // the scale factor of the last update
     void drift_and_lightcone(const Step & s);
     void kick_with_interlaced_force(const Step & s);
     // The density field (SimulationDensity.h)
@@ -410,5 +413,6 @@ class NBodySimulation {
 #include "SimulationInit.h"
 #include "SimulationStep.h"
 #include "SimulationDensity.h"
+#include "SimulationIDE.h"
 
 #endif

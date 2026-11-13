@@ -5,7 +5,7 @@
 
 //=============================================================================
 // The particle types the simulation can use. By default the simulation is compiled for one type, ParticleFiducial
-// (all the fields below: 112 bytes in 3D), which can run every configuration. With USE_MINIMAL_PARTICLES (make
+// (all the fields below: 120 bytes in 3D), which can run every configuration. With USE_MINIMAL_PARTICLES (make
 // USE_MINIMAL_PARTICLES=true) it is compiled for all of them and Main.cpp picks the smallest one that has what the
 // simulation needs (less memory, 7 times the compile time):
 //
@@ -14,8 +14,9 @@
 //   ParticleCOLAScaleDep  (+ Lagrangian position q)    scale-dependent COLA
 //   ParticleBasicQ        (pos, vel, id, q)            no COLA, but q is needed
 //                                                      (force_density_method = sheet)
-//   ParticleWithMass<P>   (P + a mass)                 particle_baryons with
-//                                                      particle_baryon_relative_mode = mass or mass_ini
+//   ParticleWithMass<P>   (P + a mass and volume)      particle_baryons with
+//                                                      particle_baryon_relative_mode = mass or mass_ini;
+//                                                      cosmology_model = IDE
 //
 // Free choice of types, so you can for example change to floats to save memory
 // or add fields you want to carry along. See FML/ParticleTypes for more examples
@@ -96,11 +97,15 @@ class ParticleCOLAScaleDep : public ParticleCOLA<NDIM> {
 /// A particle P with a mass (in units of the mean particle mass of its species). Used for the mass-encoded
 /// baryon-CDM relative mode (particle_baryon_relative_mode = mass or mass_ini): the CDM and baryon particles move
 /// together with the total CDM+baryon flow and the relative density is carried by their masses m = 1 + eps(q). The
-/// density assignment weights the particles by m / <m>
+/// density assignment weights the particles by m / <m>. And for interacting dark energy (cosmology_model = IDE), where
+/// the CDM particles gain or lose mass with the change of their volume: volume is then the comoving volume of the
+/// particle relative to the mean, 1 / (1 + delta_n) with delta_n the number density at the particle when the masses
+/// were last updated (Simulation::update_ide_masses)
 template <class P>
 class ParticleWithMass : public P {
   public:
-    double mass{1.0}; // (1 unless set: the IC with a mass-encoded relative mode, or read from a file)
+    double mass{1.0};   // (1 unless set: the IC with a mass-encoded relative mode, or read from a file, or IDE)
+    double volume{0.0}; // IDE: the volume at the last mass update (0: not set yet)
     double get_mass() const { return mass; }
     void set_mass(double _mass) { mass = _mass; }
 };

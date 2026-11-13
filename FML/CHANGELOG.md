@@ -5,6 +5,39 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: interacting dark energy
+- `cosmology_model = IDE` (`cosmology_ide_w`, `cosmology_ide_xi`, `cosmology_ide_cs2`): the background and IC of FML's
+  `ide`, the energy exchange Q = xi H rho_DE along the dark-matter 4-velocity, perturbed (as in the solver) by the
+  local expansion of the dark matter. On sub-horizon scales a CDM particle gains xi/3 rho_DE times the change of its
+  volume and keeps its momentum: the particles carry their own masses, updated before the force of every step from
+  the number density on the particle grid (`src/SimulationIDE.h`; `ParticleWithMass` has a volume field, the default
+  particle type is now 120 bytes in 3D). The linear mass growth m1(a) enters the source of D1
+  (`GravityModel::ide_mass_growth`, iterated with the growth), so the COLA frame follows the particles. The mean CDM
+  mass is `cdm_mass_factor(a)` (the Poisson normalization, the species weights).
+- Validated (xi = -0.1, w = -0.9, 32^3 particles in 1000 Mpc/h, 1e-4 times the power, against the solver's transfer
+  functions): the extra growth over xi = 0 from z = 49 to 0 (+10.3% for delta_cb; uniform mass changes would give
+  +2.4%) agrees to 6e-4 for k < 0.02 h/Mpc (CDM and baryon particles: CDM 7e-4, baryons 1e-4), 8e-3 too small for
+  k < 0.05 h/Mpc (the volume is smoothed on the particle grid); COLA as Quinn. In the nonlinear regime the CDM in
+  voids runs out (the masses stop at zero).
+- Not with massive neutrinos; with `particle_baryons` only with the displacement relative mode, not with BullFrog.
+- Regression cases `ide_cola`, `ide_baryons_quinn` (table `input/transfer_tables/ide.txt`).
+
+### SimulationCode: the cubic Galileon
+- `FML/Cosmology/Perturbations/QuasiStaticGravity_CubicGalileon.h`: the quasi-static cubic Galileon on its tracker,
+  derived from the scalar field equation: the DGP brane-bending equation with r_c(a)^2 = E^2 / (2 Omega_phi(a)
+  Omega_phi0) and beta(a) = (1 - 2 dlnH/dlna - Omega_phi(a)) / (3 Omega_phi(a)); mu = Sigma = 1 + 1/(3 beta) (1.77
+  today; the quasi-static limit of the Einstein-Boltzmann solver's equations), the 2LPT source and the Vainshtein factor of the spherical top-hat.
+- `cosmology_model = CubicGalileon` (the tracker background, no parameters) and `gravity_model = CubicGalileon`
+  (needs it): linear, the screening approximation (also the stronger force in underdense regions) or the exact
+  equation with DGP's multigrid solver (`gravity_model_cubic_galileon_exact_solution`). In deep voids (delta < -0.6
+  today) the equation has no real solution: `DGPSolverCosmology::set_allow_negative_discriminant` sets the
+  discriminant to zero there (and counts the cells) instead of stopping, as Barreira et al. 2013 (arXiv:1306.3219).
+- Validated: linear growth from z = 49 to 0 over the same background with GR, +2.03% in the simulations (linear,
+  screening and multigrid alike) vs +2.07% from the quasi-static growth equation; nonlinear P(k)/P_GR at z = 0 (256
+  Mpc/h, 64^3): 1.04-1.065 for k = 0.03-1.5 h/Mpc with the exact equation, 1.03-1.06 with the screening approximation
+  (1.04-1.21 without screening). `test_galileon` checks mu, Sigma and the 2LPT source against the solver's equations.
+- Regression cases `cubic_galileon_cola`, `cubic_galileon_exact_multigrid`.
+
 ### Covariantised dark Thomson-like scattering
 - Einstein-Boltzmann solver: `covariant_dark_scattering` (`cds_alpha`, `ds_w`, `ds_cs2`), the interaction
   Q^mu = alpha_bar (u_DE^mu - u_c^mu) (Beltran Jimenez et al. 2020): the dark-scattering equations with the rate

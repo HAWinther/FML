@@ -170,6 +170,63 @@ class GravityModel {
         if (geff_scale_dependent())
             scaledependent_growth = true;
         compute_growth_factors();
+        // Interacting dark energy: the mass perturbation of the CDM+baryons, m1 D1, enters the source of D1 and
+        // depends on the growth rate (iterated; converged to 1e-6 after a few iterations)
+        if (cosmo->is_ide())
+            for (int iter = 0; iter < 5; iter++) {
+                compute_ide_mass_growth();
+                compute_growth_factors();
+            }
+    }
+
+    //========================================================================
+    // Interacting dark energy (Cosmology::is_ide): the particles move as usual (the exchange is along the dark-matter
+    // velocity), so D1 is the growth of the displacement (of the number density delta_n), but their masses change
+    // with their volume (Simulation::update_ide_masses): to linear order the CDM+baryon mass perturbation is
+    // delta = delta_n + mu with
+    //   mu' = -q (mu + delta_n + delta_n'/3),   q = xi rho_DE / rho_cb      (' = d/dlna)
+    // (the energy exchange perturbed with the local expansion of the dark matter, Valiviita et al. 2008: the
+    // Einstein-Boltzmann solver's delta_c' with delta_DE = 0 on sub-horizon scales). With mu = m1(a) D1:
+    //   m1' = -q (1 + m1 + f/3) - m1 f,   f = dlnD1/dlna,   m1 = 0 early
+    // and the source of D1 is (1 + m1) delta_n (source_factor_1LPT; CDM and baryon particles: the CDM+baryon fluid
+    // here too). 0 for the other models
+    //========================================================================
+    double ide_mass_growth(double a) const {
+        if (not ide_m1_spline)
+            return 0.0;
+        const double x = std::log(a);
+        return x <= ide_m1_xmin ? 0.0 : ide_m1_spline(std::min(x, ide_m1_xmax));
+    }
+    void compute_ide_mass_growth() {
+        // Up to ahigh or (in the future) till the CDM+baryon density has dropped to a tenth of today's (xi < 0: the
+        // dark matter can run out, the equation becomes stiff); m1 is held constant after
+        const double xmin = std::log(alow);
+        double xmax = std::log(ahigh);
+        for (double x = 0.0; x < xmax; x += 0.01)
+            if (cosmo->cb_mass_factor(std::exp(x)) * std::exp(-3.0 * x) < 0.1) {
+                xmax = std::max(x, 0.01);
+                break;
+            }
+        const double xi = cosmo->ide_xi();
+        const double OmegaCB = cosmo->get_OmegaCDM() + cosmo->get_Omegab();
+        auto q_of_x = [&](double x) {
+            const double a = std::exp(x);
+            return xi * cosmo->ide_rho_de_a3(a) / (OmegaCB * cosmo->cb_mass_factor(a));
+        };
+        FML::SOLVERS::ODESOLVER::ODEFunction deriv = [&](double x, const double * y, double * dydx) {
+            const double f = get_f_1LPT(std::exp(x));
+            dydx[0] = -q_of_x(x) * (1.0 + y[0] + f / 3.0) - y[0] * f;
+            return GSL_SUCCESS;
+        };
+        const int n = 1000;
+        DVector x(n);
+        for (int i = 0; i < n; i++)
+            x[i] = xmin + (xmax - xmin) * i / double(n - 1);
+        FML::SOLVERS::ODESOLVER::ODESolver ode(1e-3, 1e-10, 1e-10);
+        ode.solve(deriv, x, DVector{0.0});
+        ide_m1_xmin = xmin;
+        ide_m1_xmax = xmax;
+        ide_m1_spline = Spline(x, ode.get_data_by_component(0), "IDE mass growth m1(log a)");
     }
 
     //========================================================================
@@ -346,7 +403,8 @@ class GravityModel {
 
     // Factors in the LPT equations
     virtual double source_factor_1LPT([[maybe_unused]] double a, [[maybe_unused]] double koverH0 = 0) const {
-        double factor = 1.0;
+        // Interacting dark energy: the mass perturbation of the CDM+baryons (ide_mass_growth; 0 otherwise)
+        double factor = 1.0 + ide_mass_growth(a);
         const double fnu = f_nu_of_a(a);
         if (fnu > 0.0 and koverH0 > 0.0) {
             if (transfers) {
@@ -354,7 +412,7 @@ class GravityModel {
                     transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::MassiveNeutrino, koverH0 * H0_hmpc, a);
                 const double T_cb =
                     transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, koverH0 * H0_hmpc, a);
-                factor = (1.0 - fnu) + fnu * T_nu / T_cb;
+                factor *= (1.0 - fnu) + fnu * T_nu / T_cb;
             }
         }
         return factor;
@@ -608,6 +666,10 @@ class GravityModel {
         const double x = std::log(a);
         return (x >= f_nu_xmin and x <= f_nu_xmax) ? f_nu_spline(x) : this->cosmo->f_nu(a);
     }
+
+    // IDE: the mass growth m1(log a) (compute_ide_mass_growth)
+    Spline ide_m1_spline;
+    double ide_m1_xmin{0.0}, ide_m1_xmax{0.0};
 
     // The theory's quasi-static limit (see get_quasi_static_gravity)
     std::shared_ptr<const QuasiStaticGravity> quasi_static;

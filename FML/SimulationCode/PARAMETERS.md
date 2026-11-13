@@ -27,7 +27,7 @@ Parameters marked *optional* take the default value if they are not in the param
 
 | Parameter | Type | Default | Used when | Description |
 |---|---|---|---|---|
-| `cosmology_model` | string | `"LCDM"` | always | The cosmology (background evolution). Options: `LCDM`, `w0waCDM`, `DGP`, `JBD`, `Quintessence`, `EDE`, `DarkScattering`, `CovariantDarkScattering`, `CoupledQuintessence`, `Tabulated` |
+| `cosmology_model` | string | `"LCDM"` | always | The cosmology (background evolution). Options: `LCDM`, `w0waCDM`, `DGP`, `JBD`, `Quintessence`, `EDE`, `DarkScattering`, `CovariantDarkScattering`, `CoupledQuintessence`, `IDE`, `CubicGalileon`, `Tabulated` |
 | `cosmology_Omegab` | double | *required* | always | Baryon density parameter |
 | `cosmology_OmegaMNu` | double | `0` | always | Massive neutrino density parameter (3 equal masses; or use cosmology_neutrino_masses_eV) |
 | `cosmology_neutrino_masses_eV` | double list | `{}` | always | The masses of the (up to 3) neutrinos in eV, e.g. {0.0, 0.0086, 0.05} (0 or not listed: massless). Instead of cosmology_OmegaMNu (which then follows from the masses) |
@@ -61,13 +61,16 @@ Parameters marked *optional* take the default value if they are not in the param
 | `cosmology_ds_xi` | double | *required* | cosmology_model = DarkScattering | Dark scattering: xi = sigma_D / m_c in barn/GeV (0: wCDM). The dark matter feels the drag (1 + w) c xi rho_DE / H per ln a (the CDM+baryon particles f_c = OmegaCDM / OmegaCB of it) |
 | `cosmology_cq_lambda` | double | *required* | cosmology_model = CoupledQuintessence | Coupled quintessence: the slope lambda of the potential V ~ exp(-lambda phi) (phi in reduced Planck masses) |
 | `cosmology_cq_beta` | double | *required* | cosmology_model = CoupledQuintessence | Coupled quintessence: the coupling beta (Amendola's sqrt(2/3) beta): the CDM particles have the mass m ~ exp(-beta phi) and feel G (1 + 2 beta^2) from the CDM. 0: uncoupled |
+| `cosmology_ide_w` | double | *required* | cosmology_model = IDE | Interacting dark energy: the (constant) equation of state w of the dark energy (!= -1) |
+| `cosmology_ide_xi` | double | *required* | cosmology_model = IDE | Interacting dark energy: the coupling xi of the energy exchange Q = xi H rho_DE along the dark-matter 4-velocity (> 0: energy flows to the dark matter; 0: wCDM). Needs the doom factor xi / (3 (1 + w)) <= 0 (xi < 0 for w > -1, xi > 0 for w < -1) |
+| `cosmology_ide_cs2` | double | `1` | cosmology_model = IDE | Interacting dark energy: the rest-frame sound speed squared of the dark energy (only for the IC from the internal Einstein-Boltzmann solver) |
 | `cosmology_dgp_OmegaRC` | double | *required* | cosmology_model = DGP | The cross-over scale of the self-accelerating DGP model (Omega_rc = 1/(4 rc^2 H0^2)). A cosmological constant makes up E(0) = 1 (a warning if it is not zero; no dark energy for Omega_rc = (1 - Omega_matter - Omega_radiation)^2/4) |
 
 ## Gravity model
 
 | Parameter | Type | Default | Used when | Description |
 |---|---|---|---|---|
-| `gravity_model` | string | `"GR"` | always | The gravity model (growth of perturbations and forces). Options: `GR`, `f(R)`, `DGP`, `JBD`, `Symmetron`, `Dilaton`, `mbeta`, `mu`, `CoupledQuintessence` |
+| `gravity_model` | string | `"GR"` | always | The gravity model (growth of perturbations and forces). Options: `GR`, `f(R)`, `DGP`, `CubicGalileon`, `JBD`, `Symmetron`, `Dilaton`, `mbeta`, `mu`, `CoupledQuintessence` |
 | `gravity_model_mu_parametrization` | string | *required* | gravity_model = mu | Poisson equation with G_eff/G = mu(a,k), no screening. DE: mu = 1 + mu0 Omega_DE(a)/Omega_DE(a=1). BZ: mu = (1 + beta1 lambda1^2 k^2 a^s) / (1 + lambda1^2 k^2 a^s) (Bertschinger & Zukin 2008). table: mu(a) or mu(a,k) from a file. Options: `DE`, `BZ`, `table` |
 | `gravity_model_mu_mu0` | double | *required* | gravity_model = mu and gravity_model_mu_parametrization = DE | mu0 in mu = 1 + mu0 Omega_DE(a)/Omega_DE(a=1) |
 | `gravity_model_mu_BZ_params` | double list | *required* | gravity_model = mu and gravity_model_mu_parametrization = BZ | {beta1, lambda1 (Mpc/h), s} in mu = (1 + beta1 lambda1^2 k^2 a^s) / (1 + lambda1^2 k^2 a^s) (k in h/Mpc) |
@@ -85,17 +88,18 @@ Parameters marked *optional* take the default value if they are not in the param
 | `gravity_model_dilaton_r` | double | `1` | gravity_model = Dilaton | The index r in the mass m(a) = m0 a^-r (r <= 3/2; 3/2 is the original dilaton with beta = beta0 a^s) |
 | `gravity_model_dilaton_xi` | double | `0.001` | gravity_model = Dilaton | xi = H0 / m0: the range of the fifth force today is 2998 xi Mpc/h |
 | `gravity_model_dgp_rcH0overc` | double | *required* | gravity_model = DGP | The cross-over scale rc H0 / c |
-| `gravity_model_screening` | bool | `true` | gravity_model in {mbeta, f(R), Symmetron, Dilaton, DGP} | Use the approximate screening model (otherwise linear) |
-| `gravity_model_dgp_smoothing_filter` | string | `"tophat"` | gravity_model in {mbeta, f(R), Symmetron, Dilaton, DGP} and gravity_model_screening = true and gravity_model = DGP | Screening approximation: the filter used to smooth the density field. Options: `tophat`, `sharpk`, `gaussian` |
-| `gravity_model_dgp_smoothing_scale_over_boxsize` | double | `0` | gravity_model in {mbeta, f(R), Symmetron, Dilaton, DGP} and gravity_model_screening = true and gravity_model = DGP | Screening approximation: the smoothing scale R/boxsize (0: no smoothing; 1 smooths over the whole box, which makes the screening very weak) |
-| `gravity_model_screening_enforce_largescale_linear` | bool | `false` | gravity_model in {mbeta, f(R), Symmetron, Dilaton, DGP} and gravity_model_screening = true | Combine the screened solution with the linear solution to get the correct linear evolution on large scales |
-| `gravity_model_screening_linear_scale_hmpc` | double | `0.05` | gravity_model in {mbeta, f(R), Symmetron, Dilaton, DGP} and gravity_model_screening = true | Use the linear solution for k < k* and the screened solution for k > k* (h/Mpc) |
-| `gravity_model_screening_efficiency` | double | `1` | gravity_model in {mbeta, f(R), Symmetron, Dilaton, DGP} and gravity_model_screening = true | Screening efficiency (1 is standard). Increases or decreases the amount of screening (it scales Phi_crit, or for DGP the density in the Vainshtein factor) |
+| `gravity_model_screening` | bool | `true` | gravity_model in {mbeta, f(R), Symmetron, Dilaton, DGP, CubicGalileon} | Use the approximate screening model (otherwise linear) |
+| `gravity_model_dgp_smoothing_filter` | string | `"tophat"` | gravity_model in {mbeta, f(R), Symmetron, Dilaton, DGP, CubicGalileon} and gravity_model_screening = true and gravity_model = DGP | Screening approximation: the filter used to smooth the density field. Options: `tophat`, `sharpk`, `gaussian` |
+| `gravity_model_dgp_smoothing_scale_over_boxsize` | double | `0` | gravity_model in {mbeta, f(R), Symmetron, Dilaton, DGP, CubicGalileon} and gravity_model_screening = true and gravity_model = DGP | Screening approximation: the smoothing scale R/boxsize (0: no smoothing; 1 smooths over the whole box, which makes the screening very weak) |
+| `gravity_model_screening_enforce_largescale_linear` | bool | `false` | gravity_model in {mbeta, f(R), Symmetron, Dilaton, DGP, CubicGalileon} and gravity_model_screening = true | Combine the screened solution with the linear solution to get the correct linear evolution on large scales |
+| `gravity_model_screening_linear_scale_hmpc` | double | `0.05` | gravity_model in {mbeta, f(R), Symmetron, Dilaton, DGP, CubicGalileon} and gravity_model_screening = true | Use the linear solution for k < k* and the screened solution for k > k* (h/Mpc) |
+| `gravity_model_screening_efficiency` | double | `1` | gravity_model in {mbeta, f(R), Symmetron, Dilaton, DGP, CubicGalileon} and gravity_model_screening = true | Screening efficiency (1 is standard). Increases or decreases the amount of screening (it scales Phi_crit, or for DGP the density in the Vainshtein factor) |
 | `gravity_model_fofr_exact_solution` | bool | `false` | gravity_model = f(R) | Solve the exact f(R) equation with the multigrid solver (slow, mainly for testing) |
 | `gravity_model_fofr_multigrid_method` | string | `"sqrt"` | gravity_model = f(R) and gravity_model_fofr_exact_solution = true | The field the multigrid solver solves for. sqrt: u = sqrt(|f_R|) with the equation in a cell solved exactly (a cubic for n = 1), robust for any f_R0, n and redshift. log: ln|f_R| with Newton steps (the original method; can give NaN for small f_R0 or at high redshift). Options: `sqrt`, `log` |
 | `gravity_model_symmetron_exact_solution` | bool | `false` | gravity_model = Symmetron | Solve the exact symmetron equation with the multigrid solver (slow, mainly for testing) |
 | `gravity_model_dilaton_exact_solution` | bool | `false` | gravity_model = Dilaton | Solve the exact dilaton equation with the multigrid solver (slow, mainly for testing) |
 | `gravity_model_dgp_exact_solution` | bool | `false` | gravity_model = DGP | Solve the exact DGP equation with the multigrid solver (slow, mainly for testing; can be hard to get to converge) |
+| `gravity_model_cubic_galileon_exact_solution` | bool | `false` | gravity_model = CubicGalileon | Solve the exact cubic Galileon equation (that of DGP with the Galileon's r_c(a) and beta(a)) with the multigrid solver (slow, mainly for testing) |
 | `multigrid_nsweeps` | int | `3` | solving the exact equation of the gravity model | Multigrid solver: Newton-Gauss-Seidel sweeps on every level |
 | `multigrid_nsweeps_first_step` | int | `20` | solving the exact equation of the gravity model | Multigrid solver: sweeps on the first step (increase if the solver fails to converge) |
 | `multigrid_solver_residual_convergence` | double | `1e-06` | solving the exact equation of the gravity model | Multigrid solver: converged when the residual is below this |

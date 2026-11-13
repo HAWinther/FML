@@ -68,6 +68,12 @@ class DGPSolverCosmology {
     /// The number of V-cycles of the last solve
     int last_nvcycles{0};
 
+    /// Allow a negative discriminant (set to zero there, the cells counted in last_n_negative_discriminant) instead of
+    /// stopping. Not possible for DGP; the cubic Galileon (the same equation with its r_c(a), beta(a)) has no real
+    /// solution in deep voids (QuasiStaticGravity_CubicGalileon.h)
+    bool allow_negative_discriminant{false};
+    long long last_n_negative_discriminant{0};
+
     /// A previous solution (real space, same grid) to start from (warm start)
     FFTWGrid<NDIM> * previous_solution{nullptr};
 
@@ -88,6 +94,11 @@ class DGPSolverCosmology {
     /// rms of the linear source of the equation (the residual scale changes by orders of magnitude over a simulation,
     /// so a fixed tolerance is either met trivially or not at all)
     void set_relative_criterion(bool relative) { relative_criterion = relative; }
+
+    /// Allow a negative discriminant of the equation (set to zero there) instead of stopping
+    void set_allow_negative_discriminant(bool allow) { allow_negative_discriminant = allow; }
+    /// The number of cells of the last solve where the discriminant was negative (with allow_negative_discriminant)
+    long long get_number_of_negative_discriminant_cells() const { return last_n_negative_discriminant; }
 
     /// Set maximum number of steps to take (in case residual saturates)
     void set_maxsteps(int _maxsteps) { maxsteps = _maxsteps; }
@@ -336,7 +347,8 @@ class DGPSolverCosmology {
                 Equation(&g, 0, i);
             count_negative_discriminant = false;
             FML::SumOverTasks(&n_negative_discriminant);
-            if (n_negative_discriminant > 0) {
+            last_n_negative_discriminant = n_negative_discriminant;
+            if (n_negative_discriminant > 0 and not allow_negative_discriminant) {
                 if (FML::ThisTask == 0)
                     std::cerr << "[DGPSolverCosmology] The discriminant of the DGP equation is negative in "
                               << n_negative_discriminant << " cells at a = " << a

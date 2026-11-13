@@ -43,6 +43,7 @@ namespace SIMCODE {
         bool symmetron_exact_solution{};
         bool dilaton_exact_solution{};
         bool dgp_exact_solution{};
+        bool cubic_galileon_exact_solution{};
         int multigrid_nsweeps{};
         int multigrid_nsweeps_first_step{};
         double multigrid_solver_residual_convergence{};
@@ -155,7 +156,7 @@ namespace SIMCODE {
             f.for_gravity({"DGP"}, [&]() {
                 f.required("gravity_model_dgp_rcH0overc", dgp_rcH0overc, 1.0, "The cross-over scale rc H0 / c");
             });
-            f.for_gravity({"mbeta", "f(R)", "Symmetron", "Dilaton", "DGP"}, [&]() {
+            f.for_gravity({"mbeta", "f(R)", "Symmetron", "Dilaton", "DGP", "CubicGalileon"}, [&]() {
                 f.optional("gravity_model_screening",
                            screening,
                            true,
@@ -224,6 +225,13 @@ namespace SIMCODE {
                            "Solve the exact DGP equation with the multigrid solver (slow, mainly for testing; can "
                            "be hard to get to converge)");
             });
+            f.for_gravity({"CubicGalileon"}, [&]() {
+                f.optional("gravity_model_cubic_galileon_exact_solution",
+                           cubic_galileon_exact_solution,
+                           false,
+                           "Solve the exact cubic Galileon equation (that of DGP with the Galileon's r_c(a) and "
+                           "beta(a)) with the multigrid solver (slow, mainly for testing)");
+            });
             // (a map without gravity_model, e.g. of a unit test: no exact solution)
             auto exact_solution = [](const ParameterMap & p) {
                 if (not p.contains("gravity_model"))
@@ -232,7 +240,8 @@ namespace SIMCODE {
                 return (model == "f(R)" and p.get<bool>("gravity_model_fofr_exact_solution")) or
                        (model == "Symmetron" and p.get<bool>("gravity_model_symmetron_exact_solution")) or
                        (model == "Dilaton" and p.get<bool>("gravity_model_dilaton_exact_solution")) or
-                       (model == "DGP" and p.get<bool>("gravity_model_dgp_exact_solution"));
+                       (model == "DGP" and p.get<bool>("gravity_model_dgp_exact_solution")) or
+                       (model == "CubicGalileon" and p.get<bool>("gravity_model_cubic_galileon_exact_solution"));
             };
             f.when(exact_solution, "solving the exact equation of the gravity model", [&]() {
                 f.optional("multigrid_nsweeps",
