@@ -45,7 +45,10 @@ forward model; survey-mean/integral-constraint marginalization is not automatic.
 likelihoods. Hermitian inputs are checked through its own reusable FFT plan.
 Constructor metadata, dimensions, finite values and geometry callback errors
 are checked collectively. All ranks must make the same calls in the same order.
-A rank may have no observed cells or no retained Fourier modes.
+A rank may have no observed cells or no retained Fourier modes. Nonfinite
+predictions from overflowing proposals raise `UnrepresentableState` collectively,
+so `BasicPosterior` rejects them with infinite potential. Dimension and Hermitian
+symmetry errors remain configuration/programming failures.
 
 ## Gaussian field data
 
@@ -247,3 +250,14 @@ observations. The Make target runs separate prepare/resume processes for each
 requested rank count; set `TMPDIR` to a shared filesystem for multi-node tests.
 [Checkpoint results](tests/SURVEY_CHECKPOINT_RESULTS.md) record the validation,
 including large-proposal Hermitian checks and the schema-1 rejection test.
+
+## Bounded scientific validation
+
+[survey_validation/README.md](survey_validation/README.md) describes longer
+dispersed 2LPT chains, an exact active-mode reference checked against full-grid
+production chains, independent masked linear-Gaussian references, twelve mocks
+per likelihood, future-observation predictions and clustered coverage intervals.
+[survey_validation/RESULTS.md](survey_validation/RESULTS.md) includes the plots
+and separate physical-field/selection convergence results. All physics and
+nuisances are fixed, so this does not establish joint nuisance/cosmological
+calibration or eliminate the need for volume-integrated selection modeling.

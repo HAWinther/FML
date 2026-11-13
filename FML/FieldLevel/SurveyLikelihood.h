@@ -84,10 +84,13 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 throw UnrepresentableState("[Survey likelihood] Unrepresentable proposal");
         }
         Field synthesize(const Modes & prediction) const {
-            bool valid = prediction.size() == model_->modes().size();
+            require(prediction.size() == model_->modes().size(), "[Survey observation] Invalid local prediction dimensions");
+            bool valid = true;
             for (auto z : prediction)
                 valid &= std::isfinite(z.real()) && std::isfinite(z.imag());
-            require(valid, "[Survey observation] Invalid local prediction dimensions/values");
+            // Overflow along an HMC trajectory is a rejected numerical proposal.
+            // A malformed layout remains a programming error above.
+            representable(valid);
             // Validate Hermitian planes using this observation's existing FFT plan.
             // Do not allocate a second forward-model workspace on every evaluation.
             grid_.fill_fourier_grid(FML::GRID::ComplexType(0));

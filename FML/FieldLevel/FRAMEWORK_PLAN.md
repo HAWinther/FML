@@ -61,6 +61,18 @@ additional likelihood nuisances remain open. Same-rank survey checkpoints now
 register full likelihood identities and prior families in identity schema 2;
 this initial stage 5a does not complete #52.
 
+## Bounded survey calibration (13 November 2026)
+
+The first scientific survey pass is recorded in
+[survey_validation/RESULTS.md](survey_validation/RESULTS.md): longer dispersed
+full-grid production chains, twelve independent initial-field mocks per Gaussian
+and Poisson likelihood using an exact active-mode reference, masked exact-Gaussian
+posterior checks, future-data predictions and clustered coverage, plus separate
+selection/mesh convergence. Fixed spectrum/bias/growth/noise/exposure and a small
+26-mode band limit make this conditional same-model evidence. It does not close
+production calibration, nuisance inference or PM/COLA evolution. The convergence
+scan exposes appreciable boundary errors from coarse point-sampled selection.
+
 ## Aim and posterior
 
 Build composable physics, observation, likelihood and inference components around

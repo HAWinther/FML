@@ -67,6 +67,20 @@ static void reference_tests() {
             prediction[i] = {.04, -.01};
     }
     FF::CartesianSurveyObservation obs(m, window);
+    check_local(FML::TESTS::throws<FF::UnrepresentableState>([&] {
+                    auto bad = prediction;
+                    if (FML::ThisTask == 0 && !bad.empty())
+                        bad.front() = Complex(HUGE_VAL, 0);
+                    obs.synthesize(bad);
+                }),
+                "one-rank nonfinite prediction is a collective numerical proposal rejection");
+    check_local(FML::TESTS::throws<std::invalid_argument>([&] {
+                    auto bad = prediction;
+                    if (FML::ThisTask == 0)
+                        bad.push_back(0);
+                    obs.synthesize(bad);
+                }),
+                "one-rank prediction layout error still propagates collectively");
     const auto image = obs.synthesize(prediction);
     Field test(m.cells());
     double e = 0, left = 0, right = 0;
