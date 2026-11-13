@@ -9,6 +9,8 @@
 //     growth of delta_cdm from z = 49 to 0 and Psi today
 //   * Brans-Dicke (omega = 50, at rest early, G4 = phi/2): on small scales the full solution has the quasi-static
 //     G_eff/G = (4 + 2 omega) / ((3 + 2 omega) phi) of the frontend's table (the force of SimulationCode)
+//   * K-mouflage (n = 2, beta = 0.2, Jordan frame: G4 = phi/2 with phi = 1/A^2): the same on small scales, with the
+//     table's G_eff/G = A^2 (1 + 2 beta^2 / K_X)
 //   * A table made for another cosmology (Omega_m) is refused
 // =============================================================================
 
@@ -121,6 +123,33 @@ int main() {
             worst = std::max(worst, rel(mu, mu_qs));
         }
         check(worst < 1e-4, "Brans-Dicke: the full solution has the quasi-static G_eff of the table (1e-4)");
+    }
+
+    // K-mouflage (n = 2, beta = 0.2, in the Jordan frame; its mu = A^2 (1 + 2 beta^2 / K_X) is checked against the
+    // Einstein-frame equations by check_horndeski_frontend.py): the full solution on small scales vs the table's mu
+    {
+        const auto table = BACKGROUND::read_horndeski_table(dir + "kmouflage_gravity.txt");
+        Run t(params("horndeski_table", "kmouflage_gravity.txt"), o);
+        const double k = 1.0 / Mpc;
+        double worst = 0.0;
+        for (double a : {0.25, 0.5, 1.0}) {
+            const double x = std::log(a);
+            size_t i = 0;
+            while (i + 1 < table.a().size() and table.a()[i + 1] < a)
+                i++;
+            const double f = (a - table.a()[i]) / (table.a()[i + 1] - table.a()[i]);
+            const double mu_qs = table.col[4][i] + f * (table.col[4][i + 1] - table.col[4][i]);
+            const double H0a2 = std::pow(t.cosmo.get_H0() * a, 2);
+            const double drho =
+                H0a2 * (t.cosmo.rhoCDM(x) * t.pert.get_delta_cdm(x, k) + t.cosmo.rhoB(x) * t.pert.get_delta_b(x, k));
+            const double mu = -c * c * k * k * t.pert.get_Psi(x, k) / (1.5 * drho);
+            std::printf("K-mouflage a = %.2f, k = 1/Mpc: -k^2 Psi / (4 pi G a^2 delta rho) = %.6f, quasi-static %.6f\n",
+                        a,
+                        mu,
+                        mu_qs);
+            worst = std::max(worst, rel(mu, mu_qs));
+        }
+        check(worst < 1e-4, "K-mouflage: the full solution has the quasi-static G_eff of the table (1e-4)");
     }
 
     // A table made for another cosmology is refused

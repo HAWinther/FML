@@ -9,6 +9,8 @@
 #   * Brans-Dicke (input/horndeski/brans_dicke.json): mu = (4 + 2 omega) / ((3 + 2 omega) phi), Sigma = 1/phi, no
 #     cubic term (c2 = 0), dln phi/dlna -> 1/(1 + omega) in the matter era, and M*^2 = phi, alpha_M = -alpha_B =
 #     dln phi/dlna, alpha_K = omega alpha_M^2
+#   * K-mouflage (input/horndeski/kmouflage.json): its Einstein-frame background, integrated independently here and
+#     mapped to the Jordan frame, and mu = A^2 (1 + 2 beta^2 / K_X), G_G4/G = Sigma = A^2
 # Usage: python3 check_horndeski_frontend.py <outdir>
 #==========================================================================
 import json
@@ -89,6 +91,63 @@ check(err < 0.01, "Brans-Dicke: dln phi/dlna = 1/(1 + omega) in the matter era (
 err = max(np.max(np.abs(M2 / phi - 1)), np.max(np.abs(aM - dphi / phi)), np.max(np.abs(aB + aM)),
           np.max(np.abs(aK - w * aM ** 2)) / np.max(np.abs(aK)))
 check(err < 1e-10, "Brans-Dicke: M*^2 = phi, alpha_M = -alpha_B = dln phi/dlna, alpha_K = omega alpha_M^2", err)
+
+
+# K-mouflage (kmouflage.json, n = 2) against its Einstein-frame equations (Brax & Valageas 2014; Sen Gupta, Fiorini &
+# Baker 2024, eqs. 3.5-3.9 and 4.5-4.6), integrated here independently: 8 pi G = 1, X = (dvarphi/dt_E)^2 / (2 lam^2),
+#   3 H_E^2 = 3 Omega_m A a_E^-3 + 3 Omega_r a_E^-4 + lam^2 (2 X K_X - K),   K = -1 + X + K0 X^2,  A = exp(beta varphi)
+#   (K_X + 2 X K_XX) d^2varphi/dt_E^2 = -3 H_E K_X dvarphi/dt_E - beta 3 Omega_m A a_E^-3
+# (densities of the Jordan frame times A^4; time in units of the Jordan 1/H0) and mapped to the Jordan frame:
+# a_J = A a_E, H_J = (H_E + beta dvarphi/dt_E) / A, the frontend's field phi = 1/A^2. Then G_G4/G = A^2,
+# mu = A^2 (1 + 2 beta^2 / K_X) and Sigma = A^2 (the conformal factor cancels in the lensing potential), and
+# M*^2 = 1/A^2, alpha_B = -alpha_M (G3 = 0)
+from scipy.integrate import solve_ivp
+from scipy.interpolate import interp1d
+from scipy.optimize import brentq
+
+(a, E, dlnE, GG4, mu, Sigma, b5, c2, phi, dphi, M2, dM2, aK, aB, aM, daK, daB, Rx), v = run("kmouflage")
+Om, Or, be, K0, lam = v["Omega_m"], v["Omega_r"], v["beta"], v["K0"], v["lam"]
+
+
+def km_rhs(N, y):
+    vphi, vd = y
+    aE, A = np.exp(N), np.exp(be * y[0])
+    X = vd ** 2 / (2 * lam ** 2)
+    rm = 3 * Om * A * aE ** -3
+    H = np.sqrt((rm + 3 * Or * aE ** -4 + lam ** 2 * (1 + X + 3 * K0 * X ** 2)) / 3)
+    KX = 1 + 2 * K0 * X
+    vdd = (-3 * H * KX * vd - be * rm) / (KX + 4 * K0 * X)
+    return [vd / H, vdd / H]
+
+
+aE0 = 1e-8
+H0E = np.sqrt(Om * aE0 ** -3 + Or * aE0 ** -4)
+S = -be * 3 * Om * aE0 ** -3 / (2 * H0E)  # the attractor K_X dvarphi/dt = -beta rho_m / (2 H)
+vd0 = brentq(lambda q: (1 + K0 * q ** 2 / lam ** 2) * q - S, S, 0.0)
+sol = solve_ivp(km_rhs, (np.log(aE0), np.log(3.0)), [0.0, vd0], method="LSODA", rtol=1e-11, atol=1e-30,
+                dense_output=True)
+NE = np.linspace(np.log(1e-6), np.log(2.5), 4000)
+vphi, vd = sol.sol(NE)
+A = np.exp(be * vphi)
+X = vd ** 2 / (2 * lam ** 2)
+HE = np.sqrt((3 * Om * A * np.exp(-3 * NE) + 3 * Or * np.exp(-4 * NE) + lam ** 2 * (1 + X + 3 * K0 * X ** 2)) / 3)
+aJ = A * np.exp(NE)
+HJ = (HE + be * vd) / A
+s = (aJ > 1e-5) & (aJ < 2.0)
+at = lambda col: interp1d(np.log(a), col, kind="cubic")(np.log(aJ[s]))
+err = np.max(np.abs(at(E) / HJ[s] - 1))
+check(err < 1e-6, "K-mouflage: H(a) = the Einstein-frame solution in the Jordan frame (1e-5 < a < 2)", err)
+err = max(np.max(np.abs(at(phi) * A[s] ** 2 - 1)), np.max(np.abs(at(GG4) / A[s] ** 2 - 1)),
+          np.max(np.abs(at(Sigma) / A[s] ** 2 - 1)))
+check(err < 1e-6, "K-mouflage: phi = 1/A^2, G_G4/G = Sigma = A^2", err)
+mu_E = A[s] ** 2 * (1 + 2 * be ** 2 / (1 + 2 * K0 * X[s]))
+err = np.max(np.abs(at(mu) / mu_E - 1))
+check(err < 1e-6, "K-mouflage: mu = A^2 (1 + 2 beta^2 / K_X)", err)
+err = max(np.max(np.abs(M2 / phi - 1)),
+          np.max(np.abs(aB + aM)), np.max(np.abs(aM - dphi / phi)))
+check(err < 1e-10, "K-mouflage: M*^2 = 1/A^2, alpha_M = -alpha_B = dln M*^2/dlna", err)
+i = np.argmin(np.abs(a - 1.0))
+print(f"K-mouflage today: A = {np.sqrt(GG4[i]):.6f}, mu = {mu[i]:.6f}, lam = {lam:.10g}")
 
 print("All Horndeski frontend checks passed" if not failed else f"FAILED: {failed}")
 sys.exit(1 if failed else 0)

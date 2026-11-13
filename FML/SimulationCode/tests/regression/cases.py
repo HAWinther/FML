@@ -581,6 +581,19 @@ CASES = {
         gravity_model_horndeski_exact_solution=False,
         gravity_model_screening=False,
     ),
+    # K-mouflage (n = 2, K0 = 1, beta = 0.2) in the Jordan frame as Hi-COLA (Sen Gupta, Fiorini & Baker 2024): the
+    # Newtonian force rescaled by A^2 and a linear fifth force (G3X = 0: no Vainshtein term); IC of horndeski_table
+    "horndeski_kmouflage_cola": dict(
+        cosmology_model="Horndeski",
+        cosmology_horndeski_filename=INPUT + "/horndeski/kmouflage_gravity.txt",
+        gravity_model="Horndeski",
+        gravity_model_horndeski_filename="",
+        ic_type_of_input="tables",
+        ic_input_filename=INPUT + "/transfer_tables/horndeski_kmouflage.txt",
+        ic_input_redshift=20.0,
+        gravity_model_horndeski_exact_solution=False,
+        gravity_model_screening=False,
+    ),
     # CDM and baryons as separate particles (same lattice), BullFrog, IC from the transfer functions at zini
     "two_species_bullfrog": dict(
         particle_baryons=True,

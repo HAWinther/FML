@@ -48,6 +48,11 @@ TABLES = {
                                      cosmology_horndeski_filename=cases.INPUT + "/horndeski/cubic_galileon_gravity.txt",
                                      gravity_model_horndeski_filename="", gravity_model_horndeski_exact_solution=False,
                                      gravity_model_screening=False),
+    # K-mouflage in the Jordan frame (input/horndeski/kmouflage.json, as Hi-COLA)
+    "horndeski_kmouflage": dict(cosmology_model="Horndeski", gravity_model="Horndeski",
+                                cosmology_horndeski_filename=cases.INPUT + "/horndeski/kmouflage_gravity.txt",
+                                gravity_model_horndeski_filename="", gravity_model_horndeski_exact_solution=False,
+                                gravity_model_screening=False),
 }
 
 

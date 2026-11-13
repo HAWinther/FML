@@ -5,6 +5,20 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### K-mouflage (as Hi-COLA)
+- `SimulationCode/input/horndeski/kmouflage.json`: K-mouflage (K = -1 + X + K0 X^2, A = exp(beta phi); n = 2,
+  K0 = 1, beta = 0.2) in the Jordan frame, as Hi-COLA (Sen Gupta, Fiorini & Baker 2024): the reduced Horndeski theory
+  G4 = 1/(2 A^2), K_J = lam^2 K(A^2 X / lam^2) / A^4 - 6 beta^2 X / A^2, written in the field 1/A^2 (rational, fast
+  for sympy), started on its radiation-era attractor, lam shot for H0. The Newtonian force is rescaled by A^2 and the
+  fifth force is linear (G3X = 0: no Vainshtein term; the kinetic screening is not modelled, as in Hi-COLA). Through
+  the generic Horndeski route: `cosmology_model = gravity_model = Horndeski`, IC and CMB from `horndeski_table`.
+- The frontend's `dphidlna_ini` can use `a` (= a_ini).
+- Validated: the table's H(a), A^2 and G_eff = A^2 (1 + 2 beta^2 / K_X) agree with an independent Einstein-frame
+  integration mapped to the Jordan frame to 2e-7 (`tests/check_horndeski_frontend.py`); the solver's full
+  perturbations have the table's G_eff on small scales to 1e-6 (`test_horndeski_table`); the simulation's growth
+  agrees with the solver's transfer functions to 4e-5. Regression case `horndeski_kmouflage_cola`, transfer table
+  `input/transfer_tables/horndeski_kmouflage.txt`.
+
 ### Einstein-Boltzmann solver: reduced Horndeski from its Lagrangian (horndeski_table)
 - `horndeski_table` (`model_file`, `hd_stability_check`): the background (`BackgroundModel_HorndeskiTable.h`) and the
   alpha-parameterization perturbations (`PerturbationModel_HorndeskiTable.h`, full, stability checked) of the table

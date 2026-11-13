@@ -1,0 +1,24 @@
+{
+ "_comment": "K-mouflage (Babichev, Deffayet & Ziour 2009; Brax & Valageas 2014) in the Jordan frame: the Einstein-frame action R/2 + lam^2 K(X_E), K = -1 + X_E + K0 X_E^2, X_E = -(d varphi)^2_E / (2 lam^2), with matter on A^2 g_E, A = exp(beta varphi), is the reduced Horndeski theory G4 = 1/(2 A^2), K_J = lam^2 K(A^2 X_varphi / lam^2) / A^4 - 6 beta^2 X_varphi / A^2; written here in the field phi = 1/A^2 = exp(-2 beta varphi) (Brans-Dicke-like; rational functions, fast for sympy): G4 = phi/2, X_E = X / (4 beta^2 lam^2 phi^3), K_J = lam^2 phi^2 K(X_E) - 3 X / (2 phi). n = 2, K0 = 1, beta = 0.2 (Hi-COLA's main model, Sen Gupta, Fiorini & Baker 2024, treated as there: G3X = 0, so the DGP form has no Vainshtein term and the fifth force is linear). Started at a = 1e-8 (phi = 1) on the attractor of the radiation era, K_X dvarphi/dt = -beta rho_m / (2 H) with K_X ~ 2 K0 X_E >> 1 (dphi/dlna = -2 beta dvarphi/dt / H; at rest, the field would go through a stiff transient to it), lam shot for E(a = 1) = 1: python3 ../../scripts/horndeski_frontend.py kmouflage.json --out kmouflage",
+ "K": "lam**2*phi**2*(-1 + X/(4*beta**2*lam**2*phi**3) + K0*(X/(4*beta**2*lam**2*phi**3))**2) - 3*X/(2*phi)",
+ "G3": "0",
+ "G4": "phi/2",
+ "parameters": {
+  "beta": 0.2,
+  "K0": 1.0,
+  "lam": 1.43
+ },
+ "Omega_m": 0.3175,
+ "h": 0.671,
+ "Neff": 3.046,
+ "T_CMB": 2.7255,
+ "initial": "early",
+ "a_ini": 1e-08,
+ "phi_ini": 1.0,
+ "dphidlna_ini": "2*beta*(3*beta*Omega_m*lam**2/(2*K0*E*a**3))**(1/3)/E",
+ "shoot": "lam",
+ "shoot_bracket": [
+  1.2,
+  1.7
+ ]
+}

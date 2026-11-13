@@ -29,7 +29,8 @@
 # are simplified symbolically with dH/dt and the field acceleration of the background equations and the matter density
 # eliminated with the Friedmann constraint, so that their GR parts cancel exactly (at early times the fifth force is
 # tiny and round-off would dominate it). Checked (tests/check_horndeski_frontend.py) against the cubic Galileon
-# (QuasiStaticGravity_CubicGalileon.h) and Brans-Dicke (mu = (4 + 2 omega) / ((3 + 2 omega) phi), Sigma = 1/phi); the
+# (QuasiStaticGravity_CubicGalileon.h), Brans-Dicke (mu = (4 + 2 omega) / ((3 + 2 omega) phi), Sigma = 1/phi) and
+# K-mouflage (its Einstein-frame equations, integrated independently and mapped to the Jordan frame); the
 # generic model reproduces SimulationCode's CubicGalileon gravity model to 4e-6 in P(k).
 #
 # The alphas of Bellini & Sawicki 2014 (arXiv:1404.3713), M*^2 = 2 G4, alpha_M, alpha_B, alpha_K, their derivatives
@@ -44,7 +45,7 @@
 # The table is made for one cosmology: Omega_m (cosmology_OmegaCDM + cosmology_Omegab) and the radiation (h, T_CMB and
 # Neff as the run's: Omega_r is computed as FML does) are checked by the solver; flat, no massive neutrinos.
 #
-# Input: a JSON file (examples in input/horndeski: cubic_galileon.json, brans_dicke.json) with
+# Input: a JSON file (examples in input/horndeski: cubic_galileon.json, brans_dicke.json, kmouflage.json) with
 #   K, G3, G4         expressions in phi and X (sympy syntax) and the named parameters (default 0, 0, 1/2)
 #   parameters        {name: value}
 #   Omega_m           today (the CDM + baryons of the parameter file)
@@ -56,8 +57,8 @@
 #                     with E = 1 closest to the guess (search_width: the range searched, in units of max(1, |guess|));
 #                     integrated back in time (the attractor of a tracker is unstable backwards: its decaying modes
 #                     grow, which matters only where the scalar is negligible)
-#   initial = "early": a_ini (<= a_min), phi_ini, dphidlna_ini at a_ini (a number or an expression in the parameters
-#                     and E, the GR H/H0 at a_ini), and shoot: the parameter (or Omega_Lambda) adjusted within
+#   initial = "early": a_ini (<= a_min), phi_ini, dphidlna_ini at a_ini (a number or an expression in the parameters,
+#                     a and E, the GR H/H0 at a_ini), and shoot: the parameter (or Omega_Lambda) adjusted within
 #                     shoot_bracket [lo, hi] so that E(a = 1) = 1. Use this when the early-time solution is an
 #                     attractor (trackers, Brans-Dicke): integrated back from today its decaying modes grow
 #
@@ -273,17 +274,19 @@ def main():
         # phi and dphi/dlna given at a_ini (e.g. the field at rest deep in the matter or radiation era); E there from
         # the constraint (the root closest to the GR value) and the parameter `shoot` adjusted so that E(a = 1) = 1
         x_ini = np.log(float(cfg.get("a_ini", a_min)))
-        # dphidlna_ini: a number, or an expression in the parameters and E (the GR value of H/H0 at a_ini), e.g.
-        # "xi / E**2" for the cubic Galileon's tracker
+        # dphidlna_ini: a number, or an expression in the parameters, a (= a_ini) and E (the GR value of H/H0 at
+        # a_ini), e.g. "xi / E**2" for the cubic Galileon's tracker
         phi_i = float(cfg["phi_ini"])
-        dphi_expr = sp.sympify(str(cfg.get("dphidlna_ini", 0.0)), locals={**loc, "E": sp.Symbol("E")})
+        dphi_expr = sp.sympify(str(cfg.get("dphidlna_ini", 0.0)),
+                               locals={**loc, "E": sp.Symbol("E"), "a": sp.Symbol("a")})
 
         def E_GR():
             a = np.exp(x_ini)
             return np.sqrt(values["Omega_m"] * a ** -3 + values["Omega_r"] * a ** -4 + values["Omega_Lambda"])
 
         def dphi_ini():
-            return float(dphi_expr.subs({**{sp.Symbol(n): v for n, v in values.items()}, sp.Symbol("E"): E_GR()}))
+            return float(dphi_expr.subs({**{sp.Symbol(n): v for n, v in values.items()}, sp.Symbol("E"): E_GR(),
+                                         sp.Symbol("a"): np.exp(x_ini)}))
 
         shoot = cfg["shoot"]
         if shoot not in values:

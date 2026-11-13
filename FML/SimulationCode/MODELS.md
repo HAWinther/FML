@@ -137,6 +137,19 @@ For Quintessence, EDE and Tabulated the dark energy is smooth (no perturbations)
   screening approximation, multigrid). Unlike Hi-COLA the 2LPT growth has the theory's second-order source and the
   IC are those of the model.
 
+  K-mouflage (`input/horndeski/kmouflage.json`; Babichev, Deffayet & Ziour 2009, Brax & Valageas 2014) is run as in
+  Hi-COLA (Sen Gupta, Fiorini & Baker 2024, arXiv:2407.00855): in the Jordan frame, where the Einstein-frame action
+  R/2 + λ² K(X_E) (K = -1 + X_E + K0 X_E^2, matter on A² g_E, A = exp(β φ)) is the reduced Horndeski theory G4 =
+  1/(2 A²), K_J = λ² K(A² X / λ²) / A⁴ - 6 β² X / A² (written in the field 1/A², Brans-Dicke-like). The Newtonian
+  force is rescaled by A² and the fifth force, G_eff/G = A² (1 + 2 β² / K_X), is linear: G3X = 0, so the DGP form has
+  no Vainshtein term and the kinetic (K-mouflage) screening is not modelled, as in Hi-COLA. The example is n = 2, K0 =
+  1, β = 0.2 (Hi-COLA's main model; λ shot for H0, the field started on its radiation-era attractor). Note that the
+  table fixes the Jordan-frame Ω_m (the run's), not the Einstein-frame one of Hi-COLA and MG-GLAM. Tested: H(a), A²
+  and G_eff of the table agree with an independent Einstein-frame integration mapped to the Jordan frame to 2e-7
+  (`check_horndeski_frontend.py`); the solver's full perturbations have the table's G_eff on small scales to 1e-6
+  (`test_horndeski_table`); the simulation's growth agrees with the solver's transfer functions to 4e-5
+  (k = 0.1 h/Mpc). Regression case `horndeski_kmouflage_cola`.
+
 * JBD: Jordan–Brans–Dicke. The gravity model of the cosmology with the same name (and it needs that cosmology).
 
 * CubicGalileon: the force of the cubic Galileon (needs `cosmology_model = CubicGalileon`). Its quasi-static field
