@@ -4,9 +4,9 @@
 // =====================================================================================================================
 // The cubic Galileon on its tracker (Background/BackgroundModel_CubicGalileon.h: S = int sqrt(-g) [R/2 + c2 X - g3 X
 // box phi] + S_m, c2 = -1, H dphi/dt = xi = sqrt(6 Omega_phi0) H0^2, g3 = 1/(3 xi); 8 pi G = 1) in the quasi-static
-// limit (QuasiStaticGravity.h; Barreira et al. 2013 for the N-body equations). With phi = phi(t) + pi, the scalar
-// field equation, c2 box phi - g3 [(box phi)^2 - (nabla nabla phi)^2 - R_mu nu nabla^mu phi nabla^nu phi] = 0, to
-// second order in the spatial derivatives of pi (comoving nabla) and the Einstein equations give
+// limit (QuasiStaticGravity.h; Barreira et al. 2013, arXiv:1306.3219, for the N-body equations). With phi = phi(t) +
+// pi, the scalar field equation, c2 box phi - g3 [(box phi)^2 - (nabla nabla phi)^2 - R_mu nu nabla^mu phi nabla^nu
+// phi] = 0, to second order in the spatial derivatives of pi (comoving nabla) and the Einstein equations give
 //   nabla^2 Psi = a^2 rho delta / 2 - (g3 dphi^2 / 2) nabla^2 pi,   Phi = Psi (no slip)
 //   [c2 + 2 g3 (ddphi + 2 H dphi)] nabla^2 pi - (g3/a^2) [(nabla^2 pi)^2 - (nabla_i nabla_j pi)^2] + g3 dphi^2 nabla^2
 //   Psi = 0
@@ -22,8 +22,19 @@
 // (the screening approximation here, delta = rho/rho_mean - 1: the force is stronger in underdense regions, up to
 // twice the linear fifth force at e = -1; there is no real solution for e < -1, delta < -0.6 today, where e = -1 is
 // used, as the multigrid solver sets the discriminant to zero). mu agrees with the
-// quasi-static limit of the Einstein-Boltzmann solver's equations (PerturbedFieldEquation_CubicGalileon.h; test_galileon)
-// to 1e-15 and its full solution to 0.1% for k > 0.1/Mpc.
+// quasi-static limit of the Einstein-Boltzmann solver's equations (PerturbedFieldEquation_CubicGalileon.h;
+// test_galileon) to 1e-15 and its full solution to 0.1% for k > 0.1/Mpc.
+//
+// References:
+//   Deffayet, Esposito-Farese & Vikman 2009, PRD 79, 084003, arXiv:0901.1314   (the covariant Galileon)
+//   Barreira, Li, Baugh & Pascoli 2013, arXiv:1306.3219 (with Hellwing; JCAP 10, 027)   (N-body simulations of the
+//       cubic Galileon: the DGP-like equation, no real solution in voids for a > ~0.8, discriminant set to zero)
+//   Kimura, Kobayashi & Yamamoto 2012, PRD 85, 024023, arXiv:1111.6749   (Vainshtein screening on a cosmological
+//       background in Horndeski theories; QuasiStaticGravity_Horndeski.h)
+//   Winther & Ferreira 2015, PRD 91, 123507, arXiv:1403.6492   (the screening approximation of the simulations)
+//   Brando, Koyama & Winther 2023, JCAP 06, 045, arXiv:2303.09549   (Vainshtein screening in COLA: nDGP and the
+//       cubic Galileon)
+//   Wright et al. 2023 (Hi-COLA), JCAP 03, 040, arXiv:2209.01666   (COLA simulations of the cubic Galileon)
 // =====================================================================================================================
 
 #include <FML/Cosmology/Background/BackgroundModel_CubicGalileon.h>

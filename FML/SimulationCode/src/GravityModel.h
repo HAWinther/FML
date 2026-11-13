@@ -185,8 +185,8 @@ class GravityModel {
     // with their volume (Simulation::update_ide_masses): to linear order the CDM+baryon mass perturbation is
     // delta = delta_n + mu with
     //   mu' = -q (mu + delta_n + delta_n'/3),   q = xi rho_DE / rho_cb      (' = d/dlna)
-    // (the energy exchange perturbed with the local expansion of the dark matter, Valiviita et al. 2008: the
-    // Einstein-Boltzmann solver's delta_c' with delta_DE = 0 on sub-horizon scales). With mu = m1(a) D1:
+    // (the energy exchange perturbed with the local expansion of the dark matter, Valiviita et al. 2008,
+    // arXiv:0804.0232: the Einstein-Boltzmann solver's delta_c' with delta_DE = 0 on sub-horizon scales). With mu = m1(a) D1:
     //   m1' = -q (1 + m1 + f/3) - m1 f,   f = dlnD1/dlna,   m1 = 0 early
     // and the source of D1 is (1 + m1) delta_n (source_factor_1LPT; CDM and baryon particles: the CDM+baryon fluid
     // here too). 0 for the other models

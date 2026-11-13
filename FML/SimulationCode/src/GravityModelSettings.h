@@ -44,6 +44,12 @@ namespace SIMCODE {
         bool dilaton_exact_solution{};
         bool dgp_exact_solution{};
         bool cubic_galileon_exact_solution{};
+        std::string cubic_galileon_smoothing_filter{};
+        double cubic_galileon_smoothing_scale_over_boxsize{};
+        std::string horndeski_filename{};
+        bool horndeski_exact_solution{};
+        std::string horndeski_smoothing_filter{};
+        double horndeski_smoothing_scale_over_boxsize{};
         int multigrid_nsweeps{};
         int multigrid_nsweeps_first_step{};
         double multigrid_solver_residual_convergence{};
@@ -156,7 +162,15 @@ namespace SIMCODE {
             f.for_gravity({"DGP"}, [&]() {
                 f.required("gravity_model_dgp_rcH0overc", dgp_rcH0overc, 1.0, "The cross-over scale rc H0 / c");
             });
-            f.for_gravity({"mbeta", "f(R)", "Symmetron", "Dilaton", "DGP", "CubicGalileon"}, [&]() {
+            f.for_gravity({"Horndeski"}, [&]() {
+                f.required("gravity_model_horndeski_filename",
+                           horndeski_filename,
+                           std::string(""),
+                           "Generic reduced Horndeski gravity: the table of the quasi-static theory made by "
+                           "scripts/horndeski_frontend.py from the Lagrangian (K, G3, G4); its background goes in "
+                           "cosmology_model = Tabulated (cosmology_tabulated_format = H)");
+            });
+            f.for_gravity({"mbeta", "f(R)", "Symmetron", "Dilaton", "DGP", "CubicGalileon", "Horndeski"}, [&]() {
                 f.optional("gravity_model_screening",
                            screening,
                            true,
@@ -173,6 +187,28 @@ namespace SIMCODE {
                                    0.0,
                                    "Screening approximation: the smoothing scale R/boxsize (0: no smoothing; 1 smooths "
                                    "over the whole box, which makes the screening very weak)");
+                    });
+                    f.for_gravity({"CubicGalileon"}, [&]() {
+                        f.optional("gravity_model_cubic_galileon_smoothing_filter",
+                                   cubic_galileon_smoothing_filter,
+                                   "tophat",
+                                   "Screening approximation: the filter used to smooth the density field",
+                                   choices::smoothing_filters);
+                        f.optional("gravity_model_cubic_galileon_smoothing_scale_over_boxsize",
+                                   cubic_galileon_smoothing_scale_over_boxsize,
+                                   0.0,
+                                   "Screening approximation: the smoothing scale R/boxsize (0: no smoothing)");
+                    });
+                    f.for_gravity({"Horndeski"}, [&]() {
+                        f.optional("gravity_model_horndeski_smoothing_filter",
+                                   horndeski_smoothing_filter,
+                                   "gaussian",
+                                   "Screening approximation: the filter used to smooth the density field",
+                                   choices::smoothing_filters);
+                        f.optional("gravity_model_horndeski_smoothing_scale_over_boxsize",
+                                   horndeski_smoothing_scale_over_boxsize,
+                                   0.0,
+                                   "Screening approximation: the smoothing scale R/boxsize (0: no smoothing)");
                     });
                     f.optional("gravity_model_screening_enforce_largescale_linear",
                                screening_enforce_largescale_linear,
@@ -232,6 +268,13 @@ namespace SIMCODE {
                            "Solve the exact cubic Galileon equation (that of DGP with the Galileon's r_c(a) and "
                            "beta(a)) with the multigrid solver (slow, mainly for testing)");
             });
+            f.for_gravity({"Horndeski"}, [&]() {
+                f.optional("gravity_model_horndeski_exact_solution",
+                           horndeski_exact_solution,
+                           false,
+                           "Solve the exact field equation (that of DGP with the table's r_c(a) and beta(a)) with the "
+                           "multigrid solver (slow, mainly for testing; needs r_c^2 > 0)");
+            });
             // (a map without gravity_model, e.g. of a unit test: no exact solution)
             auto exact_solution = [](const ParameterMap & p) {
                 if (not p.contains("gravity_model"))
@@ -241,7 +284,8 @@ namespace SIMCODE {
                        (model == "Symmetron" and p.get<bool>("gravity_model_symmetron_exact_solution")) or
                        (model == "Dilaton" and p.get<bool>("gravity_model_dilaton_exact_solution")) or
                        (model == "DGP" and p.get<bool>("gravity_model_dgp_exact_solution")) or
-                       (model == "CubicGalileon" and p.get<bool>("gravity_model_cubic_galileon_exact_solution"));
+                       (model == "CubicGalileon" and p.get<bool>("gravity_model_cubic_galileon_exact_solution")) or
+                       (model == "Horndeski" and p.get<bool>("gravity_model_horndeski_exact_solution"));
             };
             f.when(exact_solution, "solving the exact equation of the gravity model", [&]() {
                 f.optional("multigrid_nsweeps",

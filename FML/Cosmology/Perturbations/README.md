@@ -28,7 +28,8 @@ QuasiStaticGravity.h         the base: the quasi-static limit of a theory on a B
                              SimulationCode's gravity models (f(R), DGP, cubic Galileon, JBD, mu, symmetron, (m, beta))
 QuasiStaticGravity_<name>.h  MuSigma (Planck/DES), HuSawicky, DGP (either branch, H of any background), BransDicke,
                              Symmetron, MBeta (power-law (m(a), beta(a))), CubicGalileon (the tracker: the DGP form
-                             with r_c(a), beta(a))
+                             with r_c(a), beta(a)), Horndeski (reduced Horndeski from the table of
+                             SimulationCode/scripts/horndeski_frontend.py)
 PerturbedFieldEquation_<name>.h  GeneralRelativity, BransDicke (quasi_static(): its sub-horizon limit), MuSigma (the
                              mu-Sigma equations for a QuasiStaticGravity; default Planck/DES) with DGP and HuSawicky
                              derived from it, HorndeskiAlpha (alpha parameterization:

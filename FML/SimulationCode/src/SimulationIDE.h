@@ -5,9 +5,9 @@
 
 //=============================================================================
 // Interacting dark energy (cosmology_model = IDE): the energy exchange Q = xi H rho_DE along the dark-matter
-// 4-velocity (Valiviita, Majerotto & Maartens 2008), with the rate perturbed by the local expansion of the dark
-// matter, delta Q / Q = delta_DE - Psi + E, E = (theta_c - 3 Phi')/(3 Hp) (as in the Einstein-Boltzmann solver,
-// FML/Cosmology/Perturbations/SpeciesPerturbation_DarkEnergyFluid.h). On sub-horizon scales (delta_DE = 0 for
+// 4-velocity (Valiviita, Majerotto & Maartens 2008, arXiv:0804.0232), with the rate perturbed by the local expansion
+// of the dark matter, delta Q / Q = delta_DE - Psi + E, E = (theta_c - 3 Phi')/(3 Hp) (as in the Einstein-Boltzmann
+// solver, FML/Cosmology/Perturbations/SpeciesPerturbation_DarkEnergyFluid.h). On sub-horizon scales (delta_DE = 0 for
 // cs2 = 1, Psi negligible) the dark matter of a fluid element of physical volume V gains
 //   dm/dt = Q V = xi rho_DE (H + theta_c/3) V = (xi/3) rho_DE dV/dt
 // so a CDM particle gains xi/3 rho_DE times the change of its volume, and its momentum is not changed (the energy
@@ -32,6 +32,14 @@
 //   delta_c' = delta_n' (1 - q/3) - q delta_c,   q = xi rho_DE / rho_c
 // the solver's equation; the CDM growth from z = 49 to 0 differs from that of the particle masses changing uniformly
 // (no delta_c terms) by ~10% for xi = -0.1, w = -0.9.
+//
+// References:
+//   Valiviita, Majerotto & Maartens 2008, JCAP 07, 020, arXiv:0804.0232   (the model Q = xi H rho_DE, its perturbations
+//       and the large-scale instability for xi / (1 + w) > 0)
+//   Other N-body implementations change the particle masses only with the background, m(a), with the Euler equation of
+//   LCDM: Zhai, van de Bruck, Di Valentino, Li & Nunes 2026, arXiv:2606.11368 (RAMSES); ME-Gadget (Zhang et al. 2018,
+//   arXiv:1811.01519; for its more general couplings also a velocity drag and an effective G). Here the mass also
+//   follows the local expansion, as the perturbed rate of the Einstein-Boltzmann solver does
 //=============================================================================
 
 template <int NDIM, class T>

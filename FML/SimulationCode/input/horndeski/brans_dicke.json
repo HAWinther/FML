@@ -1,0 +1,25 @@
+{
+ "_comment": "Brans-Dicke (omega = 50), the field at rest at a = 1e-6 with phi = 1, Omega_Lambda shot for E(a = 1) = 1: python3 ../../scripts/horndeski_frontend.py brans_dicke.json --out brans_dicke",
+ "K": "omega*X/phi",
+ "G3": "0",
+ "G4": "phi/2",
+ "parameters": {
+  "omega": 50.0
+ },
+ "Omega_m": 0.3175,
+ "h": 0.671,
+ "Neff": 3.046,
+ "T_CMB": 2.7255,
+ "Omega_Lambda": 0.7,
+ "initial": "early",
+ "a_ini": 1e-06,
+ "phi_ini": 1.0,
+ "dphidlna_ini": 0.0,
+ "shoot": "Omega_Lambda",
+ "shoot_bracket": [
+  0.3,
+  1.2
+ ],
+ "a_min": 0.0001,
+ "n_points": 1000
+}

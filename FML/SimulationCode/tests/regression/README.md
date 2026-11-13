@@ -31,6 +31,7 @@ all the main code paths of the solver:
 | `coupled_quintessence_baryons_cola`, `coupled_quintessence_baryons_fastpm` | Coupled quintessence with CDM and baryon particles: the fifth force of the CDM on the CDM, the species' own steps |
 | `ide_cola`, `ide_baryons_quinn` | Interacting dark energy: the particle masses from the energy exchange (CDM+baryons as one fluid with COLA and the mass growth in the growth factors; CDM and baryon particles with Quinn) |
 | `cubic_galileon_cola`, `cubic_galileon_exact_multigrid` | The cubic Galileon: tracker background, the screening approximation with COLA, and the exact field equation (DGP's multigrid solver with r_c(a), beta(a)) |
+| `horndeski_cubic_galileon_cola`, `horndeski_cubic_galileon_exact_multigrid`, `horndeski_brans_dicke` | Generic reduced Horndeski from the frontend's tables (`input/horndeski`): the cubic Galileon (screening approximation with Gaussian smoothing; exact equation) and Brans-Dicke (the Newtonian force rescaled by 1/(2 G4)) |
 | `dark_scattering_baryons_cola`, `dark_scattering_baryons_fastpm` | Dark scattering with CDM and baryon particles: the species' own kick, drift and velocity factors, the COLA correction (COLA + Quinn; FastPM with the two-fluid growth) |
 | `dark_scattering_cola`, `dark_scattering_fastpm` | Dark matter - dark energy scattering: the velocity friction in the growth factors and the kick/drift factors (COLA + Quinn; FastPM without COLA) |
 

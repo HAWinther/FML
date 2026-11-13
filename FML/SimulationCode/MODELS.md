@@ -68,7 +68,7 @@ add a model is in [DEVELOPING.md](DEVELOPING.md#adding-a-model).
   source `clustering_mass_factor`). Needs `gravity_model = CoupledQuintessence` (the force and the velocity term of the
   CDM, below).
 
-* IDE: interacting dark energy (Valiviita, Majerotto & Maartens 2008), the internal solver's `ide`: a dark-energy
+* IDE: interacting dark energy (Valiviita, Majerotto & Maartens 2008, arXiv:0804.0232), the internal solver's `ide`: a dark-energy
   fluid with a constant `cosmology_ide_w` (!= -1) and the energy exchange Q = xi H rho_DE along the dark-matter
   4-velocity (`cosmology_ide_xi`; > 0: energy flows to the dark matter; the doom factor xi / (3 (1 + w)) must be <= 0;
   `cosmology_ide_cs2` for the IC). The CDM density follows rho_c' = -3 rho_c + xi rho_DE (`cdm_mass_factor`). As in
@@ -109,6 +109,25 @@ For Quintessence, EDE and Tabulated the dark energy is smooth (no perturbations)
 * DGP: the DGP braneworld model (a cubic Galileon), the standard test model for Vainshtein screening. With a ΛCDM
   cosmology it is the normal branch, with the DGP cosmology the original self-accelerating model.
 
+* Horndeski: a generic reduced Horndeski theory, S = ∫ √-g [K(φ, X) − G3(φ, X) □φ + G4(φ) R] (luminal
+  gravitational waves), as Hi-COLA (Wright et al. 2023, arXiv:2209.01666). `scripts/horndeski_frontend.py` takes K,
+  G3 and G4 (sympy expressions, a JSON file; examples in `input/horndeski`), derives the background equations from the
+  minisuperspace action, solves them (from today with dφ/dlna from the Friedmann constraint, or from early times with
+  a parameter shot for E(a = 1) = 1) and writes two tables: H(z) for `cosmology_model = Tabulated` (format H) and the
+  quasi-static force for `gravity_model = Horndeski` (`gravity_model_horndeski_filename`). The force (Kimura, Kobayashi
+  & Yamamoto 2012, arXiv:1111.6749; `FML/Cosmology/Perturbations/QuasiStaticGravity_Horndeski.h`) is the Newtonian force rescaled by
+  G_G4/G = 1/(2 G4) (the running Planck mass) plus a fifth force with the DGP equation of a time-dependent r_c(a) and
+  beta(a): G_eff/G = 1/(2 G4) + 1/(3 beta), the 2LPT source and Vainshtein screening of DGP (G3X ≠ 0; without it the
+  fifth force is linear): linear, the screening approximation (the density smoothed with
+  `gravity_model_horndeski_smoothing_*`, a Gaussian by default as Hi-COLA) or the exact equation with DGP's multigrid
+  solver (`gravity_model_horndeski_exact_solution`, needs r_c^2 > 0). The model checks that H(a) of its table is the
+  background's (1e-3). Tested: the frontend gives the cubic Galileon's G_eff and r_c (to 1e-10 and 1e-4 for a > 0.05)
+  and Brans-Dicke's G_eff = (4 + 2 omega) / ((3 + 2 omega) phi) and Sigma = 1/phi to 1e-12
+  (`tests/check_horndeski_frontend.py`); with the cubic Galileon tables the model gives the P(k) of `gravity_model =
+  CubicGalileon` to 4e-6 (linear, screening approximation, multigrid). The initial conditions: from a P(k) or transfer
+  function (the internal Einstein-Boltzmann solver has no model for a tabulated background); unlike Hi-COLA the 2LPT
+  growth has the theory's second-order source.
+
 * JBD: Jordan–Brans–Dicke. The gravity model of the cosmology with the same name (and it needs that cosmology).
 
 * CubicGalileon: the force of the cubic Galileon (needs `cosmology_model = CubicGalileon`). Its quasi-static field
@@ -117,7 +136,9 @@ For Quintessence, EDE and Tabulated the dark energy is smooth (no perturbations)
   (`FML/Cosmology/Perturbations/QuasiStaticGravity_CubicGalileon.h`): G_eff/G = 1 + 1/(3 beta) (1.03 at z = 1, 1.77
   today; it agrees with the Einstein-Boltzmann solver to 0.1%), the 2LPT source and the Vainshtein screening of DGP
   with these r_c(a) and beta(a) (approximate screening: the spherical top-hat factor of the local density, also in
-  underdense regions; exact: `gravity_model_cubic_galileon_exact_solution`, DGP's multigrid solver). In deep voids
+  underdense regions, with the density smoothed as for DGP: `gravity_model_cubic_galileon_smoothing_filter` and
+  `_smoothing_scale_over_boxsize`; exact: `gravity_model_cubic_galileon_exact_solution`, DGP's multigrid solver). In
+  deep voids
   (delta < -0.6 today) the equation has no real solution: the screening factor and the multigrid solver use the
   limit there (a zero discriminant; the number of such cells is printed), as Barreira et al. 2013 (arXiv:1306.3219),
   who found the same for a > ~0.8. The multigrid solver then stalls at a residual of ~1e-4 (it stops after
@@ -157,12 +178,13 @@ The theory of f(R), DGP, the cubic Galileon, JBD, the symmetron, (m(a), beta(a))
 
 ## Screening
 
-For the models with screening (f(R), DGP, the cubic Galileon, the symmetron, the dilaton and (m(a), β(a))) there are four ways to
+For the models with screening (f(R), DGP, the cubic Galileon, generic Horndeski, the symmetron, the dilaton and (m(a), β(a))) there are four ways to
 include the nonlinear evolution of the scalar field:
 
 * Linear: simulate with the linearised field equations. Fast, and agrees with linear theory on large scales.
 
-* Approximate screening (Winther & Ferreira 2014). Almost as fast and quite accurate (it can be tuned to be more
+* Approximate screening (Winther & Ferreira 2014, arXiv:1403.6492; for Vainshtein screening in COLA see also Brando,
+  Koyama & Winther 2023, arXiv:2303.09549). Almost as fast and quite accurate (it can be tuned to be more
   accurate).
 
 * Approximate screening together with the linear field equation, so that the linear evolution on large scales is

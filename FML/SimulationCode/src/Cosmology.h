@@ -52,8 +52,8 @@
 ///                    Amendola 2000): the background, rho_c(a) = Omega_cdm cdm_mass_factor(a) a^-3. The force and the
 ///                    velocity term of the CDM are in the gravity model CoupledQuintessence (needs this cosmology)
 ///   IDE           -> ide (cosmology_ide_w, _xi, _cs2): interacting dark energy, the energy exchange Q = xi H rho_DE
-///                    along the dark-matter 4-velocity (Valiviita, Majerotto & Maartens 2008). The CDM particles have
-///                    their own masses: each gains xi/3 rho_DE times the change of its physical volume
+///                    along the dark-matter 4-velocity (Valiviita, Majerotto & Maartens 2008, arXiv:0804.0232). The
+///                    CDM particles have their own masses: each gains xi/3 rho_DE times the change of its physical volume
 ///                    (Simulation::update_ide_masses); their velocities are not changed. Mean mass cdm_mass_factor(a)
 ///   CubicGalileon -> cubic_galileon: the cubic Galileon on its tracker (no free parameter beyond those of LCDM; the
 ///                    dark energy is the Galileon). The force is the gravity model CubicGalileon (needs this cosmology)

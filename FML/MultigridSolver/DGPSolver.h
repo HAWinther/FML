@@ -70,7 +70,8 @@ class DGPSolverCosmology {
 
     /// Allow a negative discriminant (set to zero there, the cells counted in last_n_negative_discriminant) instead of
     /// stopping. Not possible for DGP; the cubic Galileon (the same equation with its r_c(a), beta(a)) has no real
-    /// solution in deep voids (QuasiStaticGravity_CubicGalileon.h)
+    /// solution in deep voids (QuasiStaticGravity_CubicGalileon.h; Barreira et al. 2013, arXiv:1306.3219, who also set
+    /// the discriminant to zero there)
     bool allow_negative_discriminant{false};
     long long last_n_negative_discriminant{0};
 

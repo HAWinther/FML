@@ -6,6 +6,7 @@
 #include "GravityModel.h"
 #include "GravityModel_DGP.h"
 #include "GravityModel_CubicGalileon.h"
+#include "GravityModel_Horndeski.h"
 #include "GravityModel_GR.h"
 #include "GravityModel_CoupledQuintessence.h"
 #include "GravityModel_JBD.h"
@@ -56,6 +57,7 @@ namespace SIMCODE {
             {"f(R)", [](auto cosmo) { return std::make_shared<GravityModelFofR<NDIM>>(cosmo); }},
             {"DGP", [](auto cosmo) { return std::make_shared<GravityModelDGP<NDIM>>(cosmo); }},
             {"CubicGalileon", [](auto cosmo) { return std::make_shared<GravityModelCubicGalileon<NDIM>>(cosmo); }},
+            {"Horndeski", [](auto cosmo) { return std::make_shared<GravityModelHorndeski<NDIM>>(cosmo); }},
             {"JBD", [](auto cosmo) { return std::make_shared<GravityModelJBD<NDIM>>(cosmo); }},
             {"Symmetron", [](auto cosmo) { return std::make_shared<GravityModelSymmetron<NDIM>>(cosmo); }},
             {"Dilaton", [](auto cosmo) { return std::make_shared<GravityModelDilaton<NDIM>>(cosmo); }},

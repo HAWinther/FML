@@ -128,6 +128,10 @@ class GravityModelScreened : public GravityModel<NDIM> {
                                          " implemented here");
         }
     }
+    /// The Newtonian force relative to GR (1; a running Planck mass: generic Horndeski, 1 / (2 G4)). The fifth force is
+    /// GeffOverG - newtonian_factor of it in the linear regime
+    virtual double newtonian_factor(double /*a*/) const { return 1.0; }
+
     /// Density screening: the smoothing of the density field before the screening factor is computed
     virtual double density_smoothing_scale_over_boxsize() const { return 0.0; }
     virtual std::string density_smoothing_filter() const { return "tophat"; }
@@ -366,7 +370,8 @@ class GravityModelScreened : public GravityModel<NDIM> {
                 density_fourier.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
                 auto delta = density_fourier.get_fourier_from_index(fourier_index);
                 auto delta_fifth_force = density_fifth_force.get_fourier_from_index(fourier_index);
-                auto delta_fifth_force_linear = delta * FML::GRID::FloatType(this->GeffOverG(a, kmag / H0Box) - 1.0);
+                auto delta_fifth_force_linear =
+                    delta * FML::GRID::FloatType(this->GeffOverG(a, kmag / H0Box) - newtonian_factor(a));
                 FML::GRID::FloatType filter = f_spline(kmag);
                 auto value = delta_fifth_force_linear * filter + delta_fifth_force * FML::GRID::FloatType(1.0 - filter);
                 density_fifth_force.set_fourier_from_index(fourier_index, value);
@@ -394,7 +399,8 @@ class GravityModelScreened : public GravityModel<NDIM> {
                        std::array<FFTWGrid<NDIM>, NDIM> & force_real,
                        const FML::NBODY::ForceOptions & options = {}) const override {
         const double norm_poisson_equation = 1.5 * this->cosmo->get_OmegaM() * a;
-        auto coupling = [&](double kBox) { return this->GeffOverG(a, kBox / H0Box) - 1.0; };
+        const double newton = newtonian_factor(a);
+        auto coupling = [&](double kBox) { return this->GeffOverG(a, kBox / H0Box) - newton; };
 
         // Before multigrid_start_redshift the field equation is not solved: the linear fifth force or none (GR)
         const bool before_start =
@@ -404,7 +410,7 @@ class GravityModelScreened : public GravityModel<NDIM> {
                 std::cout << "No fifth force (" << this->get_name() << ") at z = " << 1.0 / a - 1.0
                           << " > multigrid_start_redshift = " << multigrid_start_redshift << " (GR force)\n";
             this->compute_force_from_total_density(density_fourier,
-                                                   norm_poisson_equation,
+                                                   norm_poisson_equation * newton,
                                                    density_assignment_method_used,
                                                    force_real,
                                                    options);
@@ -438,7 +444,8 @@ class GravityModelScreened : public GravityModel<NDIM> {
             for (auto && fourier_index : density_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
                 auto delta = density_fourier.get_fourier_from_index(fourier_index);
                 auto delta_fifth_force = density_fifth_force.get_fourier_from_index(fourier_index);
-                density_fifth_force.set_fourier_from_index(fourier_index, delta + delta_fifth_force);
+                density_fifth_force.set_fourier_from_index(fourier_index,
+                                                           delta * FML::GRID::FloatType(newton) + delta_fifth_force);
             }
         }
 

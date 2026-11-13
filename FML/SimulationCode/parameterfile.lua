@@ -179,8 +179,8 @@ end
 ------------------------------------------------------------
 -- Choose the gravity model
 ------------------------------------------------------------
--- Gravity model: GR, f(R), DGP, CubicGalileon, JBD, Symmetron, Dilaton, mbeta, mu, CoupledQuintessence ... add your
--- own ...
+-- Gravity model: GR, f(R), DGP, CubicGalileon, Horndeski, JBD, Symmetron, Dilaton, mbeta, mu, CoupledQuintessence ...
+-- add your own ...
 -- (JBD needs cosmology_model = "JBD": it takes phi(a) from the background; CoupledQuintessence goes together with
 -- cosmology_model = "CoupledQuintessence": the force and velocity term of the coupled CDM)
 gravity_model = "GR"
@@ -372,6 +372,9 @@ if gravity_model == "CubicGalileon" then
   gravity_model_cubic_galileon_exact_solution = false
   -- Approximate screening model (otherwise linear)
   gravity_model_screening = true
+  -- For screening approx: smoothing filter for density (tophat, gaussian, sharpk) and the smoothing scale R/boxsize
+  gravity_model_cubic_galileon_smoothing_filter = "tophat"
+  gravity_model_cubic_galileon_smoothing_scale_over_boxsize = 0.0
   gravity_model_screening_efficiency = 1.0
   gravity_model_screening_enforce_largescale_linear = true
   gravity_model_screening_linear_scale_hmpc = 0.1
@@ -381,13 +384,31 @@ if gravity_model == "CubicGalileon" then
   multigrid_nsweeps_first_step = 20
 end
 
--- The multigrid solver of the exact equations (f(R), Symmetron, Dilaton, DGP, CubicGalileon with *_exact_solution =
--- true)
-if gravity_model_fofr_exact_solution or gravity_model_symmetron_exact_solution or gravity_model_dilaton_exact_solution or gravity_model_dgp_exact_solution or gravity_model_cubic_galileon_exact_solution then
+-- Generic reduced Horndeski (K(phi, X), G3(phi, X), G4(phi)): the tables of scripts/horndeski_frontend.py. Use
+-- cosmology_model = "Tabulated" with cosmology_tabulated_format = "H" and the frontend's _background.txt
+if gravity_model == "Horndeski" then
+  gravity_model_horndeski_filename = "input/horndeski/cubic_galileon_gravity.txt"
+  -- Solve the exact equation with DGP's multigrid solver (slow and mainly for testing; needs r_c^2 > 0)
+  gravity_model_horndeski_exact_solution = false
+  -- Approximate screening model (otherwise linear)
+  gravity_model_screening = true
+  gravity_model_horndeski_smoothing_filter = "gaussian"
+  gravity_model_horndeski_smoothing_scale_over_boxsize = 0.0
+  gravity_model_screening_efficiency = 1.0
+  gravity_model_screening_enforce_largescale_linear = true
+  gravity_model_screening_linear_scale_hmpc = 0.1
+  multigrid_solver_residual_convergence = 1e-5
+  multigrid_nsweeps = 3
+  multigrid_nsweeps_first_step = 20
+end
+
+-- The multigrid solver of the exact equations (f(R), Symmetron, Dilaton, DGP, CubicGalileon, Horndeski with
+-- *_exact_solution = true)
+if gravity_model_fofr_exact_solution or gravity_model_symmetron_exact_solution or gravity_model_dilaton_exact_solution or gravity_model_dgp_exact_solution or gravity_model_cubic_galileon_exact_solution or gravity_model_horndeski_exact_solution then
   -- Converged when the rms residual is below multigrid_solver_residual_convergence (residual) or below it times
   -- the rms of the linear source of the equation (relative; the residual scale changes a lot during a simulation)
   multigrid_convergence_criterion = "residual"
-  if gravity_model == "CubicGalileon" then
+  if gravity_model == "CubicGalileon" or gravity_model == "Horndeski" then
     multigrid_convergence_criterion = "relative"
   end
   -- Solve the field equation on a grid coarser by this factor than the force grid (1: the force grid)

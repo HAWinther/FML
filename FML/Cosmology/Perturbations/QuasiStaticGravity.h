@@ -32,8 +32,9 @@
 // the code that has the grid.
 //
 // The object keeps a reference to the background: the background must outlive it.
-// Theories: QuasiStaticGravity_MuSigma.h (Planck/DES), _HuSawicky.h (f(R)), _DGP.h, _CubicGalileon.h, _BransDicke.h,
-// _Symmetron.h, _MBeta.h (the (m(a), beta(a)) parametrisation of chameleon-like theories).
+// Theories: QuasiStaticGravity_MuSigma.h (Planck/DES), _HuSawicky.h (f(R)), _DGP.h, _CubicGalileon.h, _Horndeski.h
+// (tabulated reduced Horndeski), _BransDicke.h, _Symmetron.h, _MBeta.h (the (m(a), beta(a)) parametrisation of
+// chameleon-like theories).
 // =====================================================================================================================
 
 #include <FML/Cosmology/Background/Background.h>

@@ -5,6 +5,26 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: generic reduced Horndeski (as Hi-COLA)
+- `scripts/horndeski_frontend.py`: from K(phi, X), G3(phi, X), G4(phi) (sympy expressions in a JSON file; examples
+  in `input/horndeski`) it derives the background equations from the minisuperspace action, solves them (from today
+  with dphi/dlna from the Friedmann constraint, or from early times shooting a parameter for E(a = 1) = 1) and writes
+  H(z) (for `cosmology_model = Tabulated`) and the quasi-static force (Kimura, Kobayashi & Yamamoto 2012): the
+  Newtonian force rescaled by 1/(2 G4) and a fifth force of the DGP form with r_c(a), beta(a). The coefficients are
+  simplified symbolically with the background equations, so their GR parts cancel exactly.
+- `FML/Cosmology/Perturbations/QuasiStaticGravity_Horndeski.h` (the theory from the table: mu, Sigma, the 2LPT source,
+  the Vainshtein screening) and `gravity_model = Horndeski` (`gravity_model_horndeski_filename`, `_exact_solution`,
+  `_smoothing_filter`, `_smoothing_scale_over_boxsize`): linear, screening approximation or DGP's multigrid solver.
+  `GravityModelScreened::newtonian_factor` rescales the Newtonian part of the force (1 for the other models).
+- Validated (`tests/check_horndeski_frontend.py`): the cubic Galileon's G_eff and r_c, Brans-Dicke's G_eff =
+  (4 + 2 omega) / ((3 + 2 omega) phi) and Sigma = 1/phi (to 1e-12), the Brans-Dicke attractor; with the cubic Galileon
+  tables the model gives the P(k) of `gravity_model = CubicGalileon` to 4e-6 (linear, screening, multigrid).
+- Regression cases `horndeski_cubic_galileon_cola`, `horndeski_cubic_galileon_exact_multigrid`,
+  `horndeski_brans_dicke`.
+
+### SimulationCode: density smoothing for the cubic Galileon's screening
+- `gravity_model_cubic_galileon_smoothing_filter` and `_smoothing_scale_over_boxsize`, as for DGP (default: none).
+
 ### SimulationCode: interacting dark energy
 - `cosmology_model = IDE` (`cosmology_ide_w`, `cosmology_ide_xi`, `cosmology_ide_cs2`): the background and IC of FML's
   `ide`, the energy exchange Q = xi H rho_DE along the dark-matter 4-velocity, perturbed (as in the solver) by the

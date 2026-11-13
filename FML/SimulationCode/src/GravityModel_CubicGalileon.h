@@ -13,9 +13,14 @@
 /// Galileon). Its quasi-static field equation is that of the DGP brane-bending mode with a time-dependent cross-over
 /// scale r_c(a) and beta(a) (FML/Cosmology/Perturbations/QuasiStaticGravity_CubicGalileon.h): G_eff/G = 1 + 1/(3 beta)
 /// = 1.77 today, the Vainshtein screening of the theory (gravity_model_screening, a spherical top-hat factor of the
-/// local density) or the exact solution with DGP's multigrid solver (gravity_model_cubic_galileon_exact_solution)
+/// local density) or the exact solution with DGP's multigrid solver (gravity_model_cubic_galileon_exact_solution).
+/// N-body simulations of the model: Barreira et al. 2013, arXiv:1306.3219 (full N-body); Wright et al. 2023 (Hi-COLA),
+/// arXiv:2209.01666, and Brando, Koyama & Winther 2023, arXiv:2303.09549 (COLA with approximate screening)
 template <int NDIM>
 class GravityModelCubicGalileon final : public GravityModelScreened<NDIM> {
+    std::string smoothing_filter{"tophat"};
+    double smoothing_scale_over_boxsize{0.0};
+
   public:
     template <int N>
     using FFTWGrid = FML::GRID::FFTWGrid<N>;
@@ -34,6 +39,17 @@ class GravityModelCubicGalileon final : public GravityModelScreened<NDIM> {
     void init() override {
         this->quasi_static = std::make_shared<const QuasiStaticGravity_CubicGalileon>(this->cosmo->background());
         GravityModelScreened<NDIM>::init();
+    }
+
+    /// The screening approximation: the density smoothed as for DGP (gravity_model_cubic_galileon_smoothing_*)
+    double density_smoothing_scale_over_boxsize() const override { return smoothing_scale_over_boxsize; }
+    std::string density_smoothing_filter() const override { return smoothing_filter; }
+    void read_parameters(FML::UTILS::ParameterMap & param) override {
+        GravityModelScreened<NDIM>::read_parameters(param);
+        if (this->use_screening_method) {
+            smoothing_scale_over_boxsize = this->settings.cubic_galileon_smoothing_scale_over_boxsize;
+            smoothing_filter = this->settings.cubic_galileon_smoothing_filter;
+        }
     }
 
     /// The 2LPT source of the nonlinear term of the field equation (only with screening, as for DGP)
