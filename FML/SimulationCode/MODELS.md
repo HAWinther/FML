@@ -178,6 +178,12 @@ For Quintessence, EDE and Tabulated the dark energy is smooth (no perturbations)
 
 * mbeta: the general (m(a), β(a)) parametrisation of chameleon-like models, β(a) = β0 a^n and m(a) = m0 H0 a^m.
 
+  The linear theory of Symmetron, Dilaton and mbeta (and f(R)) is also in the Einstein-Boltzmann solver: the models
+  `symmetron`, `dilaton`, `mbeta` (`fr`) of `cmb`, the ΛCDM background with the same quasi-static μ(k, a)
+  (`FML/Cosmology/Perturbations/PerturbationModel_QuasiStatic.h`), for the CMB and the linear P(k). Its scale-dependent
+  growth agrees with the quasi-static growth equation of the force here to 2e-4 (`test_quasistatic_models`). The IC of
+  `ic_type_of_input = internal` follow `cosmology_model` (ΛCDM for these), as before.
+
 * CoupledQuintessence: the force and the velocity term of the CDM of the cosmology with the same name (and it needs
   that cosmology, as JBD; it takes beta and phi(a) from the background). In the N-body equations (the sub-horizon limit
   of those of the Einstein-Boltzmann solver) the CDM feels G (1 + 2 beta^2) from the CDM (the fifth force of the light

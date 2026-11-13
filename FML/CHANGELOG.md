@@ -5,6 +5,16 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Einstein-Boltzmann solver: symmetron, dilaton and (m(a), beta(a)) models
+- `symmetron` (`sym_assb`, `sym_beta`, `sym_L_mpch`, `sym_N`, `sym_M`), `dilaton` (`dil_A2`, `dil_beta0`, `dil_r`,
+  `dil_xi`) and `mbeta` (`mb_beta0`, `mb_n_beta`, `mb_m0`, `mb_n_m`): the LCDM background with the quasi-static
+  mu(k, a) of `QuasiStaticGravity_Symmetron.h`, `_Dilaton.h`, `_MBeta.h` (the force of SimulationCode's gravity
+  models of the same names) in the mu-Sigma equations, through the new generic `PerturbationModel_QuasiStatic.h`
+  (any QuasiStaticGravity on LCDM). Example files `params/symmetron.ini`, `dilaton.ini`, `mbeta.ini`.
+- Validated (`tests/test_quasistatic_models.cpp`): the growth of delta_cdm from z = 49 to 0 relative to LCDM at k =
+  0.05 - 2.5 /Mpc agrees with the quasi-static growth equation solved independently with the same mu(k, a) to 2e-4
+  (and so does `fr`).
+
 ### K-mouflage (as Hi-COLA)
 - `SimulationCode/input/horndeski/kmouflage.json`: K-mouflage (K = -1 + X + K0 X^2, A = exp(beta phi); n = 2,
   K0 = 1, beta = 0.2) in the Jordan frame, as Hi-COLA (Sen Gupta, Fiorini & Baker 2024): the reduced Horndeski theory

@@ -18,7 +18,8 @@
 //   dark_scattering                        BackgroundModel_DarkScattering.h        make_dark_scattering
 //   covariant_dark_scattering              BackgroundModel_DarkScattering.h        make_dark_scattering (wCDM)
 //   ide                                    BackgroundModel_IDE.h                   make_ide
-//   musigma, fr, horndeski                 the LCDM / w0wa background of the models that modify the perturbations
+//   musigma, fr, symmetron, dilaton,       the LCDM / w0wa background of the models that modify the perturbations
+//   mbeta, horndeski
 //   horndeski_table                        BackgroundModel_HorndeskiTable.h (the table of BackgroundParameters::
 //                                          model_file, from SimulationCode/scripts/horndeski_frontend.py)
 //   (not in the registry: BackgroundModel_Tabulated.h, make_tabulated_E / make_tabulated_w, from a table)
@@ -275,6 +276,25 @@ namespace FML::COSMOLOGY::BACKGROUND {
              }},
             {"fr",
              "Hu-Sawicky f(R): the LCDM background (to O(fR0); fR0, fR_n only modify the perturbations)",
+             {},
+             [](const BackgroundParameters & p, const ModelParameters &, BackgroundRange r) {
+                 return make_lcdm(p, r);
+             }},
+            {"symmetron",
+             "symmetron: the LCDM background (the scalar's energy density is negligible; sym_* only modify the "
+             "perturbations)",
+             {},
+             [](const BackgroundParameters & p, const ModelParameters &, BackgroundRange r) {
+                 return make_lcdm(p, r);
+             }},
+            {"dilaton",
+             "dilaton: the LCDM background (dil_* only modify the perturbations)",
+             {},
+             [](const BackgroundParameters & p, const ModelParameters &, BackgroundRange r) {
+                 return make_lcdm(p, r);
+             }},
+            {"mbeta",
+             "(m(a), beta(a)): the LCDM background (mb_* only modify the perturbations)",
              {},
              [](const BackgroundParameters & p, const ModelParameters &, BackgroundRange r) {
                  return make_lcdm(p, r);

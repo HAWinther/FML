@@ -77,6 +77,9 @@ its parameter file in `params/` and in `./cmb --write-defaults`.
 | `axion` | `ax_log10_m`, `ax_fraction`, `ax_switch_mH`, `ax_log10_Hinf` | Mixed dark matter as axionCAMB: the share `ax_fraction` of the dark matter is an ultralight axion field (V = m²φ²/2, m = 10⁻³³–10⁻¹⁸ eV), the rest CDM, + Λ; φ_i found from Ω_ax; Klein–Gordon background and perturbations until the field oscillates fast (m/H ~ 125), then the oscillation-averaged fluid (w = 0, c_s² = k²/(k² + 4m²a²)); `ax_switch_mH = 3` switches at m = 3H as axionCAMB. P_cb, P_axion (and the axion in P_m for m ≥ 10⁻²⁵ eV); axion isocurvature from H_inf (`ax_log10_Hinf`) or `f_axi` |
 | `ide` | `ide_xi`, `ide_w`, `ide_cs2`, `ide_stability_check` | Interacting dark energy: fluid (w, ĉ_s²) exchanging energy with CDM, Q = ξHρ_DE along the CDM velocity; analytic background; doom-factor stability check |
 | `fr` | `fR0`, `fR_n` | Hu–Sawicky f(R): ΛCDM background (to O(f_R0)), quasi-static μ(k,a) = (1+4Q)/((1+3Q)(1+f_R)), Σ = 1/(1+f_R), Q = (k/a)² f_RR/(1+f_R) = (k/a)²λ_C²/3; flat |
+| `symmetron` | `sym_assb`, `sym_beta`, `sym_L_mpch`, `sym_N`, `sym_M` | Symmetron (powers (N, M) of Brax et al. 2012): ΛCDM background, quasi-static μ(k,a) = 1 + 2β(a)²k²/(k² + a²m(a)²), no fifth force before a_ssb, Σ = 1; flat. The theory of SimulationCode's `Symmetron` |
+| `dilaton` | `dil_A2`, `dil_beta0`, `dil_r`, `dil_xi` | Environment-dependent dilaton (Brax et al. 2012): ΛCDM background, quasi-static μ(k,a) as above with m(a) = m0 a^-r, Σ = 1; flat. SimulationCode's `Dilaton` |
+| `mbeta` | `mb_beta0`, `mb_n_beta`, `mb_m0`, `mb_n_m` | (m(a), β(a)) chameleon-like theories, power laws: ΛCDM background, quasi-static μ(k,a) as above, Σ = 1; flat. SimulationCode's `mbeta` |
 
 ## Accuracy
 
@@ -106,7 +109,7 @@ Each run writes `<output_dir>/params_used.ini` (re-readable) and `params.txt` (r
 | `params/twopoint.ini` | All two-point functions (perturbations to k = 1/Mpc), as in the report |
 | `params/isocurvature.ini` | Planck 2018 with a correlated CDM isocurvature mode (f = 0.3, c_ad = −0.2) |
 | `params/tensors.ini` | Planck 2018 with tensor modes, r = 0.05: lensed BB with the primordial B modes |
-| `params/musigma.ini`, `dgp.ini`, `quintessence.ini`, `jbd.ini`, `fr.ini`, `coupled_quintessence.ini`, `dark_scattering.ini`, `cubic_galileon.ini`, `horndeski.ini`, `horndeski_table.ini`, `ede.ini`, `axion.ini`, `ide.ini` | The models beyond ΛCDM, with their parameters |
+| `params/musigma.ini`, `dgp.ini`, `quintessence.ini`, `jbd.ini`, `fr.ini`, `symmetron.ini`, `dilaton.ini`, `mbeta.ini`, `coupled_quintessence.ini`, `dark_scattering.ini`, `cubic_galileon.ini`, `horndeski.ini`, `horndeski_table.ini`, `ede.ini`, `axion.ini`, `ide.ini` | The models beyond ΛCDM, with their parameters |
 
 ## Output
 

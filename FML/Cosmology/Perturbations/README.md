@@ -44,7 +44,9 @@ PerturbationModel.h          the base: which background species get which pertur
                              Perturbations adds delta_ncdm, v_ncdm of all of them)
                              for the models to reuse; PerturbationModel_Assembled (a model from given parts)
 PerturbationModel_<name>.h   LCDM, w0wa, MuSigma, DGP, HuSawicky, Horndeski, Quintessence, EDE, Axion, BransDicke,
-                             CoupledQuintessence, CubicGalileon, DarkScattering, IDE, each with its make_..._perturbations
+                             CoupledQuintessence, CubicGalileon, DarkScattering, IDE, each with its make_..._perturbations;
+                             QuasiStatic: any QuasiStaticGravity on the LCDM background with the mu-Sigma equations
+                             (symmetron, dilaton, mbeta)
 Presets.h                    the model registry (built on the background registry: name, description, the parameters
                              of the perturbations; model_parameters(name) = background's + perturbations'), and
                              make_perturbation_model(name, params, model params), make_model_background
@@ -55,9 +57,10 @@ Smooth species (Lambda, w0wa dark energy) get no perturbations; a species whose 
 (the CDM of dark scattering, coupled quintessence and IDE) is skipped by StandardSpeciesPerturbations. A species object
 is shared by all modes and threads (no per-mode state); the model keeps typed pointers to the background objects it
 needs, found once at construction (nothing is looked up or cast when the equations are evaluated). The perturbation-only
-parameters (mu0, Sigma0, fR0, fR_n, hd_* but hd_w0/hd_wa, ds_xi, ds_cs2, ide_cs2, ide_stability_check) are listed
+parameters (mu0, Sigma0, fR0, fR_n, sym_*, dil_*, mb_*, hd_* but hd_w0/hd_wa, ds_xi, ds_cs2, ide_cs2, ide_stability_check) are listed
 (with defaults and descriptions) in the registry of Presets.h, the others in the background registry; the solver's checks and warnings come with the models (w0wa: no dark-energy
-perturbations, warned once per process; dgp: Omega_Lambda < 0 warned; musigma, fr: flat, dark energy,
+perturbations, warned once per process; dgp: Omega_Lambda < 0 warned; musigma, fr, symmetron, dilaton, mbeta: flat,
+dark energy,
 1 + 2 Sigma0 - mu0 >= 0; horndeski: flat, ghost / gradient / stiffness checks, D = 0 with alpha_M rejected; IDE: the
 doom factor; dark scattering: w != -1, cs2 > 0, xi >= 0).
 
