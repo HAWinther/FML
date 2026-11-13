@@ -13,6 +13,8 @@
 //   musigma                                PerturbationModel_MuSigma.h               mu0, Sigma0
 //   dgp                                    PerturbationModel_DGP.h
 //   fr                                     PerturbationModel_HuSawicky.h             fR0, fR_n
+//   horndeski_table                        PerturbationModel_HorndeskiTable.h        hd_stability_check (model_file:
+//                                                                                    the frontend's table)
 //   horndeski                              PerturbationModel_Horndeski.h             hd_parametrization, hd_cK, hd_cB,
 //                                                                                    hd_cM, hd_M2_ini,
 //                                                                                    hd_stability_check
@@ -43,6 +45,7 @@
 #include <FML/Cosmology/Perturbations/PerturbationModel_DarkScattering.h>
 #include <FML/Cosmology/Perturbations/PerturbationModel_EDE.h>
 #include <FML/Cosmology/Perturbations/PerturbationModel_Horndeski.h>
+#include <FML/Cosmology/Perturbations/PerturbationModel_HorndeskiTable.h>
 #include <FML/Cosmology/Perturbations/PerturbationModel_HuSawicky.h>
 #include <FML/Cosmology/Perturbations/PerturbationModel_IDE.h>
 #include <FML/Cosmology/Perturbations/PerturbationModel_LCDM.h>
@@ -136,6 +139,17 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
                                           m.at("hd_cM"),
                                           m.at("hd_M2_ini")),
                      m.at("hd_stability_check") != 0.0);
+             }},
+            {"horndeski_table",
+             "reduced Horndeski (K, G3, G4) from the table of SimulationCode/scripts/horndeski_frontend.py "
+             "(model_file): its H(a) and the alpha parameterization with its alphas (alpha_T = 0, flat, no massive "
+             "neutrinos); stability checked",
+             {{"hd_stability_check",
+               1.0,
+               "1: stop for a ghost (D < 0) or gradient (c_s^2 < 0) instability, M*^2 <= 0, or c_s^2 > 1e5 (too "
+               "stiff)"}},
+             [](BG bg, M m) {
+                 return make_horndeski_table_perturbations(std::move(bg), m.at("hd_stability_check") != 0.0);
              }},
             {"quintessence", "scalar field with V = V0 exp(-lambda phi), " + QUINTESSENCE, {}, quintessence},
             {"quintessence_inverse_power_law",

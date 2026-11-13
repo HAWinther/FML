@@ -19,6 +19,8 @@
 //   covariant_dark_scattering              BackgroundModel_DarkScattering.h        make_dark_scattering (wCDM)
 //   ide                                    BackgroundModel_IDE.h                   make_ide
 //   musigma, fr, horndeski                 the LCDM / w0wa background of the models that modify the perturbations
+//   horndeski_table                        BackgroundModel_HorndeskiTable.h (the table of BackgroundParameters::
+//                                          model_file, from SimulationCode/scripts/horndeski_frontend.py)
 //   (not in the registry: BackgroundModel_Tabulated.h, make_tabulated_E / make_tabulated_w, from a table)
 //
 // Every entry lists the parameters of the background only, with their defaults and descriptions (ModelParameter). A
@@ -32,6 +34,7 @@
 // =====================================================================================================================
 
 #include <FML/Cosmology/Background/BackgroundModel_Axion.h>
+#include <FML/Cosmology/Background/BackgroundModel_HorndeskiTable.h>
 #include <FML/Cosmology/Background/BackgroundModel_BransDicke.h>
 #include <FML/Cosmology/Background/BackgroundModel_CoupledQuintessence.h>
 #include <FML/Cosmology/Background/BackgroundModel_CubicGalileon.h>
@@ -275,6 +278,13 @@ namespace FML::COSMOLOGY::BACKGROUND {
              {},
              [](const BackgroundParameters & p, const ModelParameters &, BackgroundRange r) {
                  return make_lcdm(p, r);
+             }},
+            {"horndeski_table",
+             "reduced Horndeski (K, G3, G4) from the table of SimulationCode/scripts/horndeski_frontend.py "
+             "(model_file): its H(a) as a tabulated dark energy (GR sum)",
+             {},
+             [](const BackgroundParameters & p, const ModelParameters &, BackgroundRange r) {
+                 return make_horndeski_table(p, r);
              }},
             {"horndeski",
              "Horndeski (alpha parameterization): the LCDM or w0wa background from hd_w0, hd_wa (the alphas only "

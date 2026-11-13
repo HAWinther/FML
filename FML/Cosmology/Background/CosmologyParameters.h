@@ -55,6 +55,7 @@ namespace FML::COSMOLOGY {
         // --- Model (the model registry, Cosmology/Perturbations/Presets.h) ---------
         std::string model = "lcdm";
         std::map<std::string, double> model_params;
+        std::string model_file; // the table of a model given by one (horndeski_table: horndeski_frontend.py)
 
         // --- Primordial power spectrum -------------------------------------------
         double A_s = 2.1e-9;   // Amplitude at k_pivot

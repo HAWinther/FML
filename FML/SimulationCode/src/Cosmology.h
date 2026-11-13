@@ -55,6 +55,9 @@
 ///                    along the dark-matter 4-velocity (Valiviita, Majerotto & Maartens 2008, arXiv:0804.0232). The
 ///                    CDM particles have their own masses: each gains xi/3 rho_DE times the change of its physical volume
 ///                    (Simulation::update_ide_masses); their velocities are not changed. Mean mass cdm_mass_factor(a)
+///   Horndeski     -> horndeski_table (cosmology_horndeski_filename): a reduced Horndeski theory (K, G3, G4) from the
+///                    table of scripts/horndeski_frontend.py: its H(a), and for the IC from the internal
+///                    Einstein-Boltzmann solver its alphas. Use it with gravity_model = Horndeski
 ///   CubicGalileon -> cubic_galileon: the cubic Galileon on its tracker (no free parameter beyond those of LCDM; the
 ///                    dark energy is the Galileon). The force is the gravity model CubicGalileon (needs this cosmology)
 ///   Tabulated     -> a tabulated dark energy (BackgroundModel_Tabulated.h; cosmology_tabulated_filename, _format
@@ -122,6 +125,7 @@ class Cosmology {
         double cds_alpha;
         double cq_lambda, cq_beta;
         double ide_w, ide_xi, ide_cs2;
+        std::string horndeski_filename;
         double As, ns, kpivot_mpc; // The primordial power-spectrum
 
         /// The parameters of the background and of the models
@@ -260,6 +264,14 @@ class Cosmology {
                            0.05,
                            "Coupled quintessence: the coupling beta (Amendola's sqrt(2/3) beta): the CDM particles have "
                            "the mass m ~ exp(-beta phi) and feel G (1 + 2 beta^2) from the CDM. 0: uncoupled");
+            });
+            f.for_cosmology({"Horndeski"}, [&]() {
+                f.required("cosmology_horndeski_filename",
+                           horndeski_filename,
+                           std::string(""),
+                           "Generic reduced Horndeski: the _gravity.txt table of scripts/horndeski_frontend.py (its "
+                           "H(a), and the alphas for the internal Einstein-Boltzmann solver); use it with "
+                           "gravity_model = Horndeski");
             });
             f.for_cosmology({"IDE"}, [&]() {
                 f.required("cosmology_ide_w",
@@ -727,6 +739,7 @@ class Cosmology {
             {"CoupledQuintessence", &Cosmology::read_coupled_quintessence},
             {"IDE", &Cosmology::read_ide},
             {"CubicGalileon", &Cosmology::read_cubic_galileon},
+            {"Horndeski", &Cosmology::read_horndeski},
             {"Tabulated", &Cosmology::read_tabulated, true, false, true},
         };
         return list;
@@ -792,6 +805,10 @@ class Cosmology {
         model_parameters = {{"ide_w", w}, {"ide_xi", xi}, {"ide_cs2", cs2}};
     }
     void read_cubic_galileon() { registry_name = "cubic_galileon"; }
+    void read_horndeski() {
+        registry_name = "horndeski_table";
+        input_parameters.model_file = settings.horndeski_filename;
+    }
     void read_dgp() {
         registry_name = "dgp";
         model_parameters = {{"Omega_rc", settings.dgp_OmegaRC}, {"dgp_branch", 1.0}};

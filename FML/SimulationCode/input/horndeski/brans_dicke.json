@@ -12,14 +12,12 @@
  "T_CMB": 2.7255,
  "Omega_Lambda": 0.7,
  "initial": "early",
- "a_ini": 1e-06,
+ "a_ini": 1e-09,
  "phi_ini": 1.0,
  "dphidlna_ini": 0.0,
  "shoot": "Omega_Lambda",
  "shoot_bracket": [
   0.3,
   1.2
- ],
- "a_min": 0.0001,
- "n_points": 1000
+ ]
 }

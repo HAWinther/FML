@@ -30,6 +30,7 @@ namespace FML::COSMOLOGY::BACKGROUND {
         double N_eff{3.046};              ///< Effective number of neutrinos, massless + massive
         std::vector<double> m_nu_eV{};    ///< Masses of the massive neutrino species [eV]
         double T_ncdm_over_TCMB{0.71611}; ///< Temperature of the massive species today / T_CMB
+        std::string model_file{};         ///< The file of a model given by a table (horndeski_table), else empty
 
         /// H0 in 1/s
         double H0_SI() const { return h * FML::UTILS::SI::H0_over_h; }

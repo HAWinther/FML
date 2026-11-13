@@ -256,6 +256,12 @@ namespace FML::COSMOLOGY {
                  model_description(),
                  [](S & s, const std::string & v) { s.cosmo.model = trim(v); },
                  [](const S & s) { return s.cosmo.model; }},
+                {"Cosmology",
+                 "model_file",
+                 "the table of a model given by one (horndeski_table: the _gravity.txt of "
+                 "SimulationCode/scripts/horndeski_frontend.py); empty otherwise",
+                 [](S & s, const std::string & v) { s.cosmo.model_file = trim(v); },
+                 [](const S & s) { return s.cosmo.model_file; }},
                 D("Cosmology", "A_s", "primordial curvature power at k_pivot", REF(double, cosmo.A_s)),
                 D("Cosmology", "n_s", "scalar spectral index", REF(double, cosmo.n_s)),
                 D("Cosmology",

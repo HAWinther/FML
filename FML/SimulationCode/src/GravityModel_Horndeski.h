@@ -10,8 +10,9 @@
 #include <FML/MultigridSolver/DGPSolver.h>
 
 /// A generic reduced Horndeski theory (K(phi, X), G3(phi, X), G4(phi)) from the table of its quasi-static force made by
-/// scripts/horndeski_frontend.py (gravity_model_horndeski_filename; its background goes in cosmology_model = Tabulated
-/// with the H table the frontend also writes): the Newtonian force rescaled by G_G4/G = 1 / (2 G4) (newtonian_factor)
+/// scripts/horndeski_frontend.py (that of cosmology_model = Horndeski, which also gives the background and the IC from
+/// the internal Einstein-Boltzmann solver; or gravity_model_horndeski_filename with cosmology_model = Tabulated and the
+/// H table the frontend also writes): the Newtonian force rescaled by G_G4/G = 1 / (2 G4) (newtonian_factor)
 /// plus the fifth force of the DGP form with the table's beta(a) and r_c(a)
 /// (FML/Cosmology/Perturbations/QuasiStaticGravity_Horndeski.h): linear, the screening approximation (the density
 /// smoothed with gravity_model_horndeski_smoothing_*) or the exact equation with DGP's multigrid solver
@@ -41,13 +42,18 @@ class GravityModelHorndeski final : public GravityModelScreened<NDIM> {
     double newtonian_factor(double a) const override { return horndeski().GG4(std::log(a)); }
 
     void init() override {
+        if (filename.empty())
+            filename = this->cosmo->background().parameters().model_file;
+        if (filename.empty())
+            throw std::runtime_error("Horndeski: gravity_model_horndeski_filename is empty and the cosmology has no "
+                                     "table (use cosmology_model = Horndeski, or give the frontend's _gravity.txt)");
         const auto table = QuasiStaticGravity_Horndeski::read_table(filename);
         auto qs = std::make_shared<const QuasiStaticGravity_Horndeski>(this->cosmo->background(), table, filename);
         if (qs->max_relative_E_difference() > 1e-3)
             throw std::runtime_error("Horndeski: H(a) of the table [" + filename + "] differs from the background by " +
                                      std::to_string(qs->max_relative_E_difference()) +
-                                     " (use cosmology_model = Tabulated with the frontend's _background.txt and the "
-                                     "same OmegaM)");
+                                     " (use cosmology_model = Horndeski with the same table, or Tabulated with the "
+                                     "frontend's _background.txt, and the same OmegaM)");
         this->quasi_static = qs;
         GravityModelScreened<NDIM>::init();
     }

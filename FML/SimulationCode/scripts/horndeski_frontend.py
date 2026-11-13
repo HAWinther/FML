@@ -32,12 +32,17 @@
 # (QuasiStaticGravity_CubicGalileon.h) and Brans-Dicke (mu = (4 + 2 omega) / ((3 + 2 omega) phi), Sigma = 1/phi); the
 # generic model reproduces SimulationCode's CubicGalileon gravity model to 4e-6 in P(k).
 #
+# The alphas of Bellini & Sawicki 2014 (arXiv:1404.3713), M*^2 = 2 G4, alpha_M, alpha_B, alpha_K, their derivatives
+# and the matter term Rx of the perturbation equations, for the Einstein-Boltzmann solver's horndeski_table (the full
+# linear perturbations: the IC of SimulationCode, CMB and P(k) with cmb), are derived and simplified the same way.
+#
 # Output (--out PREFIX):
-#   PREFIX_background.txt   z, E = H/H0  (cosmology_model = Tabulated, cosmology_tabulated_format = H)
-#   PREFIX_gravity.txt      a, E, dlnE/dlna, GG4, mu, Sigma, b5, c2, phi, dphi/dlna  (gravity_model = Horndeski,
-#                           gravity_model_horndeski_filename)
-# Use the same Omega_m (cosmology_OmegaCDM + cosmology_Omegab) and the radiation of the parameter file (Omega_r here:
-# photons and massless neutrinos; default from h, T_CMB, Neff as FML does).
+#   PREFIX_gravity.txt      a, E, dlnE/dlna, GG4, mu, Sigma, b5, c2, phi, dphi/dlna, M*^2, M*^2 - 1, alpha_K, alpha_B,
+#                           alpha_M, dalpha_K/dlna, dalpha_B/dlna, Rx (cosmology_model = Horndeski,
+#                           cosmology_horndeski_filename, and gravity_model = Horndeski; the solver's model_file)
+#   PREFIX_background.txt   z, E = H/H0 for a <= 1 (cosmology_model = Tabulated, cosmology_tabulated_format = H)
+# The table is made for one cosmology: Omega_m (cosmology_OmegaCDM + cosmology_Omegab) and the radiation (h, T_CMB and
+# Neff as the run's: Omega_r is computed as FML does) are checked by the solver; flat, no massive neutrinos.
 #
 # Input: a JSON file (examples in input/horndeski: cubic_galileon.json, brans_dicke.json) with
 #   K, G3, G4         expressions in phi and X (sympy syntax) and the named parameters (default 0, 0, 1/2)
@@ -45,13 +50,16 @@
 #   Omega_m           today (the CDM + baryons of the parameter file)
 #   Omega_r or h (T_CMB, Neff)    the radiation (photons + massless neutrinos)
 #   Omega_Lambda      a cosmological constant (default 0)
-#   a_min, n_points   the table: a_min - 1 (default 1e-4, 2000 points)
+#   a_min, a_max, n_points   the table: a_min - a_max (default 1e-8 - 3, 3000 points; the Einstein-Boltzmann solver
+#                     starts at a ~ 1e-8 and checks the stability to a = e)
 #   initial = "today" (default): phi0 and dphidlna0_guess: dphi/dlna today is the root of the Friedmann constraint
 #                     with E = 1 closest to the guess (search_width: the range searched, in units of max(1, |guess|));
 #                     integrated back in time (the attractor of a tracker is unstable backwards: its decaying modes
 #                     grow, which matters only where the scalar is negligible)
-#   initial = "early": a_ini (<= a_min), phi_ini, dphidlna_ini at a_ini, and shoot: the parameter (or Omega_Lambda)
-#                     adjusted within shoot_bracket [lo, hi] so that E(a = 1) = 1
+#   initial = "early": a_ini (<= a_min), phi_ini, dphidlna_ini at a_ini (a number or an expression in the parameters
+#                     and E, the GR H/H0 at a_ini), and shoot: the parameter (or Omega_Lambda) adjusted within
+#                     shoot_bracket [lo, hi] so that E(a = 1) = 1. Use this when the early-time solution is an
+#                     attractor (trackers, Brans-Dicke): integrated back from today its decaying modes grow
 #
 # Usage: python3 horndeski_frontend.py model.json --out PREFIX
 #
@@ -153,16 +161,45 @@ def derive(Kexpr, G3expr, G4expr, phis, Xs, consts):
     al2 = simplified((2 * G4 - Theta / H) / (2 * G4))
     be0 = simplified(Xv * PD * G3X / (2 * H * G4))
     coeffs = sp.lambdify(args, [G4 + 0 * H, al0, al1, al2, be0], "numpy")
-    return constraint, rhs_Hd, rhs_pdd, coeffs
+
+    # The alphas of Bellini & Sawicki 2014 (arXiv:1404.3713; as hi_class and PerturbedFieldEquation_HorndeskiAlpha.h,
+    # alpha_T = 0) for G4 = G4(phi): M*^2 = 2 G4, alpha_M = dln M*^2/dlna,
+    #   H^2 M*^2 alpha_K = 2 X (K_X + 2 X K_XX - 2 G3_phi - 2 X G3_phiX) + 12 dphi X H (G3_X + X G3_XX)
+    #   H M*^2 alpha_B = 2 dphi (X G3_X - G4_phi)
+    # their derivatives d/dlna, and Rx = 2 M*^2 (H_c^2 - H_c') - R = a^2 [-2 M*^2 dH/dt - (rho + p)_matter] (conformal
+    # H_c; the matter terms of the perturbation equations; 0 in GR), simplified as the QS coefficients above
+    Kf, G3f = Kexpr, G3expr
+    KX = sp.diff(Kf, Xs).subs(sub)
+    KXX = sp.diff(Kf, Xs, 2).subs(sub)
+    G3p = sp.diff(G3f, phis).subs(sub)
+    G3pX = sp.diff(G3f, phis, Xs).subs(sub)
+    G3XX = sp.diff(G3f, Xs, 2).subs(sub)
+    M2 = 2 * G4
+    aK = (2 * Xv * (KX + 2 * Xv * KXX - 2 * G3p - 2 * Xv * G3pX) + 12 * PD * Xv * H * (G3X + Xv * G3XX)) / (H ** 2 * M2)
+    aB = 2 * PD * (Xv * G3X - G4p) / (H * M2)
+    aM = 2 * dG4 / (H * M2)
+
+    def ddx(e):  # d/dlna = (1/H) d/dt with dH/dt and the field acceleration
+        return (sp.diff(e, P) * PD + sp.diff(e, PD) * PDD + sp.diff(e, H) * Hd) / H
+
+    Rx = -2 * M2 * Hd * A ** 2 - A ** 2 * rho_plus_p
+    alphas = [simplified(e) for e in (M2, M2 - 1, aK, aB, aM, ddx(aK), ddx(aB), Rx)]
+    alpha_fn = sp.lambdify(args, [e + 0 * H for e in alphas], "numpy")
+    return constraint, rhs_Hd, rhs_pdd, coeffs, alpha_fn
 
 
 def radiation(cfg):
+    """Photons and massless neutrinos today, as FML (Background/BackgroundParameters.h, the same constants): give h,
+    T_CMB and Neff of the simulation (or Omega_r)"""
     if "Omega_r" in cfg:
         return float(cfg["Omega_r"])
     h = float(cfg.get("h", 0.67))
     T = float(cfg.get("T_CMB", 2.7255))
     Neff = float(cfg.get("Neff", 3.046))
-    Og = 2.4728e-5 / h ** 2 * (T / 2.7255) ** 4
+    c, G, kb, hbar = 2.99792458e8, 6.67430e-11, 1.380649e-23, 1.054571817e-34
+    H0 = h * 100.0 * 1e3 / (1e6 * 3.08567758149e16)
+    rho_c0c2 = 3.0 * H0 ** 2 / (8.0 * np.pi * G) * c * c
+    Og = np.pi ** 2 / 15.0 * (kb * T) ** 4 / (hbar * c) ** 3 / rho_c0c2
     return Og * (1.0 + Neff * 7.0 / 8.0 * (4.0 / 11.0) ** (4.0 / 3.0))
 
 
@@ -181,11 +218,15 @@ def main():
     syms = [sp.Symbol(n) for n in names]
     loc = {"phi": phis, "X": Xs, **dict(zip(names, syms))}
     K, G3, G4 = (sp.sympify(str(cfg.get(n, d)), locals=loc) for n, d in (("K", "0"), ("G3", "0"), ("G4", "1/2")))
-    a_min = float(cfg.get("a_min", 1e-4))
-    npts = int(cfg.get("n_points", 2000))
+    a_min = float(cfg.get("a_min", 1e-8))
+    a_max = float(cfg.get("a_max", 3.0))
+    npts = int(cfg.get("n_points", 3000))
+    xs = np.unique(np.append(np.linspace(np.log(a_min), np.log(a_max), npts), 0.0))  # with a = 1
+    if not (a_min < 1.0 < a_max):
+        sys.exit("need a_min < 1 < a_max")
     print(f"K = {K}\nG3 = {G3}\nG4 = {G4}\n" + ", ".join(f"{n} = {v:.10g}" for n, v in values.items()))
 
-    constraint, rhs_Hd, rhs_pdd, coeffs = derive(K, G3, G4, phis, Xs, syms)
+    constraint, rhs_Hd, rhs_pdd, coeffs, alpha_fn = derive(K, G3, G4, phis, Xs, syms)
 
     def consts():
         return [values[n] for n in names]
@@ -224,21 +265,33 @@ def main():
             sys.exit("No root of the Friedmann constraint near dphidlna0_guess (no background with E(0) = 1)")
         dphi0 = min(roots, key=lambda r: abs(r - guess))
         print(f"dphi/dlna today = {dphi0:.10g} (roots: {', '.join(f'{r:.6g}' for r in roots)})")
-        xs = np.linspace(0.0, np.log(a_min), npts)
-        sol = integrate(0.0, [phi0, dphi0, 1.0], np.log(a_min), xs)
-        x, (phi, dphi, E) = sol.t[::-1], (v[::-1] for v in sol.y)
+        back = integrate(0.0, [phi0, dphi0, 1.0], np.log(a_min), xs[xs <= 0.0][::-1])
+        fwd = integrate(0.0, [phi0, dphi0, 1.0], np.log(a_max), xs[xs > 0.0])
+        x = np.concatenate([back.t[::-1], fwd.t])
+        phi, dphi, E = (np.concatenate([b[::-1], f]) for b, f in zip(back.y, fwd.y))
     elif initial == "early":
         # phi and dphi/dlna given at a_ini (e.g. the field at rest deep in the matter or radiation era); E there from
         # the constraint (the root closest to the GR value) and the parameter `shoot` adjusted so that E(a = 1) = 1
         x_ini = np.log(float(cfg.get("a_ini", a_min)))
-        phi_i, dphi_i = float(cfg["phi_ini"]), float(cfg.get("dphidlna_ini", 0.0))
+        # dphidlna_ini: a number, or an expression in the parameters and E (the GR value of H/H0 at a_ini), e.g.
+        # "xi / E**2" for the cubic Galileon's tracker
+        phi_i = float(cfg["phi_ini"])
+        dphi_expr = sp.sympify(str(cfg.get("dphidlna_ini", 0.0)), locals={**loc, "E": sp.Symbol("E")})
+
+        def E_GR():
+            a = np.exp(x_ini)
+            return np.sqrt(values["Omega_m"] * a ** -3 + values["Omega_r"] * a ** -4 + values["Omega_Lambda"])
+
+        def dphi_ini():
+            return float(dphi_expr.subs({**{sp.Symbol(n): v for n, v in values.items()}, sp.Symbol("E"): E_GR()}))
+
         shoot = cfg["shoot"]
         if shoot not in values:
             sys.exit(f"shoot = {shoot}: not Omega_Lambda or a parameter")
 
         def E_ini():
             a = np.exp(x_ini)
-            EGR = np.sqrt(values["Omega_m"] * a ** -3 + values["Omega_r"] * a ** -4 + values["Omega_Lambda"])
+            EGR, dphi_i = E_GR(), dphi_ini()
             f = lambda E: float(constraint(a, E, phi_i, E * dphi_i, *consts())) / (3 * E ** 2)
             r = roots_of(f, EGR, 0.5 * EGR)
             if not r:
@@ -247,17 +300,16 @@ def main():
 
         def E_today(q):
             values[shoot] = q
-            sol = integrate(x_ini, [phi_i, dphi_i, E_ini()], 0.0)
+            sol = integrate(x_ini, [phi_i, dphi_ini(), E_ini()], 0.0)
             return sol.y[2, -1] - 1.0
 
         lo, hi = cfg["shoot_bracket"]
         q = brentq(E_today, float(lo), float(hi), xtol=1e-13)
         values[shoot] = q
         print(f"shooting: {shoot} = {q:.12g} gives E(a = 1) = 1")
-        xs = np.linspace(np.log(a_min), 0.0, npts)
         if x_ini > xs[0]:
             sys.exit("a_ini must be <= a_min")
-        sol = integrate(x_ini, [phi_i, dphi_i, E_ini()], 0.0, xs)
+        sol = integrate(x_ini, [phi_i, dphi_ini(), E_ini()], np.log(a_max), xs)
         x, (phi, dphi, E) = sol.t, sol.y
     else:
         sys.exit("initial must be today or early")
@@ -271,6 +323,13 @@ def main():
 
     G4v, al0, al1, al2, be0 = (np.broadcast_to(np.asarray(v, dtype=float), a.shape)
                                for v in coeffs(a, E, phi, pd, *c))
+    alphas = [np.broadcast_to(np.asarray(v, dtype=float), a.shape) for v in alpha_fn(a, E, phi, pd, *c)]
+    M2, dM2, aK, aB, aM = alphas[:5]
+    Dhd = aK + 1.5 * aB ** 2
+    if np.any(M2 <= 0.0):
+        print("WARNING: M*^2 = 2 G4 <= 0 somewhere")
+    if np.any(Dhd < 0.0):
+        print(f"WARNING: ghost (alpha_K + 3 alpha_B^2/2 < 0) from a = {a[np.argmax(Dhd < 0.0)]:.4g}")
     D = al0 + 2 * al1 * al2 + al2 ** 2
     GG4 = 1.0 / (2.0 * G4v)
     s12 = al1 + al2
@@ -287,15 +346,20 @@ def main():
     head = (f"# Reduced Horndeski (horndeski_frontend.py {args.config}): K = {K}, G3 = {G3}, G4 = {G4}\n# " +
             ", ".join(f"{n} = {v:.12g}" for n, v in values.items()) + "\n")
     with open(args.out + "_background.txt", "w") as fp:
-        fp.write(head + "# z  H/H0\n")
+        fp.write(head + "# z  H/H0  (a <= 1)\n")
+        fp.write(f"{0.0:.12e} {1.0:.12e}\n")
         for ai, Ei in zip(a[::-1], E[::-1]):
-            fp.write(f"{1.0 / ai - 1.0:.12e} {Ei:.12e}\n")
+            if ai < 1.0 - 1e-12:
+                fp.write(f"{1.0 / ai - 1.0:.12e} {Ei:.12e}\n")
     with open(args.out + "_gravity.txt", "w") as fp:
-        fp.write(head + "# a  E  dlnE/dlna  GG4  mu  Sigma  b5  c2  phi  dphi/dlna\n")
-        for row in zip(a, E, dlnE, GG4, mu, Sigma, b5, c2, phi, dphi):
+        fp.write(head + "# a  E  dlnE/dlna  GG4  mu  Sigma  b5  c2  phi  dphi/dlna  M*^2  M*^2-1  alpha_K  alpha_B  "
+                        "alpha_M  dalpha_K/dlna  dalpha_B/dlna  Rx\n")
+        for row in zip(a, E, dlnE, GG4, mu, Sigma, b5, c2, phi, dphi, *alphas):
             fp.write(" ".join(f"{v:.12e}" for v in row) + "\n")
-    print(f"Today: mu = {mu[-1]:.6g}, Sigma = {Sigma[-1]:.6g}, G_G4/G = {GG4[-1]:.6g}, 1/(3 beta) = {b5[-1]:.6g}, "
-          f"(r_c H0/c)^2 = {c2[-1] / b5[-1] ** 2 if b5[-1] != 0 else 0.0:.6g}")
+    i0 = int(np.argmin(np.abs(x)))
+    print(f"Today: mu = {mu[i0]:.6g}, Sigma = {Sigma[i0]:.6g}, G_G4/G = {GG4[i0]:.6g}, 1/(3 beta) = {b5[i0]:.6g}, "
+          f"(r_c H0/c)^2 = {c2[i0] / b5[i0] ** 2 if b5[i0] != 0 else 0.0:.6g}, alpha_K = {aK[i0]:.4g}, "
+          f"alpha_B = {aB[i0]:.4g}, alpha_M = {aM[i0]:.4g}")
     print(f"Wrote {args.out}_background.txt and {args.out}_gravity.txt")
 
 

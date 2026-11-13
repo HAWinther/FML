@@ -20,7 +20,7 @@
 //
 // The table: rows "a E dlnE/dlna GG4 mu Sigma b5 c2 ..." (comment lines start with #), increasing a. Outside its range
 // the values at its ends are used. E of the table should be that of the background (the frontend also writes it
-// in the format of the Tabulated background); max_relative_E_difference() compares them.
+// in the format of the Tabulated background); max_relative_E_difference() compares them (a <= 1).
 //
 // References:
 //   Horndeski 1974, Int. J. Theor. Phys. 10, 363; Kobayashi 2019, Rept. Prog. Phys. 82, 086901, arXiv:1901.07183
@@ -108,8 +108,9 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
             b5_spline = Spline(x, t.b5, "b5(x)");
             c2_spline = Spline(x, t.c2, "c2(x)");
             Sigma_spline = Spline(x, t.Sigma, "Sigma(x)");
+            // (a <= 1: the frontend's _background.txt for a Tabulated background stops at a = 1)
             for (size_t i = 0; i < n; i++)
-                if (x[i] > bg.x_min() and x[i] < bg.x_max())
+                if (x[i] > bg.x_min() and x[i] < bg.x_max() and x[i] <= 0.0)
                     max_dE = std::max(max_dE, std::fabs(t.E[i] / bg.E(x[i]) - 1.0));
         }
         std::string name() const override { return "Horndeski"; }

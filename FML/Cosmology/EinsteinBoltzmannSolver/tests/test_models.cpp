@@ -188,6 +188,14 @@ int main() {
         for (const auto & m : PT::perturbation_registry()) {
             CosmologyParameters q;
             q.model = m.name;
+            if (m.name == "horndeski_table") { // a model given by a table: the cubic Galileon of SimulationCode
+                q.model_file = "../../SimulationCode/input/horndeski/cubic_galileon_gravity.txt";
+                q.h = 0.671;
+                q.OmegaB = 0.049;
+                q.OmegaCDM = 0.2685;
+                q.Neff = 3.046;
+                q.TCMB = 2.7255;
+            }
             try {
                 BackgroundCosmology b(q);
                 all = all && b.perturbation_model() && b.perturbation_model()->background_ptr() == b.background_ptr();

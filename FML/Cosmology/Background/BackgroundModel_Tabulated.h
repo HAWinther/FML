@@ -141,6 +141,19 @@ namespace FML::COSMOLOGY::BACKGROUND {
                 return 0.0;
             return std::exp(logE2(x)) * logE2.deriv_x(x) - drho_others(x);
         }
+        /// Analytic from the splines (a finite difference of drhodx with a fixed step mixes spline intervals)
+        double d2rhodx2(double x) const override {
+            if (from_w_table) {
+                if (x < x_lo or x > x_hi)
+                    return Species::d2rhodx2(x);
+                const double d = logrho.deriv_x(x);
+                return rho(x) * (logrho.deriv_xx(x) + d * d);
+            }
+            if (x < x_lo or x > x_hi)
+                return 0.0;
+            const double d = logE2.deriv_x(x);
+            return std::exp(logE2(x)) * (logE2.deriv_xx(x) + d * d) - d2rho_others(x);
+        }
         double p(double x) const override { return -rho(x) - drhodx(x) / 3.0; }
         /// The equation of state p/rho
         double w(double x) const { return p(x) / rho(x); }
@@ -168,6 +181,12 @@ namespace FML::COSMOLOGY::BACKGROUND {
             double r = -2.0 * Omega_k * std::exp(-2.0 * x);
             for (const auto & s : others)
                 r += s->drhodx(x);
+            return r;
+        }
+        double d2rho_others(double x) const {
+            double r = 4.0 * Omega_k * std::exp(-2.0 * x);
+            for (const auto & s : others)
+                r += s->d2rhodx2(x);
             return r;
         }
     };

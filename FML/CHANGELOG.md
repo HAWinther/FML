@@ -5,6 +5,26 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Einstein-Boltzmann solver: reduced Horndeski from its Lagrangian (horndeski_table)
+- `horndeski_table` (`model_file`, `hd_stability_check`): the background (`BackgroundModel_HorndeskiTable.h`) and the
+  alpha-parameterization perturbations (`PerturbationModel_HorndeskiTable.h`, full, stability checked) of the table
+  of `SimulationCode/scripts/horndeski_frontend.py`, which now also derives M*^2, alpha_K, alpha_B, alpha_M, their
+  derivatives and the matter term Rx from K, G3, G4 (Bellini & Sawicki 2014, simplified symbolically). New string
+  parameter `model_file` (CosmologyParameters, BackgroundParameters, the .ini files); the table's Omega_m and Omega_r
+  are checked against the run. `params/horndeski_table.ini`.
+- The frontend: tables from a = 1e-8 to 3 by default (the solver's range); Omega_r as FML computes it; the initial
+  field velocity of `initial = early` can be an expression (the tracker: `xi / E**2`); the cubic Galileon example
+  starts on its tracker.
+- Validated (`tests/test_horndeski_table.cpp`): the cubic Galileon from its Lagrangian reproduces `cubic_galileon`
+  (H 2e-7, growth and Psi 1e-6; P(k) 2e-5 and C_ell^TT 3e-6 with `cmb`); Brans-Dicke's full solution has the
+  frontend's quasi-static G_eff on small scales to 1e-6; a table made for another Omega_m is refused.
+- SimulationCode: `cosmology_model = Horndeski` (`cosmology_horndeski_filename`; the IC of `ic_type_of_input =
+  internal` from `horndeski_table`); `gravity_model_horndeski_filename` defaults to that table. The cubic Galileon run
+  through it gives the P(k) of the CubicGalileon models to 1e-5 (IC included). Regression cases now use it, with the
+  transfer table `input/transfer_tables/horndeski_cubic_galileon.txt`.
+- The dark energy of an H table (`make_tabulated_E`) has an analytic d2rhodx2 from its spline (the default finite
+  difference with step 1e-3 mixed spline intervals: 8e-5 relative errors).
+
 ### SimulationCode: generic reduced Horndeski (as Hi-COLA)
 - `scripts/horndeski_frontend.py`: from K(phi, X), G3(phi, X), G4(phi) (sympy expressions in a JSON file; examples
   in `input/horndeski`) it derives the background equations from the minisuperspace action, solves them (from today

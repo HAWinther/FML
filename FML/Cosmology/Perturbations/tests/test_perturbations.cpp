@@ -52,6 +52,23 @@ using FML::TESTS::check_local;
 using FML::TESTS::num;
 namespace BG = FML::COSMOLOGY::BACKGROUND;
 namespace PT = FML::COSMOLOGY::PERTURBATIONS;
+
+// The parameters of a model of the registry: p, or for a model given by a table (horndeski_table) the cubic Galileon
+// table of SimulationCode and the cosmology it was made for
+using RegistryParameters = FML::COSMOLOGY::BACKGROUND::BackgroundParameters;
+RegistryParameters registry_parameters(const std::string & name, RegistryParameters p) {
+    if (name == "horndeski_table") {
+        p = RegistryParameters{};
+        p.h = 0.671;
+        p.Omega_b = 0.049;
+        p.Omega_cdm = 0.2685;
+        p.N_eff = 3.046;
+        p.T_CMB = 2.7255;
+        p.model_file = "../../../SimulationCode/input/horndeski/cubic_galileon_gravity.txt";
+    }
+    return p;
+}
+
 using ModelParameters = std::map<std::string, double>;
 
 const double Mpc = FML::UTILS::SI::Mpc, c = FML::UTILS::SI::c;
@@ -473,7 +490,7 @@ void test_registry_and_errors() {
     std::string failed;
     for (const auto & m : PT::perturbation_registry()) {
         try {
-            auto pm = PT::make_perturbation_model(m.name, p);
+            auto pm = PT::make_perturbation_model(m.name, registry_parameters(m.name, p));
             pm->species_perturbations(pm->context());
             pm->field_equation_perturbations(pm->context());
         } catch (const std::exception & e) {
@@ -678,7 +695,7 @@ void test_potentials_and_derivatives() {
     double ed = 0.0;
     std::string worst;
     for (const auto & m : BG::registry()) {
-        auto bg = BG::make_background(m.name, p);
+        auto bg = BG::make_background(m.name, registry_parameters(m.name, p));
         for (const auto & s : bg->species())
             for (double x : {-12.0, -5.0, -2.0, 0.0}) {
                 const double hh = 1e-5; // (an oscillating field varies on scales ~ 1e-2 in x)
@@ -686,6 +703,12 @@ void test_potentials_and_derivatives() {
                     (s->drhodx(x - 2 * hh) - 8 * s->drhodx(x - hh) + 8 * s->drhodx(x + hh) - s->drhodx(x + 2 * hh)) /
                     (12 * hh);
                 const double e = std::abs(s->d2rhodx2(x) - fd) / (std::abs(s->rho(x)) + 1e-300);
+                // (the dark energy of an H table is E^2 - the other species: where it is < 1e-3 E^2 the difference
+                // of drhodx with step 1e-5 is dominated by the round-off of that cancellation)
+                const bool table = s->name().find("H table") != std::string::npos;
+                const double Ex = bg->E(x);
+                if (table and std::abs(s->rho(x)) < 1e-3 * Ex * Ex)
+                    continue;
                 if (e > ed) {
                     ed = e;
                     worst = m.name + " " + s->name();

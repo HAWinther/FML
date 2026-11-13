@@ -163,12 +163,13 @@ namespace SIMCODE {
                 f.required("gravity_model_dgp_rcH0overc", dgp_rcH0overc, 1.0, "The cross-over scale rc H0 / c");
             });
             f.for_gravity({"Horndeski"}, [&]() {
-                f.required("gravity_model_horndeski_filename",
+                f.optional("gravity_model_horndeski_filename",
                            horndeski_filename,
                            std::string(""),
-                           "Generic reduced Horndeski gravity: the table of the quasi-static theory made by "
-                           "scripts/horndeski_frontend.py from the Lagrangian (K, G3, G4); its background goes in "
-                           "cosmology_model = Tabulated (cosmology_tabulated_format = H)");
+                           "Generic reduced Horndeski gravity: the table made by scripts/horndeski_frontend.py from "
+                           "the Lagrangian (K, G3, G4); empty: that of cosmology_model = Horndeski "
+                           "(cosmology_horndeski_filename). With cosmology_model = Tabulated (the frontend's "
+                           "_background.txt, format H) it must be given");
             });
             f.for_gravity({"mbeta", "f(R)", "Symmetron", "Dilaton", "DGP", "CubicGalileon", "Horndeski"}, [&]() {
                 f.optional("gravity_model_screening",

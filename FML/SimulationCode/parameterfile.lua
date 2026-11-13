@@ -54,7 +54,7 @@ end
 -- Choose the cosmology 
 ------------------------------------------------------------
 -- Cosmology: LCDM, w0waCDM, DGP, JBD, Quintessence, EDE, DarkScattering, CovariantDarkScattering, CoupledQuintessence,
--- IDE, CubicGalileon, Tabulated ... add your own ...
+-- IDE, CubicGalileon, Horndeski, Tabulated ... add your own ...
 cosmology_model = "LCDM"
 --- CDM density
 cosmology_OmegaCDM = 0.2685
@@ -144,6 +144,12 @@ if cosmology_model == "IDE" then
   cosmology_ide_cs2 = 1.0
 end
 -- CubicGalileon: the cubic Galileon on its tracker (no parameters; use it with gravity_model = "CubicGalileon")
+-- Horndeski: a reduced Horndeski theory (K(phi, X), G3(phi, X), G4(phi)) from the table of
+-- scripts/horndeski_frontend.py (made for the cosmology here: OmegaM, h, TCMB, Neff); use it with gravity_model =
+-- "Horndeski". The internal Einstein-Boltzmann solver (ic_type_of_input = "internal") has its alphas
+if cosmology_model == "Horndeski" then
+  cosmology_horndeski_filename = "input/horndeski/cubic_galileon_gravity.txt"
+end
 if cosmology_model == "Tabulated" then
   -- The background from a file: H (columns z, H/H0), CLASS (a CLASS background file) or w (columns a, w(a))
   cosmology_tabulated_filename = "input/class_background_w0wa.dat"
@@ -384,10 +390,12 @@ if gravity_model == "CubicGalileon" then
   multigrid_nsweeps_first_step = 20
 end
 
--- Generic reduced Horndeski (K(phi, X), G3(phi, X), G4(phi)): the tables of scripts/horndeski_frontend.py. Use
--- cosmology_model = "Tabulated" with cosmology_tabulated_format = "H" and the frontend's _background.txt
+-- Generic reduced Horndeski (K(phi, X), G3(phi, X), G4(phi)): the table of scripts/horndeski_frontend.py. Use it with
+-- cosmology_model = "Horndeski" (or "Tabulated" with cosmology_tabulated_format = "H" and the frontend's
+-- _background.txt)
 if gravity_model == "Horndeski" then
-  gravity_model_horndeski_filename = "input/horndeski/cubic_galileon_gravity.txt"
+  -- The table ("": that of cosmology_model = "Horndeski")
+  gravity_model_horndeski_filename = ""
   -- Solve the exact equation with DGP's multigrid solver (slow and mainly for testing; needs r_c^2 > 0)
   gravity_model_horndeski_exact_solution = false
   -- Approximate screening model (otherwise linear)

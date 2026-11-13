@@ -59,6 +59,11 @@ namespace SIMCODE {
             fail(
                 "gravity_model = CubicGalileon needs cosmology_model = CubicGalileon (the background of the Galileon)");
 
+        // Generic Horndeski: the background of the frontend's table
+        if (grav.get_name() == "Horndeski" and cosmo.get_name() != "Horndeski" and cosmo.get_name() != "Tabulated")
+            fail("gravity_model = Horndeski needs cosmology_model = Horndeski (or Tabulated with the frontend's "
+                 "_background.txt)");
+
         // Interacting dark energy: the CDM particles carry their own masses (Simulation::update_ide_masses)
         if (cosmo.is_ide()) {
             if (cosmo.get_OmegaMNu() != 0.0)

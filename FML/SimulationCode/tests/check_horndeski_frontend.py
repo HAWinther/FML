@@ -2,12 +2,13 @@
 #==========================================================================
 # Check of scripts/horndeski_frontend.py (the generic reduced Horndeski model, gravity_model = Horndeski) against
 # theories with known answers:
-#   * the cubic Galileon on its tracker (input/horndeski/cubic_galileon.json): E^4 - rho E^2 = Omega_phi0, and the
+#   * the cubic Galileon on its tracker (input/horndeski/cubic_galileon.json): E^4 - rho E^2 = Omega_phi0, the
 #     quasi-static force of QuasiStaticGravity_CubicGalileon.h, mu = 1 + Omega_phi / (1 - 2 eps - Omega_phi) and
-#     (r_c H0/c)^2 = E^2 / (2 Omega_phi Omega_phi0) (a > 0.05: integrated back from today the frontend leaves the
-#     tracker, an attractor, at early times where the Galileon is negligible)
+#     (r_c H0/c)^2 = E^2 / (2 Omega_phi Omega_phi0), and the alphas alpha_K = 6 Omega_phi, alpha_B = 2 Omega_phi,
+#     alpha_M = 0 (test_horndeski), Rx = a^2 (rho + p)_phi
 #   * Brans-Dicke (input/horndeski/brans_dicke.json): mu = (4 + 2 omega) / ((3 + 2 omega) phi), Sigma = 1/phi, no
-#     cubic term (c2 = 0), and dln phi/dlna -> 1/(1 + omega) in the matter era
+#     cubic term (c2 = 0), dln phi/dlna -> 1/(1 + omega) in the matter era, and M*^2 = phi, alpha_M = -alpha_B =
+#     dln phi/dlna, alpha_K = omega alpha_M^2
 # Usage: python3 check_horndeski_frontend.py <outdir>
 #==========================================================================
 import json
@@ -43,24 +44,38 @@ def run(name):
 
 
 # Cubic Galileon
-(a, E, dlnE, GG4, mu, Sigma, b5, c2, phi, dphi), v = run("cubic_galileon")
+(a, E, dlnE, GG4, mu, Sigma, b5, c2, phi, dphi, M2, dM2, aK, aB, aM, daK, daB, Rx), v = run("cubic_galileon")
 Om, Or = v["Omega_m"], v["Omega_r"]
 Ophi0 = 1 - Om - Or
 rho = Om * a ** -3 + Or * a ** -4
 E2 = 0.5 * (rho + np.sqrt(rho ** 2 + 4 * Ophi0))
 Ophi = Ophi0 / E2 ** 2
 D = 1 - 2 * dlnE - Ophi
-s = a > 0.05
+s = a > 1e-6
 err = np.max(np.abs(E / np.sqrt(E2) - 1))
-check(err < 1e-8, "cubic Galileon: H(a) of the tracker", err)
+check(err < 1e-6, "cubic Galileon: H(a) of the tracker", err)
 err = np.max(np.abs(mu[s] / (1 + Ophi[s] / D[s]) - 1))
-check(err < 1e-6, "cubic Galileon: mu (a > 0.05)", err)
+check(err < 1e-6, "cubic Galileon: mu (a > 1e-6)", err)
 err = np.max(np.abs(c2[s] / (E2[s] / (2 * Ophi[s] * Ophi0) * (Ophi[s] / D[s]) ** 2) - 1))
-check(err < 2e-4, "cubic Galileon: (r_c H0/c)^2 b5^2 (a > 0.05)", err)
+check(err < 1e-5, "cubic Galileon: (r_c H0/c)^2 b5^2 (a > 1e-6)", err)
 check(np.max(np.abs(Sigma / mu - 1)) < 1e-12, "cubic Galileon: Sigma = mu", np.max(np.abs(Sigma / mu - 1)))
+# alphas on the tracker (test_horndeski): alpha_K = 6 Omega_phi, alpha_B = 2 Omega_phi, alpha_M = 0, M*^2 = 1
+err = max(np.max(np.abs(aK - 6 * Ophi)), np.max(np.abs(aB - 2 * Ophi))) / np.max(Ophi)
+check(err < 5e-6, "cubic Galileon: alpha_K = 6 Omega_phi, alpha_B = 2 Omega_phi", err)
+check(np.max(np.abs(aM)) + np.max(np.abs(dM2)) == 0.0, "cubic Galileon: alpha_M = 0, M*^2 = 1", np.max(np.abs(aM)))
+x = np.log(a)
+s = (a > 1e-6) & (a < 2.5)
+err = np.max(np.abs(daK - np.gradient(aK, x))[s]) / np.max(np.abs(daK[s]))
+check(err < 1e-4, "cubic Galileon: dalpha_K/dlna", err)
+# Rx = a^2 (rho + p)_phi for M*^2 = 1, with rho_phi = 3 Omega_phi0 / E^2 (8 pi G = H0 = 1): 2 a^2 Omega_phi0 dlnE/dlna
+# / E^2
+Rx_an = 2 * a ** 2 * Ophi0 * dlnE / E ** 2
+err = np.max(np.abs(Rx - Rx_an)[s] / np.max(np.abs(Rx_an[s])))
+check(err < 1e-6, "cubic Galileon: Rx", err)
+
 
 # Brans-Dicke
-(a, E, dlnE, GG4, mu, Sigma, b5, c2, phi, dphi), v = run("brans_dicke")
+(a, E, dlnE, GG4, mu, Sigma, b5, c2, phi, dphi, M2, dM2, aK, aB, aM, daK, daB, Rx), v = run("brans_dicke")
 w = v["omega"]
 err = np.max(np.abs(mu * phi * (3 + 2 * w) / (4 + 2 * w) - 1))
 check(err < 1e-10, "Brans-Dicke: mu = (4 + 2 omega) / ((3 + 2 omega) phi)", err)
@@ -69,6 +84,11 @@ check(np.max(np.abs(c2)) == 0.0, "Brans-Dicke: no cubic term", np.max(np.abs(c2)
 i = np.argmin(np.abs(a - 0.1))
 err = abs(dphi[i] / phi[i] * (1 + w) - 1)
 check(err < 0.01, "Brans-Dicke: dln phi/dlna = 1/(1 + omega) in the matter era (a = 0.1)", err)
+
+# alphas (test_horndeski): M*^2 = phi, alpha_M = -alpha_B = dln phi/dlna, alpha_K = omega alpha_M^2
+err = max(np.max(np.abs(M2 / phi - 1)), np.max(np.abs(aM - dphi / phi)), np.max(np.abs(aB + aM)),
+          np.max(np.abs(aK - w * aM ** 2)) / np.max(np.abs(aK)))
+check(err < 1e-10, "Brans-Dicke: M*^2 = phi, alpha_M = -alpha_B = dln phi/dlna, alpha_K = omega alpha_M^2", err)
 
 print("All Horndeski frontend checks passed" if not failed else f"FAILED: {failed}")
 sys.exit(1 if failed else 0)

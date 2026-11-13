@@ -27,7 +27,7 @@ Parameters marked *optional* take the default value if they are not in the param
 
 | Parameter | Type | Default | Used when | Description |
 |---|---|---|---|---|
-| `cosmology_model` | string | `"LCDM"` | always | The cosmology (background evolution). Options: `LCDM`, `w0waCDM`, `DGP`, `JBD`, `Quintessence`, `EDE`, `DarkScattering`, `CovariantDarkScattering`, `CoupledQuintessence`, `IDE`, `CubicGalileon`, `Tabulated` |
+| `cosmology_model` | string | `"LCDM"` | always | The cosmology (background evolution). Options: `LCDM`, `w0waCDM`, `DGP`, `JBD`, `Quintessence`, `EDE`, `DarkScattering`, `CovariantDarkScattering`, `CoupledQuintessence`, `IDE`, `CubicGalileon`, `Horndeski`, `Tabulated` |
 | `cosmology_Omegab` | double | *required* | always | Baryon density parameter |
 | `cosmology_OmegaMNu` | double | `0` | always | Massive neutrino density parameter (3 equal masses; or use cosmology_neutrino_masses_eV) |
 | `cosmology_neutrino_masses_eV` | double list | `{}` | always | The masses of the (up to 3) neutrinos in eV, e.g. {0.0, 0.0086, 0.05} (0 or not listed: massless). Instead of cosmology_OmegaMNu (which then follows from the masses) |
@@ -61,6 +61,7 @@ Parameters marked *optional* take the default value if they are not in the param
 | `cosmology_ds_xi` | double | *required* | cosmology_model = DarkScattering | Dark scattering: xi = sigma_D / m_c in barn/GeV (0: wCDM). The dark matter feels the drag (1 + w) c xi rho_DE / H per ln a (the CDM+baryon particles f_c = OmegaCDM / OmegaCB of it) |
 | `cosmology_cq_lambda` | double | *required* | cosmology_model = CoupledQuintessence | Coupled quintessence: the slope lambda of the potential V ~ exp(-lambda phi) (phi in reduced Planck masses) |
 | `cosmology_cq_beta` | double | *required* | cosmology_model = CoupledQuintessence | Coupled quintessence: the coupling beta (Amendola's sqrt(2/3) beta): the CDM particles have the mass m ~ exp(-beta phi) and feel G (1 + 2 beta^2) from the CDM. 0: uncoupled |
+| `cosmology_horndeski_filename` | string | *required* | cosmology_model = Horndeski | Generic reduced Horndeski: the _gravity.txt table of scripts/horndeski_frontend.py (its H(a), and the alphas for the internal Einstein-Boltzmann solver); use it with gravity_model = Horndeski |
 | `cosmology_ide_w` | double | *required* | cosmology_model = IDE | Interacting dark energy: the (constant) equation of state w of the dark energy (!= -1) |
 | `cosmology_ide_xi` | double | *required* | cosmology_model = IDE | Interacting dark energy: the coupling xi of the energy exchange Q = xi H rho_DE along the dark-matter 4-velocity (> 0: energy flows to the dark matter; 0: wCDM). Needs the doom factor xi / (3 (1 + w)) <= 0 (xi < 0 for w > -1, xi > 0 for w < -1) |
 | `cosmology_ide_cs2` | double | `1` | cosmology_model = IDE | Interacting dark energy: the rest-frame sound speed squared of the dark energy (only for the IC from the internal Einstein-Boltzmann solver) |
@@ -88,7 +89,7 @@ Parameters marked *optional* take the default value if they are not in the param
 | `gravity_model_dilaton_r` | double | `1` | gravity_model = Dilaton | The index r in the mass m(a) = m0 a^-r (r <= 3/2; 3/2 is the original dilaton with beta = beta0 a^s) |
 | `gravity_model_dilaton_xi` | double | `0.001` | gravity_model = Dilaton | xi = H0 / m0: the range of the fifth force today is 2998 xi Mpc/h |
 | `gravity_model_dgp_rcH0overc` | double | *required* | gravity_model = DGP | The cross-over scale rc H0 / c |
-| `gravity_model_horndeski_filename` | string | *required* | gravity_model = Horndeski | Generic reduced Horndeski gravity: the table of the quasi-static theory made by scripts/horndeski_frontend.py from the Lagrangian (K, G3, G4); its background goes in cosmology_model = Tabulated (cosmology_tabulated_format = H) |
+| `gravity_model_horndeski_filename` | string | `""` | gravity_model = Horndeski | Generic reduced Horndeski gravity: the table made by scripts/horndeski_frontend.py from the Lagrangian (K, G3, G4); empty: that of cosmology_model = Horndeski (cosmology_horndeski_filename). With cosmology_model = Tabulated (the frontend's _background.txt, format H) it must be given |
 | `gravity_model_screening` | bool | `true` | gravity_model in {mbeta, f(R), Symmetron, Dilaton, DGP, CubicGalileon, Horndeski} | Use the approximate screening model (otherwise linear) |
 | `gravity_model_dgp_smoothing_filter` | string | `"tophat"` | gravity_model in {mbeta, f(R), Symmetron, Dilaton, DGP, CubicGalileon, Horndeski} and gravity_model_screening = true and gravity_model = DGP | Screening approximation: the filter used to smooth the density field. Options: `tophat`, `sharpk`, `gaussian` |
 | `gravity_model_dgp_smoothing_scale_over_boxsize` | double | `0` | gravity_model in {mbeta, f(R), Symmetron, Dilaton, DGP, CubicGalileon, Horndeski} and gravity_model_screening = true and gravity_model = DGP | Screening approximation: the smoothing scale R/boxsize (0: no smoothing; 1 smooths over the whole box, which makes the screening very weak) |

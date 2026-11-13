@@ -26,6 +26,7 @@ namespace FML::COSMOLOGY {
             b.N_eff = p.Neff;
             b.m_nu_eV = p.neutrino_masses();
             b.T_ncdm_over_TCMB = p.T_ncdm_over_TCMB;
+            b.model_file = p.model_file;
             return b;
         }
 

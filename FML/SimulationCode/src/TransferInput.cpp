@@ -79,6 +79,7 @@ namespace SIMCODE {
                 {"m_nu_list", "cosmology_OmegaMNu or cosmology_neutrino_masses_eV"},
                 {"T_ncdm_over_TCMB", "the neutrino background of the simulation"},
                 {"model", "cosmology_model"},
+                {"model_file", "cosmology_horndeski_filename"},
                 {"A_s", "cosmology_As"},
                 {"n_s", "cosmology_ns"},
                 {"k_pivot", "cosmology_kpivot_mpc"},
@@ -132,6 +133,7 @@ namespace SIMCODE {
             }
             c.model = r.model;
             c.model_params = r.model_parameters;
+            c.model_file = b.model_file;
             c.A_s = r.As;
             c.n_s = r.ns;
             c.k_pivot = r.kpivot_mpc;

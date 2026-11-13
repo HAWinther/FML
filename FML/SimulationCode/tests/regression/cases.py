@@ -536,14 +536,17 @@ CASES = {
         multigrid_coarse_factor=1,
     ),
     # Generic reduced Horndeski from the tables of scripts/horndeski_frontend.py (input/horndeski): the cubic Galileon
-    # (the screening approximation with a Gaussian smoothing of the density; the exact equation) and Brans-Dicke (the
+    # (cosmology_model = Horndeski with the IC of the internal solver's horndeski_table, the screening approximation
+    # with a Gaussian smoothing of the density; the exact equation on the Tabulated background) and Brans-Dicke (the
     # Newtonian force rescaled by 1 / (2 G4) = 1/phi, no screening)
     "horndeski_cubic_galileon_cola": dict(
-        cosmology_model="Tabulated",
-        cosmology_tabulated_filename=INPUT + "/horndeski/cubic_galileon_background.txt",
-        cosmology_tabulated_format="H",
+        cosmology_model="Horndeski",
+        cosmology_horndeski_filename=INPUT + "/horndeski/cubic_galileon_gravity.txt",
         gravity_model="Horndeski",
-        gravity_model_horndeski_filename=INPUT + "/horndeski/cubic_galileon_gravity.txt",
+        gravity_model_horndeski_filename="",
+        ic_type_of_input="tables",
+        ic_input_filename=INPUT + "/transfer_tables/horndeski_cubic_galileon.txt",
+        ic_input_redshift=20.0,
         gravity_model_horndeski_exact_solution=False,
         gravity_model_screening=True,
         gravity_model_horndeski_smoothing_filter="gaussian",
@@ -571,11 +574,10 @@ CASES = {
         multigrid_coarse_factor=1,
     ),
     "horndeski_brans_dicke": dict(
-        cosmology_model="Tabulated",
-        cosmology_tabulated_filename=INPUT + "/horndeski/brans_dicke_background.txt",
-        cosmology_tabulated_format="H",
+        cosmology_model="Horndeski",
+        cosmology_horndeski_filename=INPUT + "/horndeski/brans_dicke_gravity.txt",
         gravity_model="Horndeski",
-        gravity_model_horndeski_filename=INPUT + "/horndeski/brans_dicke_gravity.txt",
+        gravity_model_horndeski_filename="",
         gravity_model_horndeski_exact_solution=False,
         gravity_model_screening=False,
     ),

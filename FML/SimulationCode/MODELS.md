@@ -89,6 +89,9 @@ add a model is in [DEVELOPING.md](DEVELOPING.md#adding-a-model).
   `particle_baryon_relative_mode = displacement` and not with BullFrog. The particles need a mass (the default
   particle type has one; it is 120 bytes in 3D).
 
+* Horndeski: a reduced Horndeski theory from the table of `scripts/horndeski_frontend.py`
+  (`cosmology_horndeski_filename`; the internal solver's `horndeski_table`), see the gravity model Horndeski below.
+
 * CubicGalileon: the cubic Galileon on its tracker (the internal solver's `cubic_galileon`; no parameter beyond those
   of ΛCDM, the dark energy is the Galileon with Omega = 1 - the other species). Use it with `gravity_model =
   CubicGalileon` (with `gravity_model = GR` it is the background alone).
@@ -113,20 +116,26 @@ For Quintessence, EDE and Tabulated the dark energy is smooth (no perturbations)
   gravitational waves), as Hi-COLA (Wright et al. 2023, arXiv:2209.01666). `scripts/horndeski_frontend.py` takes K,
   G3 and G4 (sympy expressions, a JSON file; examples in `input/horndeski`), derives the background equations from the
   minisuperspace action, solves them (from today with dφ/dlna from the Friedmann constraint, or from early times with
-  a parameter shot for E(a = 1) = 1) and writes two tables: H(z) for `cosmology_model = Tabulated` (format H) and the
-  quasi-static force for `gravity_model = Horndeski` (`gravity_model_horndeski_filename`). The force (Kimura, Kobayashi
-  & Yamamoto 2012, arXiv:1111.6749; `FML/Cosmology/Perturbations/QuasiStaticGravity_Horndeski.h`) is the Newtonian force rescaled by
-  G_G4/G = 1/(2 G4) (the running Planck mass) plus a fifth force with the DGP equation of a time-dependent r_c(a) and
-  beta(a): G_eff/G = 1/(2 G4) + 1/(3 beta), the 2LPT source and Vainshtein screening of DGP (G3X ≠ 0; without it the
-  fifth force is linear): linear, the screening approximation (the density smoothed with
-  `gravity_model_horndeski_smoothing_*`, a Gaussian by default as Hi-COLA) or the exact equation with DGP's multigrid
-  solver (`gravity_model_horndeski_exact_solution`, needs r_c^2 > 0). The model checks that H(a) of its table is the
-  background's (1e-3). Tested: the frontend gives the cubic Galileon's G_eff and r_c (to 1e-10 and 1e-4 for a > 0.05)
-  and Brans-Dicke's G_eff = (4 + 2 omega) / ((3 + 2 omega) phi) and Sigma = 1/phi to 1e-12
-  (`tests/check_horndeski_frontend.py`); with the cubic Galileon tables the model gives the P(k) of `gravity_model =
-  CubicGalileon` to 4e-6 (linear, screening approximation, multigrid). The initial conditions: from a P(k) or transfer
-  function (the internal Einstein-Boltzmann solver has no model for a tabulated background); unlike Hi-COLA the 2LPT
-  growth has the theory's second-order source.
+  a parameter shot for E(a = 1) = 1; use the latter for attractor solutions such as trackers) and writes the table
+  `_gravity.txt`: H(a), the quasi-static force and the α's of Bellini & Sawicki (arXiv:1404.3713), all derived from
+  the Lagrangian (and `_background.txt`, H(z) for `cosmology_model = Tabulated`). Use it with `cosmology_model =
+  Horndeski` (`cosmology_horndeski_filename`; the background, and the IC of `ic_type_of_input = internal`: the
+  Einstein-Boltzmann solver's `horndeski_table`, the full linear perturbations with these α's) and `gravity_model =
+  Horndeski` (its table by default). The force (Kimura, Kobayashi & Yamamoto 2012, arXiv:1111.6749;
+  `FML/Cosmology/Perturbations/QuasiStaticGravity_Horndeski.h`) is the Newtonian force rescaled by G_G4/G = 1/(2 G4)
+  (the running Planck mass) plus a fifth force with the DGP equation of a time-dependent r_c(a) and beta(a): G_eff/G
+  = 1/(2 G4) + 1/(3 beta), the 2LPT source and Vainshtein screening of DGP (G3X ≠ 0; without it the fifth force is
+  linear): linear, the screening approximation (the density smoothed with `gravity_model_horndeski_smoothing_*`, a
+  Gaussian by default as Hi-COLA) or the exact equation with DGP's multigrid solver
+  (`gravity_model_horndeski_exact_solution`, needs r_c^2 > 0). The table must be made for the cosmology of the run
+  (Ω_m and Ω_r are checked: give the frontend h, T_CMB and N_eff); flat, no massive neutrinos. Tested: the frontend
+  gives the cubic Galileon's H(a), G_eff, r_c and α's and Brans-Dicke's G_eff = (4 + 2 omega) / ((3 + 2 omega) phi),
+  Sigma = 1/phi and α's (`tests/check_horndeski_frontend.py`); in the solver the cubic Galileon from its Lagrangian
+  reproduces `cubic_galileon` (growth 1e-6, P(k) 2e-5, C_ℓ^TT 3e-6) and Brans-Dicke's full solution has the
+  quasi-static G_eff of the table on small scales to 1e-6 (`test_horndeski_table`); in the simulations the cubic
+  Galileon from its Lagrangian gives the P(k) of `CubicGalileon` to 1e-5 (the IC from the internal solver alike; linear,
+  screening approximation, multigrid). Unlike Hi-COLA the 2LPT growth has the theory's second-order source and the
+  IC are those of the model.
 
 * JBD: Jordan–Brans–Dicke. The gravity model of the cosmology with the same name (and it needs that cosmology).
 
