@@ -323,7 +323,8 @@ a strong-scaling result. No full fields or mode arrays are gathered by the model
 Small replicated metadata and repeated safety reductions still have overhead.
 
 Distributed 1LPT and 2LPT are available in stages 4b–4c below. Next:
-nonlinear inference validation and checkpoint/restart. Reconstruction outputs are
+nonlinear inference validation and performance profiling. Same-rank checkpoint/restart is
+available in stage 4e below. Reconstruction outputs are
 available in stage 4d below. Survey likelihoods remain deferred
 until after the prioritized MPI work. MPI BAO compatibility and PM/COLA are not
 provided by this linear backend. The original single-rank safety checks remain.
@@ -402,8 +403,8 @@ Validation covers serial compatibility, actual 1/2/4-rank predictions/gradients,
 large displacements, independent sparse scatter/reverse dot products, nonlinear
 MAP, joint-HMC synchronization, sanitizers and MPI/OpenMP/manual initialization.
 Distributed 2LPT and reconstruction outputs are available in stages 4c–4d below.
-Checkpoint/restart, measured workspace/communication optimization and nonlinear
-scientific validation remain open.
+Same-rank checkpoint/restart is available in stage 4e below. Measured
+workspace/communication optimization and nonlinear scientific validation remain open.
 Survey likelihoods remain deferred until after the prioritized MPI work.
 
 ## Distributed 2LPT (stage 4c, 12 November 2026)
@@ -456,8 +457,8 @@ cases. Fixed cutoffs and toy meshes do not establish production convergence or
 nonlinear posterior calibration.
 
 Distributed reconstruction outputs are available in stage 4d below.
-Checkpoint/restart, scientific nonlinear validation and workspace/communication
-profiling remain next. Survey likelihoods
+Same-rank checkpoint/restart is available in stage 4e below. Scientific nonlinear
+validation and workspace/communication profiling remain open. Survey likelihoods
 are still deferred until after the prioritized MPI work; #52 is not complete.
 
 ## Distributed reconstruction outputs (stage 4d, 13 November 2026)
@@ -522,5 +523,99 @@ The bundle allocates eight owning real fields plus local tracer modes, in additi
 to the existing workspace and reconstruction temporaries. Output selection,
 recomputation-memory policies and parallel scientific-file export are not added
 here. The method does not run automatically inside force/posterior evaluations.
-Checkpoint/restart remains the next engineering milestone; nonlinear scientific
-validation remains open and survey likelihoods remain deferred.
+Same-rank checkpoint/restart is now available in stage 4e below. Nonlinear scientific
+validation remains open; the MPI foundation is ready for the subsequent survey work.
+
+## Checkpoint/restart (stage 4e, 13 November 2026)
+
+Include `<FML/FieldLevel/Checkpoint.h>` and use `sample_checkpointed` with a
+Gaussian-field posterior. The validated targets are the built-in serial model and
+distributed linear/1LPT/2LPT models. This first implementation resumes with the
+**same MPI rank count, slab layout, executable/numerical environment and thread
+configuration**, at complete trajectory boundaries. It does not repartition a
+checkpoint or resume midway through a leapfrog trajectory.
+
+```cpp
+FF::CheckpointOptions checkpoint;
+checkpoint.directory = "/shared/run/chain-1";
+checkpoint.problem_id = "dataset-version:callback-physics-version:code-revision";
+checkpoint.every = 25;             // Complete trajectories, including warmup.
+checkpoint.max_iterations = 100;   // This invocation's budget.
+auto part = FF::sample_checkpointed(posterior, local_white, parameters,
+                                    options, checkpoint, true, field_sink);
+// In a later process, rebuild the identical model/data and original HMC options:
+checkpoint.resume = true;
+auto next = FF::sample_checkpointed(posterior, {}, {}, options,
+                                    checkpoint, true, field_sink);
+```
+
+Keep the original **full** warmup/sample schedule and HMC controls unchanged;
+`max_iterations` changes only the current job's budget. A resumed call requires
+empty initial field/parameter arguments and obtains them from disk. `every=0`
+disables periodic saves; the final boundary is always saved, including a zero-
+trajectory call. Fixed-parameter sampling (`vary_parameters=false`) is supported.
+A completed chain returns no further rows when resumed; extending its planned
+sample count is not part of this initial interface.
+
+The checkpoint preserves the local field/scalar state and cached gradient/potential,
+control RNG **and normal-distribution cache**, adapted scalar masses, dual-averaging
+state, Welford moments/window, global trajectory index, cumulative acceptance and
+divergences. The **original frozen scalar parameters defining the field metric**
+are saved separately from the current sampled scalars. Workspace scratch is rebuilt.
+The retained force is checked against a fresh evaluation before it is reused.
+
+`problem_id` is mandatory and must version callback physics, custom numerical/code
+changes and external inputs that cannot be inspected through `std::function`.
+Automatic identity checks also cover model type/configuration, parameter priors,
+response, data/likelihood weights and normalization, rank/slab geometry, precision,
+compiler/standard-library tag and thread count. The force check is an additional
+consistency check at one point, not proof that arbitrary callbacks are identical.
+The build tag is not an executable hash: the caller's versioned ID and same-build
+contract remain necessary for exact continuation.
+
+Files are written into a unique generation directory as one checksummed shard per
+rank, each bound to its rank and generation. After all ranks close and rename their
+complete shards, rank zero atomically replaces `CURRENT`. Failed shard writes do
+not publish a new manifest, and the previous checkpoint remains usable. Reads
+validate framing, bounded dimensions, checksums, generation/layout/target identity
+and replicated sampler state; errors propagate collectively before continuation.
+FNV-1a checksums detect accidental corruption and are not authentication.
+
+Use a dedicated directory for **one writer job**, on a shared filesystem supporting
+POSIX-style atomic rename. A checkpoint set may be copied to another shared path.
+Older and incomplete generations are intentionally retained; storage cleanup is
+caller-managed. No fsync/power-loss durability or automatic fallback from a damaged
+manifest is claimed. The tested failure case injects a one-rank write error before
+manifest publication; fresh-process restarts exercise normal process termination.
+
+Each call returns only its **new** recorded rows and potentials. `last` is the local
+final state; `completed_iterations` and `completed_samples`, acceptance, divergences,
+step size and masses refer to cumulative progress. Concatenate suffix rows for
+one chain before diagnostics; resumed chunks are not independent chains. Field
+sink indices continue globally across restarts. Earlier outputs are **not** stored
+in the checkpoint, and sink/file side effects are not transactional: applications
+must reconcile output indices when replaying work after the last published boundary.
+
+Fields and gradients remain local and are never gathered by checkpoint I/O. The
+state contains no full sample history. Serialization temporarily buffers local
+state, with additional per-call state/result storage; no peak-memory or I/O-scaling
+improvement is claimed. A trajectory budget also bounds returned per-call scalar
+history. Custom likelihood checkpoint identities, rank-changing restore, sample-
+schedule extension and automatic checkpoint pruning are future extensions.
+
+```sh
+make -C FML/FieldLevel/tests USE_MPI=true framework-checkpoint-mpi
+make -C FML/FieldLevel/example USE_MPI=true checkpoint_mpi
+mpirun -np 4 FML/FieldLevel/example/checkpoint_mpi /shared/toy-chain start 60
+mpirun -np 4 FML/FieldLevel/example/checkpoint_mpi /shared/toy-chain resume 90
+```
+
+The example keeps a 120-warmup/300-sample schedule across invocations. It reports
+cumulative progress, new rows and a reconstructed current-state matter summary.
+The shared HMC engine also exposes `HMCState`/`HMCRunControl` and a standard-library-
+only codec; see [MCMC/README.md](../MCMC/README.md#hmc-checkpoint-state).
+
+This completes an initial periodic MPI engineering foundation, not production
+nonlinear calibration. Scientific nonlinear validation and performance/memory
+profiling remain open. The previously deferred survey likelihood is the next
+planned observation-model extension; #52 remains open.

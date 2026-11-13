@@ -20,6 +20,7 @@
 #include <random>
 #include <stdexcept>
 #include <vector>
+#include <climits>
 
 namespace FML::MCMC {
 
@@ -37,6 +38,7 @@ namespace FML::MCMC {
     struct HMCExecution {
         std::function<double(double)> sum_custom;
         std::function<void(std::vector<double> &, std::uint64_t, std::uint64_t)> draw_custom;
+        std::function<bool(bool)> all_valid; // Collective validation for local restart/force state.
     };
 
     struct HMCOptions {
@@ -55,13 +57,14 @@ namespace FML::MCMC {
     };
 
     struct HMCResult {
-        std::vector<std::vector<double>> recorded; // one row per sample (default: the parameter block)
-        std::vector<double> potential;             // U per sample
-        double acceptance = 0;                     // mean acceptance probability in the sampling phase
-        long divergences = 0;                      // in the sampling phase
-        double step_size = 0;                      // after adaptation
-        std::vector<double> diagonal;              // parameter-block mass after adaptation
-        std::vector<double> last;                  // final state
+        std::vector<std::vector<double>> recorded;           // one row per sample (default: the parameter block)
+        std::vector<double> potential;                       // U per sample
+        double acceptance = 0;                               // mean acceptance probability in the sampling phase
+        long divergences = 0;                                // in the sampling phase
+        double step_size = 0;                                // after adaptation
+        std::vector<double> diagonal;                        // parameter-block mass after adaptation
+        std::vector<double> last;                            // final state
+        int completed_iterations = 0, completed_samples = 0; // Cumulative, including resumed segments.
     };
 
     /// U(x) = -ln posterior and its gradient. Return +infinity (or NaN) for a point outside the support.
@@ -111,14 +114,53 @@ namespace FML::MCMC {
         }
     } // namespace detail
 
+    // Complete state at a trajectory boundary. No sample history or momentum is
+    // needed: momentum is redrawn each trajectory. Distribution caches are state.
+    struct HMCState {
+        bool initialized = false;
+        HMCOptions options;
+        std::size_t n_custom = 0;
+        std::vector<double> position, gradient, diagonal, mean, m2;
+        double potential = 0, step_size = 0, accept_sum = 0;
+        int next_iteration = 0;
+        long divergences = 0, count = 0;
+        std::size_t window = 0;
+        detail::DualAveraging adaptation;
+        std::mt19937_64 rng;
+        std::normal_distribution<double> gauss;
+        std::uniform_real_distribution<double> uniform;
+    };
+    struct HMCRunControl {
+        HMCState * state = nullptr;   // Empty starts a chain; initialized resumes it.
+        int max_iterations = INT_MAX; // This call's trajectory budget, including warmup.
+        int checkpoint_every = 0;     // Callback after complete trajectories (0 disables).
+        std::function<void(const HMCState &)> checkpoint;
+    };
+    namespace detail {
+        inline bool same_options(const HMCOptions & a, const HMCOptions & b) {
+            return a.warmup == b.warmup && a.samples == b.samples && a.n_leapfrog == b.n_leapfrog &&
+                   a.jitter == b.jitter && a.step_size == b.step_size && a.adapt_step_size == b.adapt_step_size &&
+                   a.target_acceptance == b.target_acceptance && a.adapt_mass == b.adapt_mass && a.lower == b.lower &&
+                   a.upper == b.upper && a.divergence_threshold == b.divergence_threshold && a.seed == b.seed &&
+                   a.verbose_every == b.verbose_every;
+        }
+        inline bool finite_vector(const std::vector<double> & x) {
+            return std::all_of(x.begin(), x.end(), [](double v) { return std::isfinite(v); });
+        }
+    } // namespace detail
+
     inline HMCResult run_hmc(const HMCPotential & potential,
-                             std::vector<double> x,
+                             std::vector<double> initial,
                              HMCMass mass,
                              const HMCOptions & opt,
                              const HMCRecorder & record = nullptr,
-                             const HMCExecution & execution = {}) {
+                             const HMCExecution & execution = {},
+                             const HMCRunControl & control = {}) {
         using Vector = std::vector<double>;
-        const std::size_t n = x.size(), nc = mass.n_custom, np = n - std::min(n, nc);
+        HMCState local_state;
+        auto & state = control.state ? *control.state : local_state;
+        const bool resumed = state.initialized;
+        const std::size_t n = initial.size(), nc = mass.n_custom, np = n - std::min(n, nc);
         if (nc > n)
             throw std::invalid_argument("[run_hmc] n_custom exceeds the dimension");
         if (nc > 0 && (!mass.apply_sqrt || !mass.apply_inverse))
@@ -137,16 +179,110 @@ namespace FML::MCMC {
             upper.assign(np, std::numeric_limits<double>::infinity());
         if (lower.size() != np || upper.size() != np)
             throw std::invalid_argument("[run_hmc] Bounds must have one entry per parameter");
-        for (std::size_t i = 0; i < np; ++i)
-            if (!(lower[i] < upper[i]) || x[nc + i] < lower[i] || x[nc + i] > upper[i])
-                throw std::invalid_argument("[run_hmc] Invalid bounds or initial point outside them");
-        if (opt.warmup < 0 || opt.samples < 0 || opt.n_leapfrog < 1 || !(opt.step_size > 0) ||
-            !(opt.target_acceptance > 0 && opt.target_acceptance < 1))
-            throw std::invalid_argument("[run_hmc] Invalid options");
-
-        std::mt19937_64 rng(opt.seed);
-        std::normal_distribution<double> gauss;
-        std::uniform_real_distribution<double> uniform;
+        bool point_valid = resumed || detail::finite_vector(initial);
+        for (std::size_t i = 0; i < np; ++i) {
+            if (!(lower[i] < upper[i]))
+                throw std::invalid_argument("[run_hmc] Invalid bounds");
+            if (!resumed)
+                point_valid &= initial[nc + i] >= lower[i] && initial[nc + i] <= upper[i];
+        }
+        if (execution.all_valid)
+            point_valid = execution.all_valid(point_valid);
+        if (!point_valid)
+            throw std::invalid_argument("[run_hmc] Invalid/nonfinite initial point");
+        if (opt.warmup < 0 || opt.samples < 0 || opt.warmup > INT_MAX - opt.samples || opt.n_leapfrog < 1 ||
+            !(opt.step_size > 0) || !std::isfinite(opt.step_size) ||
+            !(opt.target_acceptance > 0 && opt.target_acceptance < 1) || !(opt.divergence_threshold >= 0) ||
+            control.max_iterations < 0 || control.checkpoint_every < 0)
+            throw std::invalid_argument("[run_hmc] Invalid options/run controls");
+        HMCOptions canonical = opt;
+        canonical.lower = lower;
+        canonical.upper = upper;
+        canonical.verbose_every = std::max(0, opt.verbose_every); // Legacy negative values also mean silent.
+        const auto windows = detail::mass_windows(opt.warmup);
+        const int total = opt.warmup + opt.samples;
+        if (resumed) {
+            const int completed = std::max(0, state.next_iteration - opt.warmup);
+            bool valid = detail::same_options(state.options, canonical) && state.n_custom == nc &&
+                         state.position.size() == n && state.gradient.size() == n && state.diagonal.size() == np &&
+                         state.mean.size() == np && state.m2.size() == np && state.next_iteration >= 0 &&
+                         state.next_iteration <= total && state.window <= windows.size() && state.count >= 0 &&
+                         state.count <= opt.warmup && state.divergences >= 0 && state.divergences <= completed &&
+                         std::isfinite(state.potential) && state.step_size > 0 && std::isfinite(state.step_size) &&
+                         state.accept_sum >= 0 && state.accept_sum <= completed &&
+                         detail::finite_vector(state.position) && detail::finite_vector(state.gradient) &&
+                         detail::finite_vector(state.mean) && detail::finite_vector(state.m2);
+            if (state.position.size() == n)
+                for (size_t i = 0; i < np; ++i)
+                    valid &= state.position[nc + i] >= lower[i] && state.position[nc + i] <= upper[i];
+            const auto & a = state.adaptation;
+            for (double v : {a.mu, a.log_eps, a.log_eps_bar, a.h_bar, a.gamma, a.t0, a.kappa})
+                valid &= std::isfinite(v);
+            valid &= a.gamma == .05 && a.t0 == 10 && a.kappa == .75 && a.t >= 0 && a.t <= opt.warmup;
+            size_t expected_window = 0;
+            if (opt.adapt_mass)
+                while (expected_window < windows.size() && windows[expected_window] <= state.next_iteration)
+                    ++expected_window;
+            const int begin = expected_window ? windows[expected_window - 1] : int(.15 * opt.warmup);
+            const long expected_count = opt.adapt_mass && expected_window < windows.size() ?
+                                            std::max(0, std::min(state.next_iteration, opt.warmup) - begin) :
+                                            0;
+            valid &= state.window == expected_window && state.count == expected_count;
+            for (double m : state.diagonal)
+                valid &= m > 0 && std::isfinite(m);
+            if (execution.all_valid)
+                valid = execution.all_valid(valid);
+            if (!valid)
+                throw std::invalid_argument("[run_hmc] Invalid/incompatible restart state");
+            mass.diagonal = state.diagonal;
+            // Detect an accidentally changed target while retaining the saved force
+            // and potential for exact trajectory continuation, rather than replacing them.
+            Vector check(n);
+            const double U = potential(state.position, check);
+            const auto close = [](double a, double b) {
+                return std::isfinite(a) && std::isfinite(b) &&
+                       std::abs(a - b) <= 1e-11 * std::max({1., std::abs(a), std::abs(b)});
+            };
+            valid = check.size() == n && close(U, state.potential);
+            for (size_t i = 0; valid && i < n; ++i)
+                valid &= close(check[i], state.gradient[i]);
+            if (execution.all_valid)
+                valid = execution.all_valid(valid);
+            if (!valid)
+                throw std::invalid_argument("[run_hmc] Restart target/gradient changed");
+        } else {
+            state.options = canonical;
+            state.n_custom = nc;
+            state.position = std::move(initial);
+            state.gradient.resize(n);
+            state.diagonal = mass.diagonal;
+            state.rng.seed(opt.seed);
+            state.gauss = std::normal_distribution<double>();
+            state.uniform = std::uniform_real_distribution<double>();
+            state.potential = potential(state.position, state.gradient);
+            bool valid = std::isfinite(state.potential) && state.gradient.size() == n &&
+                         detail::finite_vector(state.gradient) && detail::finite_vector(state.position);
+            if (execution.all_valid)
+                valid = execution.all_valid(valid);
+            if (!valid)
+                throw std::invalid_argument("[run_hmc] Nonfinite initial potential/gradient");
+            state.step_size = opt.step_size;
+            state.adaptation.restart(state.step_size);
+            state.mean.assign(np, 0);
+            state.m2.assign(np, 0);
+            state.next_iteration = 0;
+            state.window = 0;
+            state.count = 0;
+            state.accept_sum = 0;
+            state.divergences = 0;
+            state.initialized = true;
+        }
+        auto & x = state.position;
+        auto & grad = state.gradient;
+        auto & U = state.potential;
+        auto & rng = state.rng;
+        auto & gauss = state.gauss;
+        auto & uniform = state.uniform;
 
         Vector block(nc);
         // velocity v = M^{-1} p
@@ -171,23 +307,17 @@ namespace FML::MCMC {
             return .5 * K;
         };
 
-        Vector grad(n), grad_new(n), x_new, p(n), v(n);
-        double U = potential(x, grad);
-        if (!std::isfinite(U))
-            throw std::invalid_argument("[run_hmc] The potential is not finite at the initial point");
-
-        double eps = opt.step_size;
-        detail::DualAveraging da;
-        da.restart(eps);
-        const auto windows = detail::mass_windows(opt.warmup);
-        std::size_t window = 0;
-        // Running moments of the parameter block in the current window (Welford)
-        Vector mean(np, 0), m2(np, 0);
-        long count = 0;
-
+        Vector grad_new(n), x_new, p(n), v(n);
+        auto & eps = state.step_size;
+        auto & da = state.adaptation;
+        auto & window = state.window;
+        auto & mean = state.mean;
+        auto & m2 = state.m2;
+        auto & count = state.count;
+        auto & accept_sum = state.accept_sum;
         HMCResult result;
-        double accept_sum = 0;
-        for (int it = 0; it < opt.warmup + opt.samples; ++it) {
+        const int end = state.next_iteration + std::min(control.max_iterations, total - state.next_iteration);
+        for (int it = state.next_iteration; it < end; ++it) {
             const bool warm = it < opt.warmup;
             // Momentum p ~ N(0, M)
             if (execution.draw_custom)
@@ -244,7 +374,7 @@ namespace FML::MCMC {
             }
             const double accept_prob = std::isfinite(H1) ? std::min(1., std::exp(H0 - H1)) : 0.;
             if (!warm && !(H1 - H0 <= opt.divergence_threshold))
-                ++result.divergences;
+                ++state.divergences;
             if (uniform(rng) < accept_prob) {
                 x.swap(x_new);
                 grad.swap(grad_new);
@@ -291,11 +421,25 @@ namespace FML::MCMC {
                     std::cout << " p" << i << " " << x[nc + i];
                 std::cout << "\n";
             }
+            state.next_iteration = it + 1;
+            if (control.checkpoint && control.checkpoint_every > 0 &&
+                state.next_iteration % control.checkpoint_every == 0) {
+                state.diagonal = mass.diagonal;
+                control.checkpoint(state);
+            }
         }
-        result.acceptance = opt.samples ? accept_sum / opt.samples : 0;
+        state.diagonal = mass.diagonal;
+        const int completed = std::max(0, state.next_iteration - opt.warmup);
+        result.acceptance = completed ? accept_sum / completed : 0;
+        result.divergences = state.divergences;
+        result.completed_iterations = state.next_iteration;
+        result.completed_samples = completed;
         result.step_size = eps;
         result.diagonal = mass.diagonal;
-        result.last = std::move(x);
+        if (control.state)
+            result.last = x;
+        else
+            result.last = std::move(x);
         return result;
     }
 

@@ -8,7 +8,9 @@
 namespace FML::FIELDLEVEL::FRAMEWORK {
     using Modes = std::vector<Complex>;
     // Numerical proposal failure, distinct from a malformed model/callback contract.
-    struct UnrepresentableState : std::domain_error { using std::domain_error::domain_error; };
+    struct UnrepresentableState : std::domain_error {
+        using std::domain_error::domain_error;
+    };
     enum class Prior { Gaussian, Uniform };
     struct Parameter {
         std::string name;
@@ -231,6 +233,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         const Configuration & configuration() const { return config_; }
         const std::vector<Parameter> & parameters() const { return parameters_; }
         const auto & modes() const { return modes_; }
+        const auto & response() const { return response_; }
         struct Layout {
             int global_mesh, local_start, local_width;
             size_t global_cells, owned_cells;
@@ -494,7 +497,10 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
 
       public:
         template <class ModeList>
-        GaussianFieldLikelihood(const ModeList & modes, double cutoff, double volume, Modes data,
+        GaussianFieldLikelihood(const ModeList & modes,
+                                double cutoff,
+                                double volume,
+                                Modes data,
                                 std::function<void(const Modes &)> distributed_check = {})
             : data_(std::move(data)), weights_(modes.size()), volume_(volume) {
             if (distributed_check)
@@ -518,6 +524,9 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 }
             }
         }
+        const Modes & data() const { return data_; }
+        const std::vector<double> & weights() const { return weights_; }
+        double volume() const { return volume_; }
         double evaluate(const Modes & prediction, double log_noise, Modes & g, double & noise_gradient) const {
             if (prediction.size() != data_.size())
                 throw std::invalid_argument("[FieldFramework] Likelihood prediction dimension mismatch");
@@ -539,7 +548,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         }
     };
     // Specialize for distributed ownership. Default preserves the serial/custom-forward interface.
-    template <class Forward> struct Execution {
+    template <class Forward>
+    struct Execution {
         static void validate(const Forward & m, const Field & s, const std::vector<double> & p) {
             if (s.size() != m.cells() || p.size() != m.parameters().size())
                 throw std::invalid_argument("[FieldFramework] State dimension mismatch");
@@ -548,7 +558,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         static void hmc_controls(const Forward &, bool, const FML::MCMC::HMCOptions &) {}
         static double sum(const Forward &, double x) { return x; }
         static double maximum(const Forward &, double x) { return x; }
-        template <class Likelihood> static Likelihood likelihood(const Forward & m, Modes data) {
+        template <class Likelihood>
+        static Likelihood likelihood(const Forward & m, Modes data) {
             return {m.modes(), m.configuration().likelihood_cutoff, m.volume(), std::move(data)};
         }
         static FML::MCMC::HMCExecution hmc(const Forward &) { return {}; }
@@ -561,13 +572,13 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
 
       public:
         BasicPosterior(const Forward & model, Modes data)
-            : model_(model),
-              likelihood_(Execution<Forward>::template likelihood<Likelihood>(model, std::move(data))) {}
+            : model_(model), likelihood_(Execution<Forward>::template likelihood<Likelihood>(model, std::move(data))) {}
         BasicPosterior(const Forward & model, Likelihood likelihood)
             : model_(model), likelihood_(std::move(likelihood)) {}
         BasicPosterior(Forward &&, Modes) = delete;
         BasicPosterior(Forward &&, Likelihood) = delete;
         const Forward & model() const { return model_; }
+        const Likelihood & likelihood() const { return likelihood_; }
         template <class Work>
         double evaluate(const Field & white,
                         const std::vector<double> & p,
@@ -689,58 +700,85 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         }
     }
     using FieldSink = std::function<void(const Field &, const std::vector<double> &, std::size_t)>;
+    namespace DETAIL {
+        template <class Forward, class Likelihood>
+        inline FML::MCMC::HMCResult sample_run(const BasicPosterior<Forward, Likelihood> & posterior,
+                                               Field white,
+                                               std::vector<double> p,
+                                               FML::MCMC::HMCOptions options,
+                                               bool vary_parameters,
+                                               FieldSink sink,
+                                               const std::vector<double> & frozen,
+                                               const FML::MCMC::HMCRunControl & run = {}) {
+            const auto & model = posterior.model();
+            Execution<Forward>::validate(model, white, p);
+            Execution<Forward>::hmc_controls(model, vary_parameters, options);
+            auto w = model.workspace();
+            const size_t n = model.cells(), np = p.size();
+            if (white.size() != n || !model.in_support(p))
+                throw std::invalid_argument("[FieldFramework] Invalid HMC initial state");
+            FML::MCMC::HMCMass mass;
+            mass.n_custom = n;
+            mass.apply_sqrt = [&](auto & x) { x = model.apply_field_metric(x, frozen, w, .5); };
+            mass.apply_inverse = [&](auto & x) { x = model.apply_field_metric(x, frozen, w, -1); };
+            options.lower.clear();
+            options.upper.clear();
+            if (vary_parameters)
+                for (const auto & v : model.parameters()) {
+                    mass.diagonal.push_back(1 / (v.scale() * v.scale()));
+                    options.lower.push_back(v.lower);
+                    options.upper.push_back(v.upper);
+                }
+            Field field(n), gs;
+            std::vector<double> gp, params = p;
+            auto potential = [&](const auto & state, auto & gradient) {
+                std::copy_n(state.begin(), n, field.begin());
+                if (vary_parameters)
+                    std::copy_n(state.begin() + n, np, params.begin());
+                const double U = posterior.evaluate(field, params, w, gs, gp);
+                std::copy(gs.begin(), gs.end(), gradient.begin());
+                if (vary_parameters)
+                    std::copy(gp.begin(), gp.end(), gradient.begin() + n);
+                return U;
+            };
+            size_t draw = run.state && run.state->initialized ?
+                              size_t(std::max(0, run.state->next_iteration - options.warmup)) :
+                              0;
+            auto recorder = [&](const auto & state) {
+                std::copy_n(state.begin(), n, field.begin());
+                if (vary_parameters)
+                    std::copy_n(state.begin() + n, np, params.begin());
+                if (sink)
+                    sink(field, params, draw);
+                ++draw;
+                return params;
+            };
+            if (vary_parameters)
+                white.insert(white.end(), p.begin(), p.end());
+            return FML::MCMC::run_hmc(potential,
+                                      std::move(white),
+                                      std::move(mass),
+                                      options,
+                                      recorder,
+                                      Execution<Forward>::hmc(model),
+                                      run);
+        }
+    } // namespace DETAIL
     template <class Forward, class Likelihood>
     inline FML::MCMC::HMCResult sample(const BasicPosterior<Forward, Likelihood> & posterior,
                                        Field white,
-                                       std::vector<double> p,
+                                       std::vector<double> parameters,
                                        FML::MCMC::HMCOptions options,
                                        bool vary_parameters = true,
                                        FieldSink sink = {}) {
-        const auto & model = posterior.model();
-        Execution<Forward>::validate(model, white, p);
-        Execution<Forward>::hmc_controls(model, vary_parameters, options);
-        auto w = model.workspace();
-        const auto frozen = p;
-        const size_t n = model.cells(), np = p.size();
-        if (white.size() != n || !model.in_support(p))
-            throw std::invalid_argument("[FieldFramework] Invalid HMC initial state");
-        FML::MCMC::HMCMass mass;
-        mass.n_custom = n;
-        mass.apply_sqrt = [&](auto & x) { x = model.apply_field_metric(x, frozen, w, .5); };
-        mass.apply_inverse = [&](auto & x) { x = model.apply_field_metric(x, frozen, w, -1); };
-        options.lower.clear();
-        options.upper.clear();
-        if (vary_parameters)
-            for (const auto & v : model.parameters()) {
-                mass.diagonal.push_back(1 / (v.scale() * v.scale()));
-                options.lower.push_back(v.lower);
-                options.upper.push_back(v.upper);
-            }
-        Field field(n), gs;
-        std::vector<double> gp, params = p;
-        auto potential = [&](const auto & state, auto & gradient) {
-            std::copy_n(state.begin(), n, field.begin());
-            if (vary_parameters)
-                std::copy_n(state.begin() + n, np, params.begin());
-            const double U = posterior.evaluate(field, params, w, gs, gp);
-            std::copy(gs.begin(), gs.end(), gradient.begin());
-            if (vary_parameters)
-                std::copy(gp.begin(), gp.end(), gradient.begin() + n);
-            return U;
-        };
-        size_t draw = 0;
-        auto recorder = [&](const auto & state) {
-            std::copy_n(state.begin(), n, field.begin());
-            if (vary_parameters)
-                std::copy_n(state.begin() + n, np, params.begin());
-            if (sink)
-                sink(field, params, draw);
-            ++draw;
-            return params;
-        };
-        if (vary_parameters)
-            white.insert(white.end(), p.begin(), p.end());
-        return FML::MCMC::run_hmc(potential, std::move(white), std::move(mass), options, recorder, Execution<Forward>::hmc(model));
+        const auto frozen = parameters;
+        return DETAIL::sample_run(posterior,
+                                  std::move(white),
+                                  std::move(parameters),
+                                  options,
+                                  vary_parameters,
+                                  std::move(sink),
+                                  frozen);
     }
 } // namespace FML::FIELDLEVEL::FRAMEWORK
 #endif

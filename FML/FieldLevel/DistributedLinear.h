@@ -223,6 +223,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         const Configuration & configuration() const { return config_; }
         const auto & parameters() const { return parameters_; }
         const auto & modes() const { return modes_; }
+        const auto & response() const { return response_; }
         auto layout() const { return layout_; }
         size_t cells() const { return layout_.owned_cells; }
         double volume() const { return volume_; }
@@ -452,7 +453,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                             FML::RANDOM::COUNTER_BASED::Stream step(rng.next64(), iteration, 0x53544550u);
                             x[q] = step.normal();
                         }
-                    }};
+                    },
+                    [&m](bool valid) { return m.maximum(valid ? 0 : 1) == 0; }};
         }
     };
     using DistributedLinearPosterior = BasicPosterior<DistributedLinearModel>;

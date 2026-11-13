@@ -269,6 +269,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         const Configuration & configuration() const { return config_; }
         const auto & parameters() const { return parameters_; }
         const std::vector<FieldLevelBAO::Mode> & modes() const { return linear_.modes(); }
+        const auto & response() const { return linear_.response(); }
         Model::Layout layout() const { return linear_.layout(); }
         size_t cells() const { return linear_.cells(); }
         double volume() const { return linear_.volume(); }

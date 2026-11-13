@@ -9,7 +9,9 @@ new [distributed 1LPT/2LPT backend](FRAMEWORK.md#distributed-2lpt-stage-4c-12-no
 adds particle/mesh communication, the quadratic EdS source and matching bias/RSD
 adjoints. [Distributed reconstruction outputs](FRAMEWORK.md#distributed-reconstruction-outputs-stage-4d-13-november-2026)
 now include initial/matter density and Lagrangian displacement/velocity samples.
-Checkpoint/restart remains open; the original BAO/LPT backend stays single-rank. See [the saved plan](FRAMEWORK_PLAN.md) for the broader #52 scope.
+[Same-rank checkpoint/restart](FRAMEWORK.md#checkpointrestart-stage-4e-13-november-2026)
+now preserves complete HMC/adaptation state. The original BAO/LPT backend stays
+single-rank; scientific nonlinear validation and survey extensions remain open. See [the saved plan](FRAMEWORK_PLAN.md) for the broader #52 scope.
 
 ## BAO application (prototype)
 

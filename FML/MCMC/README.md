@@ -185,3 +185,38 @@ python tests/check_diagnostics_reference.py --driver /tmp/diagnostics_driver
   adapted to 1.5 conditional σ; `covariance()` inverts it.
 
 Tests: `cd tests && make run`.
+
+## HMC checkpoint state
+
+`HMCState` holds the complete chain state at a trajectory boundary, including
+cached potential/gradient, RNG engine and distribution cache, adaptation moments
+and masses. Pass it through the optional final `HMCRunControl` argument:
+
+```cpp
+HMCState state;
+HMCRunControl run;
+run.state = &state;
+run.max_iterations = 100;
+auto first = run_hmc(U, initial, mass, options, recorder, {}, run);
+// Preserve state; next call resumes from it with the original planned options.
+auto next = run_hmc(U, state.position, mass, options, recorder, {}, run);
+```
+
+The custom mass/potential/recorder functions are rebuilt by the caller. They must
+have the same semantics. Resuming validates controls, dimensions and a fresh
+potential/gradient, then retains the saved force for exact continuation. Sampling
+history is not in the state. Result rows/potentials contain only the current
+suffix, while `completed_iterations`, `completed_samples`, acceptance and
+divergences are cumulative. `checkpoint_every` and a boundary callback can publish
+states periodically; changing `max_iterations` does not change the planned schedule.
+
+`HMCCheckpoint.h` provides bounded, versioned, checksummed binary encoding of state
+and exact RNG/distribution round trips using the standard library's stream format.
+It requires compatible IEEE double/build/standard-library state. Its `save/load`
+functions are low-level file codecs, not an atomic multi-file commit protocol.
+The field-level [checkpoint layer](../FieldLevel/FRAMEWORK.md#checkpointrestart-stage-4e-13-november-2026)
+adds target identity, frozen field metric, MPI shards and manifest publication.
+No function objects or MPI handles are serialized; the HMC core/codec remain
+independent of FML's MPI runtime. These are trusted application checkpoints,
+not an authenticated or general untrusted-file interchange format. Zero divergence thresholds and legacy negative
+(silent) logging values remain supported.

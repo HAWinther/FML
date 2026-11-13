@@ -293,3 +293,67 @@ The output bundle costs eight local real fields plus tracer modes and existing
 workspace/temporary storage. No output-selection, recomputation policy or
 scientific-file format is introduced. Checkpoint/restart remains next; nonlinear
 calibration and survey likelihoods remain open/deferred as in the saved plan.
+
+## HMC checkpoint/restart stage 4e (13 November 2026)
+
+The shared HMC engine now has resumable trajectory-boundary state. The field layer
+adds same-rank frozen-metric/target identity and generation-based MPI checkpoint
+publication. The final validation uses isolated fixtures under the review run's
+`verified/` directory; earlier implementation-run fixtures are not the validation
+basis. A writer/reader generation-tag mismatch found during development was fixed
+before the final suite, including an explicit wrong-generation test.
+
+Standalone state/codec tests pass 39 checks. Gaussian chains stopped at iterations
+0, 27, 60, 115, 124 and 150 reproduce uninterrupted rows, potentials, final state,
+masses, step size, cumulative acceptance and divergences exactly. Engine state and
+cached normal variates survive disk round trips. Invalid target/gradient, controls,
+format/build tags, counts, checksums and truncation fail explicitly. Zero divergence
+threshold and legacy negative/silent verbosity remain restartable. The existing
+23-check HMC regression passes, with output byte-identical to its prior fixture.
+
+For each linear/1LPT/2LPT model, an uninterrupted joint chain is independently
+compared with disk resumes during warmup, across both mass-adaptation windows and
+after five sampling draws. The preparation process exits at global iteration 125;
+a separate process loads and continues to 150. Comparisons require exact equality
+of local final state, suffix parameter rows/potentials, global field-sink indices,
+masses, step size, acceptance and divergence totals. Current scalars are verified
+to differ from the original saved parameters defining the frozen field metric.
+A separate fixed-parameter test also reproduces its field trajectory exactly.
+
+All of the final build/run commands pass:
+
+- Serial fresh-process prepare/resume: 12 / 42 checks.
+- MPI one rank prepare/resume: 12 / 42 checks; two ranks: 24 / 84;
+  four ranks: 48 / 168 (helper totals sum per-rank checks).
+- Serial ASan/UBSan prepare/resume: 12 / 42 checks.
+- Two MPI ranks with two OpenMP threads and NO_AUTO_FML_SETUP: 24 / 84 checks.
+- Shared Makefile target on two ranks: 108 combined checks.
+- Rank-changing restore is rejected (three checks).
+- Rebuilt linear/LPT/reconstruction MPI regressions: 46 / 80 / 96 checks on two ranks;
+  original periodic framework and legacy BAO regressions: 53 / 37 checks.
+- The new MPI example starts for 60 trajectories, then resumes in another process
+  for 90 more, preserving its original 120-warmup/300-sample schedule and reporting
+  cumulative progress plus a reconstructed current-state matter summary.
+
+Failure tests inject a one-rank shard-write error and verify that the prior
+manifest and checkpoint remain usable. Missing/corrupted shards, a valid shard
+copied from another generation (even with identical sampler state), one-rank data
+changes, changed HMC/sampling controls and callback target changes reject
+collectively. A forged rank-local saved-force mismatch verifies collective
+revalidation rather than letting other ranks enter the next trajectory alone.
+
+Only complete trajectory-boundary state is saved; fields/gradients are local and
+no sample history is serialized. A checksum is accidental-corruption detection,
+not authentication. Same executable/numerical environment, rank/slab layout and
+thread configuration are required. Callback/code versions are supplied by the
+caller, with automatic configuration/data identity and a force check as additional
+consistency checks. This is trusted application state, not an untrusted-file format.
+
+The protocol tests cover cooperative write failure and separate-process restart,
+not a power-loss/fsync durability guarantee. One writer job per directory and a
+shared filesystem with atomic rename are required. Old/incomplete generations
+remain on disk for caller-managed cleanup. Earlier output rows and sink side
+effects are not checkpointed transactionally. Rank repartitioning, schedule
+extension, custom-likelihood identity, automatic pruning and measured I/O scaling
+remain extensions. Nonlinear scientific calibration is still open; the deferred
+survey likelihood can follow this initial periodic MPI engineering foundation.
