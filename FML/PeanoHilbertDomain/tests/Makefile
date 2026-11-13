@@ -3,7 +3,9 @@ USE_OMP ?= false
 TARGETS := test_peano_hilbert
 include ../../Makefile.config
 
-test_peano_hilbert: test_peano_hilbert.o
+FML_MODULES := Global
+
+test_peano_hilbert: test_peano_hilbert.o Global.o
 	$(LINK_EXE)
 
 MPIRUN ?= mpirun

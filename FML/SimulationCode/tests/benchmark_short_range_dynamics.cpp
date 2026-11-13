@@ -140,9 +140,7 @@ int main(int argc, char ** argv) {
                     all[i].vel[d] = fixture.particles[i].v[d];
                 }
             }
-            container.create(all, 128, [](P & p) {
-                return p.pos[0] >= FML::xmin_domain && p.pos[0] < FML::xmax_domain;
-            });
+            container.create(all, 128, FML::PARTICLE::Input::Replicated);
             std::vector<int> owner;
             auto old = gather(simulation, owner);
             auto unwrapped = fixture.particles;

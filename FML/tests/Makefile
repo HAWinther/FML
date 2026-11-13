@@ -11,7 +11,7 @@ USE_FFTW            ?= true
 USE_GSL             ?= true
 USE_LUA             ?= true
 
-TARGETS := test_core test_mpi_counts test_grid_tools test_fof test_so test_so_multislab test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_screened_collapse test_halomodel test_halomodel_reaction test_gadget test_ramses test_camb test_numcore test_fftlog test_emulator test_utils test_interpolation test_grids test_particles test_lpt test_nbody
+TARGETS := test_core test_mpi_counts test_grid_tools test_fof test_so test_so_multislab test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_screened_collapse test_halomodel test_halomodel_reaction test_gadget test_ramses test_camb test_numcore test_fftlog test_emulator test_utils test_interpolation test_grids test_particles test_domain test_lpt test_nbody
 TARGETS += test_baryonification test_numericalmethods test_interlacing_offset test_streamed_kick test_lightcone test_random_fields test_timestepping test_transfers
 TARGETS += test_fourier_resampling test_testhelpers
 TARGETS += test_four_point
@@ -257,6 +257,10 @@ test_grids: test_grids.o Global.o
 test_particles: test_particles.o Global.o
 	$(LINK_EXE)
 
+# Domain and MPIParticles with Slab, Pencil and Peano-Hilbert domains
+test_domain: test_domain.o Global.o
+	$(LINK_EXE)
+
 # LPT displacement fields and random fields
 test_lpt: test_lpt.o test_lpt_odr.o Global.o Spline.o ODESolver.o
 	$(LINK_EXE)
@@ -366,6 +370,8 @@ run: $(TARGETS)
 	  OMP_NUM_THREADS=2 $(RUN) ./test_grids; \
 	  echo "== Running test_particles with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_particles; \
+	  echo "== Running test_domain with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_domain; \
 	  echo "== Running test_lpt with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_lpt; \
 	  echo "== Running test_transfers with $$np task(s)"; \

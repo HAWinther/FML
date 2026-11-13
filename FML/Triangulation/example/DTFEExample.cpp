@@ -47,7 +47,7 @@ int main() {
 
     // Distribute them across tasks (each task keeps the particles in its x-domain)
     FML::PARTICLE::MPIParticles<Particle> part;
-    part.create(partvec.data(), partvec.size(), partvec.size(), FML::xmin_domain, FML::xmax_domain, true);
+    part.create(partvec.data(), partvec.size(), partvec.size(), FML::PARTICLE::Input::Replicated);
 
     // Make the tessellation and compute the density at the particles. The buffer is how large part of the
     // neighbor domains we include (we warn if its too small)

@@ -159,7 +159,7 @@ void test_container() {
     auto original = make_particles<3, P>(true, false);
     auto force = make_force<3>("CIC");
     FML::PARTICLE::MPIParticles<P> part;
-    part.create(original.data(), original.size(), original.size() + 16, FML::xmin_domain, FML::xmax_domain, false);
+    part.create(original.data(), original.size(), original.size() + 16, FML::PARTICLE::Input::Distributed);
     std::vector<P> expected;
     if (part.get_npart())
         expected.assign(part.get_particles_ptr(), part.get_particles_ptr() + part.get_npart());

@@ -37,14 +37,10 @@ void ReadParticlesFromFile(FML::PARTICLE::MPIParticles<Particle> & part) {
     }
 
     // Create MPI particles by letting each task keep only the particles that falls in its domain
-    const bool all_tasks_have_the_same_particles = true;
+    // Replicated: every task has the same particles (each keeps those it owns); Distributed: different ones
+    const auto input = FML::PARTICLE::Input::Replicated;
     const int nalloc_per_task = p.size() / FML::NTasks * 2;
-    part.create(p.data(),
-                p.size(),
-                nalloc_per_task,
-                FML::xmin_domain,
-                FML::xmax_domain,
-                all_tasks_have_the_same_particles);
+    part.create(p.data(), p.size(), nalloc_per_task, input);
 }
 
 int main() {

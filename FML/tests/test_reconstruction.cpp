@@ -99,7 +99,7 @@ std::array<double, 3> reconstruction_test(int Nmesh, int niter, double beta, int
 
     // Particles: lattice + Psi (real space), + f Psi_los (redshift space, f = beta with bias 1)
     FML::PARTICLE::MPIParticles<ReconParticle> part;
-    part.create_particle_grid(Nmesh, 3.0, FML::xmin_domain, FML::xmax_domain);
+    part.create_particle_grid(Nmesh, 3.0);
     std::array<std::vector<FML::GRID::FloatType>, 3> Pq;
     FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions<3, ReconParticle>(Psi,
                                                                                         part.get_particles_ptr(),

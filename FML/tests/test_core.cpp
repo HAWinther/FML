@@ -217,7 +217,7 @@ int main(int argc, char ** argv) {
                 for (int d = 0; d < 3; d++)
                     p.pos[d] = std::rand() / (RAND_MAX + 1.0);
             FML::PARTICLE::MPIParticles<Particle> mp;
-            mp.create(part.data(), n, 2 * n * FML::NTasks, FML::xmin_domain, FML::xmax_domain, false);
+            mp.create(part.data(), n, 2 * n * FML::NTasks, FML::PARTICLE::Input::Distributed);
             bool ok = mp.get_npart_total() == n * size_t(FML::NTasks);
             for (size_t i = 0; i < mp.get_npart(); i++) {
                 double xx = mp[i].pos[0];
@@ -229,7 +229,7 @@ int main(int argc, char ** argv) {
         }
         {
             FML::PARTICLE::MPIParticles<ParticleWithInit> mp;
-            mp.create_particle_grid(8, 2.0, FML::xmin_domain, FML::xmax_domain);
+            mp.create_particle_grid(8, 2.0);
             check_local(mp.get_npart_total() == 512 and mp[0].mass == 1.0,
                         "MPIParticles of a particle with a default member initializer (create_particle_grid)");
         }
@@ -242,7 +242,7 @@ int main(int argc, char ** argv) {
         for (auto & p : part)
             p.pos[0] = p.pos[1] = p.pos[2] = 0.5 * (FML::xmin_domain + FML::xmax_domain);
         FML::PARTICLE::MPIParticles<Particle> mp;
-        mp.create(part.data(), n, n / 2, FML::xmin_domain, FML::xmax_domain, false);
+        mp.create(part.data(), n, n / 2, FML::PARTICLE::Input::Distributed);
     }
 
     // 4. Unwrapped particle: should give a clear error
@@ -251,7 +251,7 @@ int main(int argc, char ** argv) {
         for (auto & p : part)
             p.pos[0] = p.pos[1] = p.pos[2] = 0.5 * (FML::xmin_domain + FML::xmax_domain);
         FML::PARTICLE::MPIParticles<Particle> mp;
-        mp.create(part.data(), 10, 100, FML::xmin_domain, FML::xmax_domain, false);
+        mp.create(part.data(), 10, 100, FML::PARTICLE::Input::Distributed);
         mp[0].pos[0] = 1.3;
         mp.communicate_particles();
     }

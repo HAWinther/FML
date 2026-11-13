@@ -30,7 +30,7 @@ grid.find_leaf(std::array<double,3>{x, y, z});   // the leaf containing any poin
 ## Design
 
 - **Cells.** A cell is `(key, anchor, level)`. `anchor` holds the integer corner coordinates (LMAX bits per axis; 21 in 3D, 31 in 2D). `key` is the 64-bit Hilbert key of the corner with the low bits cleared. A cell at level l covers exactly the key range `[key, key + 2^(NDIM*(LMAX-l)))`.
-- **Geometry vs. ordering.** All geometry (children, neighbours, periodic wrap) works on integer coordinates. The Hilbert key is used only for sorting, partitioning and lookups. Keys use Skilling's transpose algorithm.
+- **Geometry vs. ordering.** All geometry (children, neighbours, periodic wrap) works on integer coordinates. The Hilbert key is used only for sorting, partitioning and lookups. Keys use Skilling's transpose algorithm (`HilbertCurve<NDIM>`, `PeanoHilbertDomain/HilbertCurve.h`: FML's one key implementation, also used by `PeanoHilbertDomain` and `Global/Domain.h`).
 - **Lookup by containment.** `find_leaf(point)` computes the key of the point and binary-searches for the leaf whose range contains it, among the local leaves or the ghosts. A neighbour that is coarser or finer is therefore found exactly like a same-level one.
 - **Partition.** Every task holds `domain_start[NTasks+1]`, and the owner of a key is found by binary search. Partition cuts never fall inside a sibling family, so any family can always be coarsened, and the leaf set is **independent of the number of tasks**. The tests check this with a global hash.
 - **2:1 balance** is enforced across faces, edges and corners. It uses iterative target-level propagation with ghost exchange until a global `Allreduce` reports no change.

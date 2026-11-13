@@ -154,7 +154,8 @@ int main() {
             p[0].Psi_2LPT[idim] = idim == 1 ? 1.0 : 0.0;
         }
         FML::PARTICLE::MPIParticles<Particle> part;
-        part.create(p.data(), 1, 1, 0.0, 1.0, false);
+        // Every task keeps its own copy of the particle (the check below is per task)
+        part.create(p.data(), 1, 1, FML::PARTICLE::Input::Local);
 
         // The settings structs have no in-class defaults (they are in the parameter table): set every field used
         SIMCODE::TimestepSettings settings{};

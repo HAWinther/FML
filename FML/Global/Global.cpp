@@ -1,4 +1,6 @@
 #include <cerrno>
+#include <cmath>
+#include <new>
 #include <cstdio>
 #include <stdexcept>
 #include <chrono>
@@ -27,7 +29,7 @@ namespace FML {
     // as it is used when FML is initialized
     MPI_Comm communicator = MPI_COMM_WORLD;
 #endif
-    
+
     int Barrier() {
 #ifdef USE_MPI
         return MPI_Barrier(FML::communicator);
@@ -36,6 +38,10 @@ namespace FML {
     }
 
     FML::UTILS::Timings global_timer;
+
+    // The decomposition of particles (a Slab whose ranges are xmin_domain, xmax_domain). Defined before fmlsetup
+    // below: it is dynamically initialized and init_fml (called by fmlsetup) sets it
+    Domain domain{};
 
     // Initialize FML, set the few globals we have and init MPI
     // and FFTW. If no auto setup you must init MPI and FFTW
@@ -130,7 +136,242 @@ namespace FML {
         // Set range for local domain
         xmin_domain = ThisTask / double(NTasks);
         xmax_domain = (ThisTask + 1) / double(NTasks);
+        domain = Domain::uniform_slab(NTasks);
     }
+
+    void set_domain(const Domain & new_domain) {
+        const std::string msg = "[set_domain] The domain is made for " + std::to_string(new_domain.ntasks()) +
+                                " tasks, but we have " + std::to_string(NTasks);
+        assert_mpi(new_domain.ntasks() == NTasks, msg.c_str());
+        domain = new_domain;
+        if (new_domain.is_slab()) {
+            assert_mpi(new_domain.valid_slab_partition(), "[set_domain] The slabs must partition [0,1] in rank order");
+            xmin_domain = new_domain.x_min(ThisTask);
+            xmax_domain = new_domain.x_max(ThisTask);
+        } else if (ThisTask == 0) {
+            std::cout << "WARNING: the domain is " << new_domain.type_name()
+                      << ": only MPIParticles::communicate_particles supports it; the rest of FML (grids, density "
+                         "assignment, ...) assumes the Slab domain (xmin_domain, xmax_domain are unchanged)\n";
+        }
+    }
+
+    Domain get_domain() {
+        if (domain.is_slab())
+            return slab_domain_from_local_range(xmin_domain, xmax_domain);
+        return domain;
+    }
+
+    Domain slab_domain_from_local_range(double xmin, double xmax) {
+        return Domain::slab(GatherFromTasks(&xmin), GatherFromTasks(&xmax));
+    }
+
+    Domain pencil_domain(int px, int py) {
+        if (px <= 0 or py <= 0) {
+            int dims[2] = {std::max(px, 0), std::max(py, 0)};
+#ifdef USE_MPI
+            MPI_Dims_create(NTasks, 2, dims);
+#else
+            dims[0] = dims[1] = 1;
+#endif
+            px = dims[0];
+            py = dims[1];
+        }
+        assert_mpi(px * py == NTasks, "[pencil_domain] Need px * py = NTasks");
+        return Domain::uniform_pencil(px, py);
+    }
+
+#if defined(USE_MPI) && defined(USE_FFTW)
+    //=============================================================
+    // PencilDomain: the layout of a pencil grid (Domain.h)
+    //=============================================================
+    namespace {
+        GRID::my_fftw_complex * pencil_allocate_complex(size_t n) {
+#ifdef SINGLE_PRECISION_FFTW
+            return fftwf_alloc_complex(n);
+#elif defined(LONG_DOUBLE_PRECISION_FFTW)
+            return fftwl_alloc_complex(n);
+#else
+            return fftw_alloc_complex(n);
+#endif
+        }
+        void pencil_free_complex(GRID::my_fftw_complex * p) {
+#ifdef SINGLE_PRECISION_FFTW
+            fftwf_free(p);
+#elif defined(LONG_DOUBLE_PRECISION_FFTW)
+            fftwl_free(p);
+#else
+            fftw_free(p);
+#endif
+        }
+        int pencil_wrap(int i, int n) {
+            i %= n;
+            return i < 0 ? i + n : i;
+        }
+    } // namespace
+
+    PencilWorkspace::~PencilWorkspace() { pencil_free_complex(reinterpret_cast<GRID::my_fftw_complex *>(data_)); }
+
+    void PencilWorkspace::reserve(size_t ncomplex) {
+        if (ncomplex <= size_)
+            return;
+        auto * p = pencil_allocate_complex(ncomplex);
+        if (!p)
+            throw std::bad_alloc();
+        pencil_free_complex(reinterpret_cast<GRID::my_fftw_complex *>(data_));
+        data_ = reinterpret_cast<GRID::ComplexType *>(p);
+        size_ = ncomplex;
+    }
+
+    PencilDomain::Communicators::~Communicators() {
+        int finalized = 0;
+        MPI_Finalized(&finalized);
+        if (finalized)
+            return;
+        if (row != MPI_COMM_NULL)
+            MPI_Comm_free(&row);
+        if (column != MPI_COMM_NULL)
+            MPI_Comm_free(&column);
+        if (cartesian != MPI_COMM_NULL)
+            MPI_Comm_free(&cartesian);
+    }
+
+    PencilDomain::PencilDomain(std::array<int, 3> mesh,
+                               double boxsize,
+                               std::array<int, 2> process_grid,
+                               MPI_Comm communicator,
+                               int ndim)
+        : mesh_(mesh), ndim_(ndim), boxsize_(boxsize), comms_(std::make_shared<Communicators>()),
+          workspace_(std::make_shared<PencilWorkspace>()) {
+        comms_->parent = communicator;
+        if (ndim_ < 1 || ndim_ > 3 || !std::isfinite(boxsize_) || boxsize_ <= 0)
+            throw std::invalid_argument("PencilDomain: mesh and box size must be positive");
+        for (int d = 0; d < ndim_; ++d)
+            if (mesh_[d] < 1)
+                throw std::invalid_argument("PencilDomain: active mesh dimensions must be positive");
+        for (int d = ndim_; d < 3; ++d)
+            mesh_[d] = 1;
+        int nproc = 0;
+        MPI_Comm_size(communicator, &nproc);
+        int dims[2] = {process_grid[0], process_grid[1]};
+        if (ndim_ < 3 && dims[0] == 0 && dims[1] == 0)
+            dims[0] = nproc, dims[1] = 1;
+        if (dims[0] < 0 || dims[1] < 0 || dims[0] * dims[1] > nproc)
+            throw std::invalid_argument("PencilDomain: invalid process grid");
+        if (dims[0] > 0 && dims[1] > 0 && dims[0] * dims[1] != nproc)
+            throw std::invalid_argument("PencilDomain: process-grid product must equal communicator size");
+        if ((dims[0] > 0 && nproc % dims[0] != 0) || (dims[1] > 0 && nproc % dims[1] != 0))
+            throw std::invalid_argument("PencilDomain: process-grid dimensions must divide communicator size");
+        MPI_Dims_create(nproc, 2, dims);
+        process_grid_ = {dims[0], dims[1]};
+        const int nkz = fourier_last_size();
+        if (ndim_ == 1 && dims[1] != 1)
+            throw std::invalid_argument("PencilDomain: 1D grids use process_grid {nranks, 1}");
+        if (ndim_ == 2 && dims[1] != 1)
+            throw std::invalid_argument("PencilDomain: 2D grids use process_grid {nranks, 1}");
+        if (mesh_[0] < dims[0] || (ndim_ >= 2 && mesh_[1] < dims[1]) || (ndim_ >= 2 && mesh_[1] < dims[0]) ||
+            (ndim_ == 3 && nkz < dims[1]))
+            throw std::invalid_argument("PencilDomain: mesh too small for non-empty real/Fourier pencils");
+        int periods[2] = {1, 1};
+        MPI_Cart_create(communicator, 2, dims, periods, 0, &comms_->cartesian);
+        MPI_Comm_rank(comms_->cartesian, &rank_);
+        int coords[2];
+        MPI_Cart_coords(comms_->cartesian, rank_, 2, coords);
+        process_coords_ = {coords[0], coords[1]};
+        int row_keep[2] = {0, 1}, col_keep[2] = {1, 0};
+        MPI_Cart_sub(comms_->cartesian, row_keep, &comms_->row);
+        MPI_Cart_sub(comms_->cartesian, col_keep, &comms_->column);
+
+        // The pencils (owner of positions): the edges of the cells of the ranks, in units of the box
+        // (rank = c0 * P1 + c1, as MPI_Cart_create)
+        auto edges = [](int n, int parts) {
+            std::vector<double> e(size_t(parts) + 1);
+            for (int p = 0; p < parts; ++p)
+                e[size_t(p)] = split(n, parts, p).start / double(n);
+            e[size_t(parts)] = 1.0;
+            return e;
+        };
+        xedges = edges(mesh_[0], dims[0]);
+        yedges = edges(mesh_[1], dims[1]);
+    }
+
+    PencilDomain::PencilDomain(std::array<int, 3> mesh,
+                               double boxsize,
+                               int ndim,
+                               std::array<int, 2> process_grid,
+                               MPI_Comm communicator)
+        : PencilDomain(mesh, boxsize, process_grid, communicator, ndim) {}
+
+    PencilIndexRange PencilDomain::x_range_of(int p) const { return split(mesh_[0], process_grid_[0], p); }
+    PencilIndexRange PencilDomain::y_range_of(int p) const {
+        return ndim_ == 1 ? PencilIndexRange{0, 1} : split(mesh_[1], process_grid_[1], p);
+    }
+    PencilIndexRange PencilDomain::ky_range_of(int p) const {
+        return ndim_ == 1 ? PencilIndexRange{0, 1} : split(mesh_[1], process_grid_[0], p);
+    }
+    PencilIndexRange PencilDomain::kz_range_of(int p) const {
+        return ndim_ < 3 ? PencilIndexRange{0, 1} : split(fourier_last_size(), process_grid_[1], p);
+    }
+    std::array<double, 2> PencilDomain::x_bounds() const {
+        auto r = x_range();
+        return {r.start * cell_size(0), r.end() * cell_size(0)};
+    }
+    std::array<double, 2> PencilDomain::y_bounds() const {
+        auto r = y_range();
+        return {r.start * cell_size(1), r.end() * cell_size(1)};
+    }
+    int PencilDomain::cell_of_position(double p, int axis) const {
+        if (axis < 0 || axis > 2 || !std::isfinite(p))
+            throw std::invalid_argument("cell_of_position: invalid coordinate");
+        double u = std::fmod(p / boxsize_, 1.0);
+        if (u < 0)
+            u += 1.0;
+        return std::min(mesh_[axis] - 1, int(u * mesh_[axis]));
+    }
+    int PencilDomain::owner_of_cell(int ix, int iy, int) const {
+        return rank_of(split_owner(mesh_[0], process_grid_[0], pencil_wrap(ix, mesh_[0])),
+                       split_owner(mesh_[1], process_grid_[1], pencil_wrap(iy, mesh_[1])));
+    }
+    int PencilDomain::owner_of_position(double x, double y, double) const {
+        auto unit = [&](double p) {
+            if (!std::isfinite(p))
+                throw std::invalid_argument("owner_of_position: invalid coordinate");
+            double u = std::fmod(p / boxsize_, 1.0);
+            if (u < 0)
+                u += 1.0;
+            return u < 1.0 ? u : std::nextafter(1.0, 0.0);
+        };
+        const double pos[2] = {unit(x), unit(y)};
+        return owner(pos);
+    }
+    int PencilDomain::owner_of_mode(int, int ky, int kz) const {
+        if (ndim_ == 1)
+            return 0; // 1D Fourier modes are replicated after the distributed gather.
+        if (kz < 0 || kz >= fourier_last_size())
+            throw std::out_of_range("owner_of_mode: stored kz must be in [0,Nz/2]");
+        return rank_of(split_owner(mesh_[1], process_grid_[0], pencil_wrap(ky, mesh_[1])),
+                       split_owner(fourier_last_size(), process_grid_[1], kz));
+    }
+    int PencilDomain::neighbour(int axis, int direction) const {
+        if (axis < 0 || axis > 1 || (direction != -1 && direction != 1))
+            throw std::invalid_argument("neighbour: expected axis 0/1 and direction -1/+1");
+        int source, destination;
+        MPI_Cart_shift(comms().cartesian, axis, 1, &source, &destination);
+        return direction < 0 ? source : destination;
+    }
+    void PencilDomain::print_info() const {
+        if (rank_ != 0)
+            return;
+        std::cout << "PencilDomain: NDIM=" << ndim_ << " mesh " << mesh_[0] << 'x' << mesh_[1] << 'x' << mesh_[2]
+                  << " box " << boxsize_ << ", process grid " << process_grid_[0] << 'x' << process_grid_[1] << '\n';
+        for (int r = 0; r < nranks(); ++r) {
+            auto c = coords_of(r);
+            auto x = x_range_of(c[0]), y = y_range_of(c[1]), ky = ky_range_of(c[0]), kz = kz_range_of(c[1]);
+            std::cout << "  rank " << r << " coords(" << c[0] << ',' << c[1] << ") x[" << x.start << ',' << x.end()
+                      << ") y[" << y.start << ',' << y.end() << ") ky[" << ky.start << ',' << ky.end() << ") kz["
+                      << kz.start << ',' << kz.end() << ")\n";
+        }
+    }
+#endif
 
     /// Show some info about FML
     void info() {

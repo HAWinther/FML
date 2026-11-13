@@ -3,5 +3,7 @@ USE_OMP ?= false
 TARGETS := peano_hilbert_example
 include ../Makefile.config
 
-peano_hilbert_example: Main.o
+FML_MODULES := Global
+
+peano_hilbert_example: Main.o Global.o
 	$(LINK_EXE)

@@ -33,7 +33,7 @@ std::vector<P> catalogue() {
 }
 Container local(std::vector<P> all) {
     Container p;
-    p.create(all, all.size() + 32, [](P & p) { return p.pos[0] >= FML::xmin_domain && p.pos[0] < FML::xmax_domain; });
+    p.create(all, all.size() + 32, FML::PARTICLE::Input::Replicated);
     return p;
 }
 // Independent Ewald image/Fourier sum, using a reference split unrelated to the solver's chosen split.

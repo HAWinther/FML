@@ -452,7 +452,7 @@ namespace FML {
                 for (auto & p : particles)
                     nselected += selected(p);
                 const size_t nallocate = size_t(double(nselected) * options.particle_allocation_factor) + 16;
-                mpiparticles.create(particles, nallocate, selected);
+                mpiparticles.create(particles, nallocate, FML::PARTICLE::Input::Local, selected);
                 std::vector<SnapshotParticle>().swap(particles);
                 if (per_task) {
                     ANALYSIS::redistribute_particles(mpiparticles);

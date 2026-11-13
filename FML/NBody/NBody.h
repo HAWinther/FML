@@ -1109,7 +1109,7 @@ namespace FML {
             };
 
             // Create particles
-            part.create_particle_grid(Npart_1D, buffer_factor, FML::xmin_domain, FML::xmax_domain);
+            part.create_particle_grid(Npart_1D, buffer_factor);
             part.info();
 
             // Set unique IDs if we have that available in the particles

@@ -1,15 +1,18 @@
-# Peano-Hilbert MPI domain decomposition
+# Peano-Hilbert domain
 
-This folder is a standalone module for mapping 3D periodic positions to
-Peano-Hilbert keys, dividing the key range among MPI ranks, and storing a
-distributed 3D grid. It is not connected to `MPIParticles`, `SimulationCode`,
-or particle migration.
+This folder maps periodic positions to Peano-Hilbert keys, divides the key range
+among MPI ranks (`PeanoHilbertDomain`) and stores a distributed 3D grid. It holds
+FML's one Peano-Hilbert key implementation, `HilbertCurve<NDIM>` (`HilbertCurve.h`,
+Skilling's transpose algorithm, NDIM = 2-6), which `AdaptiveMPIGrid` and the
+particle domain (`Global/Domain.h`: `FML::Domain::peano_hilbert(...)`, for
+`MPIParticles`) use as well. It is not yet connected to `SimulationCode`.
 
-The implementation has two layers:
+The implementation has these layers:
 
-1. `key_from_position` and `key_from_grid_coordinate` map coordinates to a
-   64-bit Hilbert key using at most 21 bits per coordinate.
-2. `Decomposition::build` reduces a distributed prefix histogram and chooses
+0. `HilbertCurve<NDIM>::key_from_coord` / `coord_from_key`: the keys.
+1. `key_from_position` and `key_from_grid_coordinate` map 3D coordinates to a
+   64-bit Hilbert key (`HilbertCurve<3>`) using at most 21 bits per coordinate.
+2. `PeanoHilbertDomain::build` reduces a distributed prefix histogram and chooses
    approximately equal-particle contiguous key ranges. `owner_of_key` and
    `owner_of_position` map a key or position to its rank.
 3. `DistributedGrid3D<T>` stores the grid values for cells in the local key
@@ -19,15 +22,15 @@ The implementation has two layers:
 ## API
 
 ```cpp
-#include <FML/PeanoHilbertDecomposition/DistributedGrid3D.h>
+#include <FML/PeanoHilbertDomain/DistributedGrid3D.h>
 
 using namespace FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT;
 std::vector<Key> local_keys;
 // Fill local_keys with key_from_position({x, y, z}, 21) for local particles.
 #ifdef USE_MPI
-auto domains = Decomposition::build(local_keys, MPI_COMM_WORLD, 21, 16);
+auto domains = PeanoHilbertDomain::build(local_keys, MPI_COMM_WORLD, 21, 16);
 #else
-auto domains = Decomposition::build(local_keys, 0, 21, 16);
+auto domains = PeanoHilbertDomain::build(local_keys, 0, 21, 16);
 #endif
 int owner = domains.owner_of_key(local_keys.front());
 Key begin = domains.key_begin(domains.rank());

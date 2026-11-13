@@ -40,7 +40,7 @@ int main() {
         partvec.push_back(p);
     }
 
-    part.create(partvec.data(), partvec.size(), partvec.size(), FML::xmin_domain, FML::xmax_domain, true);
+    part.create(partvec.data(), partvec.size(), partvec.size(), FML::PARTICLE::Input::Replicated);
 
     //=======================================================================================
     // Do a Delaunay tessellation, compute voronoi volumes, locate density minima (or maximima, see h-file)

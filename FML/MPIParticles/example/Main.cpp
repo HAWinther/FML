@@ -20,7 +20,7 @@ int main() {
     FML::PARTICLE::MPIParticles<Particle> part;
     const int Npart_1D = 6;
     const double buffer_factor = 2.0;
-    part.create_particle_grid(Npart_1D, buffer_factor, FML::xmin_domain, FML::xmax_domain);
+    part.create_particle_grid(Npart_1D, buffer_factor);
 
     //==================================================
     // Print particles on task 0
@@ -85,14 +85,10 @@ int main() {
     // Make MPI particles from already existing particles
     //==================================================
     FML::PARTICLE::MPIParticles<Particle> part2;
-    const bool all_tasks_have_the_same_particles = false;
+    // Replicated: every task has the same particles (each keeps those it owns); Distributed: different ones
+    const auto input = FML::PARTICLE::Input::Distributed;
     auto nallocate_local = part.get_npart() * 2;
-    part2.create(part.get_particles_ptr(),
-                 part.get_npart(),
-                 nallocate_local,
-                 FML::xmin_domain,
-                 FML::xmax_domain,
-                 all_tasks_have_the_same_particles);
+    part2.create(part.get_particles_ptr(), part.get_npart(), nallocate_local, input);
 
     //==================================================
     // Print the particles we have

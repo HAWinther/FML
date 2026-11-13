@@ -16,7 +16,7 @@
 #include <mpi.h>
 #endif
 
-#include <FML/AdaptiveMPIGrid/HilbertCurve.h>
+#include <FML/PeanoHilbertDomain/HilbertCurve.h>
 #include <FML/Global/Global.h>
 
 namespace FML {

@@ -600,7 +600,7 @@ int main(int argc, char ** argv) {
             }
         }
         MPIParticles<Particle> mp;
-        mp.create(part.data(), npart, 2 * npart, FML::xmin_domain, FML::xmax_domain, true);
+        mp.create(part.data(), npart, 2 * npart, FML::PARTICLE::Input::Replicated);
         NBODY::DriftParticles<3, Particle>(mp, 1.0, true);
         double maxerr = 0.0;
         int outside = 0;
@@ -636,7 +636,7 @@ int main(int argc, char ** argv) {
             part[i].pos[0] *= 0.1; // All on task 0 (a big overdensity)
         }
         MPIParticles<Particle> mp;
-        mp.create(part.data(), npart, 2 * npart, FML::xmin_domain, FML::xmax_domain, true);
+        mp.create(part.data(), npart, 2 * npart, FML::PARTICLE::Input::Replicated);
         PGD::potential_gradient_decent_method<3, Particle>(mp.get_particles_ptr(),
                                                            mp.get_npart(),
                                                            2.0,
@@ -667,7 +667,7 @@ int main(int argc, char ** argv) {
         const int Np = 16, n = 2;
         const double A = 0.01, k = 2.0 * M_PI * n, alpha = 0.01, norm = 1.5, kl = 1.0, ks = 1000.0;
         MPIParticles<Particle> mp;
-        mp.create_particle_grid(Np, 2.0, FML::xmin_domain, FML::xmax_domain);
+        mp.create_particle_grid(Np, 2.0);
         for (auto & p : mp) {
             for (int idim = 0; idim < 3; idim++)
                 p.vel[idim] = 0.0;

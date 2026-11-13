@@ -83,14 +83,10 @@ void ReconSolver() {
     // that falls in its domain. If you run with one task you don't need this
     //=================================================================================
     FML::PARTICLE::MPIParticles<Particle> p;
-    const bool all_tasks_have_the_same_particles = true;
+    // Replicated: every task has the same particles (each keeps those it owns); Distributed: different ones
+    const auto input = FML::PARTICLE::Input::Replicated;
     const int nalloc_per_task = part.size() / FML::NTasks * 2;
-    p.create(part.data(),
-             part.size(),
-             nalloc_per_task,
-             FML::xmin_domain,
-             FML::xmax_domain,
-             all_tasks_have_the_same_particles);
+    p.create(part.data(), part.size(), nalloc_per_task, input);
 
     //=================================================================================
     // This can be used to displace particles to redshift-space if we have velocities

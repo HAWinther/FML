@@ -78,14 +78,10 @@ void ExamplesInterpolation() {
     // Make MPIParticles out of these positions
     //=======================================================
     FML::PARTICLE::MPIParticles<Particle> part;
-    const bool all_tasks_have_the_same_particles = true;
+    // Replicated: every task has the same particles (each keeps those it owns); Distributed: different ones
+    const auto input = FML::PARTICLE::Input::Replicated;
     const int nalloc_per_task = 2 * npos;
-    part.create(positions.data(),
-                positions.size(),
-                nalloc_per_task,
-                FML::xmin_domain,
-                FML::xmax_domain,
-                all_tasks_have_the_same_particles);
+    part.create(positions.data(), positions.size(), nalloc_per_task, input);
 
     //=======================================================
     // Interpolate to the particle positions

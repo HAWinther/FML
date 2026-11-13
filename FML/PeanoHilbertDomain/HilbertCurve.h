@@ -1,14 +1,22 @@
 #ifndef HILBERTCURVE_HEADER
 #define HILBERTCURVE_HEADER
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
+#include <stdexcept>
+
+#ifdef USE_MPI
+#include <mpi.h>
+#endif
 
 namespace FML {
     namespace GRID {
 
         //==========================================================================================
-        /// Peano-Hilbert keys in NDIM dimensions using Skilling's transpose algorithm
+        /// Peano-Hilbert keys in NDIM dimensions using Skilling's transpose algorithm: the one key implementation of
+        /// FML (PeanoHilbertDomain, Global/Domain.h and AdaptiveMPIGrid use it)
         /// (J. Skilling, "Programming the Hilbert curve", AIP Conf. Proc. 707, 381 (2004)).
         ///
         /// Integer coordinates have LMAX bits per axis and the key has NDIM*LMAX bits, so it
@@ -113,5 +121,100 @@ namespace FML {
         };
     } // namespace GRID
 } // namespace FML
+
+// =====================================================================================================================
+// 3D Peano-Hilbert keys of positions and grid cells (HilbertCurve<3>, checked against the resolution) for
+// PeanoHilbertDomain (Global/Domain.h) and DistributedGrid3D
+// =====================================================================================================================
+namespace FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT {
+
+    using Key = uint64_t;
+    using Position = std::array<double, 3>;
+
+    /// Return the number of usable bits per coordinate for a 64-bit key.
+    constexpr unsigned max_coordinate_bits() { return 21; }
+
+    namespace detail {
+        inline void validate_bits(unsigned bits) {
+            if (bits == 0 || bits > max_coordinate_bits())
+                throw std::invalid_argument("Peano-Hilbert bits must be in [1, 21]");
+        }
+
+        // The keys are those of HilbertCurve<3> (HilbertCurve.h: Skilling's transpose algorithm, the one key
+        // implementation of FML), with the coordinates and key checked against the resolution
+        inline Key key_from_integer_coordinates(const std::array<uint32_t, 3> & x, unsigned bits) {
+            validate_bits(bits);
+            const uint32_t limit = uint32_t(1) << bits;
+            for (auto axis : x)
+                if (axis >= limit)
+                    throw std::out_of_range("Peano-Hilbert integer coordinate is outside its grid");
+            return FML::GRID::HilbertCurve<3>::key_from_coord(x, int(bits));
+        }
+
+        inline std::array<uint32_t, 3> integer_coordinates_from_key(Key key, unsigned bits) {
+            validate_bits(bits);
+            if (key >= (Key(1) << (3 * bits)))
+                throw std::out_of_range("Peano-Hilbert key is outside its configured resolution");
+            return FML::GRID::HilbertCurve<3>::coord_from_key(key, int(bits));
+        }
+
+        inline int communicator_rank(
+#ifdef USE_MPI
+            MPI_Comm comm
+#else
+            int
+#endif
+        ) {
+#ifdef USE_MPI
+            int rank = 0;
+            MPI_Comm_rank(comm, &rank);
+            return rank;
+#else
+            return 0;
+#endif
+        }
+
+        inline int communicator_size(
+#ifdef USE_MPI
+            MPI_Comm comm
+#else
+            int
+#endif
+        ) {
+#ifdef USE_MPI
+            int size = 1;
+            MPI_Comm_size(comm, &size);
+            return size;
+#else
+            return 1;
+#endif
+        }
+    } // namespace detail
+
+    /// Map a point in the unit periodic cube [0,1)^3 to a Hilbert key.
+    inline Key key_from_position(const Position & position, unsigned bits) {
+        detail::validate_bits(bits);
+        const uint32_t ngrid = uint32_t(1) << bits;
+        std::array<uint32_t, 3> cell{};
+        for (int axis = 0; axis < 3; ++axis) {
+            const double x = position[axis];
+            if (!std::isfinite(x) || x < 0.0 || x >= 1.0)
+                throw std::out_of_range("Peano-Hilbert positions must be finite and in [0,1)");
+            cell[axis] = std::min(uint32_t(x * ngrid), ngrid - 1);
+        }
+        return detail::key_from_integer_coordinates(cell, bits);
+    }
+
+    /// Map an integer grid coordinate to a Hilbert key.
+    inline Key key_from_grid_coordinate(const std::array<uint32_t, 3> & coordinate, unsigned bits) {
+        return detail::key_from_integer_coordinates(coordinate, bits);
+    }
+
+    /// Inverse of key_from_grid_coordinate for the same bit resolution.
+    inline std::array<uint32_t, 3> grid_coordinate_from_key(Key key, unsigned bits) {
+        return detail::integer_coordinates_from_key(key, bits);
+    }
+
+} // namespace FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT
 
 #endif

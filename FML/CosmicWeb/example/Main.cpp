@@ -72,7 +72,7 @@ int main() {
                 partvec.push_back(p);
             }
     FML::PARTICLE::MPIParticles<Particle> part;
-    part.create(partvec.data(), partvec.size(), partvec.size(), FML::xmin_domain, FML::xmax_domain, true);
+    part.create(partvec.data(), partvec.size(), partvec.size(), FML::PARTICLE::Input::Replicated);
 
     // T-web: smoothing on 2 grid cells, threshold 0.2 (as is often used)
     FML::COSMICWEB::TWebOptions twebopt;

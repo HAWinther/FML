@@ -395,7 +395,7 @@ int main() {
     {
         auto parts = make_particles(20000, {}, {}, {});
         FML::PARTICLE::MPIParticles<Particle> mp;
-        mp.create(parts, parts.size(), [](Particle &) { return true; });
+        mp.create(parts, parts.size(), FML::PARTICLE::Input::Local);
         const size_t ntotal = mp.get_npart_total();
         for (size_t i = 0; i < mp.get_npart(); i++) {
             double x = mp[i].pos[0] + 0.5;
@@ -424,7 +424,7 @@ int main() {
         for (auto & p : parts)
             p.mass = m;
         FML::PARTICLE::MPIParticles<Particle> mp;
-        mp.create(parts, size_t(parts.size() * 1.25) + 16, [](Particle &) { return true; });
+        mp.create(parts, size_t(parts.size() * 1.25) + 16, FML::PARTICLE::Input::Local);
         auto context = make_context(100.0, 1.0);
         AN::BaryonificationSettings s;
         s.max_radius_over_r200 = 10.0;

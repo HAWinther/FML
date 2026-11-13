@@ -137,7 +137,7 @@ int main() {
     // Npart_1D^NDIM particles in total
     //=====================================================
     MPIParticles<Particle> part;
-    part.create_particle_grid(Npart_1D, buffer_factor, FML::xmin_domain, FML::xmax_domain);
+    part.create_particle_grid(Npart_1D, buffer_factor);
     part.info();
 
     //=====================================================

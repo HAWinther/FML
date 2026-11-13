@@ -1,5 +1,5 @@
-#include <FML/PeanoHilbertDecomposition/PeanoHilbertDecomposition.h>
-#include <FML/PeanoHilbertDecomposition/DistributedGrid3D.h>
+#include <FML/Global/Global.h>
+#include <FML/PeanoHilbertDomain/DistributedGrid3D.h>
 
 #include <iostream>
 #include <cmath>
@@ -7,7 +7,9 @@
 
 int main(int argc, char ** argv) {
 #ifdef USE_MPI
-    MPI_Init(&argc, &argv);
+    // (MPI is initialized and finalized by FML: Global.cpp, FMLSetup)
+    (void)argc;
+    (void)argv;
     MPI_Comm comm = MPI_COMM_WORLD;
 #else
     (void)argc;
@@ -32,7 +34,7 @@ int main(int argc, char ** argv) {
             local_keys.push_back(key_from_position({x, y, z}, 5));
         }
 
-    const auto decomposition = Decomposition::build(local_keys, comm, 5, 12);
+    const auto decomposition = PeanoHilbertDomain::build(local_keys, comm, 5, 12);
     DistributedGrid3D<double> grid(32, decomposition, 0.0);
     grid.initialize([](const Position & center) { return center[0] + center[1] + center[2]; });
     grid.build_halo(1, HaloConnectivity::Full, true);
@@ -72,8 +74,5 @@ int main(int argc, char ** argv) {
               << " grid cells, and " << decomposition.total_particles() << " particles; cell (0,0,0)="
               << queried_value.front() << ", ghosts=" << grid.halo_keys().size() << "\n";
 
-#ifdef USE_MPI
-    MPI_Finalize();
-#endif
     return global_errors == 0 ? 0 : 1;
 }

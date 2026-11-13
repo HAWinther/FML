@@ -1,7 +1,7 @@
 #ifndef FML_PEANO_HILBERT_DISTRIBUTED_GRID_3D_H
 #define FML_PEANO_HILBERT_DISTRIBUTED_GRID_3D_H
 
-#include <FML/PeanoHilbertDecomposition/PeanoHilbertDecomposition.h>
+#include <FML/Global/Global.h>
 
 #include <array>
 #include <climits>
@@ -26,7 +26,7 @@ namespace FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT {
       public:
         using Coordinate = std::array<uint32_t, 3>;
 
-        DistributedGrid3D(uint32_t cells_per_dimension, const Decomposition & decomposition,
+        DistributedGrid3D(uint32_t cells_per_dimension, const PeanoHilbertDomain & decomposition,
                           const T & initial_value = T{})
             : n_(cells_per_dimension), decomposition_(decomposition) {
             if (decomposition_.nranks() < 1)
@@ -203,7 +203,7 @@ namespace FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT {
         bool halo_is_periodic() const { return halo_periodic_; }
         HaloConnectivity halo_connectivity() const { return halo_connectivity_; }
 
-        const Decomposition & decomposition() const { return decomposition_; }
+        const PeanoHilbertDomain & decomposition() const { return decomposition_; }
 
       private:
 #ifdef USE_MPI
@@ -403,7 +403,7 @@ namespace FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT {
         }
 
         uint32_t n_{0};
-        Decomposition decomposition_;
+        PeanoHilbertDomain decomposition_;
         std::vector<T> values_;
         std::vector<Key> halo_keys_;
         uint32_t halo_width_{0};

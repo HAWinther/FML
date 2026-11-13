@@ -214,7 +214,7 @@ Case setup(const Options & o) {
         for (Count i = 0; i < local; ++i)
             initial[size_t(i)] = {{(FML::ThisTask + .5) / FML::NTasks, .25, .75}, Count(FML::ThisTask) * local + i};
         auto particles = std::make_shared<FML::PARTICLE::MPIParticles<Particle>>();
-        particles->create(initial.data(), initial.size(), size_t(local + 3), FML::xmin_domain, FML::xmax_domain, false);
+        particles->create(initial.data(), initial.size(), size_t(local + 3), FML::PARTICLE::Input::Distributed);
         return {[particles] {
                     for (auto & p : *particles) {
                         int step = p.id % 3 == 1 ? -1 : p.id % 3 == 2 ? 1 : 0;

@@ -49,7 +49,7 @@ int main() {
 
     // Distribute them across tasks (each task keeps the particles in its x-domain)
     FML::PARTICLE::MPIParticles<Particle> part;
-    part.create(partvec.data(), partvec.size(), partvec.size(), FML::xmin_domain, FML::xmax_domain, true);
+    part.create(partvec.data(), partvec.size(), partvec.size(), FML::PARTICLE::Input::Replicated);
 
     //=======================================================================================
     // ZOBOV voids and clusters. Default cuts as in Revolver: minimum density below the mean

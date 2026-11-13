@@ -1,4 +1,4 @@
-#include <FML/PeanoHilbertDecomposition/DistributedGrid3D.h>
+#include <FML/PeanoHilbertDomain/DistributedGrid3D.h>
 
 #include <algorithm>
 #include <array>
@@ -82,7 +82,9 @@ namespace {
 
 int main(int argc, char ** argv) {
 #ifdef USE_MPI
-    MPI_Init(&argc, &argv);
+    // (MPI is initialized and finalized by FML: Global.cpp, FMLSetup)
+    (void)argc;
+    (void)argv;
     MPI_Comm comm = MPI_COMM_WORLD;
     int nranks = 1;
     MPI_Comm_rank(comm, &rank);
@@ -139,7 +141,7 @@ int main(int argc, char ** argv) {
     std::vector<Key> distributed_keys;
     for (Key key = Key(rank); key < key_limit; key += Key(nranks))
         distributed_keys.push_back(key);
-    const auto decomposition = Decomposition::build(distributed_keys, comm, bits, 3 * bits);
+    const auto decomposition = PeanoHilbertDomain::build(distributed_keys, comm, bits, 3 * bits);
 
     std::vector<Key> starts(static_cast<size_t>(nranks));
     std::vector<Key> ends(static_cast<size_t>(nranks));
@@ -226,7 +228,7 @@ int main(int argc, char ** argv) {
     std::vector<Key> concentrated_keys;
     if (rank == 0)
         concentrated_keys.assign(64, 0);
-    const auto concentrated = Decomposition::build(concentrated_keys, comm, bits, 3 * bits);
+    const auto concentrated = PeanoHilbertDomain::build(concentrated_keys, comm, bits, 3 * bits);
     DistributedGrid3D<double> sparse_grid(n, concentrated, 0.0);
     sparse_grid.initialize([](const Position & center) {
         const uint32_t i = uint32_t(center[0] * n);
@@ -266,11 +268,8 @@ int main(int argc, char ** argv) {
     global_checks = size_t(summed_checks);
 #endif
     if (rank == 0)
-        std::cout << "PeanoHilbertDecomposition tests: " << global_checks << " checks, " << global_failures
+        std::cout << "PeanoHilbertDomain tests: " << global_checks << " checks, " << global_failures
                   << " failures on " << nranks << " rank(s)\n";
 
-#ifdef USE_MPI
-    MPI_Finalize();
-#endif
     return global_failures == 0 ? 0 : 1;
 }

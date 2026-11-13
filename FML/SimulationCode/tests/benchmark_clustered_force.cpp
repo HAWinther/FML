@@ -203,7 +203,7 @@ int main(int argc, char ** argv) {
         }
         const double normalization = 1.5 * c->get_OmegaM() * epoch / (4 * std::acos(-1.) * mass);
         Container p;
-        p.create(all, n + 32, [](P & p) { return p.pos[0] >= FML::xmin_domain && p.pos[0] < FML::xmax_domain; });
+        p.create(all, n + 32, FML::PARTICLE::Input::Replicated);
         // Small replicated catalogues/references are intentional test-only O(N^2) work.
         R::Ewald reference(sources, 5, 10), refined(sources, 7, 16);
         std::vector<Vector> truth(ntarget), fine(ntarget), soft(ntarget);

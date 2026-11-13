@@ -60,9 +60,7 @@ int main(int argc, char ** argv) {
                 }
             }
             auto & container = simulation.get_particles();
-            container.create(all, 64, [](auto & p) {
-                return p.pos[0] >= FML::xmin_domain && p.pos[0] < FML::xmax_domain;
-            });
+            container.create(all, 64, FML::PARTICLE::Input::Replicated);
             DiagnosticSimulation::Step step{.5, .5, .5, .5, 0., .001, .7};
             simulation.step(step);
             double err2 = 0, ref2 = 0;

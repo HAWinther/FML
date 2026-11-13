@@ -12,7 +12,10 @@
 #include <ios>
 #include <iostream>
 #include <limits>
+#include <optional>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #ifdef USE_MPI
@@ -30,6 +33,31 @@ namespace FML {
     namespace PARTICLE {
 
         enum class MigrationRoute { Serial, NoTraffic, Neighbors, General };
+
+        /// The header of the files of MPIParticles::dump_to_file (then the domain, Domain::write, and the particles)
+        struct MPIParticlesFileHeader {
+            char magic[8] = {'F', 'M', 'L', 'P', 'A', 'R', 'T', '\0'};
+            uint32_t version = 2; // (1: the format before the magic string, not readable)
+            int32_t ntasks = 0;
+            int32_t thistask = 0;
+            int32_t ndim = 0;
+            uint64_t sizeof_particle = 0;
+            uint64_t npart_total = 0;
+            uint64_t npart_local = 0;
+            uint64_t npart_allocated = 0;
+        };
+
+        /// How the particles given to MPIParticles::create are spread over the tasks
+        enum class Input {
+            /// Every task has the same particles (e.g. all read the same file): each keeps those it owns
+            Replicated,
+            /// The tasks have different particles, anywhere in the box: they are sent to the tasks that own them
+            /// (read in batches, communicating as we go, so one task can hold all of them)
+            Distributed,
+            /// The particles are this task's: taken as given (no ownership check, no communication; the caller makes
+            /// sure they are on the right task, or communicates afterwards)
+            Local
+        };
 
         //===========================================================
         ///
@@ -62,6 +90,11 @@ namespace FML {
         ///
         ///    DEBUG_MPIPARTICLES : Show some info when running
         ///
+        /// The particles are distributed according to a Domain (Global/Domain.h): the one given to
+        /// the constructor, or else the global FML::domain (a Slab by default) when the particles are created. Every
+        /// method supports every domain except create_particle_grid (Slab only for now); with Pencil and PeanoHilbert
+        /// a warning (the rest of FML assumes slabs)
+        ///
         /// External variables/methods we rely on:
         ///
         ///    int ThisTask;
@@ -86,17 +119,15 @@ namespace FML {
             MigrationRoute last_migration_route{MigrationRoute::Serial};
             size_t NpartLocal_in_use{0}; // Number of particles in use (total allocated given by p.size())
 
-            // The range of x-values in [0,1] that belongs to each task
-            std::vector<double> x_min_per_task{};
-            std::vector<double> x_max_per_task{};
-
-            // If we create particles from scratch according to a grid
-            double buffer_factor{1.0}; // Allocate a factor of this more particles than needed
-
-            // If we created a uniform grid of particles
-            int Npart_1D{0};       // Total number of particles slices
-            int Local_Npart_1D{0}; // Number of slices in current task
-            int Local_p_start{0};  // Start index of local particle slice in [0,Npart_1D)
+            // The decomposition of the particles over the tasks (Domain.h): the one given to the constructor (then
+            // domain_given), or else the global FML::domain (for a Slab its current ranges xmin_domain, xmax_domain)
+            // taken when the particles are created or loaded. Empty before
+            std::optional<FML::Domain> domain{};
+            bool domain_given{false};
+            // The domain to use when creating particles: the given one, else the global one (collective)
+            void set_domain_for_create();
+            // Bring the coordinates the domain uses into [0,1) (x = 1.0 just below; a tiny negative x to 0)
+            void wrap_boundary_positions(T & particle) const;
 
             // Swap particles
             void swap_particles(T & a, T & b);
@@ -128,29 +159,24 @@ namespace FML {
             /// Iterator: points to one past the last active local particle
             iterator end() { return iterator(p.data() + NpartLocal_in_use); }
 
-            /// Create MPIParticles from a set of particles. We only keep the particles in part that are in the correct
-            /// x-range if all_tasks_has_the_same_particles is true nallocate is the total amount of particles we
-            /// allocate for locally (we do buffered read if only one task reads particles to avoid having to allocate
-            /// too much).
-            /// @param[in] part Pointer to a set of particles
-            /// @param[in] NumParts Number of particles we have
-            /// @param[in] nallocate How many particles to allocate for locally (in case we want to have a buffer)
-            /// @param[in] xmin_local The min of the x-range in [0,1] the current task is responsible for
-            /// @param[in] xmax_local The max of the x-range in [0,1] the current task is responsible for
-            /// @param[in] all_tasks_has_the_same_particles Set this to be true if all tasks has the same set of
-            /// particles (e.g. they come from reading the same file). If false then we assume all tasks that has
-            /// particles has distinct particles
+            /// Create MPIParticles from a set of particles, distributed over the tasks according to the domain.
+            /// @param[in] part Pointer to the particles (positions in [0,1); x = 1.0 is allowed)
+            /// @param[in] NumParts Number of particles in part
+            /// @param[in] nallocate How many particles to allocate for locally (room for particles moving in)
+            /// @param[in] input How the particles are spread over the tasks: Input::Replicated (every task has the
+            /// same particles: each keeps those it owns), Input::Distributed (different particles anywhere: sent to
+            /// their owners, in batches) or Input::Local (already this task's: taken as given)
+            /// @param[in] keep Optional filter: only the particles for which it is true are used (e.g. a type)
             void create(T * part,
                         size_t NumParts,
                         size_t nallocate,
-                        double xmin_local,
-                        double xmax_local,
-                        bool all_tasks_has_the_same_particles);
-
-            /// Create from a vector of particles with a given selection function
-            /// This could for example be that xmin < x < xmax and if particles have a type only select a particular
-            /// type
-            void create(std::vector<T> & part, size_t nallocate, std::function<bool(T &)> selection_function);
+                        Input input,
+                        std::function<bool(T &)> keep = std::function<bool(T &)>{});
+            /// The same from a vector of particles
+            void create(std::vector<T> & part,
+                        size_t nallocate,
+                        Input input,
+                        std::function<bool(T &)> keep = std::function<bool(T &)>{});
 
             /// Moves a vector of particles into internal storage (so no copies are being done).
             /// The extra storage (if needed) needs to already be in part!
@@ -159,20 +185,73 @@ namespace FML {
             /// you really need to
             void move_from(Vector<T> && part);
 
-            /// Create \f$ {\rm Npart}_{1D}^{\rm NDIM} \f$ particles in a rectangular grid spread across all tasks
-            /// buffer_factor is how much extra to allocate in case particles moves
-            /// xmin, xmax specifies the domain in [0,1] that the current task is responsible for
-            /// This method only sets the positions of the particles not id or vel or anything else
-            void create_particle_grid(int Npart_1D, double buffer_factor, double xmin_local, double xmax_local);
+            /// Create \f$ {\rm Npart}_{1D}^{\rm NDIM} \f$ particles in a rectangular grid, each task those in its
+            /// part of the domain (for now only a Slab domain). buffer_factor is how much extra to allocate in case
+            /// particles move. This method only sets the positions of the particles not id or vel or anything else
+            void create_particle_grid(int Npart_1D, double buffer_factor);
 
+            //----------------------------------------------------------------------------------------------------
+            // Deprecated (the old interface): thin wrappers around the methods above, kept so old code compiles
+            //----------------------------------------------------------------------------------------------------
+
+            /// Deprecated: the particles get the Slab domain made from every task's [xmin_local, xmax_local)
+            /// (collective). Same as constructing with that domain and create(..., Input::Replicated) if
+            /// all_tasks_has_the_same_particles, else create(..., Input::Distributed)
+            [[deprecated("use create(part, NumParts, nallocate, Input::Replicated / Input::Distributed) with the "
+                         "domain given to the constructor")]] void
+            create(T * part,
+                   size_t NumParts,
+                   size_t nallocate,
+                   double xmin_local,
+                   double xmax_local,
+                   bool all_tasks_has_the_same_particles) {
+                set_slab_domain_from_local_range(xmin_local, xmax_local);
+                create(part,
+                       NumParts,
+                       nallocate,
+                       all_tasks_has_the_same_particles ? Input::Replicated : Input::Distributed);
+            }
+            /// Deprecated: the same as create(part, nallocate, Input::Local, selection_function)
+            [[deprecated("use create(part, nallocate, Input::Local, selection_function)")]] void
+            create(std::vector<T> & part, size_t nallocate, std::function<bool(T &)> selection_function) {
+                create(part, nallocate, Input::Local, std::move(selection_function));
+            }
+            /// Deprecated: the particles get the Slab domain made from every task's [xmin_local, xmax_local)
+            /// (collective), then the same as create_particle_grid(Npart_1D, buffer_factor)
+            [[deprecated("use create_particle_grid(Npart_1D, buffer_factor) with the domain given to the "
+                         "constructor")]] void
+            create_particle_grid(int Npart_1D, double buffer_factor, double xmin_local, double xmax_local) {
+                set_slab_domain_from_local_range(xmin_local, xmax_local);
+                create_particle_grid(Npart_1D, buffer_factor);
+            }
+
+          private:
+            // For the deprecated methods: use the Slab domain made from every task's local range (collective)
+            void set_slab_domain_from_local_range(double xmin_local, double xmax_local) {
+                domain = FML::slab_domain_from_local_range(xmin_local, xmax_local);
+                domain_given = true;
+            }
+
+          public:
+            /// The particles will use the global particle domain (FML::domain, taken when they are created)
             MPIParticles() = default;
+            /// The particles will use this domain (made for NTasks tasks). Pencil and PeanoHilbert: a warning (only
+            /// some methods support them)
+            explicit MPIParticles(const FML::Domain & particle_domain_in);
+
+            /// The domain of the particles (once created or loaded; else the one given to the constructor, or the
+            /// global one)
+            const FML::Domain & get_domain() const { return domain ? *domain : FML::domain; }
 
             // Has the mpiparticles been created?
             explicit operator bool() const;
 
             /// Get reference to particle vector. NB: due to we allow a buffer the size of the vector returned is
-            /// not equal to the number of active particles!
+            /// not equal to the number of active particles (it is get_capacity(); the active particles are the first
+            /// get_npart(), as begin() to end())!
             Vector<T> & get_particles();
+            /// The number of particles we have room for locally (the size of get_particles())
+            size_t get_capacity() const { return p.size(); }
             /// Get a pointer to the first particle.
             T * get_particles_ptr();
 
@@ -197,23 +276,20 @@ namespace FML {
             /// Last route selected by communicate_particles (same on every rank).
             MigrationRoute get_last_migration_route() const { return last_migration_route; }
 
-            /// Get a vector of xmin of the domain for each task
-            std::vector<double> get_x_min_per_task();
-            /// Get a vector of xmax of the domain for each task
-            std::vector<double> get_x_max_per_task();
-
             /// Free all memory of the stored particles
             void free();
 
             /// For memory logging add a tag to the vector we have allocated
             void add_memory_label(std::string name);
 
-            /// Dump data to file (internal format: a raw copy of the particles, one file fileprefix.X per task).
-            /// Meant for checkpointing within the same program: the files can only be read back with
+            /// Dump data to file (internal format, one file fileprefix.X per task: a header with a magic string and
+            /// version, the number of tasks, NDIM, sizeof(T), the particle counts and the domain, then the particles in
+            /// chunks). Meant for checkpointing within the same program: the files can only be read back with
             /// load_from_file using the same particle type, the same number of tasks and the same machine
-            /// architecture. For portable output use e.g. GADGET (HDF5) files (GadgetUtils)
+            /// architecture (all checked). For portable output use e.g. GADGET (HDF5) files (GadgetUtils)
             void dump_to_file(std::string fileprefix, size_t max_bytesize_buffer = 100 * 1000 * 1000);
-            /// Load data written by dump_to_file (same particle type and number of tasks)
+            /// Load data written by dump_to_file (same particle type and number of tasks; with a domain given to the
+            /// constructor, the file's domain must be the same)
             void load_from_file(std::string fileprefix);
 
             /// Show some info about the class
@@ -359,9 +435,8 @@ namespace FML {
 
         template <class T>
         void MPIParticles<T>::move_from(Vector<T> && part) {
-            // Set the xmin/xmax
-            x_min_per_task = FML::GatherFromTasks(&FML::xmin_domain);
-            x_max_per_task = FML::GatherFromTasks(&FML::xmax_domain);
+            // The domain (the given one, else the global one)
+            set_domain_for_create();
             // Move data from particles into internal storage
             p = std::move(part);
             // Set number of particles
@@ -372,33 +447,18 @@ namespace FML {
             p.resize(p.capacity());
         }
 
-        // Create from a vector of particles with a given selection function
-        template <class T>
-        void
-        MPIParticles<T>::create(std::vector<T> & part, size_t nallocate, std::function<bool(T &)> selection_function) {
-
-            // Set the xmin/xmax
-            x_min_per_task = FML::GatherFromTasks(&FML::xmin_domain);
-            x_max_per_task = FML::GatherFromTasks(&FML::xmax_domain);
-            p.clear();
-            p.reserve(nallocate + 1);
-
-            size_t count = 0;
-            for (auto & curpart : part) {
-                if (selection_function(curpart)) {
-                    p.push_back(curpart);
-                    count++;
-                    if (count > nallocate) {
-                        assert_mpi(false, "[MPIParticle::create] Reached allocation limit. Increase nallocate\n");
-                    }
-                }
-            }
-            // Set number of particles
-            NpartLocal_in_use = count;
-            NpartTotal = NpartLocal_in_use;
-            FML::SumOverTasks(&NpartTotal);
-            // Resize to capacity - we keep size in NpartLocal_in_use
-            p.resize(p.capacity());
+        /// The number of dimensions of a particle: get_ndim() (some particle types only have a non-const one), or
+        /// GetNDIM's default for particles without it
+        template <class P, class = void>
+        struct mpiparticles_has_ndim : std::false_type {};
+        template <class P>
+        struct mpiparticles_has_ndim<P, std::void_t<decltype(std::declval<P &>().get_ndim())>> : std::true_type {};
+        template <class P>
+        int mpiparticles_ndim(P & particle) {
+            if constexpr (mpiparticles_has_ndim<P>::value)
+                return int(particle.get_ndim());
+            else
+                return FML::PARTICLE::GetNDIM(particle);
         }
 
         /// Bring the x-coordinate of a particle given to MPIParticles::create into [0,1): x = 1.0 (or a tiny
@@ -419,25 +479,37 @@ namespace FML {
         }
 
         template <class T>
+        void
+        MPIParticles<T>::create(std::vector<T> & part, size_t nallocate, Input input, std::function<bool(T &)> keep) {
+            create(part.data(), part.size(), nallocate, input, std::move(keep));
+        }
+
+        template <class T>
         void MPIParticles<T>::create(T * part,
                                      size_t NumPartinpart,
                                      size_t nallocate,
-                                     double xmin,
-                                     double xmax,
-                                     bool all_tasks_has_the_same_particles) {
-            if (FML::NTasks == 1)
-                all_tasks_has_the_same_particles = true;
-
-            // Set the xmin/xmax
-            x_min_per_task = FML::GatherFromTasks(&xmin);
-            x_max_per_task = FML::GatherFromTasks(&xmax);
+                                     Input input,
+                                     std::function<bool(T &)> keep) {
+            // The domain (the given one, else the global one)
+            set_domain_for_create();
+            if (domain->ncoordinates() > 1) {
+                T tmp{};
+                const std::string msg = "[MPIParticles::create] The " + domain->type_name() + " domain needs NDIM " +
+                                        (domain->ncoordinates() == 2 ? ">= 2" : "= 3");
+                const int ndim = mpiparticles_ndim(tmp);
+                assert_mpi(domain->ncoordinates() == 2 ? ndim >= 2 : ndim == 3, msg.c_str());
+            }
+            // With one task every particle is ours
+            if (FML::NTasks == 1 and input == Input::Distributed)
+                input = Input::Replicated;
+            auto use = [&](T & particle) { return not keep or keep(particle); };
 
 #ifdef DEBUG_MPIPARTICLES
             if (ThisTask == 0) {
-                for (int i = 0; i < NTasks; i++) {
-                    std::cout << "Task: " << i << " / " << NTasks << " xmin: " << x_min_per_task[i]
-                              << " xmax: " << x_max_per_task[i] << "\n";
-                }
+                for (int i = 0; i < NTasks; i++)
+                    if (domain->is_slab())
+                        std::cout << "Task: " << i << " / " << NTasks << " xmin: " << domain->x_min(i)
+                                  << " xmax: " << domain->x_max(i) << "\n";
             }
 #endif
 
@@ -445,27 +517,35 @@ namespace FML {
             p.resize(nallocate);
             add_memory_label("MPIParticles::create");
 
-            // If all tasks has the same particles
-            // we read all the particles and only keep the particles in range
-            if (all_tasks_has_the_same_particles) {
+            // The particles are ours: take them as given
+            if (input == Input::Local) {
                 size_t count = 0;
                 for (size_t i = 0; i < NumPartinpart; i++) {
-                    auto x = FML::PARTICLE::GetPos(part[i])[0];
-                    mpiparticles_wrap_boundary_position(x);
-                    if (x >= xmin and x < xmax) {
+                    if (not use(part[i]))
+                        continue;
+                    assert_mpi(count < nallocate,
+                               "[MPIParticle::create] Reached allocation limit. Increase nallocate\n");
+                    p[count++] = part[i];
+                }
+                NpartLocal_in_use = count;
+            }
+
+            // If all tasks has the same particles we keep the particles we own
+            if (input == Input::Replicated) {
+                size_t count = 0;
+                for (size_t i = 0; i < NumPartinpart; i++) {
+                    if (not use(part[i]))
+                        continue;
+                    T particle = part[i];
+                    wrap_boundary_positions(particle);
+                    if (domain->contains(ThisTask, FML::PARTICLE::GetPos(particle))) {
                         // Check that we are not past allocation limit before writing
                         assert_mpi(count < nallocate,
                                    "[MPIParticle::create] Reached allocation limit. Increase nallocate\n");
-                        p[count] = part[i];
-                        FML::PARTICLE::GetPos(p[count])[0] = x;
-                        count++;
+                        p[count++] = particle;
                     }
                 }
-
                 NpartLocal_in_use = count;
-
-                NpartTotal = NpartLocal_in_use;
-                FML::SumOverTasks(&NpartTotal);
             }
 
 #ifdef USE_MPI
@@ -473,9 +553,9 @@ namespace FML {
             MPI_Barrier(FML::communicator);
 #endif
 
-            // If only one or more task has particles then read in batches and communicate as we go along
+            // If the tasks have different particles then read in batches and communicate as we go along
             // just in case the total amount of particles are too large
-            if (not all_tasks_has_the_same_particles) {
+            if (input == Input::Distributed) {
 
                 // Read in batches
                 size_t start = 0;
@@ -490,18 +570,16 @@ namespace FML {
                         assert_mpi(nmax_per_batch > 0,
                                    "[MPIParticle::create] Reached allocation limit while reading particles in batches "
                                    "(no room for more particles). Increase nallocate\n");
-                        size_t nbatch = start + nmax_per_batch < NumPartinpart ? start + nmax_per_batch : NumPartinpart;
-                        more_to_process_locally = nbatch < NumPartinpart;
-
-                        for (size_t i = start; i < nbatch; i++) {
-                            // Check that we are not past allocation limit before writing
-                            assert_mpi(count < nallocate,
-                                       "[MPIParticle::create] Reached allocation limit. Increase nallocate\n");
+                        size_t i = start;
+                        for (; i < NumPartinpart and count < nallocate; i++) {
+                            if (not use(part[i]))
+                                continue;
                             p[count] = part[i];
-                            mpiparticles_wrap_boundary_position(FML::PARTICLE::GetPos(p[count])[0]);
+                            wrap_boundary_positions(p[count]);
                             count++;
                         }
-                        start = nbatch;
+                        start = i;
+                        more_to_process_locally = start < NumPartinpart;
                     }
 
                     // Set the number of particles read
@@ -563,13 +641,37 @@ namespace FML {
         }
 
         template <class T>
-        std::vector<double> MPIParticles<T>::get_x_min_per_task() {
-            return x_min_per_task;
+        MPIParticles<T>::MPIParticles(const FML::Domain & particle_domain_in)
+            : domain(particle_domain_in), domain_given(true) {
+            const std::string msg = "[MPIParticles] The particle domain is made for " +
+                                    std::to_string(domain->ntasks()) + " tasks, but we have " +
+                                    std::to_string(FML::NTasks);
+            assert_mpi(domain->ntasks() == FML::NTasks, msg.c_str());
+            if (not domain->is_slab()) {
+                T tmp{};
+                try {
+                    domain->check_ndim(mpiparticles_ndim(tmp));
+                } catch (const std::exception & e) {
+                    assert_mpi(false, e.what());
+                }
+                if (FML::ThisTask == 0)
+                    std::cout << "WARNING: MPIParticles with the " << domain->type_name()
+                              << " particle domain: the rest of FML (grids, density assignment, ...) assumes the "
+                                 "Slab domain\n";
+            }
         }
 
         template <class T>
-        std::vector<double> MPIParticles<T>::get_x_max_per_task() {
-            return x_max_per_task;
+        void MPIParticles<T>::set_domain_for_create() {
+            if (not domain_given)
+                domain = FML::get_domain();
+        }
+
+        template <class T>
+        void MPIParticles<T>::wrap_boundary_positions(T & particle) const {
+            auto * pos = FML::PARTICLE::GetPos(particle);
+            for (int idim = 0; idim < domain->ncoordinates(); idim++)
+                mpiparticles_wrap_boundary_position(pos[idim]);
         }
 
         template <class T>
@@ -585,12 +687,13 @@ namespace FML {
         }
 
         template <class T>
-        void MPIParticles<T>::create_particle_grid(int Npart_1D,
-                                                   double buffer_factor,
-                                                   double xmin_local,
-                                                   double xmax_local) {
-            this->Npart_1D = Npart_1D;
-            this->buffer_factor = buffer_factor;
+        void MPIParticles<T>::create_particle_grid(int Npart_1D, double buffer_factor) {
+            // The domain (the given one, else the global one): for now a Slab
+            set_domain_for_create();
+            assert_mpi(domain->is_slab(),
+                       "[MPIParticles::create_particle_grid] only implemented for the Slab particle domain");
+            const double xmin_local = domain->x_min(ThisTask);
+            const double xmax_local = domain->x_max(ThisTask);
 
             // Use the local xmin,xmax values to compute how many slices per task
             int imin = 0;
@@ -601,8 +704,8 @@ namespace FML {
             while (imax / double(Npart_1D) < xmax_local) {
                 imax++;
             }
-            Local_p_start = imin;
-            Local_Npart_1D = imax - imin;
+            const int Local_p_start = imin;
+            int Local_Npart_1D = imax - imin;
 
             // Sanity check
             auto Local_Npart_1D_per_task = FML::GatherFromTasks(&Local_Npart_1D);
@@ -617,24 +720,12 @@ namespace FML {
             assert_mpi(Local_p_start_computed == Local_p_start,
                        "[MPIParticles::create_particle_grid] Computed Local_p_start does not match Local_p_start\n");
 
-            // Get the min and max x-positions (in [0,1]) that each of the tasks is responsible for
-            x_min_per_task = std::vector<double>(NTasks, 0.0);
-            x_max_per_task = std::vector<double>(NTasks, 0.0);
-
-            // If we don't have xmin,xmax available
-            // x_min_per_task[ThisTask] = Local_p_start / double(Npart_1D);
-            // x_max_per_task[ThisTask] = (Local_p_start + Local_Npart_1D) / double(Npart_1D);
-
-            // Fetch these values
-            x_min_per_task = FML::GatherFromTasks(&xmin_local);
-            x_max_per_task = FML::GatherFromTasks(&xmax_local);
-
 #ifdef DEBUG_MPIPARTICLES
             // Output some info
             for (int taskid = 0; taskid < NTasks; taskid++) {
                 if (ThisTask == 0) {
-                    std::cout << "Task[" << taskid << "]  xmin: " << x_min_per_task[taskid]
-                              << " xmax: " << x_max_per_task[taskid] << "\n";
+                    std::cout << "Task[" << taskid << "]  xmin: " << domain->x_min(taskid)
+                              << " xmax: " << domain->x_max(taskid) << "\n";
                 }
             }
 #endif
@@ -739,27 +830,33 @@ namespace FML {
             FML::MinOverTasks(&max_chunk_bytes);
             FML::COMMUNICATION::require_count(max_chunk_bytes > 0, "[MPIParticles] Message limit must be positive");
 
-            // Binary lookup requires a finite, contiguous rank-ordered partition. Empty slabs are allowed.
-            bool valid_partition = x_min_per_task.size() == size_t(NTasks) && x_max_per_task.size() == size_t(NTasks);
-            if (valid_partition) {
-                valid_partition = x_min_per_task.front() == 0.0 && x_max_per_task.back() == 1.0;
-                for (int task = 0; task < NTasks; ++task)
-                    valid_partition &= std::isfinite(x_min_per_task[task]) && std::isfinite(x_max_per_task[task]) &&
-                                       x_min_per_task[task] <= x_max_per_task[task] &&
-                                       (!task || x_min_per_task[task] == x_max_per_task[task - 1]);
-            }
+            // The domain must be made for these tasks (a Slab: a finite, contiguous rank-ordered partition of [0,1]
+            // for the binary lookup; empty slabs are allowed)
+            FML::COMMUNICATION::require_count(domain.has_value(),
+                                              "[MPIParticles] The particles have not been created (no domain)");
+            const FML::Domain & dom = *domain;
+            bool valid_partition = dom.ntasks() == NTasks;
+            if (valid_partition && dom.is_slab())
+                valid_partition = dom.valid_slab_partition();
             FML::COMMUNICATION::require_count(valid_partition,
-                                              "[MPIParticles] Slabs must partition [0,1] in rank order");
+                                              dom.is_slab() ?
+                                                  "[MPIParticles] Slabs must partition [0,1] in rank order" :
+                                                  "[MPIParticles] The particle domain is not made for NTasks");
+            // The domain reads the first ncoord coordinates of the positions (Slab: x; Pencil: x, y; PeanoHilbert:
+            // x, y, z). The particles need that many (get_ndim is only asked for then: some particle types have none)
+            const int ncoord = dom.ncoordinates();
+            if (ncoord > 1) {
+                T tmp_ndim{};
+                const std::string msg = "[MPIParticles::communicate_particles] The " + dom.type_name() +
+                                        " domain needs NDIM " + (ncoord == 2 ? ">= 2" : "= 3");
+                const int ndim = mpiparticles_ndim(tmp_ndim);
+                assert_mpi(ncoord == 2 ? ndim >= 2 : ndim == 3, msg.c_str());
+            }
+            // The neighbours in rank order (all traffic to them: the neighbour route)
             const int left = int((static_cast<long long>(ThisTask) + NTasks - 1) % NTasks);
             const int right = int((static_cast<long long>(ThisTask) + 1) % NTasks);
-            auto owner_of = [&](const auto & x) {
-                // Most departures end on a neighbor; avoid even a logarithmic search in that case.
-                if (x >= x_min_per_task[right] && x < x_max_per_task[right])
-                    return right;
-                if (x >= x_min_per_task[left] && x < x_max_per_task[left])
-                    return left;
-                return int(std::upper_bound(x_max_per_task.begin(), x_max_per_task.end(), x) - x_max_per_task.begin());
-            };
+            // The task that owns a particle (positions in [0,1)), the neighbours first (most departures end there)
+            auto task_of = [&](T & particle) { return dom.owner_near(ThisTask, FML::PARTICLE::GetPos(particle)); };
             int route = force_general ? 2 : 0; // 0: no traffic, 1: neighbors, 2: general (including forced).
 
             // The number of particles we start with
@@ -796,27 +893,31 @@ namespace FML {
             };
             size_t i = 0;
             while (i < NpartLocal_in_use) {
-                auto & x = FML::PARTICLE::GetPos(p[i])[0];
+                auto * pos = FML::PARTICLE::GetPos(p[i]);
+                for (int idim = 0; idim < ncoord; idim++) {
+                    auto & x = pos[idim];
 
-                // To fix issues appearing when we are exactly on the boundary
-                if (x == 1.0)
-                    x = std::nextafter(x, PosType(0.0));
-                if (x == 0.0)
-                    x = std::numeric_limits<PosType>::min();
+                    // To fix issues appearing when we are exactly on the boundary
+                    if (x == 1.0)
+                        x = std::nextafter(x, PosType(0.0));
+                    if (x == 0.0)
+                        x = std::numeric_limits<PosType>::min();
 
-                // Particles must be wrapped inside [0,1) (this also catches NaN)
-                if (not(x >= 0.0 and x < 1.0)) {
-                    std::string errmsg =
-                        "[MPIParticles::communicate_particles] Particle with x = " + std::to_string(double(x)) +
-                        " is outside [0,1). Particles must be wrapped (periodic) before communication\n";
-                    assert_mpi(false, errmsg.c_str());
+                    // Particles must be wrapped inside [0,1) (this also catches NaN)
+                    if (not(x >= 0.0 and x < 1.0)) {
+                        std::string errmsg = "[MPIParticles::communicate_particles] Particle with " +
+                                             std::string(idim == 0 ? "x" : (idim == 1 ? "y" : "z")) + " = " +
+                                             std::to_string(double(x)) +
+                                             " is outside [0,1). Particles must be wrapped (periodic) before "
+                                             "communication\n";
+                        assert_mpi(false, errmsg.c_str());
+                    }
                 }
 
-                if (x < x_min_per_task[ThisTask] || x >= x_max_per_task[ThisTask]) {
-                    const int taskid = owner_of(x);
+                if (not dom.contains(ThisTask, pos)) {
+                    const int taskid = task_of(p[i]);
                     count_outgoing(taskid, p[i]);
                     swap_particles(p[i], p[--NpartLocal_in_use]);
-
                 } else {
                     i++;
                 }
@@ -946,9 +1047,7 @@ namespace FML {
             // Gather particle data
             for (size_t i = 0; i < ntot_to_send; i++) {
                 size_t index = NpartLocal_in_use + i;
-                auto x = FML::PARTICLE::GetPos(p[index])[0];
-
-                const int taskid = owner_of(x);
+                const int taskid = task_of(p[index]);
                 assert_mpi(taskid != ThisTask, "[MPIParticles] Outgoing particle is still locally owned");
                 append_particle(index, taskid);
             }
@@ -1028,16 +1127,17 @@ namespace FML {
                 return;
             }
 
-            int ndim = FML::PARTICLE::GetNDIM(T());
-
-            // Write header data
-            size_t NpartLocalAllocated = p.size();
-            myfile.write((char *)&ndim, sizeof(ndim));
-            myfile.write((char *)&NpartTotal, sizeof(NpartTotal));
-            myfile.write((char *)&NpartLocal_in_use, sizeof(NpartLocal_in_use));
-            myfile.write((char *)&NpartLocalAllocated, sizeof(NpartLocalAllocated));
-            myfile.write((char *)x_min_per_task.data(), sizeof(double) * FML::NTasks);
-            myfile.write((char *)x_max_per_task.data(), sizeof(double) * FML::NTasks);
+            // Write the header: magic string, version, tasks, NDIM, sizeof(T), the counts and the domain
+            MPIParticlesFileHeader header;
+            header.ntasks = FML::NTasks;
+            header.thistask = FML::ThisTask;
+            header.ndim = FML::PARTICLE::GetNDIM(T());
+            header.sizeof_particle = sizeof(T);
+            header.npart_total = NpartTotal;
+            header.npart_local = NpartLocal_in_use;
+            header.npart_allocated = p.size();
+            myfile.write(reinterpret_cast<const char *>(&header), sizeof(header));
+            get_domain().write(myfile);
 
             if (NpartLocal_in_use == 0) {
                 myfile.close();
@@ -1098,23 +1198,37 @@ namespace FML {
                 assert_mpi(false, error.c_str());
             }
 
-            int ndim_expected = FML::PARTICLE::GetNDIM(T());
-            int ndim;
-
-            // Read header data
-            myfile.read((char *)&ndim, sizeof(ndim));
-            assert_mpi(ndim == ndim_expected,
-                       "[MPIParticles::load_from_file] Particle dimension do not match the one in the file");
-            myfile.read((char *)&NpartTotal, sizeof(NpartTotal));
-            myfile.read((char *)&NpartLocal_in_use, sizeof(NpartLocal_in_use));
-            size_t NpartLocalAllocated;
-            myfile.read((char *)&NpartLocalAllocated, sizeof(NpartLocalAllocated));
-            x_min_per_task.resize(FML::NTasks);
-            x_max_per_task.resize(FML::NTasks);
-            myfile.read((char *)x_min_per_task.data(), sizeof(double) * FML::NTasks);
-            myfile.read((char *)x_max_per_task.data(), sizeof(double) * FML::NTasks);
-            assert_mpi(myfile.good() and NpartLocal_in_use <= NpartLocalAllocated,
+            // Read and check the header
+            MPIParticlesFileHeader header;
+            const MPIParticlesFileHeader expected;
+            myfile.read(reinterpret_cast<char *>(&header), sizeof(header));
+            assert_mpi(myfile.good() and
+                           std::equal(std::begin(header.magic), std::end(header.magic), std::begin(expected.magic)),
+                       "[MPIParticles::load_from_file] Not a file of MPIParticles::dump_to_file (or one written by "
+                       "an older version of FML)\n");
+            assert_mpi(header.version == expected.version,
+                       "[MPIParticles::load_from_file] The file has another version of the format\n");
+            assert_mpi(header.ntasks == FML::NTasks and header.thistask == FML::ThisTask,
+                       "[MPIParticles::load_from_file] The file was written with another number of tasks\n");
+            assert_mpi(header.ndim == FML::PARTICLE::GetNDIM(T()) and header.sizeof_particle == sizeof(T),
+                       "[MPIParticles::load_from_file] The file has another particle type (NDIM or size)\n");
+            assert_mpi(header.npart_local <= header.npart_allocated,
                        "[MPIParticles::load_from_file] Error reading the header of the file\n");
+            FML::Domain file_domain;
+            try {
+                file_domain = FML::Domain::read(myfile);
+            } catch (const std::exception & e) {
+                assert_mpi(false, e.what());
+            }
+            assert_mpi(not domain_given or file_domain == *domain,
+                       "[MPIParticles::load_from_file] The file has another domain than the one given to the "
+                       "constructor\n");
+            assert_mpi(file_domain.ntasks() == FML::NTasks,
+                       "[MPIParticles::load_from_file] The domain of the file is not made for this number of tasks\n");
+            domain = file_domain;
+            NpartTotal = header.npart_total;
+            NpartLocal_in_use = header.npart_local;
+            const size_t NpartLocalAllocated = header.npart_allocated;
 
             // Allocate memory
             p.resize(NpartLocalAllocated);

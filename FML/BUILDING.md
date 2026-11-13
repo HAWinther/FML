@@ -95,7 +95,7 @@ struct Tracer {
 };
 int main() {
     FML::PARTICLE::MPIParticles<Tracer> particles;
-    particles.create_particle_grid(8, 1.5, FML::xmin_domain, FML::xmax_domain);
+    particles.create_particle_grid(8, 1.5);
 }
 ```
 

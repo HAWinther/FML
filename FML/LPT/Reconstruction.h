@@ -162,9 +162,7 @@ namespace FML {
                         shifted_part.create(shifted.data(),
                                             NumPart,
                                             size_t(2 * nmax + 1000),
-                                            FML::xmin_domain,
-                                            FML::xmax_domain,
-                                            false);
+                                            FML::PARTICLE::Input::Distributed);
                         std::vector<Helper>().swap(shifted);
                         FML::INTERPOLATION::particles_to_grid(shifted_part.get_particles_ptr(),
                                                               shifted_part.get_npart(),

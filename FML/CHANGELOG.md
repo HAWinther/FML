@@ -5,6 +5,72 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### MPIParticles: creation by the domain, cleanup, versioned dump files
+- `create(part, n, nallocate, Input, keep = {})` (pointer or vector): `Input::Replicated` (every task has the same
+  particles: each keeps those it owns), `Input::Distributed` (different particles anywhere: sent to their owners in
+  batches) or `Input::Local` (already this task's: taken as given); `keep` is an optional filter (e.g. a particle
+  type). Ownership is the domain's (the given one, else the global one), so it works for every domain type.
+  `create_particle_grid(N, buffer_factor)` (the domain gives the range; Slab only for now). Every call site updated
+  (library, examples, SimulationCode tests, BUILDING.md).
+- The old `create(part, n, nallocate, xmin, xmax, all_tasks_have_the_same_particles)`, `create(vector, nallocate,
+  selection)` and `create_particle_grid(N, buffer_factor, xmin, xmax)` are kept, marked `[[deprecated]]`: thin
+  wrappers (the ranges give the particles' Slab domain, as before) tested to give the same as the new ones.
+- The domain is an optional (empty until the particles are created or loaded); the grid-creation state
+  (`Npart_1D`, `Local_Npart_1D`, `Local_p_start`, `buffer_factor`) are local variables; `get_capacity()`.
+- `dump_to_file` / `load_from_file`: a new format (only a test used it): a header (`MPIParticlesFileHeader`: magic
+  string, version, number of tasks and the task, NDIM, `sizeof(T)`, the counts) and the domain (`Domain::write` /
+  `Domain::read`, every type), then the particles in chunks as before. Files of another particle type, number of
+  tasks or an older version are refused; with a domain given to the constructor the file's must match.
+- `SimulationCode/tests/test_cola_frame.cpp`: every task keeps its own copy of the test particle (`Input::Local`; the
+  old call gave every task the range [0,1)).
+- Tested: the particle tests and the domain tests (every domain type through `Input::Distributed`,
+  `Input::Replicated` and dump/load) on 1 - 6 tasks; the core, NBody, reconstruction, streamed-kick and Analysis
+  tests on 1, 2 and 4; the SimulationCode short-range and COLA-frame tests and the short-range (COLA) regression
+  scripts with MPI.
+
+### One Peano-Hilbert key class; PeanoHilbertDomain and PencilDomain
+- `HilbertCurve<NDIM>` (Skilling's transpose algorithm, NDIM = 2-6) moved from `AdaptiveMPIGrid/` to
+  `PeanoHilbertDomain/HilbertCurve.h`: FML's one key implementation. The Peano-Hilbert module's own 3D key code is
+  replaced by it (the keys are identical: checked on 10^6 random cells at 1 - 21 bits), and `Global/Domain.h` uses it.
+- `Global/Domain.h` holds the three domain classes and `Domain`, one of them (a `std::variant`; `get<T>()`, the
+  ownership lookups a switch on the type, no virtual calls): `SlabDomain`, `PencilDomain` (pencil edges; made from a
+  mesh also the layout of a pencil grid: cells and Fourier modes per rank, the Cartesian/row/column communicators and
+  the FFT workspace, shared by its copies; implementation in Global.cpp) and `PeanoHilbertDomain` (key ranges, `build`
+  load-balanced from particle keys; the former `Decomposition` of `PeanoHilbertDecomposition/`). Global.h includes
+  Domain.h at its end (the FFTW types are declared there). The old names `FML::GRID::PencilDomain` and
+  `FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT::PeanoHilbertDomain` are aliases.
+- `PeanoHilbertDecomposition/` is now `PeanoHilbertDomain/`: `HilbertCurve.h` (the keys, also the 3D helpers
+  `key_from_position` etc.) and `DistributedGrid3D.h`; `PeanoHilbertDecomposition.h` removed. Its example and tests link
+  Global.o and use FML's MPI setup.
+- `PencilDecomposition/` is now `PencilDomain/` with `PencilGrid.h/.cpp` only (`PencilDecomposition.h/.cpp` removed).
+  The ownership of positions is that of the pencil edges, the edges of each rank's cells; `particle_domain()` gives the
+  `Domain` for `MPIParticles` (a Slab when the process grid has one column); tested against the cell ownership at
+  random periodic positions (`coord0_of_x`, `coord1_of_y` removed). The MPI datatypes are `const`, not `constexpr`
+  (Open MPI does not compile them), and the example relies on FML's automatic MPI/FFTW setup (it initialized MPI
+  twice).
+- `AdaptiveMPIGrid/example/Makefile`: `FML_INCLUDE` defaults to the repository it is in (it was `~/local/FML`, so
+  `make examples` failed elsewhere).
+
+### Domain: the particle decomposition as an object (Slab, Pencil, Peano-Hilbert)
+- `Global/Domain.h`: which task owns a point of [0,1)^NDIM: inline `owner()`, `owner_near(task, ...)` (a Slab's
+  neighbours first) and `contains()` for Slab (any per-task ranges, empty slabs allowed), Pencil (px x py process
+  grid in (x, y), rank ix * py + iy as PencilDomain, NDIM >= 2) and PeanoHilbert (key ranges of `HilbertCurve<3>`,
+  NDIM = 3; also from a load-balanced `PeanoHilbertDomain`). Comparisons in the position's own
+  type (long double positions are not rounded). The global `FML::domain` (Global.h) is a Slab whose ranges are
+  `FML::xmin_domain`, `FML::xmax_domain` (`FML::get_domain()`, collective); `FML::set_domain`,
+  `slab_domain_from_local_range`, `pencil_domain(px, py)`. Pencil and PeanoHilbert are a preparation for supporting
+  them in more of FML: choosing one gives a warning.
+- `MPIParticles`: a new constructor taking a domain (otherwise the global one, taken when the particles are created,
+  as before). `communicate_particles` is one loop for every domain (`contains`, `owner_near`; the boundary convention
+  on the coordinates the domain uses), as are `create(vector, ...)` and `move_from`; `create(..., xmin, xmax, ...)`,
+  `create_particle_grid`, `dump_to_file` and `load_from_file` assert a Slab. `get_domain()`; `get_x_min_per_task`,
+  `get_x_max_per_task` (unused) removed.
+- Tested (`tests/test_domain.cpp`, 1 - 6 tasks): owner() of every type against brute force (the module's
+  Peano-Hilbert keys), owner_near = owner, communication with uniform and uneven slabs, pencils (2D, 3D, uneven
+  grids) and Peano-Hilbert (uniform, load-balanced) keeps every particle and puts it on its owner. With the default
+  Slab nothing changes: the SimulationCode regression outputs are bit-identical (all 65 cases, 2 tasks) and the CI
+  passes.
+
 ### Einstein-Boltzmann solver: symmetron, dilaton and (m(a), beta(a)) models
 - `symmetron` (`sym_assb`, `sym_beta`, `sym_L_mpch`, `sym_N`, `sym_M`), `dilaton` (`dil_A2`, `dil_beta0`, `dil_r`,
   `dil_xi`) and `mbeta` (`mb_beta0`, `mb_n_beta`, `mb_m0`, `mb_n_m`): the LCDM background with the quasi-static

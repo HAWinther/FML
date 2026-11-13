@@ -4,7 +4,7 @@
 // and with USE_HEALPIX Chunkpix/Chunkpix.h and the chunkpix maps of the SimulationCode lightcone):
 //  - create_particle_grid with Npart_1D not divisible by NTasks (or < NTasks) has room for a uniform shift
 //  - create with only one task having particles (batched read) and with x = 1.0 / -1e-17
-//  - dump_to_file / load_from_file with more particles than fit in the buffer
+//  - dump_to_file / load_from_file with more particles than fit in the buffer (and the domain)
 //  - particles with custom (variable size) serialisation methods compile, communicate and round trip
 //  - ParticlesInBoxes with negative positions and with no particles
 //  - SimpleGalaxy compiles, detection of overloaded (const and non-const) get_pos, swapping Eulerian and
@@ -108,7 +108,7 @@ static bool in_domain(double x, double xmin, double xmax) { return x >= xmin and
 void test_lattice() {
     for (int N : {5, 3, 7}) {
         FML::PARTICLE::MPIParticles<Particle> mp;
-        mp.create_particle_grid(N, 1.0, FML::xmin_domain, FML::xmax_domain);
+        mp.create_particle_grid(N, 1.0);
         long long id = 0, idsum0 = 0;
         for (auto & p : mp) {
             p.id = std::llround(p.pos[0] * N) * N * N + std::llround(p.pos[1] * N) * N + std::llround(p.pos[2] * N);
@@ -163,7 +163,7 @@ void test_create() {
         FML::SumOverTasks(&idsum0);
         const size_t nallocate = FML::NTasks == 1 ? ntot : size_t(1.25 * ntot / FML::NTasks);
         FML::PARTICLE::MPIParticles<Particle> mp;
-        mp.create(part.data(), n, nallocate, FML::xmin_domain, FML::xmax_domain, false);
+        mp.create(part.data(), n, nallocate, FML::PARTICLE::Input::Distributed);
         long long idsum = 0;
         bool ok = true;
         for (auto & p : mp) {
@@ -181,7 +181,7 @@ void test_create() {
         part[2] = Particle{{-1e-17, 0.5, 0.5}, 2};
         part[3] = Particle{{0.0, 0.5, 0.5}, 3};
         FML::PARTICLE::MPIParticles<Particle> mp;
-        mp.create(part.data(), 4, 10, FML::xmin_domain, FML::xmax_domain, true);
+        mp.create(part.data(), 4, 10, FML::PARTICLE::Input::Replicated);
         bool ok = true;
         for (auto & p : mp)
             ok = ok and in_domain(p.pos[0], FML::xmin_domain, FML::xmax_domain) and p.pos[0] >= 0.0 and p.pos[0] < 1.0;
@@ -200,12 +200,14 @@ void dump_load_roundtrip(FML::PARTICLE::MPIParticles<T> & mp, size_t buffer_byte
     FML::PARTICLE::MPIParticles<T> mp2;
     mp2.load_from_file(prefix);
     bool ok = mp2.get_npart() == mp.get_npart() and mp2.get_particles().size() == mp.get_particles().size() and
-              mp2.get_npart_total() == mp.get_npart_total();
+              mp2.get_npart_total() == mp.get_npart_total() and mp2.get_domain() == mp.get_domain();
     for (size_t i = 0; ok and i < mp.get_npart(); i++)
         ok = equal(mp[i], mp2[i]);
 
-    // The file must contain exactly the particles in use (header + chunks of at most buffer_bytes)
-    size_t expected = sizeof(int) + 3 * sizeof(size_t) + 2 * sizeof(double) * FML::NTasks;
+    // The file must contain exactly the particles in use (header, the domain (a Slab: its type, the number of tasks
+    // and the ranges) + chunks of at most buffer_bytes)
+    size_t expected =
+        sizeof(FML::PARTICLE::MPIParticlesFileHeader) + 2 * sizeof(int32_t) + 2 * sizeof(double) * size_t(FML::NTasks);
     size_t inbuffer = 0;
     for (size_t i = 0; i < mp.get_npart(); i++) {
         size_t bytes = FML::PARTICLE::GetSize(mp[i]);
@@ -229,7 +231,7 @@ void dump_load_roundtrip(FML::PARTICLE::MPIParticles<T> & mp, size_t buffer_byte
 
 void test_dump() {
     FML::PARTICLE::MPIParticles<Particle> mp;
-    mp.create_particle_grid(10, 1.0, FML::xmin_domain, FML::xmax_domain);
+    mp.create_particle_grid(10, 1.0);
     long long id = 1000 * FML::ThisTask;
     for (auto & p : mp)
         p.id = id++;
@@ -292,7 +294,7 @@ void test_custom_serialisation() {
     FML::SumOverTasks(&sum0);
     FML::SumOverTasks(&nextra0);
     FML::PARTICLE::MPIParticles<VarParticle> mv;
-    mv.create(v.data(), v.size(), 500 * FML::NTasks + 500, FML::xmin_domain, FML::xmax_domain, false);
+    mv.create(v.data(), v.size(), 500 * FML::NTasks + 500, FML::PARTICLE::Input::Distributed);
     for (int it = 0; it < 3; it++) {
         for (auto & q : mv)
             q.pos[0] = U(gen);
@@ -399,7 +401,7 @@ void test_reflection() {
             // And it works in MPIParticles
             std::vector<Overloaded> v{o};
             FML::PARTICLE::MPIParticles<Overloaded> mp;
-            mp.create(v.data(), v.size(), 2, FML::xmin_domain, FML::xmax_domain, true);
+            mp.create(v.data(), v.size(), 2, FML::PARTICLE::Input::Replicated);
             ok = ok and mp.get_npart_total() == 1;
         }
         check_local(ok, "Detection of overloaded (const and non-const) get_pos");
@@ -663,9 +665,12 @@ void migration_case(std::vector<double> edges, int mode, bool empty_source, cons
     }
     using Container = FML::PARTICLE::MPIParticles<T>;
     using Route = FML::PARTICLE::MigrationRoute;
-    Container automatic, general;
-    automatic.create(initial.data(), initial.size(), size_t(per_rank * ranks), edges[rank], edges[rank + 1], false);
-    general.create(initial.data(), initial.size(), size_t(per_rank * ranks), edges[rank], edges[rank + 1], false);
+    // The uneven slabs [edges[r], edges[r + 1]) as the domain of the particles
+    const auto domain = FML::Domain::slab(std::vector<double>(edges.begin(), edges.begin() + ranks),
+                                          std::vector<double>(edges.begin() + 1, edges.begin() + ranks + 1));
+    Container automatic(domain), general(domain);
+    automatic.create(initial.data(), initial.size(), size_t(per_rank * ranks), FML::PARTICLE::Input::Distributed);
+    general.create(initial.data(), initial.size(), size_t(per_rank * ranks), FML::PARTICLE::Input::Distributed);
     for (auto & p : automatic)
         p.pos[0] = position(int(migration_id(p) / per_rank), int(migration_id(p) % per_rank));
     for (auto & p : general)
@@ -727,7 +732,7 @@ void test_extended_boundary_migration() {
         return;
     ExtendedPositionParticle p{{.5L * (FML::xmin_domain + FML::xmax_domain), .25L, .75L}, FML::ThisTask};
     FML::PARTICLE::MPIParticles<ExtendedPositionParticle> particles;
-    particles.create(&p, 1, size_t(FML::NTasks), FML::xmin_domain, FML::xmax_domain, false);
+    particles.create(&p, 1, size_t(FML::NTasks), FML::PARTICLE::Input::Distributed);
     const long double just_below = std::nextafter(static_cast<long double>(1. / FML::NTasks), 0.L);
     if (FML::ThisTask == 1)
         particles[0].pos[0] = just_below;
@@ -764,6 +769,80 @@ void test_migration_routing() {
     }
 }
 
+//==========================================================
+// The deprecated (old) create methods give the same as the new ones
+//==========================================================
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+void test_deprecated_create() {
+    using MP = FML::PARTICLE::MPIParticles<Particle>;
+    using FML::PARTICLE::Input;
+    std::mt19937 gen(7);
+    std::uniform_real_distribution<double> U(0, 1);
+    const size_t n = 500;
+    std::vector<Particle> all(n);
+    for (size_t i = 0; i < n; i++)
+        all[i] = Particle{{U(gen), U(gen), U(gen)}, (long long)i};
+    // This task's part of all (for the distributed case)
+    std::vector<Particle> mine;
+    for (size_t i = FML::ThisTask; i < n; i += FML::NTasks)
+        mine.push_back(all[i]);
+
+    // The local particles sorted by id, to compare containers
+    auto ids = [](MP & mp) {
+        std::vector<long long> v;
+        for (auto & p : mp)
+            v.push_back(p.id);
+        std::sort(v.begin(), v.end());
+        return v;
+    };
+    auto same = [&](MP & a, MP & b) {
+        return all_tasks(ids(a) == ids(b) and a.get_domain() == b.get_domain() and
+                         a.get_npart_total() == b.get_npart_total());
+    };
+
+    for (bool replicated : {true, false}) {
+        auto & part = replicated ? all : mine;
+        MP old_mp, new_mp;
+        old_mp.create(part.data(), part.size(), 2 * n, FML::xmin_domain, FML::xmax_domain, replicated);
+        new_mp.create(part.data(), part.size(), 2 * n, replicated ? Input::Replicated : Input::Distributed);
+        check_local(same(old_mp, new_mp) and old_mp.get_npart_total() == n,
+                    std::string("deprecated create(..., xmin, xmax, ") + (replicated ? "true" : "false") +
+                        ") = create(..., Input::" + (replicated ? "Replicated" : "Distributed") + ")");
+    }
+    {
+        // Uneven ranges: the old call sets the domain from the ranges given
+        std::vector<double> edges(FML::NTasks + 1);
+        for (int i = 0; i <= FML::NTasks; i++)
+            edges[i] = std::pow(double(i) / FML::NTasks, 1.5);
+        const auto dom = FML::Domain::slab(std::vector<double>(edges.begin(), edges.end() - 1),
+                                           std::vector<double>(edges.begin() + 1, edges.end()));
+        MP old_mp, new_mp(dom);
+        old_mp.create(mine.data(), mine.size(), 2 * n, edges[FML::ThisTask], edges[FML::ThisTask + 1], false);
+        new_mp.create(mine.data(), mine.size(), 2 * n, Input::Distributed);
+        check_local(same(old_mp, new_mp), "deprecated create with uneven ranges = the new create with that domain");
+    }
+    {
+        auto keep = [](Particle & p) { return p.id % 3 == 0; };
+        MP old_mp, new_mp;
+        old_mp.create(mine, 2 * n, keep);
+        new_mp.create(mine, 2 * n, Input::Local, keep);
+        check_local(same(old_mp, new_mp), "deprecated create(vector, nallocate, selection) = Input::Local + filter");
+    }
+    {
+        MP old_mp, new_mp;
+        old_mp.create_particle_grid(6, 1.5, FML::xmin_domain, FML::xmax_domain);
+        new_mp.create_particle_grid(6, 1.5);
+        bool ok = old_mp.get_npart() == new_mp.get_npart() and old_mp.get_capacity() == new_mp.get_capacity();
+        for (size_t i = 0; ok and i < old_mp.get_npart(); i++)
+            for (int d = 0; d < 3; d++)
+                ok = ok and old_mp[i].pos[d] == new_mp[i].pos[d];
+        check_local(all_tasks(ok) and old_mp.get_domain() == new_mp.get_domain(),
+                    "deprecated create_particle_grid(N, buffer, xmin, xmax) = create_particle_grid(N, buffer)");
+    }
+}
+#pragma GCC diagnostic pop
+
 int main(int argc, char ** argv) {
     const std::string only = argc > 1 ? argv[1] : "";
     auto run = [&](std::string name, void (*f)()) {
@@ -773,6 +852,7 @@ int main(int argc, char ** argv) {
     run("migration", test_migration_routing);
     run("lattice", test_lattice);
     run("create", test_create);
+    run("deprecated", test_deprecated_create);
     run("dump", test_dump);
     run("custom", test_custom_serialisation);
     run("boxes", test_particles_in_boxes);

@@ -62,14 +62,11 @@ int main() {
     // Create MPI particles by letting each task keep only the particles that falls in its domain
     //==================================================================
     FML::PARTICLE::MPIParticles<Particle<NDIM>> p;
-    const bool all_tasks_have_the_same_particles = false;
-    const auto nalloc_per_task = not all_tasks_have_the_same_particles ? part.size() : part.size() / FML::NTasks * 2;
-    p.create(part.data(),
-             part.size(),
-             nalloc_per_task,
-             FML::xmin_domain,
-             FML::xmax_domain,
-             all_tasks_have_the_same_particles);
+    // Replicated: every task has the same particles (each keeps those it owns); Distributed: different ones
+    const auto input = FML::PARTICLE::Input::Distributed;
+    const auto nalloc_per_task =
+        input != FML::PARTICLE::Input::Replicated ? part.size() : part.size() / FML::NTasks * 2;
+    p.create(part.data(), part.size(), nalloc_per_task, input);
     p.info();
 
     //==================================================================

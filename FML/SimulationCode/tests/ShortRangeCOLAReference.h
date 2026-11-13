@@ -133,7 +133,7 @@ inline void check_short_range_cola_frame(DiagnosticSimulation & simulation,
         const double end = scenario == 1 ? a : .51, dtkick = kick ? .001 : 0., dtdrift = scenario == 1 ? 0. : .002;
         DiagnosticSimulation::Step step{a, end, .49, kick ? .505 : .49, dtdrift, dtkick, .7};
         auto & container = simulation.get_particles();
-        container.create(all, 64, [](auto & p) { return p.pos[0] >= FML::xmin_domain && p.pos[0] < FML::xmax_domain; });
+        container.create(all, 64, FML::PARTICLE::Input::Replicated);
         std::vector<Vector> expected_velocity(all.size()), expected_position(all.size());
         for (size_t i = 0; i < all.size(); ++i)
             for (int d = 0; d < 3; ++d) {

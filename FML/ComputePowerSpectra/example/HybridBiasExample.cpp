@@ -57,7 +57,7 @@ int main() {
     // Psi(k) = i k / k^2 delta_L(k)
     //=======================================================================================
     FML::PARTICLE::MPIParticles<Particle> part;
-    part.create_particle_grid(Npart_1D, 1.5, FML::xmin_domain, FML::xmax_domain);
+    part.create_particle_grid(Npart_1D, 1.5);
     long long int npart_local = part.get_npart();
     auto npart_per_task = FML::GatherFromTasks(&npart_local);
     long long int id = 0;

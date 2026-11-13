@@ -128,7 +128,7 @@ void check_particle_kick(std::shared_ptr<Cosmology> c) {
         }
     }
     FML::PARTICLE::MPIParticles<P> particles;
-    particles.create(all, 34, [](P & p) { return p.pos[0] >= FML::xmin_domain && p.pos[0] < FML::xmax_domain; });
+    particles.create(all, 34, FML::PARTICLE::Input::Replicated);
     SIMCODE::ShortRangeSettings settings{true, "cell", 2.5, .1, 1e-8, .3, 0};
     const double a = .8, box = 200, dt = .07, r = .02, x = r / (2 * settings.split_scale / box);
     const double window = std::erfc(x) + 2 * x / std::sqrt(M_PI) * std::exp(-x * x);
