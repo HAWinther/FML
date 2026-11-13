@@ -20,6 +20,8 @@ modified gravity. It is driven by a parameter file and computes power spectra, h
   solver.
 - PM and COLA N-body evolution with short-range and TreePM-style forces. Includes massive neutrinos and wave
   (fuzzy) dark matter.
+- Standalone conservative [SPH gas dynamics](FML/SPH/README.md), with adaptive smoothing lengths, shock viscosity,
+  MPI/OpenMP and explicit gravity/expansion hooks.
 - Modified gravity in SimulationCode: f(R), DGP, symmetron, dilaton, Jordan–Brans–Dicke, μ-parametrised and more.
   Screening is handled either exactly with multigrid solvers or with fast approximations.
 

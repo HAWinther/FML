@@ -1,0 +1,82 @@
+{
+  "sound": {
+    "sound1d": {
+      "n": [
+        64,
+        128,
+        256
+      ],
+      "velocity_l1_over_amplitude": [
+        0.0032514476694569454,
+        0.0008229020356579438,
+        0.00022488813163933
+      ],
+      "density_l1_over_amplitude": [
+        0.004284896790842065,
+        0.0010787455861672299,
+        0.00027777463653911385
+      ],
+      "energy_error": [
+        3.774758283725532e-15,
+        2.220446049250313e-16,
+        6.661338147750939e-16
+      ]
+    },
+    "sound3d": {
+      "n": [
+        8,
+        16
+      ],
+      "velocity_l1_over_amplitude": [
+        0.02568717063264911,
+        0.01949747137293908
+      ],
+      "density_l1_over_amplitude": [
+        0.08704821410930415,
+        0.0283787111055978
+      ],
+      "energy_error": [
+        2.1538326677728037e-14,
+        4.4853010194856324e-14
+      ]
+    }
+  },
+  "sod": {
+    "225": {
+      "volume_weighted_l1_density_velocity_pressure": [
+        0.016648682131314534,
+        0.05297337794466152,
+        0.01825445999306573
+      ],
+      "relative_energy_error": 1.4967522654618648e-06
+    },
+    "450": {
+      "volume_weighted_l1_density_velocity_pressure": [
+        0.008997656972821061,
+        0.02642083220538913,
+        0.009871146181840243
+      ],
+      "relative_energy_error": 7.721851513764477e-07
+    },
+    "900": {
+      "volume_weighted_l1_density_velocity_pressure": [
+        0.005389277978773992,
+        0.014824061229608386,
+        0.005630978320806367
+      ],
+      "relative_energy_error": 3.963083274882706e-07
+    }
+  },
+  "mpi_replay": {
+    "1": 0.0,
+    "2": 0.0,
+    "4": 0.0
+  },
+  "blast": {
+    "relative_energy_error": 7.938658259654119e-07,
+    "momentum_norm": 1.058243760740184e-18,
+    "max_radial_velocity": 0.410832815191956,
+    "min_energy": 9.999999999999549e-06
+  },
+  "baseline_mpi2_max_absolute_particle_difference": 0.0
+}
