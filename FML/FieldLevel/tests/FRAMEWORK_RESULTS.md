@@ -244,3 +244,52 @@ source/reverse fields. No recomputation policy, new speedup or strong-scaling
 claim is made. High-cutoff padding, general cosmological growth derivatives,
 checkpoint/restart, distributed reconstruction outputs and nonlinear scientific
 validation remain open; survey likelihoods are still deferred.
+
+## Distributed reconstruction stage 4d (13 November 2026)
+
+Both distributed backends now return the serial reconstruction bundle: initial
+contrast, unbiased real-space matter contrast, Lagrangian displacement and velocity
+samples, and observed tracer modes. Linear, 1LPT and 2LPT are all covered. Arrays
+are owning local slabs on the initial mesh, with local retained tracer modes.
+
+The new reconstruction suite passes 48 checks in serial and on one OpenMPI rank;
+two/four ranks pass 96/192 total helper checks. Two ranks with two OpenMP threads
+and `NO_AUTO_FML_SETUP` pass 96 checks. Serial ASan/UBSan passes 48. The shared
+Makefile's `framework-reconstruction-mpi` target passes on two ranks. Rebuilt
+linear MPI, LPT MPI and original periodic framework regressions pass 46, 80 and
+53 checks respectively. All three MPI example modes still pass and now reconstruct
+their final local field with globally reduced summaries.
+
+Checks include:
+
+- All output components agree with the serial API on one rank (physical fields
+  within 1e-11 and tracer modes within 1e-12), with distinct cutoffs, RSD, generic
+  spectrum parameters, higher-order bias and a response containing zero modes.
+- Tracer modes agree with `predict`; physical products are independent of bias,
+  noise, RSD and response, including an entirely zero response. Linear matter is
+  the initial density. Density contrasts have zero mean; uniform ICs reconstruct
+  zero contrast/motion.
+- Velocity conversion scales only the returned velocities. Linear/1LPT velocities
+  equal the supplied factor times displacement; 2LPT contains Psi1+2 Psi2. Finite
+  replicated conversions are required and rank-local invalid/mismatched inputs
+  fail collectively. Nonfinite reconstruction fields are also rejected.
+- Reconstruction invalidates the old pullback cache. A fresh posterior evaluation
+  restores the same objective, field gradient and scalar gradients, verifying the
+  real-space/unit-weight deposition does not contaminate later inference.
+- Independent two-wave formulas recover initial density, physical displacements
+  in box units and velocities for all three models to 4.45e-16 maximum error.
+  Unbiased real-space matter is compared with a direct particle Fourier sum in the
+  retained band. Maximum assignment errors are 7.73e-6 (1LPT) and 5.80e-6 (2LPT),
+  within a declared 1e-4 absolute finite-assignment tolerance.
+
+Optional test dumps contain all eight real output fields and all tracer modes,
+with global cell/mode IDs. Cross-rank comparisons give maximum absolute real-field
+errors 0 (linear), 8.68e-17 (1LPT) and 8.33e-17 (2LPT); tracer differences are at most
+1.22e-17. Bitwise equality is not promised for general resolutions or longer chains.
+
+These are double-FFTW toy mesh-8/density-mesh-16 numerical regressions, not a
+production mesh/cutoff convergence or nonlinear scientific-validation campaign.
+The output bundle costs eight local real fields plus tracer modes and existing
+workspace/temporary storage. No output-selection, recomputation policy or
+scientific-file format is introduced. Checkpoint/restart remains next; nonlinear
+calibration and survey likelihoods remain open/deferred as in the saved plan.

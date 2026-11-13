@@ -357,6 +357,43 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             result.mean = from_modes(mean, w);
             return result;
         }
+        // Owning local fields; displacements in box units, velocities at Lagrangian q.
+        // velocity_factor=a H f L for compatible H/length units. Invalidates the pullback cache.
+        Model::Reconstruction
+        reconstruct(const Field & s, const std::vector<double> & p, Workspace & w, double velocity_factor) const {
+            require(std::isfinite(velocity_factor), "[DistributedField] Invalid velocity factor");
+            controls({velocity_factor});
+            Model::Reconstruction result;
+            result.tracer = predict(s, p, w);
+            w.valid = false;
+            Modes dk(modes_.size());
+            for (size_t i = 0; i < dk.size(); ++i)
+                dk[i] = std::sqrt(w.power[i].value * layout_.global_cells / volume_) * w.white_modes[i];
+            result.initial_density = from_modes(dk, w);
+            result.matter_density = result.initial_density;
+            bool finite = true;
+            for (auto z : result.tracer)
+                finite &= std::isfinite(z.real()) && std::isfinite(z.imag());
+            for (double x : result.initial_density)
+                finite &= std::isfinite(x);
+            for (int c = 0; c < 3; ++c) {
+                Modes psi(dk.size());
+                for (size_t i = 0; i < dk.size(); ++i) {
+                    const auto & m = modes_[i];
+                    const double n2 = double(m.n[0]) * m.n[0] + double(m.n[1]) * m.n[1] + double(m.n[2]) * m.n[2];
+                    psi[i] = dk[i] * Complex(0, m.n[c] / (2 * M_PI * n2));
+                }
+                result.displacement[c] = from_modes(psi, w);
+                result.velocity[c].resize(cells());
+                for (size_t q = 0; q < cells(); ++q) {
+                    result.velocity[c][q] = velocity_factor * result.displacement[c][q];
+                    finite &= std::isfinite(result.velocity[c][q]) && std::isfinite(result.initial_density[q]);
+                }
+            }
+            if (maximum(finite ? 0 : 1) != 0)
+                throw UnrepresentableState("[DistributedField] Unrepresentable reconstruction");
+            return result;
+        }
         Modes mock(const Field & s, const std::vector<double> & p, std::uint64_t seed, Workspace & w) const {
             auto result = predict(s, p, w);
             to_grid(white_noise(seed), w);

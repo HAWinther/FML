@@ -37,9 +37,25 @@ int demonstrate(const Forward & model) {
                                           norm += x * x;
                                       average_norm += model.sum(norm) / options.samples;
                                   });
+    // Fixed-parameter sampling leaves only the local white field in last.
+    // The conversion is 1 for this toy; use a H f L for physical peculiar velocities.
+    const auto reconstructed = model.reconstruct(chain.last, parameters, work, 1.);
+    double initial2 = 0, matter2 = 0, velocity2 = 0;
+    for (size_t q = 0; q < model.cells(); ++q) {
+        initial2 += reconstructed.initial_density[q] * reconstructed.initial_density[q];
+        matter2 += reconstructed.matter_density[q] * reconstructed.matter_density[q];
+        for (int c = 0; c < 3; ++c)
+            velocity2 += reconstructed.velocity[c][q] * reconstructed.velocity[c][q];
+    }
+    const double cells = double(model.layout().global_cells);
+    const double initial_rms = std::sqrt(model.sum(initial2) / cells);
+    const double matter_rms = std::sqrt(model.sum(matter2) / cells);
+    const double velocity_rms = std::sqrt(model.sum(velocity2) / cells);
     if (FML::ThisTask == 0)
         std::cout << "Field HMC acceptance: " << chain.acceptance << " divergences: " << chain.divergences
-                  << "\nMean squared white-field norm: " << average_norm << '\n';
+                  << "\nMean squared white-field norm: " << average_norm
+                  << "\nInitial / real-space matter RMS: " << initial_rms << " / " << matter_rms
+                  << "\nLagrangian velocity RMS (conversion 1): " << velocity_rms << '\n';
     return fit.status == FF::MAPStatus::Converged ? 0 : 1;
 }
 

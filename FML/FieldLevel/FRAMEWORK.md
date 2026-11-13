@@ -228,8 +228,8 @@ No cosmology is inferred from a default numerical factor. Matter outputs are
 independent of tracer bias and are evaluated in real space; tracer modes retain
 the configured RSD/response. Velocity samples are at Lagrangian positions, not a
 volume-weighted Eulerian velocity mesh. A separate deposition/normalization choice
-is needed for Eulerian velocity products. Reconstruction invalidates the LPT
-forward cache, so run predict again before its next pullback.
+is needed for Eulerian velocity products. Run predict again before the next pullback after reconstruction. The distributed
+backends explicitly invalidate their forward caches for both linear and LPT models.
 
 ## Build and validation
 
@@ -270,8 +270,8 @@ plane-parallel RSD as `Model`. Its `workspace`, `white_noise`, `mock`, `predict`
 `white_noise` generates the local slab without communication; use the same seed
 and stream on every rank.
 `linear_conditional` returns the local mean/covariance and global log marginal;
-the serial-only `linear_log_marginal` convenience and reconstruction bundle are
-not supplied by this backend yet.
+the `linear_log_marginal` convenience remains serial-only. Distributed
+reconstruction outputs are available in stage 4d below.
 
 - `cells()` is the number of **owned** real cells, in x/y/z order, with no FFT
   padding. `layout()` supplies global cells and local x start/width. The latent
@@ -323,7 +323,8 @@ a strong-scaling result. No full fields or mode arrays are gathered by the model
 Small replicated metadata and repeated safety reductions still have overhead.
 
 Distributed 1LPT and 2LPT are available in stages 4b–4c below. Next:
-nonlinear inference validation, checkpoint/restart and reconstruction outputs. Survey likelihoods remain deferred
+nonlinear inference validation and checkpoint/restart. Reconstruction outputs are
+available in stage 4d below. Survey likelihoods remain deferred
 until after the prioritized MPI work. MPI BAO compatibility and PM/COLA are not
 provided by this linear backend. The original single-rank safety checks remain.
 
@@ -377,7 +378,7 @@ successful matching scatter.
 
 `map`, `sample`, `mock`, `predict`, `pullback`, `white_noise` and the frozen
 linear field metric are supported. There is no exact nonlinear conditional, and
-this backend does not yet provide the reconstruction-output bundle. A nonlinear
+reconstruction outputs are available in stage 4d below. A nonlinear
 MAP is a local optimum; the short joint-HMC regression checks execution, not
 posterior calibration.
 
@@ -400,9 +401,9 @@ for the new routing/particle loops.
 Validation covers serial compatibility, actual 1/2/4-rank predictions/gradients,
 large displacements, independent sparse scatter/reverse dot products, nonlinear
 MAP, joint-HMC synchronization, sanitizers and MPI/OpenMP/manual initialization.
-Distributed 2LPT is available in stage 4c below. Checkpoint/restart,
-reconstruction outputs, measured workspace/communication optimization and
-nonlinear scientific validation remain open.
+Distributed 2LPT and reconstruction outputs are available in stages 4c–4d below.
+Checkpoint/restart, measured workspace/communication optimization and nonlinear
+scientific validation remain open.
 Survey likelihoods remain deferred until after the prioritized MPI work.
 
 ## Distributed 2LPT (stage 4c, 12 November 2026)
@@ -454,6 +455,72 @@ widths 4 and 8 receive additional field-adjoint checks alongside the main width-
 cases. Fixed cutoffs and toy meshes do not establish production convergence or
 nonlinear posterior calibration.
 
-Checkpoint/restart, distributed reconstruction outputs, scientific nonlinear
-validation and workspace/communication profiling remain next. Survey likelihoods
+Distributed reconstruction outputs are available in stage 4d below.
+Checkpoint/restart, scientific nonlinear validation and workspace/communication
+profiling remain next. Survey likelihoods
 are still deferred until after the prioritized MPI work; #52 is not complete.
+
+## Distributed reconstruction outputs (stage 4d, 13 November 2026)
+
+`DistributedLinearModel` and `DistributedLPTModel` now provide the same
+`reconstruct(white,parameters,workspace,velocity_factor)` bundle as the serial
+model. Each call is collective and returns **owning local arrays**:
+
+- Initial linear density contrast on the initial mesh.
+- Unbiased, real-space matter contrast on the initial mesh, restricted to the
+  model's retained mode band (max of initial/likelihood cutoffs). Linear matter
+  equals the initial density. LPT matter uses unit particle weights and real-space
+  positions, with the same smooth assignment/deconvolution as the forward model.
+- Three displacement samples at Lagrangian q, in **box units**; multiply by L for
+  physical comoving lengths. They include Psi1 plus Psi2 where applicable, without
+  the tracer's redshift-space displacement.
+- Three velocity samples at Lagrangian q: `velocity_factor*Psi1` for linear/1LPT,
+  or `velocity_factor*(Psi1+2 Psi2)` for EdS 2LPT. Supply `a H f L` for peculiar
+  velocity units compatible with H and L. This conversion is explicit and separate
+  from the fixed RSD growth rate configured on the forward model.
+- Locally owned observed tracer modes, retaining the configured bias, RSD and
+  Fourier response. A zero response suppresses these modes without suppressing
+  the physical density/displacement/velocity products.
+
+Use `model.layout()` for the owned x start/width and global mesh. All real output
+vectors have `model.cells()` entries in x/y/z order; there is no FFT padding or
+all-gather. Matter is an Eulerian mesh field; displacements and velocities are
+Lagrangian samples, **not** volume- or mass-weighted Eulerian velocity meshes.
+Bias, noise, RSD and observation response do not enter the physical outputs;
+initial-spectrum parameters, the supplied velocity conversion and physical
+LPT order still do.
+
+```cpp
+auto work = model.workspace();
+auto products = model.reconstruct(local_white, parameters, work, a * H * f * L);
+// products.initial_density, matter_density, displacement[3], velocity[3], tracer
+```
+
+All ranks must call this in the same order with the same scalar parameters and
+finite velocity conversion. Per-rank conversion mismatches and nonfinite outputs
+fail collectively. The method reuses workspace scratch and, for LPT, performs an
+additional unbiased real-space deposition; it invalidates the previous pullback
+cache. Call `predict` again before `pullback`. A new posterior evaluation already
+performs that fresh prediction. Returned arrays remain owned by the caller.
+
+For fixed-parameter sampling, `sample(...,false)` returns a local white field in
+`chain.last`, so it may be passed directly to `reconstruct`. For joint sampling,
+`chain.last` also contains the replicated scalar block: split its first
+`model.cells()` entries from the parameter tail before reconstructing. A field sink
+may reconstruct samples using a separate workspace created outside worker threads;
+all ranks must participate before root-only printing or file output.
+
+The MPI example reconstructs its final field in linear/`1lpt`/`2lpt` mode and prints
+globally reduced density and velocity RMS summaries. Its velocity conversion of 1
+is explicitly a numerical toy. The focused test target is:
+
+```sh
+make -C FML/FieldLevel/tests USE_MPI=true framework-reconstruction-mpi
+```
+
+The bundle allocates eight owning real fields plus local tracer modes, in addition
+to the existing workspace and reconstruction temporaries. Output selection,
+recomputation-memory policies and parallel scientific-file export are not added
+here. The method does not run automatically inside force/posterior evaluations.
+Checkpoint/restart remains the next engineering milestone; nonlinear scientific
+validation remains open and survey likelihoods remain deferred.

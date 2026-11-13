@@ -40,9 +40,9 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                             -z * std::exp(2.3 * config_.kernel_width * (std::sqrt(r) - 1)) *
                                 (2 + 2.3 * config_.kernel_width * std::sqrt(r));
         }
-        double assignment_factor(size_t i) const {
+        double assignment_factor(size_t i, bool observed = true) const {
             const auto & m = modes()[i];
-            double f = linear_.response_[i];
+            double f = observed ? linear_.response_[i] : 1.;
             for (int c = 0; c < 3; ++c)
                 f /= kernel_ft_[std::abs(m.n[c])];
             return f;
@@ -171,6 +171,31 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 result[q++] = grid.get_real_from_index(i);
             return result;
         }
+        Field second_order_source(const Workspace & w) const {
+            Field source(cells());
+            for (size_t q = 0; q < cells(); ++q) {
+                double tt = 0;
+                for (int a = 0; a < 6; ++a)
+                    tt += (a < 3 ? 1 : 2) * w.matter_tidal[a][q] * w.matter_tidal[a][q];
+                source[q] = .5 * (w.matter_delta[q] * w.matter_delta[q] - tt);
+            }
+            return source;
+        }
+        void deposit(Workspace & w, Modes & result, bool observed) const {
+            const double fill = std::pow(double(config_.density_mesh), 3) / layout().global_cells;
+            w.assignment.deposit(w.density, [&](auto add) {
+                for (size_t q = 0; q < cells(); ++q)
+                    stencil(q, w, [&](auto node, double weight, double, double, double) {
+                        add(node, fill * w.weight[q] * weight);
+                    });
+            });
+            w.density.fftw_r2c();
+            w.down.apply(w.density, w.base.grid);
+            result.resize(modes().size());
+            for (size_t i = 0; i < modes().size(); ++i)
+                result[i] = assignment_factor(i, observed) *
+                            Complex(w.base.grid.get_fourier_from_index(modes()[i].fourier_index));
+        }
         template <class Kernel>
         void add_adjoint(const Field & values, Workspace & w, Modes & result, Kernel kernel) const {
             linear_.to_grid(values, w.base);
@@ -296,13 +321,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 w.matter_delta = field(dk, w, [](const auto &) { return Complex(1); });
                 for (int a = 0; a < 6; ++a)
                     w.matter_tidal[a] = field(dk, w, [&](const auto & m) { return Complex(tidal_kernel(m, a)); });
-                Field source(cells());
-                for (size_t q = 0; q < cells(); ++q) {
-                    double tt = 0;
-                    for (int a = 0; a < 6; ++a)
-                        tt += (a < 3 ? 1 : 2) * w.matter_tidal[a][q] * w.matter_tidal[a][q];
-                    source[q] = .5 * (w.matter_delta[q] * w.matter_delta[q] - tt);
-                }
+                const auto source = second_order_source(w);
                 // EdS Psi2 = (3/7) D[S2]; RSD adds 2 f Psi2_z.
                 for (int c = 0; c < 3; ++c) {
                     const auto psi2 = gradient_full(source, w, c, +1);
@@ -339,19 +358,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             }
             if (maximum(finite ? 0 : 1) != 0)
                 throw UnrepresentableState("[Distributed LPT] Unrepresentable particle state");
-            const double fill = std::pow(double(config_.density_mesh), 3) / layout().global_cells;
-            w.assignment.deposit(w.density, [&](auto add) {
-                for (size_t q = 0; q < cells(); ++q)
-                    stencil(q, w, [&](auto node, double weight, double, double, double) {
-                        add(node, fill * w.weight[q] * weight);
-                    });
-            });
-            w.density.fftw_r2c();
-            w.down.apply(w.density, w.base.grid);
-            w.prediction.resize(modes().size());
-            for (size_t i = 0; i < modes().size(); ++i)
-                w.prediction[i] =
-                    assignment_factor(i) * Complex(w.base.grid.get_fourier_from_index(modes()[i].fourier_index));
+            deposit(w, w.prediction, true);
             w.parameters = p;
             w.valid = true;
             return w.prediction;
@@ -450,6 +457,56 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             check(w);
             require(in_support(p), "[Distributed LPT] Invalid metric parameters");
             return linear_.apply_field_metric(s, base_parameters(p), w.base, exponent);
+        }
+        // Physical real-space outputs, independent of tracer bias, observation response and RSD.
+        // velocity_factor=a H f L; Lagrangian displacement samples are in box units.
+        Model::Reconstruction
+        reconstruct(const Field & s, const std::vector<double> & p, Workspace & w, double velocity_factor) const {
+            require(std::isfinite(velocity_factor), "[Distributed LPT] Invalid velocity factor");
+            controls({velocity_factor});
+            Model::Reconstruction result;
+            result.tracer = predict(s, p, w);
+            w.valid = false; // Subsequent scratch/deposition uses real-space, unbiased particles.
+            Modes dk(modes().size());
+            for (size_t i = 0; i < dk.size(); ++i)
+                dk[i] = std::sqrt(w.base.power[i].value * layout().global_cells / volume()) * w.base.white_modes[i];
+            result.initial_density = config_.evolution == Evolution::LPT2 ?
+                                         w.matter_delta :
+                                         field(dk, w, [](const auto &) { return Complex(1); });
+            Field source;
+            if (config_.evolution == Evolution::LPT2)
+                source = second_order_source(w);
+            bool finite = true;
+            for (auto z : result.tracer)
+                finite &= std::isfinite(z.real()) && std::isfinite(z.imag());
+            for (double x : result.initial_density)
+                finite &= std::isfinite(x);
+            for (int c = 0; c < 3; ++c) {
+                const auto first = field(dk, w, [&](const auto & m) { return displacement_kernel(m, c); });
+                Field second;
+                if (config_.evolution == Evolution::LPT2)
+                    second = gradient_full(source, w, c, +1);
+                result.displacement[c].resize(cells());
+                result.velocity[c].resize(cells());
+                for (size_t q = 0; q < cells(); ++q) {
+                    const double psi2 = second.empty() ? 0 : 3. / 7 * second[q];
+                    result.displacement[c][q] = first[q] + psi2;
+                    result.velocity[c][q] = velocity_factor * (first[q] + 2 * psi2);
+                    finite &= std::isfinite(result.displacement[c][q]) && std::isfinite(result.velocity[c][q]);
+                }
+                w.psi[c] = result.displacement[c];
+            }
+            if (maximum(finite ? 0 : 1) != 0)
+                throw UnrepresentableState("[Distributed LPT] Unrepresentable reconstruction");
+            w.weight.assign(cells(), 1.);
+            Modes matter;
+            deposit(w, matter, false);
+            result.matter_density = linear_.from_modes(matter, w.base);
+            for (double x : result.matter_density)
+                finite &= std::isfinite(x);
+            if (maximum(finite ? 0 : 1) != 0)
+                throw UnrepresentableState("[Distributed LPT] Unrepresentable matter reconstruction");
+            return result;
         }
         Modes mock(const Field & s, const std::vector<double> & p, std::uint64_t seed, Workspace & w) const {
             auto result = predict(s, p, w);
