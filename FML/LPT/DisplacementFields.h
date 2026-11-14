@@ -10,6 +10,8 @@
 #include <numeric>
 #include <string>
 #include <type_traits>
+
+#include <FML/FFTWGrid/CopyFourierModes.h>
 #include <vector>
 
 #include <FML/FFTWGrid/FFTWGrid.h>
@@ -36,6 +38,7 @@ namespace FML {
 
             template <int N>
             using FFTWGrid = FML::GRID::FFTWGrid<N>;
+            using FML::GRID::make_grid_like;
             template <class T>
             using MPIParticles = FML::PARTICLE::MPIParticles<T>;
 
@@ -57,68 +60,68 @@ namespace FML {
                 }
             } // namespace detail
 
-            template <int N>
-            void from_LPT_potential_to_displacement_vector(const FFTWGrid<N> & phi_fourier,
-                                                           std::array<FFTWGrid<N>, N> & psi_real,
+            template <int N, template <int> class Grid = FFTWGrid>
+            void from_LPT_potential_to_displacement_vector(const Grid<N> & phi_fourier,
+                                                           std::array<Grid<N>, N> & psi_real,
                                                            double DoverDini = 1.0);
 
-            template <int N>
-            void compute_1LPT_potential_fourier(const FFTWGrid<N> & delta_fourier, FFTWGrid<N> & phi_1LPT_fourier);
+            template <int N, template <int> class Grid = FFTWGrid>
+            void compute_1LPT_potential_fourier(const Grid<N> & delta_fourier, Grid<N> & phi_1LPT_fourier);
 
             /// Optional Padding uses a >=3N/2 work mesh for the quadratic source.
             /// See LPT/README.md for Nyquist conventions, memory cost and examples.
-            template <int N>
-            void compute_2LPT_potential_fourier(const FFTWGrid<N> & delta_fourier,
-                                                FFTWGrid<N> & phi_2LPT_fourier,
+            template <int N, template <int> class Grid = FFTWGrid>
+            void compute_2LPT_potential_fourier(const Grid<N> & delta_fourier,
+                                                Grid<N> & phi_2LPT_fourier,
                                                 Dealiasing dealiasing = Dealiasing::None);
 
             /// Optional Padding uses a >=2N work mesh for all nonlinear sources,
             /// retaining the full intermediate second-order bandwidth until cropping.
             // Slightly different syntax here as we have to compute phi_1LPT and phi_2LPT to compute 3LPT so do it all
-            template <int N>
-            void compute_3LPT_potential_fourier(const FFTWGrid<N> & delta_fourier,
-                                                FFTWGrid<N> & phi_1LPT_fourier,
-                                                FFTWGrid<N> & phi_2LPT_fourier,
-                                                FFTWGrid<N> & phi_3LPT_a_fourier,
-                                                FFTWGrid<N> & phi_3LPT_b_fourier,
-                                                std::array<FFTWGrid<N>, N> & phi_3LPT_Avec_fourier,
+            template <int N, template <int> class Grid = FFTWGrid>
+            void compute_3LPT_potential_fourier(const Grid<N> & delta_fourier,
+                                                Grid<N> & phi_1LPT_fourier,
+                                                Grid<N> & phi_2LPT_fourier,
+                                                Grid<N> & phi_3LPT_a_fourier,
+                                                Grid<N> & phi_3LPT_b_fourier,
+                                                std::array<Grid<N>, N> & phi_3LPT_Avec_fourier,
                                                 bool ignore_curl_term,
                                                 Dealiasing dealiasing = Dealiasing::None);
 
             // Augmented LPT potential (Kitaura & Hess 2013, https://arxiv.org/abs/1212.3514)
-            template <int N>
-            void compute_ALPT_potential_fourier(const FFTWGrid<N> & delta_fourier,
-                                                const FFTWGrid<N> & phi_2LPT_fourier,
-                                                FFTWGrid<N> & phi_ALPT_fourier,
+            template <int N, template <int> class Grid = FFTWGrid>
+            void compute_ALPT_potential_fourier(const Grid<N> & delta_fourier,
+                                                const Grid<N> & phi_2LPT_fourier,
+                                                Grid<N> & phi_ALPT_fourier,
                                                 double smoothing_scale,
                                                 std::string smoothing_method,
                                                 double DoverDini_1LPT = 1.0,
                                                 double DoverDini_2LPT = 1.0);
 
             // Spherical-collapse approximation potential (Bernardeau 1994, https://arxiv.org/abs/astro-ph/9311066)
-            template <int N>
-            void compute_spherical_collapse_potential(const FFTWGrid<N> & delta_fourier,
-                                                      FFTWGrid<N> & phi_sc_fourier,
+            template <int N, template <int> class Grid = FFTWGrid>
+            void compute_spherical_collapse_potential(const Grid<N> & delta_fourier,
+                                                      Grid<N> & phi_sc_fourier,
                                                       double DoverDini = 1.0);
 
-            template <int N>
+            template <int N, template <int> class Grid = FFTWGrid>
             void from_LPT_potential_to_displacement_vector_scaledependent(
-                const FFTWGrid<N> & phi_fourier,
-                std::array<FFTWGrid<N>, N> & psi_real,
+                const Grid<N> & phi_fourier,
+                std::array<Grid<N>, N> & psi_real,
                 std::function<double(double)> growth_function_ratio);
 
             // Computes it all for 3LPT as we need lower order results and return Psi and dPsidt
-            template <int N>
-            void compute_3LPT_displacement_field(const FFTWGrid<N> & delta_fourier,
-                                                 std::array<FFTWGrid<N>, N> & Psi,
-                                                 std::array<FFTWGrid<N>, N> & dPsidt,
+            template <int N, template <int> class Grid = FFTWGrid>
+            void compute_3LPT_displacement_field(const Grid<N> & delta_fourier,
+                                                 std::array<Grid<N>, N> & Psi,
+                                                 std::array<Grid<N>, N> & dPsidt,
                                                  double dlogDdt,
                                                  bool ignore_curl_term,
                                                  Dealiasing dealiasing = Dealiasing::None);
 
-            template <int N, class T>
+            template <int N, class T, template <int> class Grid = FFTWGrid>
             void assign_displacement_fields_scaledependent(MPIParticles<T> & part,
-                                                           FFTWGrid<N> & LPT_potential_fourier,
+                                                           Grid<N> & LPT_potential_fourier,
                                                            std::function<double(double)> DoverDini_of_k,
                                                            std::string LPT_potential_order);
 
@@ -134,10 +137,10 @@ namespace FML {
             /// @param[in] DoverDini_of_k The function D(k,z)/D(k,zini) as function of k.
             ///
             //=================================================================================
-            template <int N>
+            template <int N, template <int> class Grid>
             void
-            from_LPT_potential_to_displacement_vector_scaledependent(const FFTWGrid<N> & phi,
-                                                                     std::array<FFTWGrid<N>, N> & psi,
+            from_LPT_potential_to_displacement_vector_scaledependent(const Grid<N> & phi,
+                                                                     std::array<Grid<N>, N> & psi,
                                                                      std::function<double(double)> DoverDini_of_k) {
 
                 // We require phi to exist and if psi exists it must have the same size as phi
@@ -153,12 +156,12 @@ namespace FML {
                 auto nleft = phi.get_n_extra_slices_left();
                 auto nright = phi.get_n_extra_slices_right();
                 auto Nmesh = phi.get_nmesh();
-                auto Local_x_start = phi.get_local_x_start();
+                const bool has_dc_mode = FML::GRID::has_dc_mode(phi);
 
                 // Create the output grids if they don't exist already
                 for (int idim = 0; idim < N; idim++) {
                     if (psi[idim].get_nmesh() == 0) {
-                        psi[idim] = FFTWGrid<N>(Nmesh, nleft, nright);
+                        psi[idim] = make_grid_like(phi, Nmesh, nleft, nright);
                         psi[idim].add_memory_label(
                             "FFTWGrid::from_LPT_potential_to_displacement_vector_scaledependent::Psi_" +
                             std::to_string(idim));
@@ -172,12 +175,12 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (FML::IndexIntType irow = 0; irow < phi.get_local_nrows(); irow++) {
+                for (FML::IndexIntType irow = 0; irow < phi.get_local_nrows_fourier(); irow++) {
                     [[maybe_unused]] double kmag;
                     [[maybe_unused]] std::array<double, N> kvec;
                     std::complex<FML::GRID::FloatType> I(0, 1);
                     for (auto && fourier_index : phi.get_fourier_range_of_rows(irow, irow + 1)) {
-                        if (Local_x_start == 0 and fourier_index == 0)
+                        if (has_dc_mode and fourier_index == 0)
                             continue; // DC mode (k=0)
 
                         // Get wavevector and magnitude
@@ -195,7 +198,7 @@ namespace FML {
                 }
 
                 // Deal with DC mode
-                if (Local_x_start == 0)
+                if (has_dc_mode)
                     for (int idim = 0; idim < N; idim++)
                         psi[idim].set_fourier_from_index(0, 0.0);
 
@@ -220,9 +223,9 @@ namespace FML {
             /// at which phi is at
             ///
             //=================================================================================
-            template <int N>
-            void from_LPT_potential_to_displacement_vector(const FFTWGrid<N> & phi,
-                                                           std::array<FFTWGrid<N>, N> & psi,
+            template <int N, template <int> class Grid>
+            void from_LPT_potential_to_displacement_vector(const Grid<N> & phi,
+                                                           std::array<Grid<N>, N> & psi,
                                                            double DoverDini) {
 
                 // We require phi to exist and if psi exists it must have the same size as phi
@@ -237,12 +240,12 @@ namespace FML {
                 auto nleft = phi.get_n_extra_slices_left();
                 auto nright = phi.get_n_extra_slices_right();
                 auto Nmesh = phi.get_nmesh();
-                auto Local_x_start = phi.get_local_x_start();
+                const bool has_dc_mode = FML::GRID::has_dc_mode(phi);
 
                 // Create the output grids if they don't exist already
                 for (int idim = 0; idim < N; idim++) {
                     if (psi[idim].get_nmesh() == 0) {
-                        psi[idim] = FFTWGrid<N>(Nmesh, nleft, nright);
+                        psi[idim] = make_grid_like(phi, Nmesh, nleft, nright);
                         psi[idim].add_memory_label("FFTWGrid::from_LPT_potential_to_displacement_vector::Psi_" +
                                                    std::to_string(idim));
                         psi[idim].set_grid_status_real(false);
@@ -252,12 +255,12 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (FML::IndexIntType irow = 0; irow < psi[0].get_local_nrows(); irow++) {
+                for (FML::IndexIntType irow = 0; irow < psi[0].get_local_nrows_fourier(); irow++) {
                     [[maybe_unused]] double kmag;
                     [[maybe_unused]] std::array<double, N> kvec;
                     std::complex<FML::GRID::FloatType> I(0, 1);
                     for (auto && fourier_index : psi[0].get_fourier_range_of_rows(irow, irow + 1)) {
-                        if (Local_x_start == 0 and fourier_index == 0)
+                        if (has_dc_mode and fourier_index == 0)
                             continue; // DC mode (k=0)
 
                         // Get wavevector and magnitude
@@ -274,7 +277,7 @@ namespace FML {
                 }
 
                 // Deal with DC mode
-                if (Local_x_start == 0)
+                if (has_dc_mode)
                     for (int idim = 0; idim < N; idim++)
                         psi[idim].set_fourier_from_index(0, 0.0);
 
@@ -298,8 +301,8 @@ namespace FML {
             /// @param[out] phi_1LPT_fourier The LPT potential in fourier space
             ///
             //=================================================================================
-            template <int N>
-            void compute_1LPT_potential_fourier(const FFTWGrid<N> & delta_fourier, FFTWGrid<N> & phi_1LPT_fourier) {
+            template <int N, template <int> class Grid>
+            void compute_1LPT_potential_fourier(const Grid<N> & delta_fourier, Grid<N> & phi_1LPT_fourier) {
 
                 // We require delta to exist and if phi_1LPT is allocated it must have the same size as delta
                 assert_mpi(delta_fourier.get_nmesh() > 0,
@@ -315,11 +318,11 @@ namespace FML {
                 auto nleft = delta_fourier.get_n_extra_slices_left();
                 auto nright = delta_fourier.get_n_extra_slices_right();
                 auto Nmesh = delta_fourier.get_nmesh();
-                auto Local_x_start = delta_fourier.get_local_x_start();
+                const bool has_dc_mode = FML::GRID::has_dc_mode(delta_fourier);
 
                 // Create 1LPT grid
                 if (Nmesh_phi == 0) {
-                    phi_1LPT_fourier = FFTWGrid<N>(Nmesh, nleft, nright);
+                    phi_1LPT_fourier = make_grid_like(delta_fourier, Nmesh, nleft, nright);
                     phi_1LPT_fourier.add_memory_label("FFTWGrid::compute_1LPT_potential_fourier::phi_1LPT_fourier");
                     phi_1LPT_fourier.set_grid_status_real(false);
                 }
@@ -328,11 +331,11 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (FML::IndexIntType irow = 0; irow < phi_1LPT_fourier.get_local_nrows(); irow++) {
+                for (FML::IndexIntType irow = 0; irow < phi_1LPT_fourier.get_local_nrows_fourier(); irow++) {
                     [[maybe_unused]] double kmag2;
                     [[maybe_unused]] std::array<double, N> kvec;
                     for (auto && fourier_index : phi_1LPT_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
-                        if (Local_x_start == 0 and fourier_index == 0)
+                        if (has_dc_mode and fourier_index == 0)
                             continue; // DC mode (k=0)
 
                         // Get wavevector and magnitude
@@ -345,7 +348,7 @@ namespace FML {
                 }
 
                 // Deal with DC mode
-                if (Local_x_start == 0)
+                if (has_dc_mode)
                     phi_1LPT_fourier.set_fourier_from_index(0, 0.0);
             }
 
@@ -359,12 +362,12 @@ namespace FML {
             /// @param[out] phi_2LPT The LPT potential in fourier space
             ///
             //=================================================================================
-            template <int N>
+            template <int N, template <int> class Grid>
             void
-            compute_2LPT_potential_fourier(const FFTWGrid<N> & delta, FFTWGrid<N> & phi_2LPT, Dealiasing dealiasing) {
+            compute_2LPT_potential_fourier(const Grid<N> & delta, Grid<N> & phi_2LPT, Dealiasing dealiasing) {
                 if (dealiasing == Dealiasing::Padding) {
                     auto padded = FML::GRID::resize_fourier_grid(delta, detail::padded_lpt_mesh(delta.get_nmesh(), 2));
-                    FFTWGrid<N> potential;
+                    Grid<N> potential;
                     compute_2LPT_potential_fourier(padded, potential);
                     phi_2LPT = FML::GRID::resize_fourier_grid(potential,
                                                               delta.get_nmesh(),
@@ -388,12 +391,12 @@ namespace FML {
                 auto nleft = delta.get_n_extra_slices_left();
                 auto nright = delta.get_n_extra_slices_right();
                 auto Nmesh = delta.get_nmesh();
-                auto Local_x_start = delta.get_local_x_start();
+                const bool has_dc_mode = FML::GRID::has_dc_mode(delta);
 
                 // Create grids
-                FFTWGrid<N> phi_1LPT_ii[N];
+                Grid<N> phi_1LPT_ii[N];
                 for (int i = 0; i < N; i++) {
-                    phi_1LPT_ii[i] = FFTWGrid<N>(Nmesh, nleft, nright);
+                    phi_1LPT_ii[i] = make_grid_like(delta, Nmesh, nleft, nright);
                     phi_1LPT_ii[i].add_memory_label("FFTWGrid::compute_2LPT_potential_fourier::phi_1LPT_ii_" +
                                                     std::to_string(i));
                     phi_1LPT_ii[i].set_grid_status_real(false);
@@ -408,11 +411,11 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (FML::IndexIntType irow = 0; irow < phi_1LPT_ii[0].get_local_nrows(); irow++) {
+                for (FML::IndexIntType irow = 0; irow < phi_1LPT_ii[0].get_local_nrows_fourier(); irow++) {
                     [[maybe_unused]] double kmag2;
                     [[maybe_unused]] std::array<double, N> kvec;
                     for (auto && fourier_index : phi_1LPT_ii[0].get_fourier_range_of_rows(irow, irow + 1)) {
-                        if (Local_x_start == 0 and fourier_index == 0)
+                        if (has_dc_mode and fourier_index == 0)
                             continue; // DC mode (k=0)
 
                         // Get wavevector and magnitude
@@ -430,7 +433,7 @@ namespace FML {
                 }
 
                 // Deal with DC mode
-                if (Local_x_start == 0)
+                if (has_dc_mode)
                     for (int idim = 0; idim < N; idim++)
                         phi_1LPT_ii[idim].set_fourier_from_index(0, 0.0);
 
@@ -445,7 +448,7 @@ namespace FML {
                 }
 
                 // Crete output grid
-                phi_2LPT = FFTWGrid<N>(Nmesh, nleft, nright);
+                phi_2LPT = make_grid_like(delta, Nmesh, nleft, nright);
                 phi_2LPT.add_memory_label("FFTWGrid::compute_2LPT_potential_fourier::phi_2LPT_fourier");
                 phi_2LPT.set_grid_status_real(true);
 
@@ -478,9 +481,9 @@ namespace FML {
 
                 // Create grids
                 const int num_pairs = (N * (N - 1)) / 2;
-                FFTWGrid<N> phi_1LPT_ij[num_pairs];
+                Grid<N> phi_1LPT_ij[num_pairs];
                 for (int i = 0; i < num_pairs; i++) {
-                    phi_1LPT_ij[i] = FFTWGrid<N>(Nmesh, nleft, nright);
+                    phi_1LPT_ij[i] = make_grid_like(delta, Nmesh, nleft, nright);
                     phi_1LPT_ij[i].add_memory_label("FFTWGrid::compute_2LPT_potential_fourier::phi_1LPT_ij_" +
                                                     std::to_string(i));
                     phi_1LPT_ij[i].set_grid_status_real(false);
@@ -495,11 +498,11 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (FML::IndexIntType irow = 0; irow < phi_1LPT_ij[0].get_local_nrows(); irow++) {
+                for (FML::IndexIntType irow = 0; irow < phi_1LPT_ij[0].get_local_nrows_fourier(); irow++) {
                     [[maybe_unused]] double kmag2;
                     [[maybe_unused]] std::array<double, N> kvec;
                     for (auto && fourier_index : phi_1LPT_ij[0].get_fourier_range_of_rows(irow, irow + 1)) {
-                        if (Local_x_start == 0 and fourier_index == 0)
+                        if (has_dc_mode and fourier_index == 0)
                             continue; // DC mode (k=0)
 
                         // Get wavevector and magnitude
@@ -521,7 +524,7 @@ namespace FML {
                 }
 
                 // Deal with DC mode
-                if (Local_x_start == 0)
+                if (has_dc_mode)
                     for (auto & g : phi_1LPT_ij)
                         g.set_fourier_from_index(0, 0.0);
 
@@ -578,11 +581,11 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (FML::IndexIntType irow = 0; irow < phi_2LPT.get_local_nrows(); irow++) {
+                for (FML::IndexIntType irow = 0; irow < phi_2LPT.get_local_nrows_fourier(); irow++) {
                     [[maybe_unused]] double kmag2;
                     [[maybe_unused]] std::array<double, N> kvec;
                     for (auto && fourier_index : phi_2LPT.get_fourier_range_of_rows(irow, irow + 1)) {
-                        if (Local_x_start == 0 and fourier_index == 0)
+                        if (has_dc_mode and fourier_index == 0)
                             continue; // DC mode (k=0)
 
                         // Get wavevector and magnitude
@@ -597,7 +600,7 @@ namespace FML {
                 }
 
                 // Deal with DC mode
-                if (Local_x_start == 0)
+                if (has_dc_mode)
                     phi_2LPT.set_fourier_from_index(0, 0.0);
             }
 
@@ -623,10 +626,10 @@ namespace FML {
             /// @param[in] ignore_curl_term Don't include the transverse (curl) 3LPT term
             ///
             //===========================================================================================
-            template <int N>
-            void compute_3LPT_displacement_field(const FFTWGrid<N> & delta_fourier,
-                                                 std::array<FFTWGrid<N>, N> & Psi,
-                                                 std::array<FFTWGrid<N>, N> & dPsidt,
+            template <int N, template <int> class Grid>
+            void compute_3LPT_displacement_field(const Grid<N> & delta_fourier,
+                                                 std::array<Grid<N>, N> & Psi,
+                                                 std::array<Grid<N>, N> & dPsidt,
                                                  double dlogDdt,
                                                  bool ignore_curl_term,
                                                  Dealiasing dealiasing) {
@@ -638,13 +641,13 @@ namespace FML {
                 auto nleft = delta_fourier.get_n_extra_slices_left();
                 auto nright = delta_fourier.get_n_extra_slices_right();
                 auto Nmesh = delta_fourier.get_nmesh();
-                auto Local_x_start = delta_fourier.get_local_x_start();
+                const bool has_dc_mode = FML::GRID::has_dc_mode(delta_fourier);
 
-                std::array<FFTWGrid<N>, N> phi_3LPT_Avec_fourier;
-                FFTWGrid<N> phi_1LPT_fourier;
-                FFTWGrid<N> phi_2LPT_fourier;
-                FFTWGrid<N> phi_3LPT_a_fourier;
-                FFTWGrid<N> phi_3LPT_b_fourier;
+                std::array<Grid<N>, N> phi_3LPT_Avec_fourier;
+                Grid<N> phi_1LPT_fourier;
+                Grid<N> phi_2LPT_fourier;
+                Grid<N> phi_3LPT_a_fourier;
+                Grid<N> phi_3LPT_b_fourier;
                 compute_3LPT_potential_fourier<N>(delta_fourier,
                                                   phi_1LPT_fourier,
                                                   phi_2LPT_fourier,
@@ -656,10 +659,10 @@ namespace FML {
 
                 // Make the displacement field
                 for (int idim = 0; idim < N; idim++) {
-                    Psi[idim] = FFTWGrid<N>(Nmesh, nleft, nright);
+                    Psi[idim] = make_grid_like(delta_fourier, Nmesh, nleft, nright);
                     Psi[idim].add_memory_label("FFTWGrid::compute_1LPT_2LPT_3LPT_displacement_field::Psi" +
                                                std::to_string(idim));
-                    dPsidt[idim] = FFTWGrid<N>(Nmesh, nleft, nright);
+                    dPsidt[idim] = make_grid_like(delta_fourier, Nmesh, nleft, nright);
                     dPsidt[idim].add_memory_label("FFTWGrid::compute_1LPT_2LPT_3LPT_displacement_field::dPsidt" +
                                                   std::to_string(idim));
                     Psi[idim].set_grid_status_real(false);
@@ -674,12 +677,12 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (FML::IndexIntType irow = 0; irow < phi_1LPT_fourier.get_local_nrows(); irow++) {
+                for (FML::IndexIntType irow = 0; irow < phi_1LPT_fourier.get_local_nrows_fourier(); irow++) {
                     [[maybe_unused]] double kmag2;
                     [[maybe_unused]] std::array<double, N> kvec;
                     const ComplexType I(0, 1);
                     for (auto && fourier_index : phi_1LPT_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
-                        if (Local_x_start == 0 and fourier_index == 0)
+                        if (has_dc_mode and fourier_index == 0)
                             continue; // DC mode (k=0)
 
                         // Get wavevector and magnitude
@@ -731,7 +734,7 @@ namespace FML {
                 }
 
                 // Deal with DC mode
-                if (Local_x_start == 0) {
+                if (has_dc_mode) {
                     for (auto & g : Psi)
                         g.set_fourier_from_index(0, 0.0);
                     for (auto & g : dPsidt)
@@ -763,13 +766,13 @@ namespace FML {
             /// @param[in] ignore_curl_term Don't compute the vector potential
             ///
             //===========================================================================================
-            template <int N>
-            void compute_3LPT_potential_fourier(const FFTWGrid<N> & delta_fourier,
-                                                FFTWGrid<N> & phi_1LPT_fourier,
-                                                FFTWGrid<N> & phi_2LPT_fourier,
-                                                FFTWGrid<N> & phi_3LPT_a_fourier,
-                                                FFTWGrid<N> & phi_3LPT_b_fourier,
-                                                std::array<FFTWGrid<N>, N> & phi_3LPT_Avec_fourier,
+            template <int N, template <int> class Grid>
+            void compute_3LPT_potential_fourier(const Grid<N> & delta_fourier,
+                                                Grid<N> & phi_1LPT_fourier,
+                                                Grid<N> & phi_2LPT_fourier,
+                                                Grid<N> & phi_3LPT_a_fourier,
+                                                Grid<N> & phi_3LPT_b_fourier,
+                                                std::array<Grid<N>, N> & phi_3LPT_Avec_fourier,
                                                 bool ignore_curl_term,
                                                 Dealiasing dealiasing) {
 
@@ -780,17 +783,32 @@ namespace FML {
                     // products are complete. Cropping phi2 early loses real UV couplings.
                     auto padded = FML::GRID::resize_fourier_grid(delta_fourier,
                                                                  detail::padded_lpt_mesh(delta_fourier.get_nmesh(), 3));
-                    FFTWGrid<N> p1, p2, pa, pb;
-                    std::array<FFTWGrid<N>, N> avec;
+                    Grid<N> p1, p2, pa, pb;
+                    std::array<Grid<N>, N> avec;
                     compute_3LPT_potential_fourier<N>(padded, p1, p2, pa, pb, avec, ignore_curl_term);
-                    FML::GRID::FourierResamplingPlan<N> crop_plan(p1, delta_fourier);
-                    auto crop = [&](FFTWGrid<N> & field) {
-                        FFTWGrid<N> result(delta_fourier.get_nmesh(),
+                    // (FFTWGrid: one resampling plan for all the fields)
+                    [[maybe_unused]] auto crop_plan = [&]() {
+                        if constexpr (std::is_same_v<Grid<N>, FFTWGrid<N>>)
+                            return FML::GRID::FourierResamplingPlan<N>(p1, delta_fourier);
+                        else
+                            return 0;
+                    }();
+                    auto crop = [&](Grid<N> & field) {
+                        if constexpr (std::is_same_v<Grid<N>, FFTWGrid<N>>) {
+                            Grid<N> result(delta_fourier.get_nmesh(),
                                            delta_fourier.get_n_extra_slices_left(),
                                            delta_fourier.get_n_extra_slices_right());
-                        crop_plan.apply(field, result);
-                        field.free();
-                        return result;
+                            crop_plan.apply(field, result);
+                            field.free();
+                            return result;
+                        } else {
+                            auto result = FML::GRID::resize_fourier_grid(field,
+                                                                         delta_fourier.get_nmesh(),
+                                                                         delta_fourier.get_n_extra_slices_left(),
+                                                                         delta_fourier.get_n_extra_slices_right());
+                            field.free();
+                            return result;
+                        }
                     };
                     phi_1LPT_fourier = crop(p1);
                     phi_2LPT_fourier = crop(p2);
@@ -816,7 +834,7 @@ namespace FML {
                 auto nleft = delta_fourier.get_n_extra_slices_left();
                 auto nright = delta_fourier.get_n_extra_slices_right();
                 auto Nmesh = delta_fourier.get_nmesh();
-                auto Local_x_start = delta_fourier.get_local_x_start();
+                const bool has_dc_mode = FML::GRID::has_dc_mode(delta_fourier);
 
                 // Store -k^2phi_1LPT
                 phi_1LPT_fourier = delta_fourier;
@@ -824,9 +842,9 @@ namespace FML {
 
                 // Compute all terms phi_1LPT_ij. These are absolutely needed
                 const int num_pairs = (N * (N + 1)) / 2;
-                FFTWGrid<N> phi_1LPT_ij[num_pairs];
+                Grid<N> phi_1LPT_ij[num_pairs];
                 for (int i = 0; i < num_pairs; i++) {
-                    phi_1LPT_ij[i] = FFTWGrid<N>(Nmesh, nleft, nright);
+                    phi_1LPT_ij[i] = make_grid_like(delta_fourier, Nmesh, nleft, nright);
                     phi_1LPT_ij[i].add_memory_label("FFTWGrid::compute_3LPT_potential_fourier::phi_1LPT_ij_" +
                                                     std::to_string(i));
                 }
@@ -836,11 +854,11 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (FML::IndexIntType irow = 0; irow < phi_1LPT_fourier.get_local_nrows(); irow++) {
+                for (FML::IndexIntType irow = 0; irow < phi_1LPT_fourier.get_local_nrows_fourier(); irow++) {
                     [[maybe_unused]] double kmag2;
                     [[maybe_unused]] std::array<double, N> kvec;
                     for (auto && fourier_index : phi_1LPT_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
-                        if (Local_x_start == 0 and fourier_index == 0)
+                        if (has_dc_mode and fourier_index == 0)
                             continue; // DC mode (k=0)
 
                         // Get wavevector and magnitude
@@ -865,7 +883,7 @@ namespace FML {
                 }
 
                 // Deal with DC mode
-                if (Local_x_start == 0)
+                if (has_dc_mode)
                     for (auto & g : phi_1LPT_ij)
                         g.set_fourier_from_index(0, 0.0);
 
@@ -874,7 +892,7 @@ namespace FML {
                     phi_1LPT_ij[i].fftw_c2r();
 
                 // Compute 2LPT
-                phi_2LPT_fourier = FFTWGrid<N>(Nmesh, nleft, nright);
+                phi_2LPT_fourier = make_grid_like(delta_fourier, Nmesh, nleft, nright);
                 phi_2LPT_fourier.add_memory_label("FFTWGrid::compute_3LPT_potential_fourier::phi_2LPT_fourier");
 
                 if (FML::ThisTask == 0)
@@ -906,7 +924,7 @@ namespace FML {
 
                 // The 3a source only needs the first-order Hessian. Form it before the second-order
                 // derivatives, then reuse a reduced batch of work grids for the mixed sources.
-                phi_3LPT_a_fourier = FFTWGrid<N>(Nmesh, nleft, nright);
+                phi_3LPT_a_fourier = make_grid_like(delta_fourier, Nmesh, nleft, nright);
                 phi_3LPT_a_fourier.add_memory_label("FFTWGrid::compute_3LPT_potential_fourier::phi_3LPT_a_fourier");
 #ifdef USE_OMP
 #pragma omp parallel for
@@ -935,12 +953,12 @@ namespace FML {
                     }
                 }
 
-                phi_3LPT_b_fourier = FFTWGrid<N>(Nmesh, nleft, nright);
+                phi_3LPT_b_fourier = make_grid_like(delta_fourier, Nmesh, nleft, nright);
                 phi_3LPT_b_fourier.add_memory_label("FFTWGrid::compute_3LPT_potential_fourier::phi_3LPT_b_fourier");
                 if (not ignore_curl_term) {
                     constexpr int num_Avec = N == 2 ? 1 : N;
                     for (int dimension = 0; dimension < num_Avec; dimension++) {
-                        phi_3LPT_Avec_fourier[dimension] = FFTWGrid<N>(Nmesh, nleft, nright);
+                        phi_3LPT_Avec_fourier[dimension] = make_grid_like(delta_fourier, Nmesh, nleft, nright);
                         phi_3LPT_Avec_fourier[dimension].add_memory_label(
                             "FFTWGrid::compute_3LPT_potential_fourier::phi_3LPT_Avec_fourier" +
                             std::to_string(dimension));
@@ -950,9 +968,9 @@ namespace FML {
                 // Keep just one batch of H2 derivatives: diagonals first, then off-diagonals.
                 // Cache the diagonal contributions in the output grids before reusing the work grids.
                 // This avoids retaining all six H2 meshes and avoids six separate Fourier/source passes.
-                std::array<FFTWGrid<N>, N> hessian2;
+                std::array<Grid<N>, N> hessian2;
                 for (int component = 0; component < N; component++) {
-                    hessian2[component] = FFTWGrid<N>(Nmesh, nleft, nright);
+                    hessian2[component] = make_grid_like(delta_fourier, Nmesh, nleft, nright);
                     hessian2[component].add_memory_label("FFTWGrid::compute_3LPT_potential_fourier::work_phi_2LPT_ij_" +
                                                          std::to_string(component));
                 }
@@ -964,11 +982,11 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                    for (FML::IndexIntType irow = 0; irow < phi_2LPT_fourier.get_local_nrows(); irow++) {
+                    for (FML::IndexIntType irow = 0; irow < phi_2LPT_fourier.get_local_nrows_fourier(); irow++) {
                         double kmag2;
                         std::array<double, N> kvec;
                         for (auto && index : phi_2LPT_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
-                            if (Local_x_start == 0 and index == 0) {
+                            if (has_dc_mode and index == 0) {
                                 for (int component = 0; component < count; component++)
                                     hessian2[component].set_fourier_from_index(index, 0.0);
                                 continue;
@@ -1097,11 +1115,11 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (FML::IndexIntType irow = 0; irow < phi_1LPT_fourier.get_local_nrows(); irow++) {
+                for (FML::IndexIntType irow = 0; irow < phi_1LPT_fourier.get_local_nrows_fourier(); irow++) {
                     [[maybe_unused]] double kmag2;
                     [[maybe_unused]] std::array<double, N> kvec;
                     for (auto && fourier_index : phi_1LPT_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
-                        if (Local_x_start == 0 and fourier_index == 0)
+                        if (has_dc_mode and fourier_index == 0)
                             continue; // DC mode (k=0)
 
                         // Get wavevector and magnitude
@@ -1158,16 +1176,16 @@ namespace FML {
             /// growth factor at the redshift delta_fourier is at
             ///
             //=================================================================================
-            template <int N>
-            void compute_spherical_collapse_potential(const FFTWGrid<N> & delta_fourier,
-                                                      FFTWGrid<N> & phi_sc_fourier,
+            template <int N, template <int> class Grid>
+            void compute_spherical_collapse_potential(const Grid<N> & delta_fourier,
+                                                      Grid<N> & phi_sc_fourier,
                                                       double DoverDini_1LPT) {
 
                 assert_mpi(delta_fourier.get_nmesh() > 0,
                            "[compute_spherical_collapse_potential] delta_fourier grid has to be already allocated");
 
                 [[maybe_unused]] auto Nmesh = delta_fourier.get_nmesh();
-                auto Local_x_start = delta_fourier.get_local_x_start();
+                const bool has_dc_mode = FML::GRID::has_dc_mode(delta_fourier);
 
                 phi_sc_fourier = delta_fourier;
                 phi_sc_fourier.add_memory_label("FFTWGrid::compute_spherical_collapse_potential::phi_sc_fourier");
@@ -1190,11 +1208,11 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (FML::IndexIntType irow = 0; irow < phi_sc_fourier.get_local_nrows(); irow++) {
+                for (FML::IndexIntType irow = 0; irow < phi_sc_fourier.get_local_nrows_fourier(); irow++) {
                     [[maybe_unused]] double kmag2;
                     [[maybe_unused]] std::array<double, N> kvec;
                     for (auto && fourier_index : phi_sc_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
-                        if (Local_x_start == 0 and fourier_index == 0)
+                        if (has_dc_mode and fourier_index == 0)
                             continue; // DC mode (k=0)
                         phi_sc_fourier.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
                         auto value = phi_sc_fourier.get_fourier_from_index(fourier_index);
@@ -1203,7 +1221,7 @@ namespace FML {
                 }
 
                 // Set the DC mode
-                if (Local_x_start == 0)
+                if (has_dc_mode)
                     phi_sc_fourier.set_fourier_from_index(0, 0.0);
             }
 
@@ -1225,10 +1243,10 @@ namespace FML {
             /// growth factor at the redshift delta_fourier is at
             ///
             //=================================================================================
-            template <int N>
-            void compute_ALPT_potential_fourier(const FFTWGrid<N> & delta_fourier,
-                                                const FFTWGrid<N> & phi_2LPT_fourier,
-                                                FFTWGrid<N> & phi_ALPT_fourier,
+            template <int N, template <int> class Grid>
+            void compute_ALPT_potential_fourier(const Grid<N> & delta_fourier,
+                                                const Grid<N> & phi_2LPT_fourier,
+                                                Grid<N> & phi_ALPT_fourier,
                                                 double smoothing_scale,
                                                 std::string smoothing_method,
                                                 double DoverDini_1LPT,
@@ -1243,11 +1261,11 @@ namespace FML {
                            "same size");
 
                 [[maybe_unused]] auto Nmesh = delta_fourier.get_nmesh();
-                auto Local_x_start = delta_fourier.get_local_x_start();
+                const bool has_dc_mode = FML::GRID::has_dc_mode(delta_fourier);
 
                 // Compute the short range spherical collapse approximation
                 // D*Psi_SC = 3( sqrt(1 - 2/3 * D/Dini delta_ini) - 1 )
-                FFTWGrid<N> phi_sc_fourier;
+                Grid<N> phi_sc_fourier;
                 compute_spherical_collapse_potential(delta_fourier, phi_sc_fourier, DoverDini_1LPT);
 
                 // Copy over the long range 2LPT approximation
@@ -1259,11 +1277,11 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (FML::IndexIntType irow = 0; irow < phi_ALPT_fourier.get_local_nrows(); irow++) {
+                for (FML::IndexIntType irow = 0; irow < phi_ALPT_fourier.get_local_nrows_fourier(); irow++) {
                     [[maybe_unused]] double kmag2;
                     [[maybe_unused]] std::array<double, N> kvec;
                     for (auto && fourier_index : phi_ALPT_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
-                        if (Local_x_start == 0 and fourier_index == 0)
+                        if (has_dc_mode and fourier_index == 0)
                             continue; // DC mode (k=0)
                         // Get wavevector and magnitude
                         phi_ALPT_fourier.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
@@ -1284,7 +1302,7 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (FML::IndexIntType irow = 0; irow < phi_ALPT_fourier.get_local_nrows(); irow++) {
+                for (FML::IndexIntType irow = 0; irow < phi_ALPT_fourier.get_local_nrows_fourier(); irow++) {
                     for (auto && fourier_index : phi_ALPT_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
                         auto short_range = phi_sc_fourier.get_fourier_from_index(fourier_index);
                         auto smoothed = phi_ALPT_fourier.get_fourier_from_index(fourier_index);
@@ -1429,10 +1447,10 @@ namespace FML {
             /// the field is interpolated at q - lattice_offset (the grid nodes when the grid has one cell per
             /// particle, exact with CIC)
             //===================================================================================
-            template <int N, class T, class W>
+            template <int N, class T, class W, template <int> class Grid = FFTWGrid>
             std::array<std::vector<FML::GRID::FloatType>, N>
             displacement_at_lagrangian_positions(MPIParticles<T> & part,
-                                                 const std::vector<const FFTWGrid<N> *> & potentials,
+                                                 const std::vector<const Grid<N> *> & potentials,
                                                  W && weight,
                                                  double lattice_offset = 0.0,
                                                  const std::string & interpolation_method = "CIC") {
@@ -1446,7 +1464,7 @@ namespace FML {
                                  FML::GRID::FloatType(weight(n, kmag));
                     potential.set_fourier_from_index(fourier_index, value);
                 });
-                std::array<FFTWGrid<N>, N> psi;
+                std::array<Grid<N>, N> psi;
                 std::function<double(double)> multiply_by_one = []([[maybe_unused]] double kBox) { return 1.0; };
                 from_LPT_potential_to_displacement_vector_scaledependent<N>(potential, psi, multiply_by_one);
                 potential.free();
@@ -1508,9 +1526,9 @@ namespace FML {
             /// should store the data in
             ///
             //===================================================================================
-            template <int N, class T>
+            template <int N, class T, template <int> class Grid>
             void assign_displacement_fields_scaledependent(MPIParticles<T> & part,
-                                                           FFTWGrid<N> & LPT_potential_fourier,
+                                                           Grid<N> & LPT_potential_fourier,
                                                            std::function<double(double)> DoverDini_of_k,
                                                            std::string LPT_potential_order) {
                 enum Order { _1LPT, _2LPT, _3LPTA, _3LPTB };
@@ -1546,7 +1564,7 @@ namespace FML {
                 // With the particles at their Lagrangian positions (on the task they started off from)
                 with_particles_at_lagrangian_positions(part, [&]() {
                     // Use initial LPT potential + growth factor to compute displacement field at present time
-                    std::array<FFTWGrid<N>, N> psi_LPT_vector;
+                    std::array<Grid<N>, N> psi_LPT_vector;
                     FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector_scaledependent(LPT_potential_fourier,
                                                                                                   psi_LPT_vector,
                                                                                                   DoverDini_of_k);

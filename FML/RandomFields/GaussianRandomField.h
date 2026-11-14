@@ -14,6 +14,7 @@
 #endif
 
 #include <FML/FFTWGrid/FFTWGrid.h>
+#include <FML/FFTWGrid/CopyFourierModes.h>
 #include <FML/RandomGenerator/RandomGenerator.h>
 #include <FML/RandomFields/CounterBasedRandomField.h>
 #include <FML/Smoothing/SmoothingFourier.h>
@@ -512,8 +513,8 @@ namespace FML {
         /// @param[in] Pofk_of_kBox_over_volume P(k)/V as a function of kBox = k B (the same as for
         /// generate_gaussian_random_field_fourier)
         //=================================================================================
-        template <int N>
-        void whiten_and_set_power_spectrum(FFTWGrid<N> & grid,
+        template <int N, template <int> class Grid = FFTWGrid>
+        void whiten_and_set_power_spectrum(Grid<N> & grid,
                                            const std::function<double(double)> & Pofk_of_kBox_over_volume) {
             FML::GRID::transform_fourier_modes<N>(grid, [&](double kmag, std::complex<FML::GRID::FloatType> value) {
                 // Whiten the field
@@ -527,11 +528,52 @@ namespace FML {
         }
 
         /// @brief delta(k) -> -delta(k): the field with all phases shifted by pi (the partner of a paired simulation)
-        template <int N>
-        void reverse_phases(FFTWGrid<N> & grid) {
+        template <int N, template <int> class Grid = FFTWGrid>
+        void reverse_phases(Grid<N> & grid) {
             FML::GRID::transform_fourier_modes<N>(grid, [](double, std::complex<FML::GRID::FloatType> value) {
                 return FML::GRID::FloatType(-1.0) * value;
             });
+        }
+
+        //=================================================================================
+        // The generators for the other grids (e.g. PencilGrid). The mode-keyed (Philox) backend is generated
+        // directly on the grid; NGenIC: the field is generated on the FFTW slabs as for an FFTWGrid and its modes are
+        // redistributed (all of them), which needs a temporary FFTWGrid of the same size. Either way the same seed
+        // gives the same field for any decomposition
+        //=================================================================================
+        template <int N,
+                  template <int>
+                  class Grid,
+                  std::enable_if_t<not FML::GRID::is_fftwgrid_v<Grid<N>>, int> = 0>
+        void generate_gaussian_random_field_fourier(Grid<N> & grid,
+                                                    RandomGenerator * rng,
+                                                    std::function<double(double)> power,
+                                                    bool fixed,
+                                                    const RandomFieldOptions & options = {}) {
+            // The mode-keyed backend only depends on the wave-vector: generated directly on the grid
+            if constexpr (N >= 2 && N <= 3) {
+                if (options.backend != RandomFieldBackend::NGenIC) {
+                    COUNTER_BASED::generate_fourier(grid, options.seed, options.stream, power, fixed);
+                    return;
+                }
+            }
+            FFTWGrid<N> slabs(grid.get_nmesh());
+            generate_gaussian_random_field_fourier<N>(slabs, rng, power, fixed, options);
+            FML::GRID::redistribute_fourier_grid<N>(slabs, grid);
+            grid.set_grid_status_real(false);
+        }
+
+        template <int N,
+                  template <int>
+                  class Grid,
+                  std::enable_if_t<not FML::GRID::is_fftwgrid_v<Grid<N>>, int> = 0>
+        void generate_gaussian_random_field_real(Grid<N> & grid,
+                                                 RandomGenerator * rng,
+                                                 std::function<double(double)> power,
+                                                 bool fixed,
+                                                 const RandomFieldOptions & options = {}) {
+            generate_gaussian_random_field_fourier<N>(grid, rng, power, fixed, options);
+            grid.fftw_c2r();
         }
 
         } // namespace GAUSSIAN

@@ -21,8 +21,8 @@ namespace FML::FOURPOINT {
         bool valid{}; // Empty shells/no closing quartets return NaN normalized values.
     };
     namespace detail {
-        inline bool
-        uses_mode(const FourierGrid & grid, const std::array<double, 3> & wave, double k2, double low, double high) {
+        template <class Grid>
+        bool uses_mode(const Grid & grid, const std::array<double, 3> & wave, double k2, double low, double high) {
             return FML::CORRELATIONFUNCTIONS::detail::polyspectrum_uses_mode<3, 4>(grid,
                                                                                    wave,
                                                                                    k2,
@@ -30,8 +30,10 @@ namespace FML::FOURPOINT {
                                                                                    high * high,
                                                                                    true);
         }
-        inline FourierGrid shell(const FourierGrid & input, const ShellOptions & o, int bin, int mesh, bool geometry) {
-            FourierGrid field(input.get_nmesh());
+        template <class Grid>
+        Grid shell(const Grid & input, const ShellOptions & o, int bin, int mesh, bool geometry) {
+            using FML::GRID::make_grid_like;
+            Grid field = make_grid_like(input, input.get_nmesh(), 0, 0);
             field.set_grid_status_real(false);
             const double low = o.k_edges[bin] * o.boxsize, high = o.k_edges[bin + 1] * o.boxsize;
             for (auto index : input.get_fourier_range()) {
@@ -47,13 +49,14 @@ namespace FML::FOURPOINT {
             field.fftw_c2r();
             return field;
         }
-        inline long double average_product(const std::array<const FourierGrid *, 4> & fields) {
+        template <class Grid>
+        long double average_product(const std::array<const Grid *, 4> & fields) {
             long double sum = 0;
 #ifdef USE_OMP
 #pragma omp parallel for reduction(+ : sum)
 #endif
-            for (int x = 0; x < fields[0]->get_local_nx(); ++x)
-                for (auto index : fields[0]->get_real_range(x, x + 1)) {
+            for (FML::IndexIntType x = 0; x < FML::IndexIntType(fields[0]->get_local_nrows()); ++x)
+                for (auto index : fields[0]->get_real_range_of_rows(x, x + 1)) {
                     long double product = 1;
                     for (auto f : fields)
                         product *= f->get_real_from_index(index);
@@ -67,12 +70,14 @@ namespace FML::FOURPOINT {
     /// Collective periodic shell estimator. Input is FML-normalized Fourier density contrast.
     /// References are exact ensemble covariances of the four dimensionless shell-filtered fields,
     /// one row-major 4x4 matrix per requested tuple. No particle-noise/window correction is applied.
-    inline std::vector<ShellResult>
-    connected_shell_four_point(const FourierGrid & input,
+    /// (Grid: FFTWGrid or any grid with the interface, e.g. PencilGrid)
+    template <class Grid = FourierGrid>
+    std::vector<ShellResult>
+    connected_shell_four_point(const Grid & input,
                                const ShellOptions & o,
                                const std::vector<Configuration> & configurations,
                                const std::vector<std::array<double, 16>> & reference_covariances = {}) {
-        bool valid = input.get_nmesh() > 0 && !const_cast<FourierGrid &>(input).get_grid_status_real() &&
+        bool valid = input.get_nmesh() > 0 && !const_cast<Grid &>(input).get_grid_status_real() &&
                      std::isfinite(o.boxsize) && o.boxsize > 0 && o.k_edges.size() >= 2 && !configurations.empty() &&
                      (reference_covariances.empty() || reference_covariances.size() == configurations.size());
         double maximum = 0;
@@ -116,12 +121,12 @@ namespace FML::FOURPOINT {
             ShellResult out;
             out.bins = configurations[c];
             out.work_mesh = mesh;
-            std::map<int, FourierGrid> fields;
+            std::map<int, Grid> fields;
             // Geometry phase and density phase never retain both sets of shell fields.
             for (int bin : out.bins)
                 if (!fields.count(bin))
                     fields.emplace(bin, detail::shell(input, o, bin, mesh, true));
-            std::array<const FourierGrid *, 4> selected;
+            std::array<const Grid *, 4> selected;
             for (int i = 0; i < 4; ++i)
                 selected[i] = &fields.at(out.bins[i]);
             const auto quartets = detail::average_product(selected);
@@ -141,8 +146,8 @@ namespace FML::FOURPOINT {
                                               k2,
                                               o.k_edges[bin] * o.boxsize,
                                               o.k_edges[bin + 1] * o.boxsize))
-                            count += FML::GRID::fourier_mode_multiplicity(int(index % (input.get_nmesh() / 2 + 1)),
-                                                                          input.get_nmesh());
+                            count += FML::GRID::fourier_mode_multiplicity(
+                                input.get_fourier_integer_wavevector_from_index(index)[2], input.get_nmesh());
                     }
                     FML::SumOverTasks(&count);
                     counts[bin] = count;
@@ -152,12 +157,14 @@ namespace FML::FOURPOINT {
                 selected[i] = &fields.at(out.bins[i]);
                 out.mode_counts[i] = counts.at(out.bins[i]);
             }
-            const size_t count = size_t(selected[0]->get_local_nx()) * mesh * mesh;
+            // The local cells in the order of the rows (x, y; z fastest)
+            std::vector<FML::IndexIntType> cells;
+            for (FML::IndexIntType r = 0; r < FML::IndexIntType(selected[0]->get_local_nrows()); r++)
+                for (auto index : selected[0]->get_real_range_of_rows(r, r + 1))
+                    cells.push_back(index);
+            const size_t count = cells.size();
             auto sample = [&](size_t row) {
-                const std::array<int, 3> coord{int(row / (size_t(mesh) * mesh)),
-                                               int(row / mesh % mesh),
-                                               int(row % mesh)};
-                const auto index = selected[0]->get_index_real(coord);
+                const auto index = cells[row];
                 std::array<FML::GRID::FloatType, 4> values;
                 for (int i = 0; i < 4; ++i)
                     values[i] = selected[i]->get_real_from_index(index);

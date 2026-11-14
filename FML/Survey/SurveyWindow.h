@@ -97,7 +97,8 @@ namespace FML::SURVEY {
             coefficients.push_back(detail::legendre_coefficients(ell));
         auto separation = [&](const Mesh & mesh, FML::IndexIntType i) {
             auto c = mesh.get_coord_from_index(i);
-            c[0] += mesh.get_local_x_start();
+            c[0] += int(mesh.get_local_range(0)[0]);
+            c[1] += int(mesh.get_local_range(1)[0]);
             Vector s;
             for (int d = 0; d < 3; ++d)
                 s[d] = (c[d] > g.nmesh / 2 ? c[d] - g.nmesh : c[d]) * g.cellsize();

@@ -4,14 +4,19 @@
 #error "WeakLensing/FlatSky.h requires USE_FFTW; the scalar WeakLensing.h API does not"
 #endif
 #include <FML/FFTWGrid/FFTWGrid.h>
+#include <FML/FFTWGrid/GridInterface.h>
 #include "WeakLensing.h"
 #include <array>
 
 namespace FML::WEAKLENSING {
+    /// The maps are FFTWGrid<2> (slabs) by default; any 2D grid with the generic grid interface works too (e.g.
+    /// FML::GRID::PencilGrid<2>, include <FML/PencilDomain/PencilGrid.h>): the shear maps are made like the input
     using AngularGrid = FML::GRID::FFTWGrid<2>;
-    struct ShearMaps {
-        AngularGrid gamma1, gamma2;
+    template <class Grid = AngularGrid>
+    struct ShearMapsT {
+        Grid gamma1, gamma2;
     };
+    using ShearMaps = ShearMapsT<>;
     namespace detail {
         inline void collective_require(bool valid, const char * message) {
             int good = valid;
@@ -24,7 +29,9 @@ namespace FML::WEAKLENSING {
     /// gamma2=2lxly/l^2 kappa. theta_x/y in radians; input is preserved.
     /// DC and both even-N Nyquist lines are removed from both shear components.
     /// All ranks participate; outputs have no halos and contain owned real pixels.
-    inline ShearMaps shear_from_convergence(const AngularGrid & kappa, double theta_x, double theta_y) {
+    template <class Grid>
+    inline ShearMapsT<Grid> shear_from_convergence(const Grid & kappa, double theta_x, double theta_y) {
+        static_assert(FML::GRID::has_fourier_grid_interface<Grid>::value, "shear_from_convergence: not a grid");
         auto spectrum = kappa;
         const int n = spectrum.get_nmesh();
         detail::collective_require(n >= 2 && std::isfinite(theta_x) && std::isfinite(theta_y) && theta_x > 0 &&
@@ -42,12 +49,24 @@ namespace FML::WEAKLENSING {
         detail::collective_require(min_n == max_n && low[0] == high[0] && low[1] == high[1],
                                    "WeakLensing: ranks disagree on shear geometry");
         bool finite = true;
-        for (int ix = 0; ix < spectrum.get_local_nx(); ++ix)
-            for (int iy = 0; iy < n; ++iy)
-                finite = finite && std::isfinite(spectrum.get_real({ix, iy}));
+        if constexpr (FML::GRID::is_fftwgrid_v<Grid>) {
+            for (int ix = 0; ix < spectrum.get_local_nx(); ++ix)
+                for (int iy = 0; iy < n; ++iy)
+                    finite = finite && std::isfinite(spectrum.get_real({ix, iy}));
+        } else {
+            for (auto && index : spectrum.get_real_range())
+                finite = finite && std::isfinite(spectrum.get_real_from_index(index));
+        }
         detail::collective_require(finite, "WeakLensing: nonfinite convergence pixels");
         spectrum.fftw_r2c();
-        ShearMaps result{AngularGrid(n), AngularGrid(n)};
+        ShearMapsT<Grid> result;
+        if constexpr (FML::GRID::is_fftwgrid_v<Grid>) {
+            result.gamma1 = Grid(n);
+            result.gamma2 = Grid(n);
+        } else {
+            result.gamma1 = make_grid_like(kappa, n, 0, 0);
+            result.gamma2 = make_grid_like(kappa, n, 0, 0);
+        }
         auto * one = result.gamma1.get_fourier_grid();
         auto * two = result.gamma2.get_fourier_grid();
         const auto * input = spectrum.get_fourier_grid();
@@ -56,7 +75,7 @@ namespace FML::WEAKLENSING {
 #endif
         for (FML::IndexIntType i = 0; i < spectrum.get_ntot_fourier(); ++i) {
             const auto mode = spectrum.get_fourier_integer_wavevector_from_index(i);
-            if ((mode[0] == 0 && mode[1] == 0) || (n % 2 == 0 && (std::abs(mode[0]) == n / 2 || mode[1] == n / 2))) {
+            if ((mode[0] == 0 && mode[1] == 0) || (n % 2 == 0 && (std::abs(mode[0]) == n / 2 || std::abs(mode[1]) == n / 2))) {
                 one[i] = two[i] = FML::GRID::ComplexType(0);
                 continue;
             }

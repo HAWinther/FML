@@ -4,6 +4,13 @@
 #include <FML/Global/Global.h>
 #ifdef USE_FFTW
 #include <FML/WeakLensing/FlatSky.h>
+#ifdef WL_PENCIL
+// The same tests with the maps on PencilGrid<2>
+#include <FML/PencilDomain/PencilGrid.h>
+using TestGrid = FML::GRID::PencilGrid<2>;
+#else
+using TestGrid = FML::WEAKLENSING::AngularGrid;
+#endif
 #endif
 #include <iostream>
 #include <string>
@@ -188,22 +195,20 @@ static void shear_tests() {
     const double tx = .2, ty = .35, pi = std::acos(-1.);
     const double tolerance = sizeof(FML::GRID::FloatType) == 4 ? 2e-5 : 3e-12;
     for (const auto mode : std::vector<std::array<int, 2>>{{2, 0}, {0, 2}, {1, 2}, {-1, 2}}) {
-        AngularGrid kappa(n);
+        TestGrid kappa(n);
         kappa.fill_real_grid(
             [&](std::array<double, 2> & x) { return 2. + .3 * std::cos(2 * pi * (mode[0] * x[0] + mode[1] * x[1])); });
         const auto shear = shear_from_convergence(kappa, tx, ty);
         const double lx = mode[0] / tx, ly = mode[1] / ty, den = lx * lx + ly * ly;
         double error = 0, preserved = 0;
-        for (int ix = 0; ix < kappa.get_local_nx(); ++ix)
-            for (int iy = 0; iy < n; ++iy) {
-                const auto x = kappa.get_real_position({ix, iy});
-                const double signal = .3 * std::cos(2 * pi * (mode[0] * x[0] + mode[1] * x[1]));
-                error =
-                    std::max(error,
-                             std::abs(double(shear.gamma1.get_real({ix, iy})) - signal * (lx * lx - ly * ly) / den));
-                error = std::max(error, std::abs(double(shear.gamma2.get_real({ix, iy})) - signal * 2 * lx * ly / den));
-                preserved = std::max(preserved, std::abs(double(kappa.get_real({ix, iy})) - (2 + signal)));
-            }
+        for (auto index : kappa.get_real_range()) {
+            const auto c = kappa.get_coord_from_index(index);
+            const auto x = kappa.get_real_position(c);
+            const double signal = .3 * std::cos(2 * pi * (mode[0] * x[0] + mode[1] * x[1]));
+            error = std::max(error, std::abs(double(shear.gamma1.get_real(c)) - signal * (lx * lx - ly * ly) / den));
+            error = std::max(error, std::abs(double(shear.gamma2.get_real(c)) - signal * 2 * lx * ly / den));
+            preserved = std::max(preserved, std::abs(double(kappa.get_real(c)) - (2 + signal)));
+        }
         FML::MaxOverTasks(&error);
         FML::MaxOverTasks(&preserved);
         close(error, 0., tolerance, "Fourier mode shear incl. sign/aspect/DC");
@@ -225,7 +230,7 @@ static void shear_tests() {
         FML::MaxOverTasks(&bmode);
         close(bmode, 0., tolerance, "Born shear has no B mode");
     }
-    AngularGrid dc(n);
+    TestGrid dc(n);
     dc.fill_real_grid(2.);
     const auto zero = shear_from_convergence(dc, tx, ty);
     double maxzero = 0;
@@ -236,7 +241,7 @@ static void shear_tests() {
     FML::MaxOverTasks(&maxzero);
     close(maxzero, 0., tolerance, "mass-sheet monopole removed");
     if (n % 2 == 0) {
-        AngularGrid nyquist(n);
+        TestGrid nyquist(n);
         nyquist.fill_real_grid([&](std::array<double, 2> & x) {
             return std::cos(2 * pi * (n / 2 * x[0] + x[1])) + std::cos(2 * pi * (x[0] + n / 2 * x[1]));
         });

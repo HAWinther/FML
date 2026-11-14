@@ -1,7 +1,12 @@
 #ifndef FML_SURVEY_MESH_HEADER
 #define FML_SURVEY_MESH_HEADER
 #include <FML/FFTWGrid/FFTWGrid.h>
+#include <FML/FFTWGrid/GridInterface.h>
 #include <FML/Global/ChunkedExchange.h>
+#ifdef FML_SURVEY_PENCIL_MESH
+#include <FML/PencilDomain/PencilGrid.h>
+#endif
+#include <algorithm>
 #include <array>
 #include <functional>
 #include <limits>
@@ -10,7 +15,13 @@
 
 namespace FML::SURVEY {
     using Vector = std::array<double, 3>;
+    // The meshes: FFTWGrid slabs, or (experiment, -DFML_SURVEY_PENCIL_MESH) PencilGrid pencils decomposed as the
+    // fiducial domain FML::domain (FML::set_domain(FML::Domain::uniform_pencil(px, py)))
+#ifdef FML_SURVEY_PENCIL_MESH
+    using Mesh = FML::GRID::PencilGrid<3>;
+#else
     using Mesh = FML::GRID::FFTWGrid<3>;
+#endif
     using Complex = FML::GRID::ComplexType;
     using Real = FML::GRID::FloatType;
 
@@ -49,7 +60,8 @@ namespace FML::SURVEY {
         double volume() const { return boxsize * boxsize * boxsize; }
         Vector position(const Mesh & mesh, FML::IndexIntType index) const {
             auto c = mesh.get_coord_from_index(index);
-            c[0] += mesh.get_local_x_start();
+            c[0] += int(mesh.get_local_range(0)[0]);
+            c[1] += int(mesh.get_local_range(1)[0]);
             Vector x;
             for (int d = 0; d < 3; ++d)
                 x[d] = minimum[d] + c[d] * cellsize();
@@ -64,7 +76,8 @@ namespace FML::SURVEY {
             return unit(r);
         }
         void validate() const {
-            bool ok = nmesh >= 4 && nmesh % FML::NTasks == 0 && boxsize > 0 && volume() > 0 && std::isfinite(volume());
+            bool ok = nmesh >= 4 && (not FML::GRID::is_fftwgrid_v<Mesh> || nmesh % FML::NTasks == 0) && boxsize > 0 &&
+                      volume() > 0 && std::isfinite(volume());
             for (int d = 0; d < 3; ++d)
                 ok &= std::isfinite(minimum[d]) && std::isfinite(observer[d]) && std::isfinite(fixed_los[d]);
             require(ok && (local_los || dot(fixed_los, fixed_los) > 0),
@@ -147,11 +160,56 @@ namespace FML::SURVEY {
             }
         }
         inline Mesh empty_mesh(const Geometry & g, int ghosts = 0) {
-            Mesh grid(g.nmesh, ghosts, ghosts);
+            auto grid = FML::GRID::make_grid<Mesh>(g.nmesh, ghosts, ghosts, FML::domain);
             grid.set_grid_status_real(true);
             for (auto i : grid.get_real_range())
                 grid.set_real_from_index(i, 0);
             return grid;
+        }
+        // The task that has a cell (global (x, y); all of z) of a mesh: the local boxes of all the tasks (slabs or
+        // pencils, a product of x- and y-blocks)
+        class MeshOwners {
+            std::vector<int> xstarts, ystarts, table;
+
+          public:
+            explicit MeshOwners(const Mesh & mesh) {
+                const long long mine[4] = {(long long)(mesh.get_local_range(0)[0]),
+                                           (long long)(mesh.get_local_range(0)[1]),
+                                           (long long)(mesh.get_local_range(1)[0]),
+                                           (long long)(mesh.get_local_range(1)[1])};
+                std::vector<long long> all(4 * size_t(FML::NTasks));
+#ifdef USE_MPI
+                MPI_Allgather(mine, 4, MPI_LONG_LONG, all.data(), 4, MPI_LONG_LONG, FML::communicator);
+#else
+                std::copy(mine, mine + 4, all.begin());
+#endif
+                for (int t = 0; t < FML::NTasks; ++t)
+                    if (all[4 * t + 1] > 0 && all[4 * t + 3] > 0) {
+                        xstarts.push_back(int(all[4 * t]));
+                        ystarts.push_back(int(all[4 * t + 2]));
+                    }
+                for (auto * v : {&xstarts, &ystarts}) {
+                    std::sort(v->begin(), v->end());
+                    v->erase(std::unique(v->begin(), v->end()), v->end());
+                }
+                table.assign(xstarts.size() * ystarts.size(), -1);
+                for (int t = 0; t < FML::NTasks; ++t)
+                    if (all[4 * t + 1] > 0 && all[4 * t + 3] > 0)
+                        table[block(xstarts, int(all[4 * t])) * ystarts.size() + block(ystarts, int(all[4 * t + 2]))] =
+                            t;
+            }
+            static size_t block(const std::vector<int> & starts, int c) {
+                return size_t(std::upper_bound(starts.begin(), starts.end(), c) - starts.begin()) - 1;
+            }
+            int owner(int cx, int cy) const { return table[block(xstarts, cx) * ystarts.size() + block(ystarts, cy)]; }
+        };
+        // The neighbouring cell (local coordinates) of a mesh along an axis: the axes the mesh has whole wrap, the
+        // split ones use the halo
+        inline std::array<int, 3> neighbor(const Mesh & mesh, std::array<int, 3> c, int direction, int step, int n) {
+            c[direction] += step;
+            if (mesh.get_local_range(direction)[1] == n)
+                c[direction] = (c[direction] + n) % n;
+            return c;
         }
         inline std::vector<double> legendre_coefficients(int ell) {
             std::vector<double> p0(ell + 1), p1(ell + 1);
@@ -245,26 +303,37 @@ namespace FML::SURVEY {
             double weight;
         };
         std::vector<std::vector<PaintPoint>> outgoing(FML::NTasks);
-        const int slab = g.nmesh / FML::NTasks;
+        auto grid = detail::empty_mesh(g);
+        const detail::MeshOwners owners(grid);
         for (const auto & p : points) {
             if (p.weight == 0)
                 continue;
             const double x = (p.position[0] - g.minimum[0]) / g.cellsize();
-            const int left = int(std::floor(x));
-            const int first = left / slab, second = (left + 1) / slab;
-            outgoing[first].push_back({p.position, p.weight});
-            // Send the particle once to each intersecting slab, rather than staging
-            // eight full cell records. Only an x-boundary CIC cloud needs a duplicate.
-            if (second != first && x > left)
-                outgoing[second].push_back({p.position, p.weight});
+            const double y = (p.position[1] - g.minimum[1]) / g.cellsize();
+            const int left = int(std::floor(x)), below = int(std::floor(y));
+            // Send the particle once to each task with cells of its CIC cloud (slabs: the x-cells; pencils: the
+            // (x, y)-cells), rather than staging eight full cell records. Cells with zero weight are skipped
+            int sent[4], nsent = 0;
+            for (int dx = 0; dx < 2; ++dx)
+                for (int dy = 0; dy < 2; ++dy) {
+                    if ((dx && !(x > left)) || (dy && !(y > below)))
+                        continue;
+                    const int cy = (below + dy) % g.nmesh;
+                    const int task = owners.owner(left + dx, cy);
+                    if (std::find(sent, sent + nsent, task) == sent + nsent) {
+                        sent[nsent++] = task;
+                        outgoing[task].push_back({p.position, p.weight});
+                    }
+                }
         }
         auto received = detail::route(outgoing);
-        auto grid = detail::empty_mesh(g);
-        const int start = int(grid.get_local_x_start());
+        const int xstart = int(grid.get_local_range(0)[0]), nx = int(grid.get_local_range(0)[1]);
+        const int ystart = int(grid.get_local_range(1)[0]), ny = int(grid.get_local_range(1)[1]);
         for (const auto & p : received)
             detail::cic(p.position, g, [&](auto c, double w) {
-                c[0] -= start;
-                if (c[0] >= 0 && c[0] < grid.get_local_nx())
+                c[0] -= xstart;
+                c[1] -= ystart;
+                if (c[0] >= 0 && c[0] < nx && c[1] >= 0 && c[1] < ny)
                     grid.set_real(c, grid.get_real(c) + Real(p.weight * w));
             });
         return grid;

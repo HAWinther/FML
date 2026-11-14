@@ -9,11 +9,12 @@
 #include <functional>
 #include <limits>
 #include <stdexcept>
+#include <type_traits>
 #include <vector>
 namespace FML::CORRELATIONFUNCTIONS::detail {
-    template <int N, int ORDER>
+    template <int N, int ORDER, class GridType = FML::GRID::FFTWGrid<N>>
     class ShellCache {
-        using Grid = FML::GRID::FFTWGrid<N>;
+        using Grid = GridType;
         struct Entry {
             int bin{-1};
             size_t age{0};
@@ -32,9 +33,14 @@ namespace FML::CORRELATIONFUNCTIONS::detail {
                    const PolyspectrumOptions & options,
                    PolyspectrumStatistics & statistics,
                    size_t & shell_builds,
-                   std::function<Grid(int)> builder)
+                   std::function<Grid(int)> builder,
+                   size_t bytes_per_shell = 0)
             : build(std::move(builder)), stats(statistics), builds(shell_builds) {
-            size_t bytes = Grid::storage_bytes(mesh);
+            // (the bytes of a shell grid: FFTWGrid knows them from the mesh, other grids pass them)
+            size_t bytes = bytes_per_shell;
+            if constexpr (std::is_same_v<Grid, FML::GRID::FFTWGrid<N>>)
+                if (bytes == 0)
+                    bytes = Grid::storage_bytes(mesh);
             FML::MaxOverTasks(&bytes);
             stats.shell_grid_bytes = bytes;
             size_t capacity =
@@ -94,8 +100,8 @@ namespace FML::CORRELATIONFUNCTIONS::detail {
             return result;
         }
     };
-    template <int N, int ORDER, class Store>
-    void integrate_configurations(ShellCache<N, ORDER> & cache,
+    template <int N, int ORDER, class Store, class GridType>
+    void integrate_configurations(ShellCache<N, ORDER, GridType> & cache,
                                   const std::vector<std::array<int, ORDER>> & configs,
                                   size_t batch_size,
                                   size_t & reductions,
@@ -107,16 +113,29 @@ namespace FML::CORRELATIONFUNCTIONS::detail {
             for (size_t i = 0; i < sums.size(); i++) {
                 auto fields = cache.get(configs[start + i]);
                 double sum = 0.0;
+                if constexpr (std::is_same_v<GridType, FML::GRID::FFTWGrid<N>>) {
 #ifdef USE_OMP
 #pragma omp parallel for reduction(+ : sum)
 #endif
-                for (int slice = 0; slice < fields[0]->get_local_nx(); slice++)
-                    for (auto index : fields[0]->get_real_range(slice, slice + 1)) {
-                        double product = 1.0;
-                        for (auto field : fields)
-                            product *= field->get_real_from_index(index);
-                        sum += product;
-                    }
+                    for (int slice = 0; slice < fields[0]->get_local_nx(); slice++)
+                        for (auto index : fields[0]->get_real_range(slice, slice + 1)) {
+                            double product = 1.0;
+                            for (auto field : fields)
+                                product *= field->get_real_from_index(index);
+                            sum += product;
+                        }
+                } else {
+#ifdef USE_OMP
+#pragma omp parallel for reduction(+ : sum)
+#endif
+                    for (FML::IndexIntType row = 0; row < FML::IndexIntType(fields[0]->get_local_nrows()); row++)
+                        for (auto index : fields[0]->get_real_range_of_rows(row, row + 1)) {
+                            double product = 1.0;
+                            for (auto field : fields)
+                                product *= field->get_real_from_index(index);
+                            sum += product;
+                        }
+                }
                 sums[i] = sum;
             }
             FML::SumArrayOverTasks(sums.data(), sums.size());

@@ -1,3 +1,5 @@
+#include <cstdio>
+#include <cstdlib>
 #include <FML/Survey/SurveyReconstruction.h>
 #include <FML/Survey/SurveyWindow.h>
 #include <iostream>
@@ -570,7 +572,8 @@ void test_reconstruction() {
         auto source = survey_detail::empty_mesh(g);
         for (auto i : source.get_real_range()) {
             auto c = source.get_coord_from_index(i);
-            c[0] += source.get_local_x_start();
+            c[0] += int(source.get_local_range(0)[0]);
+            c[1] += int(source.get_local_range(1)[0]);
             double rhs = 0;
             for (int d = 0; d < 3; ++d) {
                 auto prev = c;
@@ -583,13 +586,15 @@ void test_reconstruction() {
         bool same = solution.report.converged;
         for (auto i : source.get_real_range()) {
             auto c = source.get_coord_from_index(i);
-            c[0] += source.get_local_x_start();
+            c[0] += int(source.get_local_range(0)[0]);
+            c[1] += int(source.get_local_range(1)[0]);
             for (int d = 0; d < 3; ++d) {
                 auto prev = c, next = c;
                 --prev[d];
                 ++next[d];
                 const double expected = (potential[index(next)] - potential[index(prev)]) / (2 * g.cellsize());
-                same &= near(solution.field[d].get_real_from_index(i), expected, sizeof(Real) == 4 ? 2e-4 : 1e-7);
+                same &= near(solution.field[d].get_real(source.get_coord_from_index(i)), expected,
+                             sizeof(Real) == 4 ? 2e-4 : 1e-7);
             }
         }
         check(same,
@@ -821,6 +826,19 @@ void test_validation() {
 }
 int main(int argc, char ** argv) {
     const std::string mode = argc > 1 ? argv[1] : "all";
+#ifdef FML_SURVEY_PENCIL_MESH
+    // Experiment: the meshes are PencilGrids on the pencils FML_PENCILS="px py" (default: as square as possible)
+    {
+        int px = 1;
+        for (int p = 1; p * p <= FML::NTasks; p++)
+            if (FML::NTasks % p == 0)
+                px = p;
+        int py = FML::NTasks / px;
+        if (const char * e = std::getenv("FML_PENCILS"))
+            std::sscanf(e, "%d %d", &px, &py);
+        FML::set_domain(FML::Domain::uniform_pencil(px, py));
+    }
+#endif
     if (mode == "all" || mode == "power")
         test_power();
     if (mode == "all" || mode == "window")

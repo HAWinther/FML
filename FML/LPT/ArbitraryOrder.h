@@ -1,7 +1,9 @@
 #ifndef FML_LPT_ARBITRARY_ORDER_H
 #define FML_LPT_ARBITRARY_ORDER_H
 
+#include <FML/FFTWGrid/CopyFourierModes.h>
 #include <FML/FFTWGrid/FourierResampling.h>
+#include <FML/FFTWGrid/GridInterface.h>
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -16,8 +18,15 @@
 #include <type_traits>
 #include <vector>
 
+// The arbitrary-order EdS LPT displacement orders on a grid type G: FML::GRID::FFTWGrid<3> (slabs, the default) or
+// FML::GRID::PencilGrid<3> (pencils, include <FML/PencilDomain/PencilGrid.h>). On pencils the intermediate (work-mesh)
+// grids are uniform pencils with the process grid of the input and the orders are on grids like the input; the input
+// embedding and the order cropping copy the Fourier modes to their owners (copy_fourier_modes) instead of the slab
+// resampling plan, and the Hermitian boundary planes are exchanged between the owners of mirrored modes.
 namespace FML::COSMOLOGY::LPT {
-    using EdSLPTVector = std::array<FML::GRID::FFTWGrid<3>, 3>;
+    template <class G = FML::GRID::FFTWGrid<3>>
+    using EdSLPTVectorT = std::array<G, 3>;
+    using EdSLPTVector = EdSLPTVectorT<>;
 
     enum class EdSLPTWorkspace { CacheGradients, RecomputeGradients };
     struct EdSLPTOptions {
@@ -57,23 +66,33 @@ namespace FML::COSMOLOGY::LPT {
         double worst_compatibility_ratio = 0;
     };
 
-    struct EdSLPTEvaluation {
-        EdSLPTVector displacement_fourier;
-        EdSLPTVector ddisplacement_dln_a_fourier;
+    template <class G = FML::GRID::FFTWGrid<3>>
+    struct EdSLPTEvaluationT {
+        EdSLPTVectorT<G> displacement_fourier;
+        EdSLPTVectorT<G> ddisplacement_dln_a_fourier;
     };
-    struct EdSLPTResult {
-        std::vector<EdSLPTVector> orders_fourier;
+    using EdSLPTEvaluation = EdSLPTEvaluationT<>;
+    template <class G = FML::GRID::FFTWGrid<3>>
+    struct EdSLPTResultT {
+        std::vector<EdSLPTVectorT<G>> orders_fourier;
         EdSLPTReport report;
-        EdSLPTEvaluation evaluate(double growth_ratio, size_t max_owned_bytes_per_rank) const;
+        EdSLPTEvaluationT<G> evaluate(double growth_ratio, size_t max_owned_bytes_per_rank) const;
     };
-    using EdSLPTOrderSink = std::function<void(int, const EdSLPTVector &)>;
+    using EdSLPTResult = EdSLPTResultT<>;
+    template <class G = FML::GRID::FFTWGrid<3>>
+    using EdSLPTOrderSinkT = std::function<void(int, const EdSLPTVectorT<G> &)>;
+    using EdSLPTOrderSink = EdSLPTOrderSinkT<>;
 
     namespace eds_detail {
         using Grid = FML::GRID::FFTWGrid<3>;
         using Real = FML::GRID::FloatType;
         using Complex = FML::GRID::ComplexType;
         using Tensor = std::array<Grid, 9>;
+        template <class G>
+        using TensorT = std::array<G, 9>;
         using Remap = FML::GRID::FourierResamplingPlan<3>;
+        template <class G>
+        inline constexpr bool is_slabs = FML::GRID::is_fftwgrid_v<G>;
 
         using FML::COMMUNICATION::collective_try;
 
@@ -124,7 +143,13 @@ namespace FML::COSMOLOGY::LPT {
         inline bool finite(Complex value) {
             return std::isfinite(value.real()) && std::isfinite(value.imag());
         }
-        inline std::array<int, 3> mode_numbers(const Grid & grid, FML::IndexIntType index) {
+        // The signed mode numbers of a Fourier cell (only |m| and m == 0 are used: the sign of the Nyquist mode does
+        // not matter)
+        template <class G>
+        inline std::array<int, 3> mode_numbers(const G & grid, FML::IndexIntType index) {
+            if constexpr (not is_slabs<G>) {
+                return grid.get_fourier_integer_wavevector_from_index(index);
+            } else {
             const auto coord = grid.get_fourier_coord_from_index(index);
             std::array<int, 3> mode = coord;
             mode[0] += int(grid.get_local_x_start());
@@ -132,12 +157,14 @@ namespace FML::COSMOLOGY::LPT {
                 if (value > grid.get_nmesh() / 2)
                     value -= grid.get_nmesh();
             return mode;
+            }
         }
         inline bool supported(const std::array<int, 3> & mode, const std::array<int, 3> & limits) {
             return std::abs(mode[0]) <= limits[0] && std::abs(mode[1]) <= limits[1] &&
                    std::abs(mode[2]) <= limits[2];
         }
-        inline Complex corrected_seed(const Grid & input, FML::IndexIntType index,
+        template <class G>
+        inline Complex corrected_seed(const G & input, FML::IndexIntType index,
                                       const std::array<int, 3> & limits) {
             const auto mode = mode_numbers(input, index);
             if (mode == std::array<int, 3>{0, 0, 0} || !supported(mode, limits))
@@ -148,8 +175,8 @@ namespace FML::COSMOLOGY::LPT {
 
         // Exchange only the boundary rows needed for Hermitian validation and correction.
         // Global x-pair ordering prevents cycles between the blocking peer exchanges.
-        inline void boundaries(const Grid & input, const EdSLPTOptions & options,
-                               EdSLPTReport & report, Grid * accepted = nullptr) {
+        inline void boundaries_slabs(const Grid & input, const EdSLPTOptions & options,
+                                     EdSLPTReport & report, Grid * accepted = nullptr) {
             const int mesh = input.get_nmesh();
             const size_t chunk = std::min(size_t(mesh),
                 std::min(options.max_remap_message_bytes, size_t(INT_MAX)) / sizeof(Complex));
@@ -239,14 +266,99 @@ namespace FML::COSMOLOGY::LPT {
             }, "EdS Hermitian validation");
         }
 
+        // Other grids: every cell of the planes kz = 0 (and kz = mesh/2 for even meshes) is sent to the task that
+        // has its mirror (-kx, -ky, kz), which compares it with (and corrects it towards) the conjugate of the mirror
+        template <class G>
+        inline void boundaries(const G & input, const EdSLPTOptions & options,
+                               EdSLPTReport & report, G * accepted = nullptr) {
+            if constexpr (is_slabs<G>) {
+                boundaries_slabs(input, options, report, accepted);
+            } else {
+                const int mesh = input.get_nmesh();
+                struct Partner {
+                    int coord[3];
+                    Complex value;
+                };
+                std::vector<std::vector<Partner>> send;
+                std::optional<FML::GRID::detail::FourierOwners<3>> owners;
+                collective_try([&] {
+                    send.resize(FML::NTasks);
+                    owners.emplace(input);
+                    const auto kz_range = input.get_local_fourier_range(2);
+                    for (int plane : {0, mesh / 2}) {
+                        if (plane == mesh / 2 && (mesh % 2 != 0 || plane == 0))
+                            continue;
+                        if (plane < kz_range[0] || plane >= kz_range[0] + kz_range[1])
+                            continue;
+                        const auto kx_range = input.get_local_fourier_range(0);
+                        const auto ky_range = input.get_local_fourier_range(1);
+                        for (ptrdiff_t kx = kx_range[0]; kx < kx_range[0] + kx_range[1]; ++kx)
+                            for (ptrdiff_t ky = ky_range[0]; ky < ky_range[0] + ky_range[1]; ++ky) {
+                                const std::array<int, 3> mirror{int((mesh - kx) % mesh), int((mesh - ky) % mesh), plane};
+                                Partner record{{mirror[0], mirror[1], mirror[2]},
+                                               input.get_fourier_from_index(
+                                                   input.get_index_fourier_global({int(kx), int(ky), plane}))};
+                                send[owners->owner(mirror)].push_back(record);
+                            }
+                    }
+                }, "EdS boundary records");
+                Real mismatch_max = 0;
+                FML::COMMUNICATION::exchange_records_chunked(send, [&](const Partner * records, size_t count) {
+                    for (size_t r = 0; r < count; ++r) {
+                        const std::array<int, 3> coordinate{records[r].coord[0], records[r].coord[1], records[r].coord[2]};
+                        const auto index = input.get_index_fourier_global(coordinate);
+                        const auto value = input.get_fourier_from_index(index);
+                        const auto partner = records[r].value;
+                        const Real mismatch = std::abs(value - std::conj(partner));
+                        mismatch_max = std::max(mismatch_max, mismatch);
+                        const auto mode = mode_numbers(input, index);
+                        if (mode != std::array<int, 3>{0, 0, 0} && supported(mode, options.input_mode_limit)) {
+                            const auto corrected = mismatch == 0 ? value : Real(.5) * value + Real(.5) * std::conj(partner);
+                            const double correction = double(std::abs(value - corrected));
+                            report.max_hermitian_correction = std::max(report.max_hermitian_correction, correction);
+                            report.max_input_correction = std::max(report.max_input_correction, correction);
+                            if (accepted)
+                                accepted->set_fourier_from_index(index, corrected);
+                        }
+                    }
+                }, std::min(options.max_remap_message_bytes, size_t(INT_MAX)));
+                collective_try([&] {
+                    if (!std::isfinite(mismatch_max) || mismatch_max > Real(report.input_tolerance))
+                        throw std::domain_error("[EdS LPT] Non-Hermitian input boundary plane");
+                }, "EdS Hermitian validation");
+            }
+        }
+
+        // The storage of a grid without extra cells: of the slabs, or of the grid type on a pencil domain
+        template <class G>
+        inline size_t storage_of(int mesh, [[maybe_unused]] const FML::PencilDomain * domain) {
+            if constexpr (is_slabs<G>)
+                return G::storage_bytes(mesh);
+            else
+                return G::storage_bytes(mesh, *domain);
+        }
+        // The uniform pencils with the process grid of a domain (the work grids: on cells for meshes divisible by P)
+        inline FML::PencilDomain uniform_pencils(const std::array<int, 2> & P) {
+            auto edges = [](int parts) {
+                std::vector<double> e(parts + 1);
+                for (int i = 0; i <= parts; ++i)
+                    e[i] = double(i) / parts;
+                return e;
+            };
+            return FML::PencilDomain::from_edges(edges(P[0]), edges(P[1]));
+        }
+
         // Dedicated collective plans avoid rank-dependent hits in FFTWGrid's global cache.
+        // (other grids: their own transforms)
+        template <class G>
         class Transforms {
 #ifdef USE_FFTW
             FML::GRID::my_fftw_plan forward = nullptr, inverse = nullptr;
 #endif
             int mesh;
           public:
-            explicit Transforms(Grid & scratch) : mesh(scratch.get_nmesh()) {
+            explicit Transforms(G & scratch) : mesh(scratch.get_nmesh()) {
+                if constexpr (is_slabs<G>) {
 #ifdef USE_FFTW
                 const unsigned flag = FML::GRID::get_fftw_planner_flag() | FFTW_UNALIGNED;
 #ifdef USE_MPI
@@ -261,6 +373,7 @@ namespace FML::COSMOLOGY::LPT {
                 if (!forward || !inverse)
                     FML::abort_mpi(1);
 #endif
+                }
             }
             ~Transforms() {
 #ifdef USE_FFTW
@@ -270,7 +383,14 @@ namespace FML::COSMOLOGY::LPT {
             }
             Transforms(const Transforms &) = delete;
             Transforms & operator=(const Transforms &) = delete;
-            void apply(Grid & field, bool r2c) {
+            void apply(G & field, bool r2c) {
+                if constexpr (not is_slabs<G>) {
+                    if (r2c)
+                        field.fftw_r2c();
+                    else
+                        field.fftw_c2r();
+                    return;
+                } else {
 #ifdef USE_FFTW
                 if (r2c) {
                     EXECUTE_R2C_NEW_ARRAY(forward, field.get_real_grid(), field.get_fftw_grid());
@@ -278,7 +398,7 @@ namespace FML::COSMOLOGY::LPT {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                    for (FML::IndexIntType row = 0; row < field.get_local_nrows(); ++row)
+                    for (FML::IndexIntType row = 0; row < field.get_local_nrows_fourier(); ++row)
                         for (auto index : field.get_fourier_range_of_rows(row, row + 1))
                             field.set_fourier_from_index(index, norm * field.get_fourier_from_index(index));
                 } else {
@@ -286,6 +406,7 @@ namespace FML::COSMOLOGY::LPT {
                 }
                 field.set_grid_status_real(!r2c);
 #endif
+                }
             }
         };
 
@@ -322,19 +443,28 @@ namespace FML::COSMOLOGY::LPT {
 
         // The ledger tracks payload capacities plus a conservative metadata bound.
         // One extra grid is reserved for FFTWGrid's non-ESTIMATE planner backup.
+        // Grids are allocated in two layouts: the work mesh (slabs, or uniform pencils) and the input mesh (slabs, or
+        // like the input)
+        template <class G>
         class Workspace {
             size_t current;
             EdSLPTReport & report;
-            Transforms * transforms = nullptr;
+            Transforms<G> * transforms = nullptr;
+            const G & input;
+            std::optional<FML::PencilDomain> work_domain;
           public:
-            explicit Workspace(EdSLPTReport & report) : current(report.metadata_bound_bytes), report(report) {}
+            Workspace(EdSLPTReport & report, const G & input) : current(report.metadata_bound_bytes), report(report), input(input) {
+                if constexpr (not is_slabs<G>)
+                    work_domain = uniform_pencils(input.get_domain().process_grid());
+            }
             void check() {
                 report.accounted_owned_peak_bytes = std::max(report.accounted_owned_peak_bytes, current);
                 if (current > report.owned_peak_bound_bytes)
                     throw std::logic_error("[EdS LPT] Owned capacity exceeded its preflight bound");
             }
-            void use(Transforms & backend) { transforms = &backend; }
-            void allocate(Grid & grid, int mesh) {
+            void use(Transforms<G> & backend) { transforms = &backend; }
+            // work = true: a grid of the work mesh, otherwise of the input mesh
+            void allocate(G & grid, bool work) {
                 collective_try([&] {
 #ifdef FML_EDS_LPT_TEST_ALLOCATIONS
                     if (fail_allocation_after == 0) {
@@ -343,16 +473,21 @@ namespace FML::COSMOLOGY::LPT {
                     }
                     if (fail_allocation_after > 0) --fail_allocation_after;
 #endif
-                    grid = Grid(mesh, 0, 0);
+                    if constexpr (is_slabs<G>)
+                        grid = G(work ? report.work_mesh : report.input_mesh, 0, 0);
+                    else if (work)
+                        grid = G(report.work_mesh, 0, 0, *work_domain);
+                    else
+                        grid = make_grid_like(input, report.input_mesh, 0, 0);
                     current = sum_bytes(current, grid.allocated_storage_bytes());
                     check();
                 }, "EdS grid allocation");
             }
-            void release(Grid & grid) {
+            void release(G & grid) {
                 current -= grid.allocated_storage_bytes();
                 grid.free();
             }
-            void transform(Grid & grid, bool forward) {
+            void transform(G & grid, bool forward) {
                 transforms->apply(grid, forward);
                 ++report.fft_count;
             }
@@ -360,7 +495,8 @@ namespace FML::COSMOLOGY::LPT {
     } // namespace eds_detail
 
     /// Collective preflight without work/output grids or FFT plans.
-    inline EdSLPTReport plan_eds_lpt(const eds_detail::Grid & input, const EdSLPTOptions & options,
+    template <class G>
+    inline EdSLPTReport plan_eds_lpt(const G & input, const EdSLPTOptions & options,
                                      EdSLPTOutput output) {
         using namespace eds_detail;
         require_backend();
@@ -374,15 +510,27 @@ namespace FML::COSMOLOGY::LPT {
             (unsigned long long)FML::GRID::get_fftw_nthreads(), (unsigned long long)FML::NThreads, (unsigned long long)options.workspace};
         same_value(configuration, "[EdS LPT] Options or meshes differ between ranks");
         EdSLPTReport report;
-        std::array<ptrdiff_t, 2> work_slab{};
+        std::array<ptrdiff_t, 2> work_slab{}, slab{};
+        // Pencils: the process grid of the input (the work grids are uniform pencils with it)
+        std::array<int, 2> process_grid{FML::NTasks, 1};
+        std::optional<FML::PencilDomain> work_domain, input_domain;
         collective_try([&] {
-            if (mesh < 2 || mesh % FML::NTasks != 0 || input.get_grid_status_real())
-                throw std::invalid_argument("[EdS LPT] Need an allocated Fourier grid divisible by the rank count");
+            if constexpr (is_slabs<G>) {
+                if (mesh < 2 || mesh % FML::NTasks != 0 || input.get_grid_status_real())
+                    throw std::invalid_argument("[EdS LPT] Need an allocated Fourier grid divisible by the rank count");
+            } else {
+                if (mesh < 2 || input.get_grid_status_real())
+                    throw std::invalid_argument("[EdS LPT] Need an allocated Fourier grid");
+                process_grid = input.get_domain().process_grid();
+                input_domain = input.get_domain();
+            }
             if (options.max_owned_bytes_per_rank < sizeof(std::array<ptrdiff_t,3>))
                 throw std::length_error("[EdS LPT] Budget cannot hold layout-query metadata");
-            const auto slab = Grid::local_slab(mesh);
-            if (slab[0] <= 0 || input.get_local_nx() != slab[0] || input.get_local_x_start() != slab[1])
-                throw std::invalid_argument("[EdS LPT] Incompatible local Fourier slab");
+            if constexpr (is_slabs<G>) {
+                slab = Grid::local_slab(mesh);
+                if (slab[0] <= 0 || input.get_local_nx() != slab[0] || input.get_local_x_start() != slab[1])
+                    throw std::invalid_argument("[EdS LPT] Incompatible local Fourier slab");
+            }
             if (options.max_order < 1 || options.max_order == std::numeric_limits<int>::max())
                 throw std::invalid_argument("[EdS LPT] Invalid maximum order");
             if (output != EdSLPTOutput::RetainOrders && output != EdSLPTOutput::StreamOrders)
@@ -394,15 +542,21 @@ namespace FML::COSMOLOGY::LPT {
                     throw std::invalid_argument("[EdS LPT] Explicit strictly sub-Nyquist input support is required");
             const size_t bandwidth = *std::max_element(options.input_mode_limit.begin(), options.input_mode_limit.end());
             const size_t lower = std::max(size_t(mesh), sum_bytes(product_bytes(product_bytes(2, options.max_order), bandwidth), 1));
-            const size_t multiple = std::lcm(size_t(2), size_t(FML::NTasks));
+            // The work mesh is a multiple of 2 and of the number of slabs (pencils: of P0 and P1, so the uniform pencils
+            // lie on cells)
+            const size_t multiple = std::lcm(std::lcm(size_t(2), size_t(process_grid[0])), size_t(process_grid[1]));
             const size_t work = product_bytes(sum_bytes(lower, multiple - 1) / multiple, multiple);
             if (work > size_t(std::numeric_limits<int>::max()))
                 throw std::overflow_error("[EdS LPT] Work mesh exceeds the grid width representation");
             grid_bytes(mesh);
             grid_bytes(int(work));
-            work_slab = Grid::local_slab(int(work));
-            if (work_slab[0] <= 0)
-                throw std::invalid_argument("[EdS LPT] Empty work slabs are unsupported");
+            if constexpr (is_slabs<G>) {
+                work_slab = Grid::local_slab(int(work));
+                if (work_slab[0] <= 0)
+                    throw std::invalid_argument("[EdS LPT] Empty work slabs are unsupported");
+            } else {
+                work_domain = uniform_pencils(process_grid);
+            }
             report.input_mesh = mesh;
             report.work_mesh = int(work);
             report.max_order = options.max_order;
@@ -413,22 +567,41 @@ namespace FML::COSMOLOGY::LPT {
                 throw std::invalid_argument("[EdS LPT] Unknown workspace policy");
             report.beyond_validated_order = options.max_order > report.validated_max_order;
             report.input_bytes = input.allocated_storage_bytes();
-            report.output_grid_bytes = Grid::storage_bytes(mesh);
-            report.work_grid_bytes = Grid::storage_bytes(int(work));
+            report.output_grid_bytes = storage_of<G>(mesh, input_domain ? &*input_domain : nullptr);
+            report.work_grid_bytes = storage_of<G>(int(work), work_domain ? &*work_domain : nullptr);
             const size_t retained = output == EdSLPTOutput::RetainOrders ? size_t(options.max_order) : 1;
             report.output_bytes = product_bytes(product_bytes(3, retained), report.output_grid_bytes);
             const bool cached = options.workspace == EdSLPTWorkspace::CacheGradients;
             const size_t tensor_count = cached ? size_t(options.max_order - 1) : std::min(size_t(3), size_t(options.max_order - 1));
             report.internal_gradient_bytes = product_bytes(product_bytes(9, tensor_count), report.work_grid_bytes);
             report.internal_displacement_bytes = cached ? 0 : product_bytes(product_bytes(3, size_t(options.max_order - 1)), report.work_grid_bytes);
-            report.metadata_bound_bytes = sum_bytes(product_bytes(size_t(options.max_order - 1), cached ? sizeof(Tensor) : sizeof(EdSLPTVector)),
-                                                    product_bytes(retained, sizeof(EdSLPTVector)));
-            report.remap_workspace_bound_bytes = Remap::workspace_bound(mesh, int(work), size_t(slab[0]),
-                size_t(work_slab[0]), options.max_remap_message_bytes);
+            report.metadata_bound_bytes = sum_bytes(product_bytes(size_t(options.max_order - 1), cached ? sizeof(TensorT<G>) : sizeof(EdSLPTVectorT<G>)),
+                                                    product_bytes(retained, sizeof(EdSLPTVectorT<G>)));
+            const size_t message = std::min(options.max_remap_message_bytes, size_t(INT_MAX));
+            if constexpr (is_slabs<G>) {
+                report.remap_workspace_bound_bytes = Remap::workspace_bound(mesh, int(work), size_t(slab[0]),
+                    size_t(work_slab[0]), options.max_remap_message_bytes);
+            } else {
+                // copy_fourier_modes: a record (3 ints and a value, at most 2 Complex) per local mode of the source
+                // (vectors of at most twice the size) and the receive scratch (8 MB). The sources are an input-mesh
+                // or a work-mesh grid: at most as many modes as complex numbers allocated
+                const size_t modes = std::max(report.output_grid_bytes, report.work_grid_bytes) / sizeof(Complex);
+                report.remap_workspace_bound_bytes = sum_bytes(product_bytes(product_bytes(2, modes), 2 * sizeof(Complex)),
+                                                               size_t(8) * 1024 * 1024);
+            }
             report.metadata_bound_bytes = sum_bytes(report.metadata_bound_bytes, report.remap_workspace_bound_bytes);
-            const size_t boundary_values = std::min(size_t(mesh), std::min(options.max_remap_message_bytes, size_t(INT_MAX)) / sizeof(Complex));
-            report.metadata_bound_bytes = sum_bytes(report.metadata_bound_bytes,
-                sum_bytes(product_bytes(size_t(FML::NTasks), sizeof(slab)), product_bytes(2 * boundary_values, sizeof(Complex))));
+            if constexpr (is_slabs<G>) {
+                const size_t boundary_values = std::min(size_t(mesh), message / sizeof(Complex));
+                report.metadata_bound_bytes = sum_bytes(report.metadata_bound_bytes,
+                    sum_bytes(product_bytes(size_t(FML::NTasks), sizeof(slab)), product_bytes(2 * boundary_values, sizeof(Complex))));
+            } else {
+                // The boundary records: at most the two planes of the local modes (vectors of at most twice the size),
+                // the receive scratch and the owner table of the Fourier boxes
+                const size_t plane_modes = product_bytes(2, product_bytes(size_t(mesh), size_t(mesh)));
+                report.metadata_bound_bytes = sum_bytes(report.metadata_bound_bytes,
+                    sum_bytes(sum_bytes(product_bytes(product_bytes(2, plane_modes), 2 * sizeof(Complex)), message),
+                              product_bytes(size_t(FML::NTasks) + 3 * size_t(mesh), 8 * sizeof(int))));
+            }
             report.owned_peak_bound_bytes = sum_bytes(report.metadata_bound_bytes,
                 sum_bytes(report.internal_gradient_bytes, report.internal_displacement_bytes));
             report.owned_peak_bound_bytes = sum_bytes(report.owned_peak_bound_bytes, product_bytes(8, report.work_grid_bytes));
@@ -482,25 +655,27 @@ namespace FML::COSMOLOGY::LPT {
     }
 
     namespace eds_detail {
+        template <class G>
         class GradientStore {
+            using Tensor = TensorT<G>;
             const EdSLPTOptions & options;
             EdSLPTReport & report;
-            Workspace & workspace;
+            Workspace<G> & workspace;
             std::vector<Tensor> gradients;
-            std::vector<EdSLPTVector> displacements;
+            std::vector<EdSLPTVectorT<G>> displacements;
             std::array<Tensor,3> scratch;
             GradientLRU cache;
-            void build(Tensor & tensor, const EdSLPTVector & displacement) {
+            void build(Tensor & tensor, const EdSLPTVectorT<G> & displacement) {
                 for (int i = 0; i < 3; ++i)
                     for (int j = 0; j < 3; ++j) {
                         auto & field = tensor[3*i+j];
                         workspace.release(field);
-                        workspace.allocate(field, report.work_mesh);
+                        workspace.allocate(field, true);
                         field.set_grid_status_real(false);
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                        for (FML::IndexIntType row = 0; row < field.get_local_nrows(); ++row)
+                        for (FML::IndexIntType row = 0; row < field.get_local_nrows_fourier(); ++row)
                             for (auto index : field.get_fourier_range_of_rows(row,row+1)) {
                                 std::array<double,3> wave;
                                 double k2;
@@ -512,7 +687,7 @@ namespace FML::COSMOLOGY::LPT {
                     }
             }
           public:
-            GradientStore(const EdSLPTOptions & options, EdSLPTReport & report, Workspace & workspace)
+            GradientStore(const EdSLPTOptions & options, EdSLPTReport & report, Workspace<G> & workspace)
                 : options(options), report(report), workspace(workspace) {
                 collective_try([&] {
                     const size_t count = size_t(options.max_order-1);
@@ -525,7 +700,7 @@ namespace FML::COSMOLOGY::LPT {
                     }
                 }, "EdS gradient metadata");
             }
-            void remember(int order, EdSLPTVector & displacement) {
+            void remember(int order, EdSLPTVectorT<G> & displacement) {
                 if (options.workspace == EdSLPTWorkspace::CacheGradients)
                     build(gradients[order-1],displacement);
                 else
@@ -539,7 +714,8 @@ namespace FML::COSMOLOGY::LPT {
             }
         };
 
-        inline std::array<Real, 9> tensor_at(const Tensor & tensor, FML::IndexIntType index) {
+        template <class G>
+        inline std::array<Real, 9> tensor_at(const TensorT<G> & tensor, FML::IndexIntType index) {
             std::array<Real, 9> value;
             for (int i = 0; i < 9; ++i)
                 value[i] = tensor[i].get_real_from_index(index);
@@ -579,8 +755,10 @@ namespace FML::COSMOLOGY::LPT {
             return value;
         }
 
-        inline void compute_sources(int order, GradientStore & gradients,
-                                    std::array<Grid, 4> & sources, std::array<Real, 4> & bounds) {
+        template <class G>
+        inline void compute_sources(int order, GradientStore<G> & gradients,
+                                    std::array<G, 4> & sources, std::array<Real, 4> & bounds) {
+            using Tensor = TensorT<G>;
             const Real denominator = (Real(2) * order + 3) * (order - 1);
             for (int r = 1; r <= order / 2; ++r) {
                 const int t = order - r;
@@ -594,7 +772,7 @@ namespace FML::COSMOLOGY::LPT {
 #endif
                 for (FML::IndexIntType row = 0; row < sources[0].get_local_nrows(); ++row) {
                     for (auto index : sources[0].get_real_range_of_rows(row, row + 1)) {
-                        const auto a = tensor_at(left, index), b = tensor_at(right, index);
+                        const auto a = tensor_at<G>(left, index), b = tensor_at<G>(right, index);
                         Real envelope;
                         const Real value = quadratic(a, b, envelope);
                         sources[0].set_real_from_index(index, sources[0].get_real_from_index(index) + scalar * value);
@@ -639,7 +817,7 @@ namespace FML::COSMOLOGY::LPT {
                     for (FML::IndexIntType row = 0; row < sources[0].get_local_nrows(); ++row)
                         for (auto index : sources[0].get_real_range_of_rows(row, row + 1)) {
                             Real envelope;
-                            const Real value = cubic(tensor_at(first, index), tensor_at(second, index), tensor_at(third, index), envelope);
+                            const Real value = cubic(tensor_at<G>(first, index), tensor_at<G>(second, index), tensor_at<G>(third, index), envelope);
                             sources[0].set_real_from_index(index, sources[0].get_real_from_index(index) + factor * value);
                             maximum = std::max(maximum, std::abs(factor) * envelope);
                         }
@@ -647,8 +825,9 @@ namespace FML::COSMOLOGY::LPT {
                 }
         }
 
-        inline void invert_sources(std::array<Grid, 4> & sources, const std::array<Real, 4> & envelopes,
-                                    EdSLPTVector & displacement, EdSLPTReport & report, Workspace & workspace) {
+        template <class G>
+        inline void invert_sources(std::array<G, 4> & sources, const std::array<Real, 4> & envelopes,
+                                    EdSLPTVectorT<G> & displacement, EdSLPTReport & report, Workspace<G> & workspace) {
             Real envelope = 0;
             for (auto value : envelopes) envelope += value;
             const Real operations = Real(256) * (1 + std::log2(Real(report.work_mesh))) * report.max_order * report.max_order;
@@ -659,7 +838,7 @@ namespace FML::COSMOLOGY::LPT {
             }, "EdS source envelope");
             for (auto & field : sources) workspace.transform(field, true);
             for (auto & field : displacement) {
-                workspace.allocate(field, report.work_mesh);
+                workspace.allocate(field, true);
                 field.set_grid_status_real(false);
             }
             const Complex imaginary(0, 1);
@@ -668,7 +847,7 @@ namespace FML::COSMOLOGY::LPT {
 #ifdef USE_OMP
 #pragma omp parallel for reduction(min:valid) reduction(max:worst)
 #endif
-            for (FML::IndexIntType row = 0; row < sources[0].get_local_nrows(); ++row) {
+            for (FML::IndexIntType row = 0; row < sources[0].get_local_nrows_fourier(); ++row) {
                 for (auto index : sources[0].get_fourier_range_of_rows(row, row + 1)) {
                     std::array<double, 3> wave;
                     double k2;
@@ -704,12 +883,38 @@ namespace FML::COSMOLOGY::LPT {
             report.worst_compatibility_ratio = std::max(report.worst_compatibility_ratio, worst);
         }
 
-        inline EdSLPTReport run(const Grid & input, const EdSLPTOptions & options, EdSLPTOutput output,
-                                 const EdSLPTOrderSink & sink, std::vector<EdSLPTVector> & collected) {
+        // Copy the modes strictly inside the smaller Nyquist cube to another mesh (the slab plan, or copy_fourier_modes)
+        template <class G>
+        class Resample {
+            std::optional<Remap> plan;
+            EdSLPTReport & report;
+            const char * label;
+          public:
+            Resample(EdSLPTReport & report, const char * label) : report(report), label(label) {}
+            void apply(const G & from, G & to, size_t max_message_bytes) {
+                if constexpr (is_slabs<G>) {
+                    if (!plan)
+                        plan.emplace(from, to);
+                    plan->apply(from, to, max_message_bytes);
+                    collective_try([&] {
+                        if (plan->workspace_storage_bytes() > report.remap_workspace_bound_bytes)
+                            throw std::logic_error(label);
+                    }, "EdS remap capacity");
+                } else {
+                    (void)max_message_bytes;
+                    FML::GRID::copy_fourier_modes<3>(from, to, [](const std::array<int, 3> &) { return 1.0; });
+                }
+                ++report.remap_count;
+            }
+        };
+
+        template <class G>
+        inline EdSLPTReport run(const G & input, const EdSLPTOptions & options, EdSLPTOutput output,
+                                 const EdSLPTOrderSinkT<G> & sink, std::vector<EdSLPTVectorT<G>> & collected) {
             const auto start = std::chrono::steady_clock::now();
             auto report = plan_eds_lpt(input, options, output);
-            Workspace workspace(report);
-            GradientStore gradients(options, report, workspace);
+            Workspace<G> workspace(report, input);
+            GradientStore<G> gradients(options, report, workspace);
             collective_try([&] {
                 if (output == EdSLPTOutput::RetainOrders) {
                     collected.reserve(size_t(options.max_order));
@@ -717,34 +922,29 @@ namespace FML::COSMOLOGY::LPT {
                         throw std::logic_error("[EdS LPT] Unexpected output vector capacity");
                 }
             }, "EdS retained metadata");
-            Grid planning_grid;
-            workspace.allocate(planning_grid, report.work_mesh);
-            Transforms transforms(planning_grid);
+            G planning_grid;
+            workspace.allocate(planning_grid, true);
+            Transforms<G> transforms(planning_grid);
             workspace.use(transforms);
             workspace.release(planning_grid);
-            Grid accepted, seed;
-            workspace.allocate(accepted, report.input_mesh);
+            G accepted, seed;
+            workspace.allocate(accepted, false);
             accepted.set_grid_status_real(false);
             for (auto index : input.get_fourier_range())
                 accepted.set_fourier_from_index(index, corrected_seed(input, index, options.input_mode_limit));
             boundaries(input, options, report, &accepted);
-            workspace.allocate(seed, report.work_mesh);
+            workspace.allocate(seed, true);
             {
-                Remap embed(accepted, seed);
-                collective_try([&] {
-                    if (embed.workspace_storage_bytes() > report.remap_workspace_bound_bytes)
-                        throw std::logic_error("[EdS LPT] Remapping capacity exceeded preflight");
-                }, "EdS embedding capacity");
+                Resample<G> embed(report, "[EdS LPT] Remapping capacity exceeded preflight");
                 embed.apply(accepted, seed, options.max_remap_message_bytes);
-                ++report.remap_count;
             }
             workspace.release(accepted);
-            std::optional<Remap> crop;
+            Resample<G> crop(report, "[EdS LPT] Crop capacity exceeded preflight");
             for (int order = 1; order <= options.max_order; ++order) {
-                EdSLPTVector displacement;
+                EdSLPTVectorT<G> displacement;
                 if (order == 1) {
                     for (auto & field : displacement) {
-                        workspace.allocate(field, report.work_mesh);
+                        workspace.allocate(field, true);
                         field.set_grid_status_real(false);
                     }
                     for (auto index : seed.get_fourier_range()) {
@@ -757,9 +957,9 @@ namespace FML::COSMOLOGY::LPT {
                     }
                     workspace.release(seed);
                 } else {
-                    std::array<Grid, 4> sources;
+                    std::array<G, 4> sources;
                     for (auto & field : sources)
-                        workspace.allocate(field, report.work_mesh);
+                        workspace.allocate(field, true);
                     std::array<Real, 4> envelopes{};
                     compute_sources(order, gradients, sources, envelopes);
                     for (auto & value : envelopes) FML::MaxOverTasks(&value);
@@ -767,24 +967,11 @@ namespace FML::COSMOLOGY::LPT {
                     for (auto & field : sources)
                         workspace.release(field);
                 }
-                EdSLPTVector cropped;
+                EdSLPTVectorT<G> cropped;
                 for (auto & field : cropped)
-                    workspace.allocate(field, report.input_mesh);
-                if (!crop) {
-                    crop.emplace(displacement[0], cropped[0]);
-                    collective_try([&] {
-                        if (crop->workspace_storage_bytes() > report.remap_workspace_bound_bytes)
-                            throw std::logic_error("[EdS LPT] Crop capacity exceeded preflight");
-                    }, "EdS crop capacity");
-                }
-                for (int i = 0; i < 3; ++i) {
-                    crop->apply(displacement[i], cropped[i], options.max_remap_message_bytes);
-                    collective_try([&] {
-                        if (crop->workspace_storage_bytes() > report.remap_workspace_bound_bytes)
-                            throw std::logic_error("[EdS LPT] Transport capacity exceeded preflight");
-                    }, "EdS crop transport capacity");
-                    ++report.remap_count;
-                }
+                    workspace.allocate(field, false);
+                for (int i = 0; i < 3; ++i)
+                    crop.apply(displacement[i], cropped[i], options.max_remap_message_bytes);
                 if (output == EdSLPTOutput::RetainOrders)
                     collected.push_back(std::move(cropped));
                 else {
@@ -809,21 +996,26 @@ namespace FML::COSMOLOGY::LPT {
         }
     } // namespace eds_detail
 
-    inline EdSLPTResult compute_eds_lpt(const eds_detail::Grid & input, const EdSLPTOptions & options) {
-        EdSLPTResult result;
-        result.report = eds_detail::run(input, options, EdSLPTOutput::RetainOrders, {}, result.orders_fourier);
+    /// All the orders (Fourier space, on grids of the input mesh decomposed as the input) and the report
+    template <class G>
+    inline EdSLPTResultT<G> compute_eds_lpt(const G & input, const EdSLPTOptions & options) {
+        EdSLPTResultT<G> result;
+        result.report = eds_detail::run<G>(input, options, EdSLPTOutput::RetainOrders, {}, result.orders_fourier);
         return result;
     }
-    inline EdSLPTReport for_each_eds_lpt_order(const eds_detail::Grid & input, const EdSLPTOptions & options,
-                                               const EdSLPTOrderSink & sink) {
+    /// The orders one at a time (sink(order, fields)), with the memory of one order
+    template <class G>
+    inline EdSLPTReport for_each_eds_lpt_order(const G & input, const EdSLPTOptions & options,
+                                               const FML::GRID::non_deduced_t<EdSLPTOrderSinkT<G>> & sink) {
         eds_detail::collective_try([&] {
             if (!sink) throw std::invalid_argument("[EdS LPT] Streaming requires a nonempty sink");
         }, "EdS sink validation");
-        std::vector<EdSLPTVector> unused;
-        return eds_detail::run(input, options, EdSLPTOutput::StreamOrders, sink, unused);
+        std::vector<EdSLPTVectorT<G>> unused;
+        return eds_detail::run<G>(input, options, EdSLPTOutput::StreamOrders, sink, unused);
     }
 
-    inline EdSLPTEvaluation EdSLPTResult::evaluate(double g, size_t budget) const {
+    template <class G>
+    inline EdSLPTEvaluationT<G> EdSLPTResultT<G>::evaluate(double g, size_t budget) const {
         using namespace eds_detail;
         require_backend();
         same_value(g, "[EdS LPT] Growth ratios differ between ranks");
@@ -834,11 +1026,15 @@ namespace FML::COSMOLOGY::LPT {
             if (!(g > 0) || !std::isfinite(g) || orders_fourier.empty() ||
                 orders_fourier.size() != size_t(report.max_order))
                 throw std::invalid_argument("[EdS LPT] Evaluation requires complete orders and positive finite growth");
-            size_t bytes = product_bytes(orders_fourier.capacity(), sizeof(EdSLPTVector));
-            mesh = orders_fourier[0][0].get_nmesh();
-            if (mesh < 2 || mesh % FML::NTasks)
+            size_t bytes = product_bytes(orders_fourier.capacity(), sizeof(EdSLPTVectorT<G>));
+            const auto & first = orders_fourier[0][0];
+            mesh = first.get_nmesh();
+            if (mesh < 2 || (is_slabs<G> && mesh % FML::NTasks))
                 throw std::invalid_argument("[EdS LPT] Invalid retained mesh");
-            const auto slab = Grid::local_slab(mesh);
+            // Every field has the layout of the first (slabs: FFTW's slabs)
+            std::array<ptrdiff_t, 2> slab{first.get_local_range(0)[1], first.get_local_range(0)[0]};
+            if constexpr (is_slabs<G>)
+                slab = Grid::local_slab(mesh);
             Real weight = 1;
             for (size_t n = 0; n < orders_fourier.size(); ++n) {
                 weight *= Real(g);
@@ -846,22 +1042,32 @@ namespace FML::COSMOLOGY::LPT {
                     throw std::overflow_error("[EdS LPT] Nonfinite evaluation weight");
                 for (const auto & field : orders_fourier[n]) {
                     if (field.get_nmesh() != mesh || field.get_grid_status_real() ||
-                        field.get_local_nx() != slab[0] || field.get_local_x_start() != slab[1])
+                        field.get_local_range(0)[1] != slab[0] || field.get_local_range(0)[0] != slab[1] ||
+                        field.get_local_range(1) != first.get_local_range(1) ||
+                        field.get_ntot_fourier() != first.get_ntot_fourier())
                         throw std::invalid_argument("[EdS LPT] Incompatible retained Fourier field");
                     bytes = sum_bytes(bytes, field.allocated_storage_bytes());
                 }
             }
             grid_bytes(mesh);
-            bytes = sum_bytes(bytes, product_bytes(6, Grid::storage_bytes(mesh)));
+            if constexpr (is_slabs<G>)
+                bytes = sum_bytes(bytes, product_bytes(6, Grid::storage_bytes(mesh)));
+            else
+                bytes = sum_bytes(bytes, product_bytes(6, G::storage_bytes(mesh, first.get_domain())));
             if (!budget || bytes > budget)
                 throw std::length_error("[EdS LPT] Evaluation exceeds owned-memory budget");
         }, "EdS evaluator preflight");
         same_value(mesh, "[EdS LPT] Retained meshes differ between ranks");
-        EdSLPTEvaluation result;
+        EdSLPTEvaluationT<G> result;
         collective_try([&] {
             for (int i = 0; i < 3; ++i) {
-                result.displacement_fourier[i] = Grid(mesh, 0, 0);
-                result.ddisplacement_dln_a_fourier[i] = Grid(mesh, 0, 0);
+                if constexpr (is_slabs<G>) {
+                    result.displacement_fourier[i] = Grid(mesh, 0, 0);
+                    result.ddisplacement_dln_a_fourier[i] = Grid(mesh, 0, 0);
+                } else {
+                    result.displacement_fourier[i] = make_grid_like(orders_fourier[0][0], mesh, 0, 0);
+                    result.ddisplacement_dln_a_fourier[i] = make_grid_like(orders_fourier[0][0], mesh, 0, 0);
+                }
                 result.displacement_fourier[i].set_grid_status_real(false);
                 result.ddisplacement_dln_a_fourier[i].set_grid_status_real(false);
             }
@@ -874,7 +1080,7 @@ namespace FML::COSMOLOGY::LPT {
 #ifdef USE_OMP
 #pragma omp parallel for reduction(min:valid)
 #endif
-                for (FML::IndexIntType row = 0; row < orders_fourier[n][i].get_local_nrows(); ++row)
+                for (FML::IndexIntType row = 0; row < orders_fourier[n][i].get_local_nrows_fourier(); ++row)
                 for (auto index : orders_fourier[n][i].get_fourier_range_of_rows(row, row + 1)) {
                     const auto coefficient = orders_fourier[n][i].get_fourier_from_index(index);
                     auto value = result.displacement_fourier[i].get_fourier_from_index(index) + weight * coefficient;
@@ -890,5 +1096,6 @@ namespace FML::COSMOLOGY::LPT {
         }, "EdS evaluator arithmetic");
         return result;
     }
+
 } // namespace FML::COSMOLOGY::LPT
 #endif

@@ -10,6 +10,7 @@
 #endif
 
 #include <FML/FFTWGrid/FFTWGrid.h>
+#include <FML/FFTWGrid/GridInterface.h>
 #include <FML/Global/Global.h>
 #include <FML/NBody/ForceOptions.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
@@ -39,6 +40,7 @@ namespace FML {
         // Type aliases
         template <int N>
         using FFTWGrid = FML::GRID::FFTWGrid<N>;
+        using FML::GRID::make_grid_like;
         template <class T>
         using MPIParticles = FML::PARTICLE::MPIParticles<T>;
 
@@ -48,15 +50,15 @@ namespace FML {
         template <int N, class T>
         void DriftParticles(T * p, size_t NumPart, double delta_time, bool periodic_box = true);
 
-        template <int N, class T>
-        void KickParticles(std::array<FFTWGrid<N>, N> & force_grid,
+        template <int N, class T, template <int> class Grid = FFTWGrid>
+        void KickParticles(std::array<Grid<N>, N> & force_grid,
                            MPIParticles<T> & part,
                            double delta_time,
                            std::string interpolation_method,
                            double velocity_scale = 1.0);
 
-        template <int N, class T>
-        void KickParticles(std::array<FFTWGrid<N>, N> & force_grid,
+        template <int N, class T, template <int> class Grid = FFTWGrid>
+        void KickParticles(std::array<Grid<N>, N> & force_grid,
                            T * p,
                            size_t NumPart,
                            double delta_time,
@@ -67,16 +69,16 @@ namespace FML {
         template <int N, class T>
         void ScaleVelocities(T * p, size_t NumPart, double velocity_scale);
 
-        template <int N>
-        void compute_force_from_density_real(const FFTWGrid<N> & density_grid_real,
-                                             std::array<FFTWGrid<N>, N> & force_real,
+        template <int N, template <int> class Grid = FFTWGrid>
+        void compute_force_from_density_real(const Grid<N> & density_grid_real,
+                                             std::array<Grid<N>, N> & force_real,
                                              std::string density_assignment_method_used,
                                              double norm_poisson_equation,
                                              const ForceOptions & options = {});
 
-        template <int N>
-        void compute_force_from_density_fourier(const FFTWGrid<N> & density_grid_fourier,
-                                                std::array<FFTWGrid<N>, N> & force_real,
+        template <int N, template <int> class Grid = FFTWGrid>
+        void compute_force_from_density_fourier(const Grid<N> & density_grid_fourier,
+                                                std::array<Grid<N>, N> & force_real,
                                                 std::string density_assignment_method_used,
                                                 double norm_poisson_equation,
                                                 const ForceOptions & options = {});
@@ -92,16 +94,16 @@ namespace FML {
             return stencil_order == 2 or stencil_order == 4 or stencil_order == 6;
         }
 
-        template <int N>
-        void compute_force_from_potential_real(FFTWGrid<N> & potential_real,
-                                               std::array<FFTWGrid<N>, N> & force_grid_real,
+        template <int N, template <int> class Grid = FFTWGrid>
+        void compute_force_from_potential_real(Grid<N> & potential_real,
+                                               std::array<Grid<N>, N> & force_grid_real,
                                                std::string force_interpolation_method,
                                                int stencil_order,
                                                const ForceOptions & options = {});
 
-        template <int N>
-        void compute_potential_real_from_density_fourier(const FFTWGrid<N> & density_grid_fourier,
-                                                         FFTWGrid<N> & potential_real,
+        template <int N, template <int> class Grid = FFTWGrid>
+        void compute_potential_real_from_density_fourier(const Grid<N> & density_grid_fourier,
+                                                         Grid<N> & potential_real,
                                                          double norm_poisson_equation,
                                                          int n_boundary_slices_to_be_allocated,
                                                          const ForceOptions & options = {});
@@ -136,14 +138,35 @@ namespace FML {
                                     std::string density_assignment_method,
                                     double norm_poisson_equation,
                                     const ForceOptions & options = {}) {
+            // The particles on the global slabs, the grid an FFTWGrid with the extra slices of the method
+            auto nleftright = FML::INTERPOLATION::get_extra_slices(density_assignment_method);
+            FFTWGrid<N> density_grid_real(Nmesh, nleftright.first, nleftright.second);
+            density_grid_real.add_memory_label("FFTWGrid::KickDriftKickNBodyStep::density_grid_real");
+            KickDriftKickNBodyStep<N, T>(std::move(density_grid_real),
+                                         part,
+                                         delta_time,
+                                         density_assignment_method,
+                                         norm_poisson_equation,
+                                         options);
+        }
+
+        /// @brief The same step for any grid (FFTWGrid, PencilGrid, ...): density_grid_real is the work grid, made
+        /// with the layout to use and the extra cells of the method (get_extra_slices). The particles must be on its
+        /// domain (FML::GRID::particle_domain_of(grid); e.g. part.set_domain(...) first)
+        template <int N, class T, template <int> class Grid>
+        void KickDriftKickNBodyStep(Grid<N> density_grid_real,
+                                    MPIParticles<T> & part,
+                                    double delta_time,
+                                    std::string density_assignment_method,
+                                    double norm_poisson_equation,
+                                    const ForceOptions & options = {}) {
             options.validate();
+            assert_mpi(part.get_domain() == FML::GRID::particle_domain_of(density_grid_real),
+                       "[KickDriftKickNBodyStep] The particles are not on the domain of the grid");
 
             const bool periodic_box = true;
 
             // Particles -> density field
-            auto nleftright = FML::INTERPOLATION::get_extra_slices(density_assignment_method);
-            FFTWGrid<N> density_grid_real(Nmesh, nleftright.first, nleftright.second);
-            density_grid_real.add_memory_label("FFTWGrid::KickDriftKickNBodyStep::density_grid_real");
             density_grid_real.set_grid_status_real(true);
             FML::INTERPOLATION::particles_to_grid<N, T>(part.get_particles_ptr(),
                                                         part.get_npart(),
@@ -152,15 +175,15 @@ namespace FML {
                                                         density_assignment_method);
 
             // Density field -> force
-            std::array<FFTWGrid<N>, N> force_real;
-            compute_force_from_density_real<N>(density_grid_real,
-                                               force_real,
-                                               density_assignment_method,
-                                               norm_poisson_equation,
-                                               options);
+            std::array<Grid<N>, N> force_real;
+            compute_force_from_density_real<N, Grid>(density_grid_real,
+                                                     force_real,
+                                                     density_assignment_method,
+                                                     norm_poisson_equation,
+                                                     options);
 
             // Update velocity of particles
-            KickParticles(force_real, part, delta_time * 0.5, density_assignment_method);
+            KickParticles<N, T, Grid>(force_real, part, delta_time * 0.5, density_assignment_method);
 
             // Move particles (this does communication)
             DriftParticles<N, T>(part, delta_time, periodic_box);
@@ -173,14 +196,14 @@ namespace FML {
                                                         density_assignment_method);
 
             // Density field -> force
-            compute_force_from_density_real<N>(density_grid_real,
-                                               force_real,
-                                               density_assignment_method,
-                                               norm_poisson_equation,
-                                               options);
+            compute_force_from_density_real<N, Grid>(density_grid_real,
+                                                     force_real,
+                                                     density_assignment_method,
+                                                     norm_poisson_equation,
+                                                     options);
 
             // Update velocity of particles
-            KickParticles(force_real, part, delta_time * 0.5, density_assignment_method);
+            KickParticles<N, T, Grid>(force_real, part, delta_time * 0.5, density_assignment_method);
         }
 
         //===================================================================================
@@ -274,19 +297,19 @@ namespace FML {
         /// @param[in] norm_poisson_equation The prefactor (norm) to the Poisson equation.
         ///
         //===================================================================================
-        template <int N>
-        void compute_force_from_density_real(const FFTWGrid<N> & density_grid_real,
-                                             std::array<FFTWGrid<N>, N> & force_real,
+        template <int N, template <int> class Grid>
+        void compute_force_from_density_real(const Grid<N> & density_grid_real,
+                                             std::array<Grid<N>, N> & force_real,
                                              std::string density_assignment_method_used,
                                              double norm_poisson_equation,
                                              const ForceOptions & options) {
             options.validate();
 
-            FFTWGrid<N> density_grid_fourier = density_grid_real;
+            Grid<N> density_grid_fourier = density_grid_real;
             density_grid_fourier.add_memory_label("FFTWGrid::compute_force_from_density_real::density_grid_fourier");
             density_grid_fourier.set_grid_status_real(true);
             density_grid_fourier.fftw_r2c();
-            compute_force_from_density_fourier<N>(density_grid_fourier,
+            compute_force_from_density_fourier<N, Grid>(density_grid_fourier,
                                                   force_real,
                                                   density_assignment_method_used,
                                                   norm_poisson_equation,
@@ -309,9 +332,9 @@ namespace FML {
         /// @param[in] norm_poisson_equation The prefactor (norm) to the Poisson equation.
         ///
         //===================================================================================
-        template <int N>
-        void compute_force_from_density_fourier(const FFTWGrid<N> & density_grid_fourier,
-                                                std::array<FFTWGrid<N>, N> & force_real,
+        template <int N, template <int> class Grid>
+        void compute_force_from_density_fourier(const Grid<N> & density_grid_fourier,
+                                                std::array<Grid<N>, N> & force_real,
                                                 std::string density_assignment_method_used,
                                                 double norm_poisson_equation,
                                                 const ForceOptions & options) {
@@ -321,8 +344,8 @@ namespace FML {
             const int GRADIENT_KERNEL = options.gradient_kernel;
 
             auto Nmesh = density_grid_fourier.get_nmesh();
-            auto Local_nx = density_grid_fourier.get_local_nx();
-            auto Local_x_start = density_grid_fourier.get_local_x_start();
+            // The fast path below is for FFTWGrid<3> (it decodes the slab indices); other grids use the general loop
+            constexpr bool is_fftwgrid = std::is_same_v<Grid<N>, FFTWGrid<N>>;
 
             // Should we deconvolve the density+force-assignment?
             // We set this to false as standard
@@ -357,17 +380,19 @@ namespace FML {
             bool aliased = false;
             for (int idim = 0; idim < N; idim++)
                 aliased = aliased or (&force_real[idim] == &density_grid_fourier);
-            const bool fast_path = (N == 3) and not aliased;
+            const bool fast_path = (N == 3) and is_fftwgrid and not aliased;
             for (int idim = 0; idim < N; idim++) {
                 if (fast_path) {
-                    auto & g = force_real[idim];
-                    if (g.get_nmesh() != Nmesh or
-                        g.get_n_extra_slices_left() != density_grid_fourier.get_n_extra_slices_left() or
-                        g.get_n_extra_slices_right() != density_grid_fourier.get_n_extra_slices_right())
-                        g = FFTWGrid<N>(Nmesh,
-                                        density_grid_fourier.get_n_extra_slices_left(),
-                                        density_grid_fourier.get_n_extra_slices_right());
-                    g.set_grid_status_real(false);
+                    if constexpr (is_fftwgrid) {
+                        auto & g = force_real[idim];
+                        if (g.get_nmesh() != Nmesh or
+                            g.get_n_extra_slices_left() != density_grid_fourier.get_n_extra_slices_left() or
+                            g.get_n_extra_slices_right() != density_grid_fourier.get_n_extra_slices_right())
+                            g = FFTWGrid<N>(Nmesh,
+                                            density_grid_fourier.get_n_extra_slices_left(),
+                                            density_grid_fourier.get_n_extra_slices_right());
+                        g.set_grid_status_real(false);
+                    }
                 } else {
                     force_real[idim] = density_grid_fourier;
                     force_real[idim].set_grid_status_real(idim == 0);
@@ -378,8 +403,11 @@ namespace FML {
 
             // Fast path for N = 3: the same operations in the same order as the general loop below (identical
             // results) without decoding every Fourier index and with a table for the window function
-            if constexpr (N == 3)
+            if constexpr (N == 3 and is_fftwgrid)
                 if (fast_path) {
+                    const auto Local_nx = density_grid_fourier.get_local_nx();
+                    const auto Local_x_start = density_grid_fourier.get_local_x_start();
+                    const bool has_dc_mode = Local_x_start == 0;
                     const FML::INTERPOLATION::WindowFunctionTable<N> window_table(density_assignment_method_used,
                                                                                   Nmesh);
                     const int nover2 = Nmesh / 2;
@@ -401,7 +429,7 @@ namespace FML {
                         kvec[1] = twopi * double(k_vec_integer[1]);
                         size_t fourier_index = (size_t(islice) * Nmesh + iy) * nover2plus1;
                         for (int iz = 0; iz < nover2plus1; iz++, fourier_index++) {
-                            if (Local_x_start == 0 and fourier_index == 0) {
+                            if (has_dc_mode and fourier_index == 0) {
                                 for (int idim = 0; idim < N; idim++)
                                     force_real[idim].set_fourier_from_index(0, 0.0);
                                 continue; // DC mode (k=0)
@@ -439,18 +467,21 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (FML::IndexIntType irow = 0; irow < force_real[0].get_local_nrows(); irow++) {
+            for (FML::IndexIntType irow = 0; irow < FML::IndexIntType(force_real[0].get_local_nrows_fourier()); irow++) {
                 std::array<double, N> kvec;
                 std::complex<FML::GRID::FloatType> I(0, 1);
                 for (auto && fourier_index : force_real[0].get_fourier_range_of_rows(irow, irow + 1)) {
-                    if (Local_x_start == 0 and fourier_index == 0) {
+                    // Fetch k_vec_integer (k = 0: the DC mode)
+                    auto k_vec_integer = force_real[0].get_fourier_integer_wavevector_from_index(fourier_index);
+                    bool dc_mode = true;
+                    for (int idim = 0; idim < N; idim++)
+                        dc_mode = dc_mode and k_vec_integer[idim] == 0;
+                    if (dc_mode) {
                         for (int idim = 0; idim < N; idim++)
-                            force_real[idim].set_fourier_from_index(0, 0.0);
+                            force_real[idim].set_fourier_from_index(fourier_index, 0.0);
                         continue; // DC mode (k=0)
                     }
 
-                    // Fetch value, k_vec_integer, k_vec and |k_vec|
-                    auto k_vec_integer = force_real[0].get_fourier_integer_wavevector_from_index(fourier_index);
                     double kmag2 = 0.0;
                     for (int idim = 0; idim < N; idim++) {
                         kvec[idim] = k_vec_integer[idim] * 2.0 * M_PI;
@@ -588,13 +619,13 @@ namespace FML {
         /// @param[in] velocity_scale Multiply the velocities by this before the kick (default 1)
         ///
         //===================================================================================
-        template <int N, class T>
-        void KickParticles(std::array<FFTWGrid<N>, N> & force_grid,
+        template <int N, class T, template <int> class Grid>
+        void KickParticles(std::array<Grid<N>, N> & force_grid,
                            MPIParticles<T> & part,
                            double delta_time,
                            std::string interpolation_method,
                            double velocity_scale) {
-            KickParticles<N, T>(force_grid,
+            KickParticles<N, T, Grid>(force_grid,
                                 part.get_particles_ptr(),
                                 part.get_npart(),
                                 delta_time,
@@ -634,8 +665,8 @@ namespace FML {
         /// @param[in] velocity_scale Multiply the velocities by this before the kick (default 1)
         ///
         //===================================================================================
-        template <int N, class T>
-        void KickParticles(std::array<FFTWGrid<N>, N> & force_grid,
+        template <int N, class T, template <int> class Grid>
+        void KickParticles(std::array<Grid<N>, N> & force_grid,
                            T * p,
                            size_t NumPart,
                            double delta_time,
@@ -691,22 +722,22 @@ namespace FML {
                 std::cout << "[Kick] Max delta_vel : " << max_dvel << "\n";
         }
 
-        template <int N, class T>
+        template <int N, class T, template <int> class Grid = FFTWGrid>
         void NBodyInitialConditions(MPIParticles<T> & part,
                                     int Npart_1D,
                                     double buffer_factor,
 
-                                    const FFTWGrid<N> & delta_fourier,
-                                    std::vector<FFTWGrid<N>> & phi_nLPT_potentials,
+                                    const Grid<N> & delta_fourier,
+                                    std::vector<Grid<N>> & phi_nLPT_potentials,
                                     int LPT_order,
 
                                     double box,
                                     double zini,
                                     std::vector<double> velocity_norms,
                                     std::function<double(double)> velocity_norm_1LPT_of_kBox = nullptr,
-                                    const FFTWGrid<N> * delta_fourier_2LPT_source = nullptr,
-                                    const FFTWGrid<N> * delta_fourier_1LPT_stored = nullptr,
-                                    const FFTWGrid<N> * mass_contrast_fourier = nullptr,
+                                    const FML::GRID::non_deduced_t<Grid<N>> * delta_fourier_2LPT_source = nullptr,
+                                    const FML::GRID::non_deduced_t<Grid<N>> * delta_fourier_1LPT_stored = nullptr,
+                                    const FML::GRID::non_deduced_t<Grid<N>> * mass_contrast_fourier = nullptr,
                                     std::function<double(double)> velocity_norm_2LPT_of_kBox = nullptr);
 
         //=====================================================================
@@ -842,22 +873,22 @@ namespace FML {
         /// the wavenumber of the 2LPT field
         ///
         //=====================================================================
-        template <int N, class T>
+        template <int N, class T, template <int> class Grid>
         void NBodyInitialConditions(MPIParticles<T> & part,
                                     int Npart_1D,
                                     double buffer_factor,
 
-                                    const FFTWGrid<N> & delta_fourier,
-                                    std::vector<FFTWGrid<N>> & phi_nLPT_potentials,
+                                    const Grid<N> & delta_fourier,
+                                    std::vector<Grid<N>> & phi_nLPT_potentials,
                                     int LPT_order,
 
                                     double box,
                                     double zini,
                                     std::vector<double> velocity_norms,
                                     std::function<double(double)> velocity_norm_1LPT_of_kBox,
-                                    const FFTWGrid<N> * delta_fourier_2LPT_source,
-                                    const FFTWGrid<N> * delta_fourier_1LPT_stored,
-                                    const FFTWGrid<N> * mass_contrast_fourier,
+                                    const FML::GRID::non_deduced_t<Grid<N>> * delta_fourier_2LPT_source,
+                                    const FML::GRID::non_deduced_t<Grid<N>> * delta_fourier_1LPT_stored,
+                                    const FML::GRID::non_deduced_t<Grid<N>> * mass_contrast_fourier,
                                     std::function<double(double)> velocity_norm_2LPT_of_kBox) {
 
             T tmp{};
@@ -943,10 +974,10 @@ namespace FML {
             // The scalefactor and log(a) at the initial time
             const double aini = 1.0 / (1.0 + zini);
 
-            FFTWGrid<N> phi_1LPT;
-            FFTWGrid<N> phi_2LPT;
-            FFTWGrid<N> phi_3LPTa;
-            FFTWGrid<N> phi_3LPTb;
+            Grid<N> phi_1LPT;
+            Grid<N> phi_2LPT;
+            Grid<N> phi_3LPTa;
+            Grid<N> phi_3LPTb;
             if (LPT_order == 1) {
                 // Generate the 1LPT potential phi_1LPT = delta(k)/k^2
                 FML::COSMOLOGY::LPT::compute_1LPT_potential_fourier(delta_fourier, phi_1LPT);
@@ -961,7 +992,7 @@ namespace FML {
                 // Generate the 3LPT potentials phi_3LPTa, phi_3LPTb plus 3LPT curl term
                 // We ignore the curl term in this implementation for simplicity
                 const bool ignore_3LPT_curl_term = true;
-                std::array<FFTWGrid<N>, N> phi_3LPT_Avec_fourier;
+                std::array<Grid<N>, N> phi_3LPT_Avec_fourier;
                 FML::COSMOLOGY::LPT::compute_3LPT_potential_fourier<N>(delta_fourier,
                                                                        phi_1LPT,
                                                                        phi_2LPT,
@@ -976,10 +1007,10 @@ namespace FML {
             // Frees the memory of phi_nLPT after its used
             //================================================================
             auto comp_displacement = [&]([[maybe_unused]] int nLPT,
-                                         FFTWGrid<N> & phi_nLPT,
+                                         Grid<N> & phi_nLPT,
                                          std::array<std::vector<FML::GRID::FloatType>, N> & displacements_nLPT) {
                 // Generate Psi from phi
-                std::array<FFTWGrid<N>, N> Psi_nLPT_vector;
+                std::array<Grid<N>, N> Psi_nLPT_vector;
                 FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector<N>(phi_nLPT, Psi_nLPT_vector);
                 for (int idim = 0; idim < N; idim++) {
                     Psi_nLPT_vector[idim].communicate_boundaries();
@@ -1116,14 +1147,18 @@ namespace FML {
             if constexpr (FML::PARTICLE::has_set_id<T>()) {
                 if (FML::ThisTask == 0)
                     std::cout << "Storing unique ID in particle\n";
-                long long int npart_local = part.get_npart();
-                auto part_per_task = FML::GatherFromTasks(&npart_local);
-                long long int id_start = 0;
-                for (int i = 0; i < FML::ThisTask; i++)
-                    id_start += part_per_task[i];
-                long long int count = 0;
+                // The ID is the index of the lattice point (x slowest, the last coordinate fastest), so it does not
+                // depend on the domain decomposition (for slabs it is the count of the particles in task order)
                 for (auto & p : part) {
-                    FML::PARTICLE::SetID(p, id_start + count++);
+                    const auto * pos = FML::PARTICLE::GetPos(p);
+                    long long int id = 0;
+                    for (int idim = 0; idim < N; idim++) {
+                        long long int c = std::llround(double(pos[idim]) * Npart_1D);
+                        if (c >= Npart_1D)
+                            c -= Npart_1D;
+                        id = id * Npart_1D + c;
+                    }
+                    FML::PARTICLE::SetID(p, id);
                 }
             }
 
@@ -1151,7 +1186,7 @@ namespace FML {
             // Masses m = 1 + eps(q) from the mass contrast field at the lattice (before the particles are displaced)
             if (mass_contrast_fourier) {
                 if constexpr (FML::PARTICLE::has_set_mass<T>()) {
-                    FFTWGrid<N> eps = *mass_contrast_fourier;
+                    Grid<N> eps = *mass_contrast_fourier;
                     eps.fftw_c2r();
                     eps.communicate_boundaries();
                     std::vector<FML::GRID::FloatType> eps_at_part;
@@ -1183,14 +1218,14 @@ namespace FML {
 
             // The velocity norm(k) Psi_nLPT(k) for a scale-dependent velocity norm (e.g. a scale-dependent growth rate)
             auto comp_scaledependent_velocity = [&](int nLPT,
-                                                    const FFTWGrid<N> & phi_nLPT,
+                                                    const Grid<N> & phi_nLPT,
                                                     const std::function<double(double)> & norm_of_kBox,
                                                     std::array<std::vector<FML::GRID::FloatType>, N> & velocities) {
-                FFTWGrid<N> phi_vel = phi_nLPT;
+                Grid<N> phi_vel = phi_nLPT;
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (FML::IndexIntType irow = 0; irow < phi_vel.get_local_nrows(); irow++) {
+                for (FML::IndexIntType irow = 0; irow < phi_vel.get_local_nrows_fourier(); irow++) {
                     [[maybe_unused]] double kmag;
                     [[maybe_unused]] std::array<double, N> kvec;
                     for (auto && fourier_index : phi_vel.get_fourier_range_of_rows(irow, irow + 1)) {
@@ -1215,7 +1250,7 @@ namespace FML {
                     comp_scaledependent_velocity(nLPT, phi_1LPT, velocity_norm_1LPT_of_kBox, velocities_1LPT);
                 comp_displacement(nLPT, phi_1LPT, displacements_1LPT);
                 if (delta_fourier_1LPT_stored and FML::PARTICLE::has_get_D_1LPT<T>()) {
-                    FFTWGrid<N> phi_stored;
+                    Grid<N> phi_stored;
                     FML::COSMOLOGY::LPT::compute_1LPT_potential_fourier(*delta_fourier_1LPT_stored, phi_stored);
                     comp_displacement(nLPT, phi_stored, stored_1LPT);
                 }
@@ -1323,9 +1358,9 @@ namespace FML {
         /// @param[in] coupling_factor_of_kBox The coupling factor \f$ g(k) \f$
         ///
         //===================================================================================
-        template <int N>
-        void compute_delta_fifth_force(const FFTWGrid<N> & density_fourier,
-                                       FFTWGrid<N> & density_mg_fourier,
+        template <int N, template <int> class Grid = FFTWGrid>
+        void compute_delta_fifth_force(const Grid<N> & density_fourier,
+                                       Grid<N> & density_mg_fourier,
                                        std::function<double(double)> coupling_factor_of_kBox) {
 
             auto coupling_factor_of_kBox_spline =
@@ -1334,7 +1369,7 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (FML::IndexIntType irow = 0; irow < density_mg_fourier.get_local_nrows(); irow++) {
+            for (FML::IndexIntType irow = 0; irow < density_mg_fourier.get_local_nrows_fourier(); irow++) {
                 [[maybe_unused]] double kmag;
                 [[maybe_unused]] std::array<double, N> kvec;
                 for (auto && fourier_index : density_mg_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
@@ -1373,15 +1408,15 @@ namespace FML {
         /// metric (not the code-potential) so \f$ C = \frac{3}{2}\Omega_M a \frac{(H_0B)^2}{a^2} \f$
         ///
         //===================================================================================
-        template <int N>
+        template <int N, template <int> class Grid = FFTWGrid>
         void compute_delta_fifth_force_potential_screening(
-            const FFTWGrid<N> & density_fourier,
-            FFTWGrid<N> & density_mg_fourier,
+            const Grid<N> & density_fourier,
+            Grid<N> & density_mg_fourier,
             std::function<double(double)> coupling_factor_of_kBox,
             std::function<double(double)> screening_factor_of_newtonian_potential,
             double poisson_norm) {
 
-            const auto Local_x_start = density_fourier.get_local_x_start();
+            const bool has_dc_mode = FML::GRID::has_dc_mode(density_fourier);
 
             // Make copy of density grid
             density_mg_fourier = density_fourier;
@@ -1390,7 +1425,7 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (FML::IndexIntType irow = 0; irow < density_mg_fourier.get_local_nrows(); irow++) {
+            for (FML::IndexIntType irow = 0; irow < density_mg_fourier.get_local_nrows_fourier(); irow++) {
                 [[maybe_unused]] double kmag2;
                 [[maybe_unused]] std::array<double, N> kvec;
                 for (auto && fourier_index : density_mg_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
@@ -1404,7 +1439,7 @@ namespace FML {
             }
 
             // Set DC mode
-            if (Local_x_start == 0)
+            if (has_dc_mode)
                 density_mg_fourier.set_fourier_from_index(0, 0.0);
 
             // Take another copy of the density field as we need it in real space
@@ -1434,7 +1469,7 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (FML::IndexIntType irow = 0; irow < density_mg_fourier.get_local_nrows(); irow++) {
+            for (FML::IndexIntType irow = 0; irow < density_mg_fourier.get_local_nrows_fourier(); irow++) {
                 [[maybe_unused]] double kmag;
                 [[maybe_unused]] std::array<double, N> kvec;
                 for (auto && fourier_index : density_mg_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
@@ -1474,9 +1509,9 @@ namespace FML {
         /// @param[in] smoothing_method The k-space smoothing filter (gaussian, tophat, sharpk).
         ///
         //===================================================================================
-        template <int N>
-        void compute_delta_fifth_force_density_screening(const FFTWGrid<N> & density_fourier,
-                                                         FFTWGrid<N> & density_mg_fourier,
+        template <int N, template <int> class Grid = FFTWGrid>
+        void compute_delta_fifth_force_density_screening(const Grid<N> & density_fourier,
+                                                         Grid<N> & density_mg_fourier,
                                                          std::function<double(double)> coupling_factor_of_kBox,
                                                          std::function<double(double)> screening_factor_of_density,
                                                          double smoothing_scale,
@@ -1512,7 +1547,7 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (FML::IndexIntType irow = 0; irow < density_mg_fourier.get_local_nrows(); irow++) {
+            for (FML::IndexIntType irow = 0; irow < density_mg_fourier.get_local_nrows_fourier(); irow++) {
                 [[maybe_unused]] double kmag;
                 [[maybe_unused]] std::array<double, N> kvec;
                 for (auto && fourier_index : density_mg_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
@@ -1547,9 +1582,9 @@ namespace FML {
         ///             4 for 4-point stencil using phi(+/-1), phi(+/-2). We also have 6 implemented.
         ///
         //===================================================================================
-        template <int N>
-        void compute_force_from_potential_real(FFTWGrid<N> & potential_real,
-                                               std::array<FFTWGrid<N>, N> & force_grid_real,
+        template <int N, template <int> class Grid>
+        void compute_force_from_potential_real(Grid<N> & potential_real,
+                                               std::array<Grid<N>, N> & force_grid_real,
                                                std::string force_interpolation_method,
                                                int stencil_order,
                                                const ForceOptions & options) {
@@ -1565,11 +1600,11 @@ namespace FML {
                        "compute_potential_real_from_density_fourier)");
 
             const auto Nmesh = potential_real.get_nmesh();
-            const auto Local_x_start = potential_real.get_local_x_start();
+            const bool has_dc_mode = FML::GRID::has_dc_mode(potential_real);
             const double one_over_h = double(Nmesh);
 
             // Deconvolve the density assignment + force interpolation (as in compute_force_from_density_fourier)
-            FFTWGrid<N> potential_deconvolved;
+            Grid<N> potential_deconvolved;
             if (options.deconvolve) {
                 const FML::INTERPOLATION::WindowFunctionTable<N> window_table(force_interpolation_method, Nmesh);
                 potential_deconvolved = potential_real;
@@ -1579,11 +1614,11 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (FML::IndexIntType irow = 0; irow < potential_deconvolved.get_local_nrows(); irow++) {
+                for (FML::IndexIntType irow = 0; irow < potential_deconvolved.get_local_nrows_fourier(); irow++) {
                     double kmag2;
                     std::array<double, N> kvec;
                     for (auto && fourier_index : potential_deconvolved.get_fourier_range_of_rows(irow, irow + 1)) {
-                        if (Local_x_start == 0 and fourier_index == 0)
+                        if (has_dc_mode and fourier_index == 0)
                             continue; // DC mode (k=0)
                         potential_deconvolved.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
                         const double W = window_table(kvec);
@@ -1594,7 +1629,7 @@ namespace FML {
                 }
                 potential_deconvolved.fftw_c2r();
             }
-            FFTWGrid<N> & potential = options.deconvolve ? potential_deconvolved : potential_real;
+            Grid<N> & potential = options.deconvolve ? potential_deconvolved : potential_real;
 
             // Make sure boundaries are set
             potential.communicate_boundaries();
@@ -1602,18 +1637,17 @@ namespace FML {
             // Allocate grid
             auto nextra = FML::INTERPOLATION::get_extra_slices(force_interpolation_method);
             for (int idim = 0; idim < N; idim++)
-                force_grid_real[idim] = FFTWGrid<N>(Nmesh, nextra.first, nextra.second);
+                force_grid_real[idim] = make_grid_like(potential_real, Nmesh, nextra.first, nextra.second);
 
             // Adds iplus to idim of (i,j,k,...) and does periodic wrap
             // Used to compute Phi(i+1,j,k), Phi(i,j,k-2) etc.
+            // (periodic along an axis the task has all of, else into the extra cells)
+            std::array<bool, N> whole_axis;
+            for (int idim = 0; idim < N; idim++)
+                whole_axis[idim] = potential.get_local_range(idim)[1] == Nmesh;
             auto add_to_coord = [=](std::array<int, N> & coord, int idim, int iplus) {
                 coord[idim] += iplus;
-                if (idim == 0) {
-                    if (FML::NTasks == 1 and coord[0] >= Nmesh)
-                        coord[idim] -= Nmesh;
-                    if (FML::NTasks == 1 and coord[0] < 0)
-                        coord[idim] += Nmesh;
-                } else {
+                if (whole_axis[idim]) {
                     if (coord[idim] >= Nmesh)
                         coord[idim] -= Nmesh;
                     if (coord[idim] < 0)
@@ -1825,9 +1859,9 @@ namespace FML {
         ///             get forces)
         ///
         //===================================================================================
-        template <int N>
-        void compute_potential_real_from_density_fourier(const FFTWGrid<N> & density_grid_fourier,
-                                                         FFTWGrid<N> & potential_real,
+        template <int N, template <int> class Grid>
+        void compute_potential_real_from_density_fourier(const Grid<N> & density_grid_fourier,
+                                                         Grid<N> & potential_real,
                                                          double norm_poisson_equation,
                                                          int n_boundary_slices_to_be_allocated,
                                                          const ForceOptions & options) {
@@ -1835,21 +1869,22 @@ namespace FML {
 
             const int LAPLACE_KERNEL = options.laplace_kernel;
             const auto Nmesh = density_grid_fourier.get_nmesh();
-            const auto Local_x_start = density_grid_fourier.get_local_x_start();
+            const bool has_dc_mode = FML::GRID::has_dc_mode(density_grid_fourier);
 
             // Allocate grid with n_boundary_slices_to_be_allocated extra
             // cells on the left and right
-            potential_real = FFTWGrid<N>(Nmesh, n_boundary_slices_to_be_allocated, n_boundary_slices_to_be_allocated);
+            potential_real = make_grid_like(
+                density_grid_fourier, Nmesh, n_boundary_slices_to_be_allocated, n_boundary_slices_to_be_allocated);
 
             // Loop over all local fourier grid cells
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (FML::IndexIntType irow = 0; irow < density_grid_fourier.get_local_nrows(); irow++) {
+            for (FML::IndexIntType irow = 0; irow < density_grid_fourier.get_local_nrows_fourier(); irow++) {
                 double kmag2;
                 std::array<double, N> kvec;
                 for (auto && fourier_index : density_grid_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
-                    if (Local_x_start == 0 and fourier_index == 0) {
+                    if (has_dc_mode and fourier_index == 0) {
                         potential_real.set_fourier_from_index(0, 0.0);
                         continue; // DC mode (k=0)
                     }
@@ -1935,9 +1970,9 @@ namespace FML {
         /// With velocity_norm_2LPT_of_kBox the 2LPT velocity is velocity_norm_2LPT(kB) Psi_2LPT (instead of
         /// velocity_norms[1] Psi_2LPT). Returns delta_i(k) (shifted).
         //=============================================================================
-        template <int NDIM, class P>
-        FFTWGrid<NDIM> generate_species_from_delta_cb(MPIParticles<P> & particles,
-                                                      const FFTWGrid<NDIM> & delta_cb_fourier,
+        template <int NDIM, class P, template <int> class Grid = FFTWGrid>
+        Grid<NDIM> generate_species_from_delta_cb(MPIParticles<P> & particles,
+                                                      const Grid<NDIM> & delta_cb_fourier,
                                                       const std::function<double(double)> & ratio_of_kBox,
                                                       std::function<double(double)> velocity_norm_1LPT_of_kBox,
                                                       const std::vector<double> & velocity_norms,
@@ -1956,9 +1991,9 @@ namespace FML {
 
             // delta_i(k) on the (offset) lattice: f(q) -> f(q + shift) so that the particle created at q gets the
             // displacement at q + shift (and is then moved there)
-            FFTWGrid<NDIM> delta = delta_cb_fourier;
+            Grid<NDIM> delta = delta_cb_fourier;
             const bool need_total = LPT_order >= 2 or store_cb_LPT_fields;
-            FFTWGrid<NDIM> delta_total;
+            Grid<NDIM> delta_total;
             if (need_total)
                 delta_total = delta_cb_fourier;
             FML::GRID::multiply_fourier_by_function_of_k<NDIM>(delta, ratio_of_kBox);
@@ -1969,7 +2004,7 @@ namespace FML {
             }
 
             // The mass contrast eps(k) = delta_cb(k) mass_contrast(kB) (on the same offset lattice)
-            FFTWGrid<NDIM> mass_contrast;
+            Grid<NDIM> mass_contrast;
             if (mass_contrast_of_kBox) {
                 mass_contrast = delta_cb_fourier;
                 FML::GRID::multiply_fourier_by_function_of_k<NDIM>(mass_contrast, mass_contrast_of_kBox);
@@ -1977,7 +2012,7 @@ namespace FML {
                     FML::GRID::shift_grid_fourier<NDIM>(mass_contrast, shift_vec, +1.0);
             }
 
-            std::vector<FFTWGrid<NDIM>> no_potentials;
+            std::vector<Grid<NDIM>> no_potentials;
             NBodyInitialConditions<NDIM, P>(particles,
                                                         Npart_1D,
                                                         allocation_factor,

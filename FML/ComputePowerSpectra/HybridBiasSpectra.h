@@ -222,8 +222,8 @@ namespace FML {
                 };
 
                 /// Mean of a real grid (over all tasks)
-                template <int N>
-                double mean_of_real_grid(const FFTWGrid<N> & grid) {
+                template <int N, template <int> class Grid = FFTWGrid>
+                double mean_of_real_grid(const Grid<N> & grid) {
                     double sum = 0.0;
 #ifdef USE_OMP
 #pragma omp parallel for reduction(+ : sum)
@@ -307,10 +307,10 @@ namespace FML {
             /// @param[in] growth_factor_of_kBox Optional: multiply delta_linear by this function of k (in units of
             /// 1/box), e.g. D(k,z) / D(k,zini) to scale the initial field to the redshift of the snapshot
             //=====================================================================================================
-            template <int N>
-            void compute_lagrangian_fields(const FFTWGrid<N> & delta_linear_fourier,
+            template <int N, template <int> class Grid = FFTWGrid>
+            void compute_lagrangian_fields(const Grid<N> & delta_linear_fourier,
                                            int Nlattice,
-                                           std::vector<FFTWGrid<N>> & fields,
+                                           std::vector<Grid<N>> & fields,
                                            const HybridBiasOptions & options = HybridBiasOptions(),
                                            std::function<double(double)> growth_factor_of_kBox = nullptr) {
                 assert_mpi(options.noperators >= 1 and options.noperators <= max_operators,
@@ -321,7 +321,7 @@ namespace FML {
                     return;
 
                 // The linear field on the lattice grid (and scaled by the growth factor)
-                FFTWGrid<N> delta(Nlattice);
+                auto delta = make_grid_like(delta_linear_fourier, Nlattice, 0, 0);
                 delta.add_memory_label("HybridBias::delta_L(q)");
                 std::function<double(const std::array<int, N> &)> factor = [&](const std::array<int, N> & m) {
                     if (not growth_factor_of_kBox)
@@ -332,7 +332,7 @@ namespace FML {
                     return growth_factor_of_kBox(2.0 * M_PI * std::sqrt(k2));
                 };
                 FML::NUFFT::copy_fourier_modes<N>(delta_linear_fourier, delta, factor);
-                if (FML::ThisTask == 0)
+                if (FML::GRID::has_dc_mode(delta))
                     delta.set_fourier_from_index(0, 0.0);
                 if (options.kcut > 0.0) {
                     const double kcut = options.kcut;
@@ -347,7 +347,7 @@ namespace FML {
 
 
                 // nabla^2 delta (k in units of 1/box)
-                FFTWGrid<N> nabla2;
+                Grid<N> nabla2;
                 if (nfields >= 4) {
                     nabla2 = delta;
                     FML::GRID::multiply_fourier_by_function_of_k<N>(nabla2, [](double kmag) { return -kmag * kmag; });
@@ -355,19 +355,19 @@ namespace FML {
                 }
 
                 // s^2 = sum_ij s_ij^2 with s_ij = (k_i k_j / k^2 - delta_ij / N) delta(k)
-                FFTWGrid<N> s2;
+                Grid<N> s2;
                 if (nfields >= 3) {
-                    s2 = FFTWGrid<N>(Nlattice);
+                    s2 = make_grid_like(delta, Nlattice, 0, 0);
                     s2.add_memory_label("HybridBias::s2(q)");
                     s2.fill_real_grid(0.0);
-                    FFTWGrid<N> sij(Nlattice);
+                    auto sij = make_grid_like(delta, Nlattice, 0, 0);
                     for (int i = 0; i < N; i++) {
                         for (int j = i; j < N; j++) {
                             sij.set_grid_status_real(false);
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                            for (FML::IndexIntType irow = 0; irow < delta.get_local_nrows(); irow++) {
+                            for (FML::IndexIntType irow = 0; irow < delta.get_local_nrows_fourier(); irow++) {
                                 [[maybe_unused]] double kmag2;
                                 [[maybe_unused]] std::array<double, N> kvec;
                                 for (auto && fourier_index : delta.get_fourier_range_of_rows(irow, irow + 1)) {
@@ -397,7 +397,7 @@ namespace FML {
 
                 // delta and delta^2
                 delta.fftw_c2r();
-                FFTWGrid<N> delta2;
+                Grid<N> delta2;
                 if (nfields >= 2) {
                     delta2 = delta;
 #ifdef USE_OMP
@@ -412,7 +412,7 @@ namespace FML {
                 }
 
                 // Subtract the means
-                auto subtract_mean = [&](FFTWGrid<N> & grid) {
+                auto subtract_mean = [&](Grid<N> & grid) {
                     const double mean = detail::mean_of_real_grid<N>(grid);
 #ifdef USE_OMP
 #pragma omp parallel for
@@ -447,10 +447,10 @@ namespace FML {
             /// @param[out] values values[nfields * i + f] is field f at the lattice point of particle i
             /// @param[in] lattice_coordinate Optional: the lattice point of a particle (default: from get_id)
             //=====================================================================================================
-            template <int N, class T>
+            template <int N, class T, template <int> class Grid = FFTWGrid>
             void lagrangian_fields_at_particles(const T * p,
                                                 size_t NumPart,
-                                                const std::vector<FFTWGrid<N>> & fields,
+                                                const std::vector<Grid<N>> & fields,
                                                 std::vector<double> & values,
                                                 detail::LatticeCoordinateFunction<N, T> lattice_coordinate = nullptr) {
                 FML::COMMUNICATION::require_count(fields.size() <= size_t(INT_MAX), "[hybrid fields] Too many fields");
@@ -467,14 +467,26 @@ namespace FML {
                 const int Nlattice = fields[0].get_nmesh();
                 if (not lattice_coordinate)
                     lattice_coordinate = detail::lattice_coordinate_from_id<N, T>(Nlattice);
-                [[maybe_unused]] long long int local_x_start = fields[0].get_local_x_start();
-                [[maybe_unused]] long long int local_nx = fields[0].get_local_nx();
-
-                // The local index (in the slab of the owner) of a lattice point
-                auto local_index = [&](const std::array<int, N> & coord, long long int x_start) {
-                    auto c = coord;
-                    c[0] = int(coord[0] - x_start);
+                // The index of a lattice point (global coordinates) in our grids (we must have it)
+                auto local_index = [&](std::array<int, N> c) {
+                    for (int idim = 0; idim < N; idim++)
+                        c[idim] -= int(fields[0].get_local_range(idim)[0]);
                     return fields[0].get_index_real(c);
+                };
+                // The lattice point as one number (and back)
+                auto flat = [&](const std::array<int, N> & c) {
+                    long long int g = 0;
+                    for (int idim = 0; idim < N; idim++)
+                        g = g * Nlattice + c[idim];
+                    return g;
+                };
+                [[maybe_unused]] auto unflat = [&](long long int g) {
+                    std::array<int, N> c;
+                    for (int idim = N - 1; idim >= 0; idim--) {
+                        c[idim] = int(g % Nlattice);
+                        g /= Nlattice;
+                    }
+                    return c;
                 };
                 auto check = [&](const std::array<int, N> & coord) {
                     for (int idim = 0; idim < N; idim++)
@@ -490,7 +502,7 @@ namespace FML {
                     for (size_t i = 0; i < NumPart; i++) {
                         const auto coord = lattice_coordinate(p[i]);
                         check(coord);
-                        const auto index = local_index(coord, 0);
+                        const auto index = local_index(coord);
                         for (int f = 0; f < nfields; f++)
                             values[i * nfields + f] = fields[f].get_real_from_index(index);
                     }
@@ -498,13 +510,8 @@ namespace FML {
                 }
 
 #ifdef USE_MPI
-                // The slabs of the lattice grid
-                auto x_start_of_task = FML::GatherFromTasks(&local_x_start);
-                auto nx_of_task = FML::GatherFromTasks(&local_nx);
-                std::vector<int> owner_of_x(Nlattice, -1);
-                for (int t = 0; t < FML::NTasks; t++)
-                    for (long long int ix = x_start_of_task[t]; ix < x_start_of_task[t] + nx_of_task[t]; ix++)
-                        owner_of_x[ix] = t;
+                // The tasks with the lattice points (slabs or pencils of the lattice grid)
+                const FML::GRID::CellOwners<N> owners(fields[0]);
 
                 // We do it in chunks of particles to keep the MPI buffers below 2 GB
                 const size_t chunk = size_t(1) << 24;
@@ -524,8 +531,9 @@ namespace FML {
                     for (size_t i = 0; i < n; i++) {
                         const auto coord = lattice_coordinate(p[i0 + i]);
                         check(coord);
-                        owner[i] = owner_of_x[coord[0]];
-                        index_in_owner[i] = local_index(coord, x_start_of_task[owner[i]]);
+                        owner[i] = owners.owner(coord);
+                        // (the owner finds its index: the layout of the grids differs between tasks for pencils)
+                        index_in_owner[i] = flat(coord);
                         nsend[owner[i]]++;
                     }
                     MPI_Alltoall(nsend.data(), 1, MPI_INT, nrecv.data(), 1, MPI_INT, FML::communicator);
@@ -560,9 +568,11 @@ namespace FML {
 
                     // Answer them
                     std::vector<double> answers(size_t(ntotrecv) * nfields);
-                    for (size_t r = 0; r < ntotrecv; r++)
+                    for (size_t r = 0; r < ntotrecv; r++) {
+                        const auto index = local_index(unflat(received[r]));
                         for (int f = 0; f < nfields; f++)
-                            answers[size_t(r) * nfields + f] = fields[f].get_real_from_index(received[r]);
+                            answers[size_t(r) * nfields + f] = fields[f].get_real_from_index(index);
+                    }
                     std::vector<int> nsend_f(FML::NTasks), nrecv_f(FML::NTasks), sdispl_f(FML::NTasks),
                         rdispl_f(FML::NTasks);
                     nsend_f = answer_layout.counts;
@@ -583,7 +593,6 @@ namespace FML {
                         for (int f = 0; f < nfields; f++)
                             values[(i0 + i) * nfields + f] = result[position[i] * nfields + f];
                 }
-                (void)local_nx;
 #endif
             }
 
@@ -601,15 +610,16 @@ namespace FML {
             /// @param[out] advected The nfields + 1 grids in Fourier space
             /// @param[in] options The options (density_assignment_method, interlacing)
             //=====================================================================================================
-            template <int N, class T>
+            template <int N, class T, template <int> class Grid = FFTWGrid>
             void compute_advected_fields(const T * p,
                                          size_t NumPart,
                                          size_t NumPartTot,
                                          const std::vector<double> & values,
                                          int nfields,
                                          int Nmesh,
-                                         std::vector<FFTWGrid<N>> & advected,
-                                         const HybridBiasOptions & options = HybridBiasOptions()) {
+                                         std::vector<Grid<N>> & advected,
+                                         const HybridBiasOptions & options = HybridBiasOptions(),
+                                         const FML::Domain & domain = FML::domain) {
                 assert_mpi(values.size() == NumPart * size_t(nfields),
                            "[compute_advected_fields] values has the wrong size");
                 std::vector<detail::WeightedParticle<N>> wp(NumPart);
@@ -629,7 +639,8 @@ namespace FML {
 #endif
                     for (size_t i = 0; i < NumPart; i++)
                         wp[i].weight = f < 0 ? 1.0 : values[i * nfields + f];
-                    FFTWGrid<N> grid(Nmesh, nleftright.first, nleftright.second + (options.interlacing ? 1 : 0));
+                    auto grid = FML::GRID::make_grid<Grid<N>>(
+                        Nmesh, nleftright.first, nleftright.second + (options.interlacing ? 1 : 0), domain);
                     grid.add_memory_label("HybridBias::advected field");
                     FML::INTERPOLATION::particles_to_fourier_grid<N>(wp.data(),
                                                                      NumPart,
@@ -638,7 +649,7 @@ namespace FML {
                                                                      options.density_assignment_method,
                                                                      options.interlacing);
                     FML::INTERPOLATION::deconvolve_window_function_fourier<N>(grid, options.density_assignment_method);
-                    if (FML::ThisTask == 0)
+                    if (FML::GRID::has_dc_mode(grid))
                         grid.set_fourier_from_index(0, 0.0);
                     advected.push_back(std::move(grid));
                 }
@@ -652,8 +663,8 @@ namespace FML {
             /// @param[in] nbins Number of bins (0: Nmesh / 2), linearly spaced from the fundamental mode to the Nyquist
             /// frequency
             //=====================================================================================================
-            template <int N>
-            void cross_spectra_of_grids(const std::vector<FFTWGrid<N>> & grids,
+            template <int N, template <int> class Grid = FFTWGrid>
+            void cross_spectra_of_grids(const std::vector<Grid<N>> & grids,
                                         HybridBiasSpectra<N> & spectra,
                                         int nbins = 0) {
                 const int n = int(grids.size());
@@ -699,24 +710,24 @@ namespace FML {
             /// @param[in] lattice_coordinate Optional: the lattice point of a particle (default from get_id)
             /// @param[out] advected_out Optional: return the advected fields (Fourier space)
             //=====================================================================================================
-            template <int N, class T>
+            template <int N, class T, template <int> class Grid = FFTWGrid>
             void compute_hybrid_bias_spectra(const T * p,
                                              size_t NumPart,
                                              size_t NumPartTot,
-                                             const FFTWGrid<N> & delta_linear_fourier,
+                                             const Grid<N> & delta_linear_fourier,
                                              int Nlattice,
                                              int Nmesh,
                                              const HybridBiasOptions & options,
                                              HybridBiasSpectra<N> & spectra,
                                              std::function<double(double)> growth_factor_of_kBox = nullptr,
                                              detail::LatticeCoordinateFunction<N, T> lattice_coordinate = nullptr,
-                                             std::vector<FFTWGrid<N>> * advected_out = nullptr) {
+                                             std::vector<Grid<N>> * advected_out = nullptr) {
                 assert_mpi(double(NumPartTot) == std::pow(double(Nlattice), N),
                            "[compute_hybrid_bias_spectra] We need Nlattice^N particles");
                 std::vector<double> values;
                 int nfields = 0;
                 {
-                    std::vector<FFTWGrid<N>> fields;
+                    std::vector<Grid<N>> fields;
                     compute_lagrangian_fields<N>(delta_linear_fourier,
                                                  Nlattice,
                                                  fields,
@@ -725,8 +736,16 @@ namespace FML {
                     nfields = int(fields.size());
                     lagrangian_fields_at_particles<N, T>(p, NumPart, fields, values, lattice_coordinate);
                 }
-                std::vector<FFTWGrid<N>> advected;
-                compute_advected_fields<N, T>(p, NumPart, NumPartTot, values, nfields, Nmesh, advected, options);
+                std::vector<Grid<N>> advected;
+                compute_advected_fields<N, T>(p,
+                                              NumPart,
+                                              NumPartTot,
+                                              values,
+                                              nfields,
+                                              Nmesh,
+                                              advected,
+                                              options,
+                                              FML::GRID::particle_domain_of(delta_linear_fourier));
                 cross_spectra_of_grids<N>(advected, spectra, options.nbins);
 
                 detail::set_shotnoise(values, nfields, NumPart, NumPartTot, options.subtract_shotnoise, spectra);
@@ -766,8 +785,8 @@ namespace FML {
             /// for the operators and the displacement
             /// @param[in] kcut_displacement The spherical cut of the displacement (units of 1/box, 0: none)
             //=====================================================================================================
-            template <int N>
-            void compute_zeldovich_hybrid_bias_spectra(const FFTWGrid<N> & delta_linear_fourier,
+            template <int N, template <int> class Grid = FFTWGrid>
+            void compute_zeldovich_hybrid_bias_spectra(const Grid<N> & delta_linear_fourier,
                                                        int Nlattice,
                                                        int Nmesh,
                                                        const HybridBiasOptions & options,
@@ -776,33 +795,34 @@ namespace FML {
                                                        double kcut_displacement = 0.0) {
                 using Point = detail::ZeldovichPoint<N>;
                 // The operators on the lattice
-                std::vector<FFTWGrid<N>> fields;
+                std::vector<Grid<N>> fields;
                 compute_lagrangian_fields<N>(delta_linear_fourier, Nlattice, fields, options, growth_factor_of_kBox);
                 const int nfields = int(fields.size());
 
                 // The Zel'dovich displacement on the lattice: the linear field with only the displacement cut
-                std::array<FFTWGrid<N>, N> psi;
+                std::array<Grid<N>, N> psi;
                 {
                     HybridBiasOptions doptions;
                     doptions.noperators = 2;
                     doptions.kcut = kcut_displacement;
                     doptions.smoothing_scale = 0.0;
-                    std::vector<FFTWGrid<N>> delta;
+                    std::vector<Grid<N>> delta;
                     compute_lagrangian_fields<N>(delta_linear_fourier,
                                                  Nlattice,
                                                  delta,
                                                  doptions,
                                                  growth_factor_of_kBox);
                     delta[0].fftw_r2c();
-                    FFTWGrid<N> phi;
+                    Grid<N> phi;
                     FML::COSMOLOGY::LPT::compute_1LPT_potential_fourier<N>(delta[0], phi);
                     delta.clear();
                     FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector<N>(phi, psi);
                 }
 
                 // The points x = q + Psi(q) with the operator values at q (the lattice points of this task)
+                const auto domain = FML::GRID::particle_domain_of(psi[0]);
                 Vector<Point> points;
-                const size_t nlocal = size_t(psi[0].get_local_nx()) * size_t(std::pow(double(Nlattice), N - 1));
+                const size_t nlocal = size_t(psi[0].get_local_nrows()) * size_t(Nlattice);
                 points.reserve(size_t(1.5 * double(nlocal)) + 1024);
                 for (FML::IndexIntType irow = 0; irow < psi[0].get_local_nrows(); irow++) {
                     for (auto && real_index : psi[0].get_real_range_of_rows(irow, irow + 1)) {
@@ -820,7 +840,7 @@ namespace FML {
                 fields.clear();
                 for (auto & g : psi)
                     g.free();
-                FML::PARTICLE::MPIParticles<Point> part;
+                FML::PARTICLE::MPIParticles<Point> part(domain);
                 part.move_from(std::move(points));
                 part.communicate_particles();
                 const size_t NumPart = part.get_npart(), NumPartTot = part.get_npart_total();
@@ -832,8 +852,9 @@ namespace FML {
                 for (size_t i = 0; i < NumPart; i++)
                     for (int f = 0; f < nfields; f++)
                         values[i * nfields + f] = p[i].w[f];
-                std::vector<FFTWGrid<N>> advected;
-                compute_advected_fields<N, Point>(p, NumPart, NumPartTot, values, nfields, Nmesh, advected, options);
+                std::vector<Grid<N>> advected;
+                compute_advected_fields<N, Point>(
+                    p, NumPart, NumPartTot, values, nfields, Nmesh, advected, options, domain);
                 cross_spectra_of_grids<N>(advected, spectra, options.nbins);
                 detail::set_shotnoise(values, nfields, NumPart, NumPartTot, false, spectra);
             }
@@ -964,9 +985,9 @@ namespace FML {
             /// @param[out] result result[a] is the cross spectrum of the tracer with operator a (box units)
             /// @param[in] nbins Number of bins (0: Nmesh / 2)
             //=====================================================================================================
-            template <int N>
-            void tracer_cross_spectra(const FFTWGrid<N> & tracer_fourier,
-                                      const std::vector<FFTWGrid<N>> & advected,
+            template <int N, template <int> class Grid = FFTWGrid>
+            void tracer_cross_spectra(const Grid<N> & tracer_fourier,
+                                      const std::vector<Grid<N>> & advected,
                                       std::vector<PowerSpectrumBinning<N>> & result,
                                       int nbins = 0) {
                 const int Nmesh = tracer_fourier.get_nmesh();

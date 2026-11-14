@@ -10,6 +10,7 @@
 
 #include <FML/Global/Global.h>
 #include <FML/FFTWGrid/FFTWGrid.h>
+#include <FML/FFTWGrid/GridInterface.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/Smoothing/SmoothingFourier.h>
@@ -63,7 +64,7 @@ namespace FML {
         //             and doing interpolation when computing things.
         ///
         //=================================================================================
-        template <int N, class T>
+        template <int N, class T, template <int> class Grid = FFTWGrid>
         void potential_gradient_decent_method(T * p,
                                               size_t NumPart,
                                               double k_lowpass,
@@ -71,7 +72,8 @@ namespace FML {
                                               double displacement_factor,
                                               double norm_poisson_equation,
                                               int Ngrid,
-                                              std::string density_assignment_method) {
+                                              std::string density_assignment_method,
+                                              const FML::Domain & domain = FML::domain) {
 
             const std::complex<FML::GRID::FloatType> I(0, 1);
 
@@ -87,7 +89,8 @@ namespace FML {
 
             // Bin particles to grid and fourier transform
             const auto nleftright = FML::INTERPOLATION::get_extra_slices(density_assignment_method);
-            FFTWGrid<N> density_k(Ngrid, nleftright.first, nleftright.second);
+            // (decomposed as the domain of the particles: the fiducial FML::domain unless given)
+            auto density_k = FML::GRID::make_grid<Grid<N>>(Ngrid, nleftright.first, nleftright.second, domain);
             const bool interlacing = false;
             FML::INTERPOLATION::particles_to_fourier_grid(p,
                                                           NumPart,
@@ -108,7 +111,7 @@ namespace FML {
             FML::GRID::custom_smoothing_filter_fourier_space(density_k, filter);
 
             // Density field -> force
-            std::array<FFTWGrid<N>, N> force_real;
+            std::array<Grid<N>, N> force_real;
             FML::NBODY::compute_force_from_density_fourier<N>(density_k,
                                                               force_real,
                                                               density_assignment_method,
@@ -154,7 +157,7 @@ namespace FML {
         //=================================================================================
         /// As above, but for MPIParticles and the particles are communicated afterwards (so they are on the right task)
         //=================================================================================
-        template <int N, class T>
+        template <int N, class T, template <int> class Grid = FFTWGrid>
         void potential_gradient_decent_method(MPIParticles<T> & part,
                                               double k_lowpass,
                                               double k_highpass,
@@ -162,14 +165,15 @@ namespace FML {
                                               double norm_poisson_equation,
                                               int Ngrid,
                                               std::string density_assignment_method) {
-            potential_gradient_decent_method<N, T>(part.get_particles_ptr(),
-                                                   part.get_npart(),
-                                                   k_lowpass,
-                                                   k_highpass,
-                                                   displacement_factor,
-                                                   norm_poisson_equation,
-                                                   Ngrid,
-                                                   density_assignment_method);
+            potential_gradient_decent_method<N, T, Grid>(part.get_particles_ptr(),
+                                                         part.get_npart(),
+                                                         k_lowpass,
+                                                         k_highpass,
+                                                         displacement_factor,
+                                                         norm_poisson_equation,
+                                                         Ngrid,
+                                                         density_assignment_method,
+                                                         part.get_domain());
             part.communicate_particles();
         }
 

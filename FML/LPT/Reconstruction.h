@@ -10,8 +10,10 @@
 #include <vector>
 
 #include <FML/FFTWGrid/FFTWGrid.h>
+#include <FML/FFTWGrid/GridInterface.h>
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
+#include <FML/Interpolation/ParticleGridInterpolationGeneric.h>
 #include <FML/LPT/DisplacementFields.h>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/Smoothing/SmoothingFourier.h>
@@ -65,8 +67,13 @@ namespace FML {
             ///
             /// This method assumes scale-independent growth factor, but that is easily changed
             ///
+            /// The grids are FFTWGrid (slabs, the default) or any grid with the generic grid interface (e.g. PencilGrid:
+            /// RSDReconstructionFourierMethod<N, T, FML::GRID::PencilGrid>). Other grids are made on the domain of the
+            /// particles (which must be one the grid type can be decomposed in, e.g. a PencilDomain or a SlabDomain).
+            ///
             /// @tparam N The dimension of the grid
             /// @tparam T The particle class
+            /// @tparam Grid The grid type
             ///
             /// @param[out] part MPIParticles. Particles gets updated.
             /// @param[in] density_assignment_method The density assignment method (NGP, CIC, TSC, PCS, PQS)
@@ -80,7 +87,7 @@ namespace FML {
             ///
             //============================================================================
 
-            template <int N, class T>
+            template <int N, class T, template <int> class Grid = FFTWGrid>
             void RSDReconstructionFourierMethod(MPIParticles<T> & part,
                                                 std::string density_assignment_method,
                                                 std::vector<double> los_direction,
@@ -127,6 +134,18 @@ namespace FML {
                 };
 
                 auto nleftright = FML::INTERPOLATION::get_extra_slices(density_assignment_method);
+                // The (CIC) interpolation of the displacement needs its extra cells too (NGP assignment has none)
+                const auto nleftright_interpolation = FML::INTERPOLATION::get_extra_slices(interpolation_method);
+                nleftright.first = std::max(nleftright.first, nleftright_interpolation.first);
+                nleftright.second = std::max(nleftright.second, nleftright_interpolation.second);
+                constexpr bool slabs = FML::GRID::is_fftwgrid_v<Grid<N>>;
+                auto make_grid = [&]() {
+                    if constexpr (slabs)
+                        return Grid<N>(Nmesh, nleftright.first, nleftright.second);
+                    else
+                        return FML::GRID::make_grid<Grid<N>>(Nmesh, nleftright.first, nleftright.second,
+                                                             part.get_domain());
+                };
 
                 for (int i = 0; i < niterations; i++) {
                     if (FML::ThisTask == 0)
@@ -135,8 +154,8 @@ namespace FML {
 
                     // The density field of the current estimate of the real-space positions x = s - shift
                     // (the observed positions in the first iteration)
-                    FFTWGrid<N> density(Nmesh, nleftright.first, nleftright.second);
-                    density.add_memory_label("FFTWGrid::RSDReconstructionFourierMethod::density");
+                    Grid<N> density = make_grid();
+                    density.add_memory_label("RSDReconstructionFourierMethod::density");
                     density.set_grid_status_real(true);
                     if (i == 0) {
                         FML::INTERPOLATION::particles_to_grid(p,
@@ -158,7 +177,13 @@ namespace FML {
                         }
                         long long int nmax = NumPart;
                         FML::MaxOverTasks(&nmax);
-                        FML::PARTICLE::MPIParticles<Helper> shifted_part;
+                        // (on the domain of the particles = of the grid)
+                        auto shifted_part = [&] {
+                            if constexpr (slabs)
+                                return FML::PARTICLE::MPIParticles<Helper>();
+                            else
+                                return FML::PARTICLE::MPIParticles<Helper>(part.get_domain());
+                        }();
                         shifted_part.create(shifted.data(),
                                             NumPart,
                                             size_t(2 * nmax + 1000),
@@ -179,15 +204,15 @@ namespace FML {
                                                               smoothing_options.first);
 
                     // The 1LPT potential
-                    FFTWGrid<N> phi_1LPT;
-                    compute_1LPT_potential_fourier(density, phi_1LPT);
+                    Grid<N> phi_1LPT;
+                    compute_1LPT_potential_fourier<N, Grid>(density, phi_1LPT);
 
                     // Free some memory
                     density.free();
 
                     // The 1LPT displacement field
-                    std::array<FFTWGrid<N>, N> Psi;
-                    from_LPT_potential_to_displacement_vector<N>(phi_1LPT, Psi);
+                    std::array<Grid<N>, N> Psi;
+                    from_LPT_potential_to_displacement_vector<N, Grid>(phi_1LPT, Psi);
                     for (int idim = 0; idim < N; idim++) {
                         Psi[idim].communicate_boundaries();
                     }
@@ -310,8 +335,12 @@ namespace FML {
                 }
             }
 
-            // Only need to communicate if we have shifted along the x-axis
-            if (line_of_sight_direction[0] != 0.0)
+            // Only need to communicate if we have shifted along an axis the domain is split along (slabs: x)
+            bool shifted_across_tasks = line_of_sight_direction[0] != 0.0;
+            if (not part.get_domain().is_slab())
+                for (auto los : line_of_sight_direction)
+                    shifted_across_tasks = shifted_across_tasks or los != 0.0;
+            if (shifted_across_tasks)
                 part.communicate_particles();
 
             // If velocity_to_displacement < 0 we are going the other way around

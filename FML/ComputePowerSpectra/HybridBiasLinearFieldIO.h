@@ -2,6 +2,7 @@
 #define FML_HYBRIDBIAS_LINEARFIELDIO_HEADER
 
 #include <FML/FFTWGrid/FFTWGrid.h>
+#include <FML/FFTWGrid/GridInterface.h>
 #include <FML/Global/Global.h>
 
 #include <cmath>
@@ -87,17 +88,117 @@ namespace FML {
                 return h;
             }
 
+            namespace detail_io {
+                /// The rows (lines along the last axis) of the local cells of a grid: f(local coordinates of the
+                /// first cell of the row, global row number = the row in the file)
+                template <int N, class Grid, class F>
+                void for_each_local_row(const Grid & grid, F && f) {
+                    const long long int nmesh = grid.get_nmesh();
+                    std::array<long long int, N> start{}, count{};
+                    long long int nrows = 1;
+                    for (int d = 0; d < N - 1; d++) {
+                        start[d] = grid.get_local_range(d)[0];
+                        count[d] = grid.get_local_range(d)[1];
+                        nrows *= count[d];
+                    }
+                    for (long long int r = 0; r < nrows; r++) {
+                        std::array<int, N> c{};
+                        long long int rr = r, global_row = 0;
+                        for (int d = N - 2; d >= 0; d--) {
+                            c[d] = int(rr % count[d]);
+                            rr /= count[d];
+                        }
+                        for (int d = 0; d < N - 1; d++)
+                            global_row = global_row * nmesh + start[d] + c[d];
+                        f(c, global_row);
+                    }
+                }
+
+                /// write_linear_field for any decomposition: task 0 writes the header and sizes the file, then the
+                /// tasks write their rows in turn at their place in the file
+                template <int N, class Grid>
+                void write_rows(const std::string & filename, const Grid & real_grid, double boxsize, double redshift) {
+                    const long long int nmesh = real_grid.get_nmesh();
+                    std::string error;
+                    if (FML::ThisTask == 0) {
+                        std::ofstream out(filename, std::ios::binary | std::ios::trunc);
+                        const long long int ndim = N;
+                        out.write(magic, 8);
+                        out.write(reinterpret_cast<const char *>(&nmesh), 8);
+                        out.write(reinterpret_cast<const char *>(&ndim), 8);
+                        out.write(reinterpret_cast<const char *>(&boxsize), 8);
+                        out.write(reinterpret_cast<const char *>(&redshift), 8);
+                        std::vector<char> zeros(size_t(8 * nmesh), 0);
+                        for (long long int r = 0; r < (long long int)(std::pow(double(nmesh), N - 1) + 0.5); r++)
+                            out.write(zeros.data(), std::streamsize(zeros.size()));
+                        if (not out)
+                            error = "cannot write " + filename;
+                    }
+                    collective_error(error, "write_linear_field");
+                    for (int task = 0; task < FML::NTasks; task++) {
+                        if (task == FML::ThisTask) {
+                            std::fstream out(filename, std::ios::binary | std::ios::in | std::ios::out);
+                            std::vector<double> row(static_cast<size_t>(nmesh));
+                            for_each_local_row<N>(real_grid, [&](std::array<int, N> c, long long int global_row) {
+                                for (int iz = 0; iz < nmesh; iz++) {
+                                    c[N - 1] = iz;
+                                    row[size_t(iz)] = double(real_grid.get_real(c));
+                                }
+                                out.seekp(header_bytes + std::streamoff(8) * global_row * nmesh);
+                                out.write(reinterpret_cast<const char *>(row.data()), std::streamsize(8 * nmesh));
+                            });
+                            if (not out)
+                                error = "error writing " + filename;
+                        }
+#ifdef USE_MPI
+                        MPI_Barrier(FML::communicator);
+#endif
+                    }
+                    collective_error(error, "write_linear_field");
+                }
+
+                /// read_linear_field for any decomposition: every task reads its rows
+                template <int N, class Grid>
+                void read_rows(const std::string & filename, Grid & grid) {
+                    const long long int nmesh = grid.get_nmesh();
+                    std::string error;
+                    try {
+                        std::ifstream in(filename, std::ios::binary);
+                        std::vector<double> row(static_cast<size_t>(nmesh));
+                        for_each_local_row<N>(grid, [&](std::array<int, N> c, long long int global_row) {
+                            in.seekg(header_bytes + std::streamoff(8) * global_row * nmesh);
+                            in.read(reinterpret_cast<char *>(row.data()), std::streamsize(8 * nmesh));
+                            for (int iz = 0; iz < nmesh; iz++) {
+                                if (not std::isfinite(row[size_t(iz)]))
+                                    throw std::runtime_error("a value is not finite");
+                                c[N - 1] = iz;
+                                grid.set_real(c, FML::GRID::FloatType(row[size_t(iz)]));
+                            }
+                        });
+                        if (not in)
+                            throw std::runtime_error("error reading the values");
+                    } catch (const std::exception & e) {
+                        error = e.what();
+                    }
+                    collective_error(error, "read_linear_field(" + filename + ")");
+                }
+            } // namespace detail_io
+
             /// Write a real-space grid (the lattice field) to filename. Collective: the tasks append their x slices
             /// in turn
-            template <int N>
+            template <int N, template <int> class Grid = FML::GRID::FFTWGrid>
             void write_linear_field(const std::string & filename,
-                                    const FML::GRID::FFTWGrid<N> & real_grid,
+                                    const Grid<N> & real_grid,
                                     double boxsize,
                                     double redshift) {
                 if (not detail_io::little_endian())
                     throw std::runtime_error("write_linear_field: only little-endian machines are supported");
                 const long long int nmesh = real_grid.get_nmesh();
-                const int local_nx = int(real_grid.get_local_nx());
+                if constexpr (not FML::GRID::is_fftwgrid_v<Grid<N>>) {
+                    detail_io::write_rows<N>(filename, real_grid, boxsize, redshift);
+                    return;
+                }
+                const int local_nx = int(real_grid.get_local_range(0)[1]);
                 std::string error;
                 for (int task = 0; task < FML::NTasks; task++) {
                     if (task == FML::ThisTask and error.empty()) {
@@ -144,8 +245,10 @@ namespace FML {
 
             /// Read a linear field file into a real-space grid (nmesh from the file; the x slices of this task).
             /// Collective
-            template <int N>
-            FML::GRID::FFTWGrid<N> read_linear_field(const std::string & filename, LinearFieldFileHeader & header) {
+            template <int N, template <int> class Grid = FML::GRID::FFTWGrid>
+            Grid<N> read_linear_field(const std::string & filename,
+                                      LinearFieldFileHeader & header,
+                                      const FML::Domain & domain = FML::domain) {
                 std::string error;
                 try {
                     if (not detail_io::little_endian())
@@ -161,9 +264,13 @@ namespace FML {
                 detail_io::collective_error(error, "read_linear_field(" + filename + ")");
 
                 const int nmesh = int(header.nmesh);
-                FML::GRID::FFTWGrid<N> grid(nmesh);
-                const long long int local_nx = grid.get_local_nx();
-                const long long int x_start = grid.get_local_x_start();
+                auto grid = FML::GRID::make_grid<Grid<N>>(nmesh, 0, 0, domain);
+                if constexpr (not FML::GRID::is_fftwgrid_v<Grid<N>>) {
+                    detail_io::read_rows<N>(filename, grid);
+                    return grid;
+                }
+                const long long int local_nx = grid.get_local_range(0)[1];
+                const long long int x_start = grid.get_local_range(0)[0];
                 const long long int nrows_per_slice = (long long int)std::pow(double(nmesh), N - 2);
                 try {
                     std::ifstream in(filename, std::ios::binary);

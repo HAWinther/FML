@@ -10,6 +10,7 @@
 #include <gsl/gsl_math.h>
 
 #include <FML/FFTWGrid/FFTWGrid.h>
+#include <FML/FFTWGrid/GridInterface.h>
 
 namespace FML {
 
@@ -18,6 +19,7 @@ namespace FML {
 
         template <int N>
         using FFTWGrid = FML::GRID::FFTWGrid<N>;
+        using FML::GRID::make_grid_like;
 
         //=================================================================================
         /// Computes the Hessian matrix of a grid [norm * f] via Fourier transforms.
@@ -38,9 +40,9 @@ namespace FML {
         /// @param[in] hessian_of_potential_of_f Compute the hessian of the potential of the grid (default is false)
         ///
         //=================================================================================
-        template <int N>
-        void ComputeHessianWithFT(const FFTWGrid<N> & f_real,
-                                  std::vector<FFTWGrid<N>> & hessian_real,
+        template <int N, template <int> class Grid = FFTWGrid>
+        void ComputeHessianWithFT(const Grid<N> & f_real,
+                                  std::vector<Grid<N>> & hessian_real,
                                   double norm = 1.0,
                                   bool hessian_of_potential_of_f = false) {
 
@@ -48,22 +50,22 @@ namespace FML {
 
             // Helper function to go from f(k) -> DiDj f
             // Read the retained Fourier source while filling each output directly.
-            auto ComputeSecondDerivative = [&](const FFTWGrid<N> & source, FFTWGrid<N> & grid, int i1, int i2) {
+            auto ComputeSecondDerivative = [&](const Grid<N> & source, Grid<N> & grid, int i1, int i2) {
                 if (FML::ThisTask == 0)
                     std::cout << "[ComputeHessianWithFT::ComputeSecondDerivative] Computing phi_" << i1 << "," << i2
                               << "\n";
 
-                auto Local_x_start = grid.get_local_x_start();
+                const bool has_dc_mode = FML::GRID::has_dc_mode(grid);
                 // The Nyquist frequency 2pi * Nmesh/2 (with a margin for rounding)
                 const double knyquist = M_PI * grid.get_nmesh() * (1.0 - 1e-10);
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (FML::IndexIntType irow = 0; irow < grid.get_local_nrows(); irow++) {
+                for (FML::IndexIntType irow = 0; irow < grid.get_local_nrows_fourier(); irow++) {
                     [[maybe_unused]] double kmag2;
                     [[maybe_unused]] std::array<double, N> kvec;
                     for (auto && fourier_index : grid.get_fourier_range_of_rows(irow, irow + 1)) {
-                        if (Local_x_start == 0 and fourier_index == 0)
+                        if (has_dc_mode and fourier_index == 0)
                             continue; // DC mode (k=0)
 
                         grid.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
@@ -94,7 +96,7 @@ namespace FML {
             };
 
             // Take a copy and Fourier transform it
-            FFTWGrid<N> f_fourier = f_real;
+            Grid<N> f_fourier = f_real;
             f_fourier.fftw_r2c();
 
             // Allocate grids
@@ -124,10 +126,10 @@ namespace FML {
         ///
         //=================================================================================
 
-        template <int N>
-        void SymmetricTensorEigensystem(std::vector<FFTWGrid<N>> & tensor_real,
-                                        std::vector<FFTWGrid<N>> & eigenvalues,
-                                        std::vector<FFTWGrid<N>> & eigenvectors,
+        template <int N, template <int> class Grid = FFTWGrid>
+        void SymmetricTensorEigensystem(std::vector<Grid<N>> & tensor_real,
+                                        std::vector<Grid<N>> & eigenvalues,
+                                        std::vector<Grid<N>> & eigenvectors,
                                         bool compute_eigenvectors = false) {
 
             // We read all the N(N+1)/2 components [00,01,..,0N,11,12,...,NN] in every cell
@@ -138,7 +140,7 @@ namespace FML {
                        "[SymmetricTensorEigensystem] tensor_real[0] is not allocated\n");
             for (size_t i = 1; i < tensor_real.size(); i++)
                 assert_mpi(tensor_real[i].get_nmesh() == tensor_real[0].get_nmesh() and
-                               tensor_real[i].get_local_nx() == tensor_real[0].get_local_nx(),
+                               tensor_real[i].get_local_nrows() == tensor_real[0].get_local_nrows(),
                            "[SymmetricTensorEigensystem] the grids in tensor_real must all have the same size\n");
 
             // N eigenvalues

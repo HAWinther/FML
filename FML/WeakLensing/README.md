@@ -8,7 +8,8 @@ calibrated survey likelihood.
 
 `WeakLensing.h` is standalone C++17 (no FML setup, FFTW, GSL or MPI dependency).
 `FlatSky.h` adds an optional `FFTWGrid<2>` adapter using the existing serial/MPI
-FFT backend. Namespace: `FML::WEAKLENSING`.
+FFT backend (any 2D grid with FML's generic grid interface works too, e.g.
+`PencilGrid<2>`). Namespace: `FML::WEAKLENSING`.
 
 ## Units and physical assumptions
 
@@ -107,6 +108,11 @@ application, the caller coordinates errors from these rank-local APIs.
 // kappa is a real-space, distributed FFTWGrid<2> on a periodic angular patch.
 auto shear = shear_from_convergence(kappa, theta_x_radians, theta_y_radians);
 ```
+
+The maps can also be another 2D grid type, e.g. `FML::GRID::PencilGrid<2>` (include
+`<FML/PencilDomain/PencilGrid.h>`): `shear_from_convergence` returns
+`ShearMapsT<Grid>` with maps made like the input (`ShearMaps` is the `FFTWGrid<2>`
+version). The tests run on both.
 
 The fixed Cartesian convention is
 

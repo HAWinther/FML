@@ -61,9 +61,9 @@ namespace FML {
             /// @param[in] kernel_values Optional. If you specify generic fNL then this gives the kernel values.
             ///
             //======================================================================
-            template <int N>
+            template <int N, template <int> class Grid = FFTWGrid>
             void
-            generate_nonlocal_gaussian_random_field_fourier(FFTWGrid<N> & phi_fourier,
+            generate_nonlocal_gaussian_random_field_fourier(Grid<N> & phi_fourier,
                                                             RandomGenerator * rng,
                                                             std::function<double(double)> Pofk_of_kBox_over_volume,
                                                             bool fix_amplitude,
@@ -129,7 +129,7 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (FML::IndexIntType irow = 0; irow < phi_fourier.get_local_nrows(); irow++) {
+                for (FML::IndexIntType irow = 0; irow < phi_fourier.get_local_nrows_fourier(); irow++) {
                     [[maybe_unused]] double kmag;
                     [[maybe_unused]] std::array<double, N> kvec;
                     for (auto && fourier_index : phi_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
@@ -151,13 +151,13 @@ namespace FML {
                     return;
 
                 // Get phi in real space
-                FFTWGrid<N> phi_real = phi_fourier;
+                Grid<N> phi_real = phi_fourier;
                 phi_real.add_memory_label("FFTWGrid::generate_nonlocal_gaussian_random_field_fourier::phi_real");
                 phi_real.set_grid_status_real(false);
                 phi_real.fftw_c2r();
 
                 // Compute phi^2 - <phi>^2 in real space and store in source
-                FFTWGrid<N> source(Nmesh, nleft, nright);
+                auto source = FML::GRID::make_grid_like(phi_fourier, Nmesh, nleft, nright);
                 source.add_memory_label("FFTWGrid::generate_nonlocal_gaussian_random_field_fourier::source");
                 double phi_squared_mean = 0.0;
                 double phi_mean = 0.0;
@@ -226,12 +226,12 @@ namespace FML {
                 const bool term2_active = kernel_values[2] != 0.0;
                 const bool term3_active = kernel_values[3] != 0.0;
                 const bool need_m23 = term2_active || term3_active;
-                FFTWGrid<N> phi_m13(Nmesh);
-                FFTWGrid<N> phi_m23, phi_m33;
+                auto phi_m13 = FML::GRID::make_grid_like(phi_fourier, Nmesh, 0, 0);
+                Grid<N> phi_m23, phi_m33;
                 if (need_m23)
-                    phi_m23 = FFTWGrid<N>(Nmesh);
+                    phi_m23 = FML::GRID::make_grid_like(phi_fourier, Nmesh, 0, 0);
                 if (term3_active)
-                    phi_m33 = FFTWGrid<N>(Nmesh);
+                    phi_m33 = FML::GRID::make_grid_like(phi_fourier, Nmesh, 0, 0);
                 phi_m13.add_memory_label("FFTWGrid::generate_nonlocal_gaussian_random_field_fourier::phi_m13");
                 if (need_m23)
                     phi_m23.add_memory_label("FFTWGrid::generate_nonlocal_gaussian_random_field_fourier::phi_m23");
@@ -240,7 +240,7 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (FML::IndexIntType irow = 0; irow < phi_fourier.get_local_nrows(); irow++) {
+                for (FML::IndexIntType irow = 0; irow < phi_fourier.get_local_nrows_fourier(); irow++) {
                     [[maybe_unused]] double kmag;
                     [[maybe_unused]] std::array<double, N> kvec;
                     for (auto && fourier_index : phi_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
@@ -275,9 +275,9 @@ namespace FML {
 
                 // We use the grids already allocated as temporary grids
                 // We must make sure we do things in the right order below
-                FFTWGrid<N> & temp1 = phi_m13;
-                FFTWGrid<N> & temp2 = phi_m23;
-                FFTWGrid<N> & temp3 = phi_m33;
+                Grid<N> & temp1 = phi_m13;
+                Grid<N> & temp2 = phi_m23;
+                Grid<N> & temp3 = phi_m33;
 
                 // Compute the square of some quantities in real space
 #ifdef USE_OMP
@@ -319,7 +319,7 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                for (FML::IndexIntType irow = 0; irow < source.get_local_nrows(); irow++) {
+                for (FML::IndexIntType irow = 0; irow < source.get_local_nrows_fourier(); irow++) {
                     [[maybe_unused]] double kmag;
                     [[maybe_unused]] std::array<double, N> kvec;
                     for (auto && fourier_index : source.get_fourier_range_of_rows(irow, irow + 1)) {
@@ -413,9 +413,9 @@ namespace FML {
             /// @param[in] kernel_values Optional. If you specify generic fNL then this gives the kernel values.
             ///
             //======================================================================
-            template <int N>
+            template <int N, template <int> class Grid = FFTWGrid>
             void generate_nonlocal_gaussian_random_field_fourier_cosmology(
-                FFTWGrid<N> & delta_fourier,
+                Grid<N> & delta_fourier,
                 RandomGenerator * rng,
                 std::function<double(double)> Pofk_of_kBox_over_Pofk_primordal,
                 std::function<double(double)> Pofk_of_kBox_over_volume_primordial,
@@ -427,7 +427,7 @@ namespace FML {
                 const GAUSSIAN::RandomFieldOptions & random_options = {}) {
 
                 // Generate a gaussian random field delta using a primordial power-spectrum
-                FFTWGrid<N> & phi_fourier = delta_fourier;
+                Grid<N> & phi_fourier = delta_fourier;
                 generate_nonlocal_gaussian_random_field_fourier(phi_fourier,
                                                                 rng,
                                                                 Pofk_of_kBox_over_volume_primordial,
@@ -438,16 +438,15 @@ namespace FML {
                                                                 kernel_values,
                                                                 random_options);
 
-                const auto Local_nx = phi_fourier.get_local_nx();
-                const auto Local_x_start = phi_fourier.get_local_x_start();
+                const bool has_dc_mode = FML::GRID::has_dc_mode(phi_fourier);
 
                 // Transform to delta by multiplying by sqrt(P(k) / Pprimodial(k))
-                for (int islice = 0; islice < Local_nx; islice++) {
+                for (FML::IndexIntType irow = 0; irow < FML::IndexIntType(phi_fourier.get_local_nrows_fourier()); irow++) {
                     [[maybe_unused]] double kmag;
                     [[maybe_unused]] std::array<double, N> kvec;
-                    for (auto && fourier_index : phi_fourier.get_fourier_range(islice, islice + 1)) {
+                    for (auto && fourier_index : phi_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
                         // The DC mode (k=0) is zero. We skip it as the ratio is often 0/0 = NaN there
-                        if (Local_x_start == 0 and fourier_index == 0) {
+                        if (has_dc_mode and fourier_index == 0) {
                             phi_fourier.set_fourier_from_index(fourier_index, 0.0);
                             continue;
                         }

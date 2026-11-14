@@ -11,8 +11,9 @@ namespace FML::RANDOM::COUNTER_BASED {
     inline uint32_t signed_counter(int wave) {
         return wave >= 0 ? uint32_t(wave) * 2u : uint32_t(-int64_t(wave) * 2 - 1);
     }
-    template <int N>
-    void generate_fourier(FML::GRID::FFTWGrid<N> & grid,
+    /// Any grid (FFTWGrid, PencilGrid, ...): the value of a mode only depends on its wave-vector
+    template <int N, template <int> class Grid = FML::GRID::FFTWGrid>
+    void generate_fourier(Grid<N> & grid,
                           uint64_t seed,
                           uint32_t stream,
                           const std::function<double(double)> & power,
@@ -24,13 +25,14 @@ namespace FML::RANDOM::COUNTER_BASED {
 #ifdef USE_OMP
 #pragma omp parallel for reduction(| : invalid)
 #endif
-        for (FML::IndexIntType irow = 0; irow < grid.get_local_nrows(); irow++) {
+        for (FML::IndexIntType irow = 0; irow < grid.get_local_nrows_fourier(); irow++) {
             for (auto index : grid.get_fourier_range_of_rows(irow, irow + 1)) {
-                auto wave = grid.get_fourier_coord_from_index(index);
-                wave[0] += grid.get_local_x_start();
+                auto wave = grid.get_fourier_integer_wavevector_from_index(index);
                 bool zero = true, nyquist = false;
                 double norm2 = 0;
                 for (int d = 0; d < N; d++) {
+                    // (in (-mesh/2, mesh/2])
+                    wave[d] = ((wave[d] % mesh) + mesh) % mesh;
                     if (d < N - 1 && wave[d] > mesh / 2)
                         wave[d] -= mesh;
                     zero = zero && wave[d] == 0;

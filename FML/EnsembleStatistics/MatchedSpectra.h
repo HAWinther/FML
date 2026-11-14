@@ -9,18 +9,22 @@ namespace FML::ENSEMBLE {
     /// Collective raw auto/cross spectra. Input grids must already be Fourier-space
     /// density contrasts in the same box; no assignment or particle-noise corrections.
     /// kmin/kmax are the existing FML bin-center limits in physical inverse-length units.
-    inline MatchedSpectra matched_spectra(const FML::GRID::FFTWGrid<3> & target,
-                                          const FML::GRID::FFTWGrid<3> & control,
+    /// (Grid: FFTWGrid or any grid with the interface, e.g. PencilGrid; both decomposed the same way)
+    template <template <int> class Grid = FML::GRID::FFTWGrid>
+    MatchedSpectra matched_spectra(const Grid<3> & target,
+                                   const Grid<3> & control,
                                           double boxsize,
                                           double kmin,
                                           double kmax,
                                           int bins) {
         int valid = boxsize > 0 && std::isfinite(boxsize * boxsize * boxsize) && boxsize * boxsize * boxsize > 0 &&
                     kmin >= 0 && kmax > kmin && std::isfinite(kmax * boxsize) && bins >= 2 && target.get_nmesh() > 0 &&
-                    target.get_nmesh() == control.get_nmesh() && target.get_local_nx() == control.get_local_nx() &&
-                    target.get_local_x_start() == control.get_local_x_start() &&
-                    !const_cast<FML::GRID::FFTWGrid<3> &>(target).get_grid_status_real() &&
-                    !const_cast<FML::GRID::FFTWGrid<3> &>(control).get_grid_status_real();
+                    target.get_nmesh() == control.get_nmesh() &&
+                    target.get_local_range(0) == control.get_local_range(0) &&
+                    target.get_local_range(1) == control.get_local_range(1) &&
+                    target.get_local_nrows_fourier() == control.get_local_nrows_fourier() &&
+                    !const_cast<Grid<3> &>(target).get_grid_status_real() &&
+                    !const_cast<Grid<3> &>(control).get_grid_status_real();
         FML::MinOverTasks(&valid);
         detail::require(valid, "Invalid matched Fourier-grid spectra inputs");
         Count schema = target.get_nmesh();

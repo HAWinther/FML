@@ -23,12 +23,6 @@ namespace FML::SURVEY {
         double alpha = 0;
     };
     namespace detail {
-        inline std::array<int, 3> neighbor(std::array<int, 3> c, int direction, int step, int n) {
-            c[direction] += step;
-            if (direction > 0)
-                c[direction] = (c[direction] + n) % n;
-            return c;
-        }
         inline double mesh_dot(const Mesh & a, const Mesh & b) {
             double sum = 0;
             for (auto i : a.get_real_range())
@@ -72,7 +66,7 @@ namespace FML::SURVEY {
                 const auto c = phi.get_coord_from_index(i);
                 Vector grad;
                 for (int d = 0; d < 3; ++d)
-                    grad[d] = (phi.get_real(neighbor(c, d, 1, g.nmesh)) - phi.get_real_from_index(i)) / h;
+                    grad[d] = (phi.get_real(neighbor(phi, c, d, 1, g.nmesh)) - phi.get_real_from_index(i)) / h;
                 const auto n = g.los(g.position(phi, i));
                 const double radial = dot(grad, n);
                 for (int d = 0; d < 3; ++d)
@@ -84,7 +78,7 @@ namespace FML::SURVEY {
                 const auto c = phi.get_coord_from_index(i);
                 double value = 0;
                 for (int d = 0; d < 3; ++d)
-                    value -= (flux[d].get_real_from_index(i) - flux[d].get_real(neighbor(c, d, -1, g.nmesh))) / h;
+                    value -= (flux[d].get_real_from_index(i) - flux[d].get_real(neighbor(flux[d], c, d, -1, g.nmesh))) / h;
                 output.set_real_from_index(i, Real(value));
             }
         }
@@ -120,12 +114,17 @@ namespace FML::SURVEY {
         auto phi = detail::empty_mesh(g, 1), residual = detail::empty_mesh(g, 1), direction = detail::empty_mesh(g, 1);
         auto preconditioned = detail::empty_mesh(g, 1), ap = detail::empty_mesh(g, 1);
         std::array<Mesh, 3> flux{detail::empty_mesh(g, 1), detail::empty_mesh(g, 1), detail::empty_mesh(g, 1)};
+        // The source on a mesh with the halo of the others (a real index is only valid on meshes with the same
+        // halo: PencilGrid rows include the halo in y)
+        auto source_with_halo = detail::empty_mesh(g, 1);
         bool finite = true;
         for (auto i : source.get_real_range()) {
             const double x = source.get_real_from_index(i);
             finite &= std::isfinite(x);
-            residual.set_real_from_index(i, Real(x));
+            source_with_halo.set_real(source.get_coord_from_index(i), Real(x));
         }
+        for (auto i : residual.get_real_range())
+            residual.set_real_from_index(i, source_with_halo.get_real_from_index(i));
         require(finite, "Nonfinite reconstruction source");
         SolverReport report;
         report.removed_mean = detail::remove_mean(residual, g);
@@ -157,7 +156,7 @@ namespace FML::SURVEY {
             for (auto i : residual.get_real_range())
                 residual.set_real_from_index(
                     i,
-                    Real(source.get_real_from_index(i) - report.removed_mean - ap.get_real_from_index(i)));
+                    Real(source_with_halo.get_real_from_index(i) - report.removed_mean - ap.get_real_from_index(i)));
             const double residual2 = detail::mesh_dot(residual, residual);
             if (!std::isfinite(residual2))
                 throw std::runtime_error("Nonfinite reconstruction residual");
@@ -180,8 +179,8 @@ namespace FML::SURVEY {
             const auto c = phi.get_coord_from_index(i);
             for (int d = 0; d < 3; ++d)
                 flux[d].set_real_from_index(i,
-                                            Real((phi.get_real(detail::neighbor(c, d, 1, g.nmesh)) -
-                                                  phi.get_real(detail::neighbor(c, d, -1, g.nmesh))) /
+                                            Real((phi.get_real(detail::neighbor(phi, c, d, 1, g.nmesh)) -
+                                                  phi.get_real(detail::neighbor(phi, c, d, -1, g.nmesh))) /
                                                  (2 * g.cellsize())));
         }
         for (auto & field : flux)
@@ -207,18 +206,21 @@ namespace FML::SURVEY {
             Vector value;
             unsigned long long index;
         };
-        const int slab = g.nmesh / FML::NTasks;
+        // The point goes to the task of its cell (the halos have the rest of the CIC cloud)
+        const detail::MeshOwners owners(fields[0]);
         std::vector<std::vector<Query>> outgoing(FML::NTasks);
         for (size_t i = 0; i < points.size(); ++i) {
             const int ix = int((points[i].position[0] - g.minimum[0]) / g.cellsize());
-            outgoing[ix / slab].push_back({points[i].position, i, FML::ThisTask});
+            const int iy = int((points[i].position[1] - g.minimum[1]) / g.cellsize());
+            outgoing[owners.owner(ix, iy)].push_back({points[i].position, i, FML::ThisTask});
         }
         const auto queries = detail::route(outgoing);
         std::vector<std::vector<Answer>> replies(FML::NTasks);
         for (const auto & query : queries) {
             Vector value{};
             detail::cic(query.position, g, [&](auto c, double w) {
-                c[0] -= fields[0].get_local_x_start();
+                c[0] -= int(fields[0].get_local_range(0)[0]);
+                c[1] -= int(fields[0].get_local_range(1)[0]);
                 for (int d = 0; d < 3; ++d)
                     value[d] += w * fields[d].get_real(c);
             });

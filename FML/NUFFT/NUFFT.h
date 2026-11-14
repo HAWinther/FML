@@ -6,6 +6,8 @@
 #include <array>
 #include <cmath>
 #include <complex>
+#include <functional>
+#include <type_traits>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -20,6 +22,8 @@
 #endif
 
 #include <FML/FFTWGrid/FFTWGrid.h>
+#include <FML/FFTWGrid/CopyFourierModes.h>
+#include <FML/FFTWGrid/GridInterface.h>
 #include <FML/Global/Global.h>
 #include <FML/Global/ChunkedExchange.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
@@ -909,6 +913,221 @@ namespace FML {
                        "particles first)\n");
         }
 
+        //================================================================================
+        // The spreading and the interpolation for the other grids (e.g. PencilGrid; FFTWGrid has its own, faster ones
+        // above). An axis whose local range is all of it is periodic within the task; on the others the kernel reaches
+        // into the extra cells: they are added to their owners after spreading (add_contribution_from_extra_cells) and
+        // must be filled before interpolating (communicate_boundaries). The particles must be in the domain of the
+        // grid (FML::GRID::particle_domain_of)
+        //================================================================================
+
+        namespace detail {
+            template <int N, template <int> class Grid>
+            constexpr bool is_fftwgrid = std::is_same_v<Grid<N>, FFTWGrid<N>>;
+
+            // The local cells of the kernel of a particle along each axis and their weights. False if the kernel
+            // is outside the local cells (with the extra cells)
+            template <int N, class Kernel, class Grid>
+            bool kernel_cells(const Kernel & kernel,
+                              const Grid & grid,
+                              const double * pos,
+                              std::array<std::array<int, 16>, N> & cells,
+                              std::array<double, N * 16> & weights) {
+                const int nf = grid.get_nmesh();
+                const int w = kernel.width;
+                const int nleft = grid.get_n_extra_slices_left();
+                const int nright = grid.get_n_extra_slices_right();
+                for (int idim = 0; idim < N; idim++) {
+                    const double x = pos[idim] * nf;
+                    const int j0 = int(std::ceil(x - 0.5 * w));
+                    kernel.weights(double(j0) - x + 0.5 * w, &weights[idim * w]);
+                    const auto range = grid.get_local_range(idim);
+                    if (range[1] < nf) {
+                        const int i0 = j0 - int(range[0]);
+                        if (i0 < -nleft or i0 + w > int(range[1]) + nright)
+                            return false;
+                        for (int j = 0; j < w; j++)
+                            cells[idim][j] = i0 + j;
+                    } else {
+                        for (int j = 0; j < w; j++)
+                            cells[idim][j] = ((j0 + j) % nf + nf) % nf;
+                    }
+                }
+                return true;
+            }
+
+            template <int N, class Kernel, class Grid>
+            void check_extra_cells(const Kernel & kernel, const Grid & grid, const char * name) {
+                const int nextra = std::min(grid.get_n_extra_slices_left(), grid.get_n_extra_slices_right());
+                bool ok = nextra >= kernel.width / 2 + 1;
+                for (int idim = 0; idim < N; idim++) {
+                    const auto range = grid.get_local_range(idim);
+                    if (range[1] < grid.get_nmesh())
+                        ok = ok and range[1] >= std::max(grid.get_n_extra_slices_left(), grid.get_n_extra_slices_right());
+                }
+                assert_mpi(ok,
+                           (std::string("[NUFFT::") + name +
+                            "] Too few extra cells for the kernel, or fewer local cells than extra cells. Use fewer "
+                            "tasks or a larger grid\n")
+                               .c_str());
+            }
+        } // namespace detail
+
+        /// @brief Spread values c_p onto the fine grid (any grid with the interface, not FFTWGrid)
+        template <int N,
+                  class T,
+                  class Kernel = PSWFKernel<N>,
+                  template <int> class Grid,
+                  std::enable_if_t<not detail::is_fftwgrid<N, Grid>, int> = 0>
+        void spread_to_fine_grid(const T * part,
+                                 size_t NumPart,
+                                 const std::vector<double> & values,
+                                 const Kernel & kernel,
+                                 Grid<N> & fine,
+                                 const ParticleOrdering<N> * ordering = nullptr) {
+            static_assert(FML::GRID::has_fourier_grid_interface<Grid<N>>::value, "spread_to_fine_grid: not a grid");
+            detail::check_extra_cells<N>(kernel, fine, "spread_to_fine_grid");
+            if (ordering)
+                assert_mpi(ordering->size() == NumPart,
+                           "[NUFFT::spread_to_fine_grid] Particle ordering has the wrong size\n");
+            const int w = kernel.width;
+            fine.fill_real_grid(0.0);
+            FloatType * grid = fine.get_real_grid();
+            int out_of_bounds = 0;
+#ifdef USE_OMP
+#pragma omp parallel for reduction(max : out_of_bounds)
+#endif
+            for (size_t i = 0; i < NumPart; i++) {
+                const size_t ip = ordering ? ordering->get_indices()[i] : i;
+                const double * pos =
+                    ordering ? ordering->get_positions()[i].data() : FML::PARTICLE::GetPos(const_cast<T *>(part)[i]);
+                std::array<std::array<int, 16>, N> cells;
+                std::array<double, N * 16> weights;
+                if (not detail::kernel_cells<N>(kernel, fine, pos, cells, weights)) {
+                    out_of_bounds = 1;
+                    continue;
+                }
+                std::array<int, N> coord;
+                for (int a = 0; a < w; a++) {
+                    coord[0] = cells[0][a];
+                    for (int b = 0; b < w; b++) {
+                        coord[1] = cells[1][b];
+                        if constexpr (N == 2) {
+                            const double weight = values[ip] * weights[a] * weights[w + b];
+#ifdef USE_OMP
+#pragma omp atomic
+#endif
+                            grid[fine.get_index_real(coord)] += FloatType(weight);
+                        } else {
+                            coord[2] = 0;
+                            const auto row = fine.get_index_real(coord);
+                            const double wab = values[ip] * weights[a] * weights[w + b];
+                            for (int c = 0; c < w; c++) {
+#ifdef USE_OMP
+#pragma omp atomic
+#endif
+                                grid[row + cells[2][c]] += FloatType(wab * weights[2 * w + c]);
+                            }
+                        }
+                    }
+                }
+            }
+            FML::MaxOverTasks(&out_of_bounds);
+            assert_mpi(out_of_bounds == 0,
+                       "[NUFFT::spread_to_fine_grid] A particle is outside the local domain (communicate the "
+                       "particles first)\n");
+            fine.add_contribution_from_extra_cells();
+        }
+
+        /// @brief Interpolate the fine (real space, with boundaries communicated) grid to the particle positions
+        /// (any grid with the interface, not FFTWGrid)
+        template <int N,
+                  class T,
+                  class Kernel = PSWFKernel<N>,
+                  template <int> class Grid,
+                  std::enable_if_t<not detail::is_fftwgrid<N, Grid>, int> = 0>
+        void interpolate_from_fine_grid(const Grid<N> & fine,
+                                        const T * part,
+                                        size_t NumPart,
+                                        const Kernel & kernel,
+                                        std::vector<FloatType> & result,
+                                        const ParticleOrdering<N> * ordering = nullptr) {
+            static_assert(FML::GRID::has_fourier_grid_interface<Grid<N>>::value,
+                          "interpolate_from_fine_grid: not a grid");
+            detail::check_extra_cells<N>(kernel, fine, "interpolate_from_fine_grid");
+            if (ordering)
+                assert_mpi(ordering->size() == NumPart,
+                           "[NUFFT::interpolate_from_fine_grid] Particle ordering has the wrong size\n");
+            const int w = kernel.width;
+            result.resize(NumPart);
+            int out_of_bounds = 0;
+#ifdef USE_OMP
+#pragma omp parallel for reduction(max : out_of_bounds)
+#endif
+            for (size_t i = 0; i < NumPart; i++) {
+                const size_t ip = ordering ? ordering->get_indices()[i] : i;
+                const double * pos =
+                    ordering ? ordering->get_positions()[i].data() : FML::PARTICLE::GetPos(const_cast<T *>(part)[i]);
+                std::array<std::array<int, 16>, N> cells;
+                std::array<double, N * 16> weights;
+                if (not detail::kernel_cells<N>(kernel, fine, pos, cells, weights)) {
+                    out_of_bounds = 1;
+                    continue;
+                }
+                double sum = 0.0;
+                std::array<int, N> coord;
+                for (int a = 0; a < w; a++) {
+                    coord[0] = cells[0][a];
+                    for (int b = 0; b < w; b++) {
+                        coord[1] = cells[1][b];
+                        if constexpr (N == 2) {
+                            sum += weights[a] * weights[w + b] * fine.get_real(coord);
+                        } else {
+                            coord[2] = 0;
+                            const auto row = fine.get_index_real(coord);
+                            double rowsum = 0.0;
+                            for (int c = 0; c < w; c++)
+                                rowsum += weights[2 * w + c] * fine.get_real_from_index(row + cells[2][c]);
+                            sum += weights[a] * weights[w + b] * rowsum;
+                        }
+                    }
+                }
+                result[ip] = FloatType(sum);
+            }
+            FML::MaxOverTasks(&out_of_bounds);
+            assert_mpi(out_of_bounds == 0,
+                       "[NUFFT::interpolate_from_fine_grid] A particle is outside the local domain (communicate the "
+                       "particles first)\n");
+        }
+
+        namespace detail {
+            /// The size of the fine grid: the kernel's (sigma Nmesh, even, a multiple of the number of tasks), made
+            /// larger if needed so that it has the decomposition of the grid (fits_grid_like)
+            template <int N, class Kernel, class Grid>
+            int fine_nmesh_like(const Kernel & kernel, const Grid & grid) {
+                const int nmesh = grid.get_nmesh();
+                int nf = kernel.fine_nmesh(nmesh);
+                while (not fits_grid_like(grid, nf) and nf <= 64 * nmesh)
+                    nf += 2;
+                assert_mpi(fits_grid_like(grid, nf), "[NUFFT] Found no fine grid size with the decomposition of the grid\n");
+                return nf;
+            }
+
+            /// Set the k = 0 mode to zero (on the task that has it: the local Fourier index 0 with k = 0)
+            template <int N, class Grid>
+            void zero_dc_mode(Grid & grid) {
+                if (grid.get_local_nrows_fourier() == 0)
+                    return;
+                const auto k = grid.get_fourier_integer_wavevector_from_index(0);
+                bool dc = true;
+                for (int idim = 0; idim < N; idim++)
+                    dc = dc and k[idim] == 0;
+                if (dc)
+                    grid.set_fourier_from_index(0, 0.0);
+            }
+
+        } // namespace detail
+
         /// @brief The 1D table of 1/phi_hat for the integer wavenumbers m = -nf/2,...,nf/2 of the fine grid
         template <class Kernel>
         inline std::vector<double> inverse_kernel_fourier_table(const Kernel & kernel, int nf) {
@@ -918,62 +1137,8 @@ namespace FML {
             return table;
         }
 
-        //================================================================================
-        /// @brief Copy all Fourier modes with \f$ |m_i| < \min(N_{\rm src},N_{\rm dst})/2 \f$ from one grid to
-        /// another of a different size, multiplying by factor(m). All other modes of dst are set to zero. Works with
-        /// MPI (the modes are sent to the task that owns them in dst).
-        ///
-        /// @param[in] src The source grid (Fourier space)
-        /// @param[out] dst The destination grid (allocated, Fourier space on output)
-        /// @param[in] factor Function of the integer wavevector
-        //================================================================================
-        template <int N>
-        void copy_fourier_modes(const FFTWGrid<N> & src,
-                                FFTWGrid<N> & dst,
-                                const std::function<double(const std::array<int, N> &)> & factor) {
-            const int nsrc = src.get_nmesh();
-            const int ndst = dst.get_nmesh();
-            const int mmax = std::min(nsrc, ndst) / 2; // keep |m| < mmax
-            assert_mpi(nsrc > 0 && ndst > 0, "[NUFFT::copy_fourier_modes] Grids must be allocated");
-            const int ndst_per_task = ndst / FML::NTasks;
-
-            dst.fill_fourier_grid(0.0);
-            dst.set_grid_status_real(false);
-
-            struct Mode {
-                int coord[N];
-                ComplexType value;
-            };
-            std::vector<std::vector<Mode>> send(FML::NTasks);
-            const auto Local_nx = src.get_local_nx();
-            for (int islice = 0; islice < Local_nx; islice++) {
-                for (auto && fourier_index : src.get_fourier_range(islice, islice + 1)) {
-                    auto m = src.get_fourier_integer_wavevector_from_index(fourier_index);
-                    bool keep = true;
-                    for (int idim = 0; idim < N; idim++)
-                        keep = keep and std::abs(m[idim]) < mmax;
-                    if (not keep)
-                        continue;
-                    Mode mode;
-                    for (int idim = 0; idim < N; idim++)
-                        mode.coord[idim] = (m[idim] >= 0 or idim == N - 1) ? m[idim] : m[idim] + ndst;
-                    mode.value = src.get_fourier_from_index(fourier_index) * FloatType(factor(m));
-                    const int owner = FML::NTasks == 1 ? 0 : mode.coord[0] / ndst_per_task;
-                    send[owner].push_back(mode);
-                }
-            }
-
-            const auto dst_x_start = dst.get_local_x_start();
-            FML::COMMUNICATION::exchange_records_chunked(send, [&](const Mode * modes, size_t count) {
-                for (size_t i = 0; i < count; ++i) {
-                    std::array<int, N> coord;
-                    for (int idim = 0; idim < N; idim++)
-                        coord[idim] = modes[i].coord[idim];
-                    coord[0] -= int(dst_x_start);
-                    dst.set_fourier(coord, modes[i].value);
-                }
-            });
-        }
+        // copy_fourier_modes (any grids, also of different types) is in FFTWGrid/CopyFourierModes.h
+        using FML::GRID::copy_fourier_modes;
 
         //================================================================================
         /// @brief NUFFT type 1: compute
@@ -987,21 +1152,23 @@ namespace FML {
         /// @param[out] out The output grid (Nmesh must be set). Fourier space on output.
         /// @param[in] kernel The spreading kernel (sets the accuracy)
         //================================================================================
-        template <int N, class T, class Kernel = PSWFKernel<N>>
+        template <int N, class T, class Kernel = PSWFKernel<N>, template <int> class Grid = FFTWGrid>
         void nufft_type1(const T * part,
                          size_t NumPart,
                          const std::vector<double> & values,
                          double norm,
-                         FFTWGrid<N> & out,
+                         Grid<N> & out,
                          const Kernel & kernel = Kernel(),
                          const ParticleOrdering<N> * ordering = nullptr) {
             const int nmesh = out.get_nmesh();
             assert_mpi(nmesh > 0, "[NUFFT::nufft_type1] Output grid must be allocated\n");
             assert_mpi(values.size() >= NumPart, "[NUFFT::nufft_type1] Too few values\n");
-            const int nf = kernel.fine_nmesh(nmesh);
+            const int nf = detail::fine_nmesh_like<N>(kernel, out);
             const int nextra = kernel.extra_slices();
 
-            FFTWGrid<N> fine(nf, nextra, nextra);
+            // (the fine grid decomposed as the output grid)
+            using FML::GRID::make_grid_like;
+            auto fine = make_grid_like(out, nf, nextra, nextra);
             fine.add_memory_label("FFTWGrid::NUFFT::nufft_type1::fine");
             spread_to_fine_grid<N, T>(part, NumPart, values, kernel, fine, ordering);
             fine.fftw_r2c();
@@ -1027,8 +1194,8 @@ namespace FML {
         /// @param[out] result The values at the particle positions
         /// @param[in] kernel The spreading kernel (sets the accuracy)
         //================================================================================
-        template <int N, class T, class Kernel = PSWFKernel<N>>
-        void nufft_type2(const FFTWGrid<N> & in,
+        template <int N, class T, class Kernel = PSWFKernel<N>, template <int> class Grid = FFTWGrid>
+        void nufft_type2(const Grid<N> & in,
                          const T * part,
                          size_t NumPart,
                          std::vector<FloatType> & result,
@@ -1036,10 +1203,11 @@ namespace FML {
                          const ParticleOrdering<N> * ordering = nullptr) {
             const int nmesh = in.get_nmesh();
             assert_mpi(nmesh > 0, "[NUFFT::nufft_type2] Input grid must be allocated\n");
-            const int nf = kernel.fine_nmesh(nmesh);
+            const int nf = detail::fine_nmesh_like<N>(kernel, in);
             const int nextra = kernel.extra_slices();
 
-            FFTWGrid<N> fine(nf, nextra, nextra);
+            using FML::GRID::make_grid_like;
+            auto fine = make_grid_like(in, nf, nextra, nextra);
             fine.add_memory_label("FFTWGrid::NUFFT::nufft_type2::fine");
             const auto inv = inverse_kernel_fourier_table(kernel, nf);
             copy_fourier_modes<N>(in, fine, [&](const std::array<int, N> & m) {
@@ -1084,29 +1252,28 @@ namespace FML {
         /// @param[in] epsilon The requested accuracy
         /// @param[in] sigma The upsampling factor
         //================================================================================
-        template <int N, class T>
+        template <int N, class T, template <int> class Grid = FFTWGrid>
         void particles_to_fourier_grid_nufft(const T * part,
                                              size_t NumPart,
                                              size_t NumPartTot,
-                                             FFTWGrid<N> & density_fourier,
+                                             Grid<N> & density_fourier,
                                              double epsilon = 1e-6,
                                              double sigma = 2.0,
                                              const ParticleOrdering<N> * ordering = nullptr) {
             PSWFKernel<N> kernel(epsilon, sigma);
             auto values = particle_weights(part, NumPart, NumPartTot);
             nufft_type1<N, T>(part, NumPart, values, 1.0 / double(NumPartTot), density_fourier, kernel, ordering);
-            if (density_fourier.get_local_x_start() == 0)
-                density_fourier.set_fourier_from_index(0, 0.0);
+            detail::zero_dc_mode<N>(density_fourier);
         }
 
         /// Density assignment using an explicitly selected kernel, for example
         /// PSWFKernel<N>. This overload keeps kernel choice separate from the
         /// tolerance/sigma convenience interface above.
-        template <int N, class T, class Kernel>
+        template <int N, class T, class Kernel, template <int> class Grid = FFTWGrid>
         void particles_to_fourier_grid_nufft(const T * part,
                                              size_t NumPart,
                                              size_t NumPartTot,
-                                             FFTWGrid<N> & density_fourier,
+                                             Grid<N> & density_fourier,
                                              const Kernel & kernel,
                                              const ParticleOrdering<N> * ordering = nullptr) {
             auto values = particle_weights(part, NumPart, NumPartTot);
@@ -1117,8 +1284,7 @@ namespace FML {
                               density_fourier,
                               kernel,
                               ordering);
-            if (density_fourier.get_local_x_start() == 0)
-                density_fourier.set_fourier_from_index(0, 0.0);
+            detail::zero_dc_mode<N>(density_fourier);
         }
 
         //================================================================================
@@ -1141,6 +1307,81 @@ namespace FML {
         /// @param[in] filter Optional filter W(k) (k in units of 1/boxsize) multiplying the potential, e.g. a
         /// long-range split. Default none.
         //================================================================================
+        namespace detail {
+            // The force with a fine grid made by make_fine(nf, nextra) (decomposed as the particles)
+            template <int N, class T, class Kernel, class MakeFine>
+            void compute_force_nufft_impl(const T * part,
+                                          size_t NumPart,
+                                          size_t NumPartTot,
+                                          int nmesh,
+                                          int nf,
+                                          double norm_poisson_equation,
+                                          std::array<std::vector<FloatType>, N> & force,
+                                          const Kernel & kernel,
+                                          std::function<double(double)> filter,
+                                          const ParticleOrdering<N> * ordering,
+                                          MakeFine && make_fine) {
+                const int nextra = kernel.extra_slices();
+                const int mmax = nmesh / 2;
+
+                // Spread and FFT
+                auto potential = make_fine(nf, nextra);
+                potential.add_memory_label("FFTWGrid::NUFFT::compute_force_nufft::potential");
+                auto values = particle_weights(part, NumPart, NumPartTot);
+                spread_to_fine_grid<N, T>(part, NumPart, values, kernel, potential, ordering);
+                potential.fftw_r2c();
+
+                // delta(k) = nf^N / NumPartTot * B(k) / phi_hat(k) -> Phi(k) = -norm delta / k^2 and divide by
+                // phi_hat(k) once more for the interpolation back to the particles
+                const auto inv = inverse_kernel_fourier_table(kernel, nf);
+                const double prefactor = std::pow(double(nf), N) / double(NumPartTot) * norm_poisson_equation;
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                for (FML::IndexIntType irow = 0; irow < FML::IndexIntType(potential.get_local_nrows_fourier()); irow++) {
+                    for (auto && fourier_index : potential.get_fourier_range_of_rows(irow, irow + 1)) {
+                        auto m = potential.get_fourier_integer_wavevector_from_index(fourier_index);
+                        double kmag2 = 0.0, f = prefactor;
+                        bool keep = true;
+                        for (int idim = 0; idim < N; idim++) {
+                            keep = keep and std::abs(m[idim]) < mmax;
+                            kmag2 += (2.0 * M_PI * m[idim]) * (2.0 * M_PI * m[idim]);
+                            f *= inv[m[idim] + nf / 2] * inv[m[idim] + nf / 2];
+                        }
+                        if (not keep or kmag2 == 0.0) {
+                            potential.set_fourier_from_index(fourier_index, 0.0);
+                            continue;
+                        }
+                        f *= -1.0 / kmag2;
+                        if (filter)
+                            f *= filter(std::sqrt(kmag2));
+                        potential.set_fourier_from_index(fourier_index,
+                                                         potential.get_fourier_from_index(fourier_index) * FloatType(f));
+                    }
+                }
+
+                // Gradient, back to real space and interpolate
+                for (int idim = 0; idim < N; idim++) {
+                    auto grad = potential;
+                    grad.add_memory_label("FFTWGrid::NUFFT::compute_force_nufft::grad");
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                    for (FML::IndexIntType irow = 0; irow < FML::IndexIntType(grad.get_local_nrows_fourier()); irow++) {
+                        const ComplexType I(0, 1);
+                        for (auto && fourier_index : grad.get_fourier_range_of_rows(irow, irow + 1)) {
+                            auto m = grad.get_fourier_integer_wavevector_from_index(fourier_index);
+                            auto value = grad.get_fourier_from_index(fourier_index);
+                            grad.set_fourier_from_index(fourier_index, value * I * FloatType(2.0 * M_PI * m[idim]));
+                        }
+                    }
+                    grad.fftw_c2r();
+                    grad.communicate_boundaries();
+                    interpolate_from_fine_grid<N, T>(grad, part, NumPart, kernel, force[idim], ordering);
+                }
+            }
+        } // namespace detail
+
         template <int N, class T, class Kernel>
         void compute_force_nufft_with_kernel(const T * part,
                                              size_t NumPart,
@@ -1151,65 +1392,45 @@ namespace FML {
                                              const Kernel & kernel,
                                              std::function<double(double)> filter = nullptr,
                                              const ParticleOrdering<N> * ordering = nullptr) {
-            const int nf = kernel.fine_nmesh(nmesh);
-            const int nextra = kernel.extra_slices();
-            const int mmax = nmesh / 2;
+            detail::compute_force_nufft_impl<N, T>(part,
+                                                   NumPart,
+                                                   NumPartTot,
+                                                   nmesh,
+                                                   kernel.fine_nmesh(nmesh),
+                                                   norm_poisson_equation,
+                                                   force,
+                                                   kernel,
+                                                   filter,
+                                                   ordering,
+                                                   [](int nf, int nextra) { return FFTWGrid<N>(nf, nextra, nextra); });
+        }
 
-            // Spread and FFT
-            FFTWGrid<N> potential(nf, nextra, nextra);
-            potential.add_memory_label("FFTWGrid::NUFFT::compute_force_nufft::potential");
-            auto values = particle_weights(part, NumPart, NumPartTot);
-            spread_to_fine_grid<N, T>(part, NumPart, values, kernel, potential, ordering);
-            potential.fftw_r2c();
-
-            // delta(k) = nf^N / NumPartTot * B(k) / phi_hat(k) -> Phi(k) = -norm delta / k^2 and divide by
-            // phi_hat(k) once more for the interpolation back to the particles
-            const auto inv = inverse_kernel_fourier_table(kernel, nf);
-            const double prefactor = std::pow(double(nf), N) / double(NumPartTot) * norm_poisson_equation;
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-            for (FML::IndexIntType irow = 0; irow < potential.get_local_nrows(); irow++) {
-                for (auto && fourier_index : potential.get_fourier_range_of_rows(irow, irow + 1)) {
-                    auto m = potential.get_fourier_integer_wavevector_from_index(fourier_index);
-                    double kmag2 = 0.0, f = prefactor;
-                    bool keep = true;
-                    for (int idim = 0; idim < N; idim++) {
-                        keep = keep and std::abs(m[idim]) < mmax;
-                        kmag2 += (2.0 * M_PI * m[idim]) * (2.0 * M_PI * m[idim]);
-                        f *= inv[m[idim] + nf / 2] * inv[m[idim] + nf / 2];
-                    }
-                    if (not keep or kmag2 == 0.0) {
-                        potential.set_fourier_from_index(fourier_index, 0.0);
-                        continue;
-                    }
-                    f *= -1.0 / kmag2;
-                    if (filter)
-                        f *= filter(std::sqrt(kmag2));
-                    potential.set_fourier_from_index(fourier_index,
-                                                     potential.get_fourier_from_index(fourier_index) * FloatType(f));
-                }
-            }
-
-            // Gradient, back to real space and interpolate
-            for (int idim = 0; idim < N; idim++) {
-                FFTWGrid<N> grad = potential;
-                grad.add_memory_label("FFTWGrid::NUFFT::compute_force_nufft::grad");
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-                for (FML::IndexIntType irow = 0; irow < grad.get_local_nrows(); irow++) {
-                    const ComplexType I(0, 1);
-                    for (auto && fourier_index : grad.get_fourier_range_of_rows(irow, irow + 1)) {
-                        auto m = grad.get_fourier_integer_wavevector_from_index(fourier_index);
-                        auto value = grad.get_fourier_from_index(fourier_index);
-                        grad.set_fourier_from_index(fourier_index, value * I * FloatType(2.0 * M_PI * m[idim]));
-                    }
-                }
-                grad.fftw_c2r();
-                grad.communicate_boundaries();
-                interpolate_from_fine_grid<N, T>(grad, part, NumPart, kernel, force[idim], ordering);
-            }
+        /// @brief The same with the decomposition of a grid: the particles are in the domain of grid
+        /// (FML::GRID::particle_domain_of), the modes are those of a grid of its size and the fine grids are
+        /// decomposed as it (e.g. a PencilGrid)
+        template <int N, class T, class Kernel, template <int> class Grid>
+        void compute_force_nufft_with_kernel(const Grid<N> & grid,
+                                             const T * part,
+                                             size_t NumPart,
+                                             size_t NumPartTot,
+                                             double norm_poisson_equation,
+                                             std::array<std::vector<FloatType>, N> & force,
+                                             const Kernel & kernel,
+                                             std::function<double(double)> filter = nullptr,
+                                             const ParticleOrdering<N> * ordering = nullptr) {
+            using FML::GRID::make_grid_like;
+            detail::compute_force_nufft_impl<N, T>(
+                part,
+                NumPart,
+                NumPartTot,
+                grid.get_nmesh(),
+                detail::fine_nmesh_like<N>(kernel, grid),
+                norm_poisson_equation,
+                force,
+                kernel,
+                filter,
+                ordering,
+                [&](int nf, int nextra) { return make_grid_like(grid, nf, nextra, nextra); });
         }
 
         template <int N, class T>
