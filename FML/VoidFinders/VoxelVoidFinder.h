@@ -9,6 +9,8 @@
 #include <vector>
 
 #include <FML/FFTWGrid/FFTWGrid.h>
+#include <FML/FFTWGrid/GhostedCells.h>
+#include <FML/FFTWGrid/GridInterface.h>
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/Smoothing/SmoothingFourier.h>
@@ -69,47 +71,43 @@ namespace FML {
         /// for clusters)
         ///
         //========================================================================================
-        inline std::vector<Void> VoxelWatershed(const FML::GRID::FFTWGrid<3> & density,
-                                                bool find_clusters = false,
-                                                double density_cut = 1.0,
-                                                ZoneMerging merging = ZoneMerging::None,
-                                                double link_density_threshold = 0.2) {
+        template <template <int> class Grid = FML::GRID::FFTWGrid>
+        std::vector<Void> VoxelWatershed(const Grid<3> & density,
+                                         bool find_clusters = false,
+                                         double density_cut = 1.0,
+                                         ZoneMerging merging = ZoneMerging::None,
+                                         double link_density_threshold = 0.2) {
 
             // Clusters merge across links above the threshold: the void default (0.2) would merge everything
             assert_mpi(not(find_clusters and merging == ZoneMerging::Threshold and link_density_threshold <= 1.0),
                        "[VoxelWatershed] Clusters with ZoneMerging::Threshold need link_density_threshold > 1 (in "
                        "units of the mean; the default 0.2 is for voids)");
             const int N = density.get_nmesh();
-            const long long int N2 = (long long int)(N)*N;
-            const int nx = int(density.get_local_nx());
-            const long long int x0 = density.get_local_x_start();
-            const long long int nloc = nx * N2;
-            assert_mpi(nx > 0, "[VoxelWatershed] Every task must have at least one slice of the grid");
-            const bool serial = FML::NTasks == 1;
+            // The local cells: [x0, x0 + nx) x [y0, y0 + ny) x [0, N) (slabs: y whole)
+            const int nx = int(density.get_local_range(0)[1]), ny = int(density.get_local_range(1)[1]);
+            const long long int x0 = density.get_local_range(0)[0], y0 = density.get_local_range(1)[0];
+            const long long int nloc = (long long int)(nx) * ny * N;
+            assert_mpi(nloc > 0, "[VoxelWatershed] Every task must have some of the grid");
 
-            // The quantity we find minima of, with one ghost slice on each side
-            FML::GRID::FFTWGrid<3> q(N, 1, 1);
+            // The quantity we find minima of, with one extra cell on each side of the split axes
+            auto q = make_grid_like(density, N, 1, 1);
             for (int ix = 0; ix < nx; ix++)
-                for (int iy = 0; iy < N; iy++)
+                for (int iy = 0; iy < ny; iy++)
                     for (int iz = 0; iz < N; iz++) {
                         const double d = density.get_real({ix, iy, iz});
                         q.set_real({ix, iy, iz}, FML::GRID::FloatType(find_clusters ? 1.0 / d : d));
                     }
             q.communicate_boundaries();
+            auto q_at = [&](int ix, int iy, int iz) { return q.get_real(FML::GRID::wrap_whole_axes<3>(q, {ix, iy, iz})); };
 
-            // Local index: [0,nloc) are our voxels, then the left and right ghost slices
-            auto local_index = [&](int ix, int iy, int iz) -> long long int {
-                if (serial)
-                    ix = (ix + N) % N;
-                if (ix < 0)
-                    return nloc + iy * N + iz;
-                if (ix >= nx)
-                    return nloc + N2 + iy * N + iz;
-                return (ix * N + iy) * (long long int)(N) + iz;
-            };
+            // The labels of our cells and of the ghost cells of the neighbours (-1: none yet)
+            const long long int no_label = -1;
+            FML::GRID::GhostedCells<long long int, 3> label(density, 1, 1, no_label);
+            const bool serial = not label.is_split(0) and not label.is_split(1);
+            auto local_index = [&](int ix, int iy, int iz) -> long long int { return label.index({ix, iy, iz}); };
             auto global_index = [&](int ix, int iy, int iz) -> long long int {
-                const long long int gx = (x0 + ix + N) % N;
-                return (gx * N + iy) * N + iz;
+                const long long int gx = (x0 + ix + N) % N, gy = (y0 + iy + N) % N;
+                return (gx * N + gy) * N + iz;
             };
             // Order: by quantity then by the global index
             auto lower = [](double qa, long long int ga, double qb, long long int gb) {
@@ -118,21 +116,25 @@ namespace FML {
             const int dirs[6][3] = {{0, 0, 1}, {0, 0, -1}, {0, 1, 0}, {0, -1, 0}, {1, 0, 0}, {-1, 0, 0}};
             auto for_each_neighbor = [&](int ix, int iy, int iz, auto && f) {
                 for (auto & d : dirs)
-                    f(ix + d[0], (iy + d[1] + N) % N, (iz + d[2] + N) % N);
+                    f(ix + d[0], iy + d[1], (iz + d[2] + N) % N);
             };
+            // Is a stored label one of our cells?
+            std::vector<char> is_ghost(size_t(label.size()));
+            for (long long int i = 0; i < label.size(); i++)
+                is_ghost[i] = char(label.is_ghost(i));
 
             // Link every voxel to its lowest neighbor
-            std::vector<long long int> parent(nloc);
+            std::vector<long long int> parent(size_t(label.size()), -1);
             std::vector<long long int> minima;
             for (int ix = 0; ix < nx; ix++)
-                for (int iy = 0; iy < N; iy++)
+                for (int iy = 0; iy < ny; iy++)
                     for (int iz = 0; iz < N; iz++) {
                         double qbest = q.get_real({ix, iy, iz});
                         long long int gbest = global_index(ix, iy, iz);
                         long long int best = local_index(ix, iy, iz);
                         const long long int self = best;
                         for_each_neighbor(ix, iy, iz, [&](int jx, int jy, int jz) {
-                            const double qj = q.get_real({jx, jy, jz});
+                            const double qj = q_at(jx, jy, jz);
                             const long long int gj = global_index(jx, jy, jz);
                             if (lower(qj, gj, qbest, gbest)) {
                                 qbest = qj;
@@ -161,26 +163,24 @@ namespace FML {
             if (FML::ThisTask == 0)
                 std::cout << "[VoxelWatershed] Found " << nzones << " zones on a " << N << "^3 grid\n";
 
-            // Labels: follow the links. For links into the ghost slices we need the labels from the neighbor tasks
-            const long long int no_label = -1;
-            std::vector<long long int> label(nloc + 2 * N2, no_label);
+            // Labels: follow the links. For links into the ghost cells we need the labels from the neighbor tasks
             for (size_t k = 0; k < minima.size(); k++)
                 label[minima[k]] = id_start + (long long int)(k);
             std::vector<char> stuck;
             std::vector<long long int> path;
             auto assign_labels = [&]() -> long long int {
-                stuck.assign(nloc, 0);
+                stuck.assign(size_t(label.size()), 0);
                 long long int nassigned = 0;
-                for (long long int i = 0; i < nloc; i++) {
-                    if (label[i] != no_label or stuck[i])
+                for (long long int i = 0; i < label.size(); i++) {
+                    if (is_ghost[i] or label[i] != no_label or stuck[i])
                         continue;
                     path.clear();
                     long long int j = i;
-                    while (j < nloc and label[j] == no_label and not stuck[j]) {
+                    while (not is_ghost[j] and label[j] == no_label and not stuck[j]) {
                         path.push_back(j);
                         j = parent[j];
                     }
-                    const bool found = (j >= nloc or not stuck[j]) and label[j] != no_label;
+                    const bool found = (is_ghost[j] or not stuck[j]) and label[j] != no_label;
                     for (auto k : path) {
                         if (found)
                             label[k] = label[j];
@@ -192,37 +192,7 @@ namespace FML {
                 }
                 return nassigned;
             };
-            auto exchange_ghost_labels = [&]() {
-#ifdef USE_MPI
-                const int LeftTask = (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks;
-                const int RightTask = (FML::ThisTask + 1) % FML::NTasks;
-                // Our first slice is the right ghost of the left task, our last slice the left ghost of the right task
-                MPI_Sendrecv(label.data(),
-                             int(N2),
-                             MPI_LONG_LONG,
-                             LeftTask,
-                             0,
-                             label.data() + nloc + N2,
-                             int(N2),
-                             MPI_LONG_LONG,
-                             RightTask,
-                             0,
-                             FML::communicator,
-                             MPI_STATUS_IGNORE);
-                MPI_Sendrecv(label.data() + (nx - 1) * N2,
-                             int(N2),
-                             MPI_LONG_LONG,
-                             RightTask,
-                             1,
-                             label.data() + nloc,
-                             int(N2),
-                             MPI_LONG_LONG,
-                             LeftTask,
-                             1,
-                             FML::communicator,
-                             MPI_STATUS_IGNORE);
-#endif
-            };
+            auto exchange_ghost_labels = [&]() { label.communicate(); };
             assign_labels();
             if (not serial) {
                 for (int iteration = 0; iteration < 100000; iteration++) {
@@ -238,13 +208,12 @@ namespace FML {
             std::vector<double> core(FML::COMMUNICATION::checked_bytes(nzones, 4, std::vector<double>().max_size()),
                                      0.0);
             for (size_t k = 0; k < minima.size(); k++) {
-                const long long int i = minima[k];
-                const long long int ix = i / N2, iy = (i / N) % N, iz = i % N;
+                const auto c3 = label.coord(minima[k]);
                 double * c = &core[4 * (id_start + (long long int)(k))];
-                c[0] = double(x0 + ix) / N;
-                c[1] = double(iy) / N;
-                c[2] = double(iz) / N;
-                c[3] = q.get_real({int(ix), int(iy), int(iz)});
+                c[0] = double(x0 + c3[0]) / N;
+                c[1] = double(y0 + c3[1]) / N;
+                c[2] = double(c3[2]) / N;
+                c[3] = q.get_real(c3);
             }
 
             FML::SumArrayOverTasks(core.data(), core.size());
@@ -255,7 +224,7 @@ namespace FML {
             std::vector<ZoneLink> links;
             long long int nunassigned = 0;
             for (int ix = 0; ix < nx; ix++)
-                for (int iy = 0; iy < N; iy++)
+                for (int iy = 0; iy < ny; iy++)
                     for (int iz = 0; iz < N; iz++) {
                         const long long int a = label[local_index(ix, iy, iz)];
                         if (a == no_label) {
@@ -264,7 +233,7 @@ namespace FML {
                         }
                         const double qi = q.get_real({ix, iy, iz});
                         const double weight = 1.0 / qi;
-                        const double pos[3] = {double(x0 + ix) / N, double(iy) / N, double(iz) / N};
+                        const double pos[3] = {double(x0 + ix) / N, double(y0 + iy) / N, double(iz) / N};
                         double * s = &sums[6 * a];
                         s[0] += 1.0;
                         s[1] += find_clusters ? 1.0 / qi : qi;
@@ -278,7 +247,7 @@ namespace FML {
                             const long long int b = label[local_index(jx, jy, jz)];
                             if (b == no_label or b == a)
                                 return;
-                            const double link = std::max(qi, double(q.get_real({jx, jy, jz})));
+                            const double link = std::max(qi, double(q_at(jx, jy, jz)));
                             links.push_back({std::min(a, b), std::max(a, b), link});
                         });
                         if (links.size() > size_t(4 * nzones + 1000000))
@@ -299,7 +268,7 @@ namespace FML {
             // Merge the zones and make the catalogue on task 0
             std::vector<Void> voids;
             if (FML::ThisTask == 0) {
-                const double voxel_volume = 1.0 / double(N2 * N);
+                const double voxel_volume = 1.0 / (double(N) * N * N);
                 std::vector<Zone> zones(nzones);
                 for (long long int a = 0; a < nzones; a++) {
                     const double * c = &core[4 * a];
@@ -343,8 +312,13 @@ namespace FML {
         /// @param[out] grid The density field
         ///
         //========================================================================================
-        template <class T>
-        void void_density_field(T * p, size_t NumPart, const VoxelOptions & options, FML::GRID::FFTWGrid<3> & grid) {
+        template <class T, template <int> class Grid = FML::GRID::FFTWGrid>
+        void void_density_field(T * p,
+                                size_t NumPart,
+                                const VoxelOptions & options,
+                                Grid<3> & grid,
+                                const FML::Domain & domain = FML::domain) {
+            constexpr bool fftw = FML::GRID::is_fftwgrid_v<Grid<3>>;
 
             assert_mpi(FML::PARTICLE::GetNDIM(T()) == 3, "[void_density_field] Only implemented in 3D");
             long long int NumPartTot = (long long int)(NumPart);
@@ -359,11 +333,11 @@ namespace FML {
                 const double n_revolver = std::floor(2.0 * std::cbrt(4.0 * M_PI * double(NumPartTot) / 3.0));
                 const int multiple = n_revolver >= 256 ? 32 : 8;
                 Nmesh = std::max(multiple, multiple * int(std::lround(n_revolver / multiple)));
-                assert_mpi(Nmesh % FML::NTasks == 0,
+                assert_mpi(not fftw or Nmesh % FML::NTasks == 0,
                            "[VoxelVoidFinder] The default Nmesh (Revolver's size rounded to a multiple of 8 or 32) is "
                            "not a multiple of the number of tasks: set Nmesh");
             }
-            assert_mpi(Nmesh >= FML::NTasks and Nmesh % FML::NTasks == 0,
+            assert_mpi(not fftw or (Nmesh >= FML::NTasks and Nmesh % FML::NTasks == 0),
                        "[VoxelVoidFinder] Nmesh must be a multiple of the number of tasks");
             const double smoothing_scale =
                 options.smoothing_scale < 0.0 ? std::cbrt(1.0 / double(NumPartTot)) : options.smoothing_scale;
@@ -373,7 +347,7 @@ namespace FML {
 
             // Density assignment gives delta
             const auto nextra = FML::INTERPOLATION::get_extra_slices(options.density_assignment_method);
-            grid = FML::GRID::FFTWGrid<3>(Nmesh, nextra.first, nextra.second);
+            grid = FML::GRID::make_grid<Grid<3>>(Nmesh, nextra.first, nextra.second, domain);
             FML::INTERPOLATION::particles_to_grid(p,
                                                   NumPart,
                                                   size_t(NumPartTot),
@@ -423,10 +397,8 @@ namespace FML {
             }
 
             // Density in units of the mean
-            for (int ix = 0; ix < grid.get_local_nx(); ix++)
-                for (int iy = 0; iy < Nmesh; iy++)
-                    for (int iz = 0; iz < Nmesh; iz++)
-                        grid.set_real({ix, iy, iz}, FML::GRID::FloatType(1.0 + grid.get_real({ix, iy, iz})));
+            for (auto && index : grid.get_real_range())
+                grid.set_real_from_index(index, FML::GRID::FloatType(1.0 + grid.get_real_from_index(index)));
         }
 
         //========================================================================================
@@ -440,17 +412,20 @@ namespace FML {
         /// @param[in] NumPart Number of local particles
         /// @param[in] options The options
         /// @param[out] density_grid Optional: the smoothed density field (in units of the mean) we used
+        /// @param[in] domain The domain of the particles (the grid is decomposed the same way; Grid = PencilGrid for
+        /// a pencil domain)
         ///
         //========================================================================================
-        template <class T>
+        template <class T, template <int> class Grid = FML::GRID::FFTWGrid>
         std::vector<Void> VoxelVoidFinder(T * p,
                                           size_t NumPart,
                                           const VoxelOptions & options = VoxelOptions(),
-                                          FML::GRID::FFTWGrid<3> * density_grid = nullptr) {
+                                          FML::GRID::non_deduced_t<Grid<3>> * density_grid = nullptr,
+                                          const FML::Domain & domain = FML::domain) {
             if (FML::ThisTask == 0)
                 std::cout << "[VoxelVoidFinder] Finding " << (options.find_clusters ? "clusters" : "voids") << "\n";
-            FML::GRID::FFTWGrid<3> grid;
-            void_density_field(p, NumPart, options, grid);
+            Grid<3> grid;
+            void_density_field<T, Grid>(p, NumPart, options, grid, domain);
             auto voids = VoxelWatershed(grid,
                                         options.find_clusters,
                                         options.find_clusters ? options.max_dens_cut : options.min_dens_cut,

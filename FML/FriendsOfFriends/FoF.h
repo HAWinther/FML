@@ -207,6 +207,19 @@ namespace FML {
             }
         }
 
+        // FoF on a domain (Slab or Pencil; FoFDomain.h, included at the end): used for the particles on pencils
+        template <class T, int NDIM, class FoFHaloClass>
+        void FriendsOfFriends(const FML::Domain & domain,
+                              T * part,
+                              size_t NumPart,
+                              double linking_length,
+                              int nmin_FoF_group,
+                              bool periodic,
+                              double Buffersize_over_Boxsize,
+                              std::vector<FoFHaloClass> & LocalFoFGroups,
+                              int Ngrid = FoF_Ngrid_max,
+                              double mean_particle_separation = 0.0);
+
         template <class T, int NDIM, class FoFHaloClass = FoFHalo<T, NDIM>>
         void FriendsOfFriends(T * part,
                               size_t NumPart,
@@ -217,6 +230,21 @@ namespace FML {
                               std::vector<FoFHaloClass> & LocalFoFGroups,
                               int Ngrid,
                               double mean_particle_separation) {
+
+            // The particles are on the pencils (FML::domain): the version for any box domain
+            if (not FML::domain.is_slab()) {
+                FriendsOfFriends<T, NDIM, FoFHaloClass>(FML::domain,
+                                                        part,
+                                                        NumPart,
+                                                        linking_length,
+                                                        nmin_FoF_group,
+                                                        periodic,
+                                                        Buffersize_over_Boxsize,
+                                                        LocalFoFGroups,
+                                                        Ngrid,
+                                                        mean_particle_separation);
+                return;
+            }
 
             LocalFoFGroups.clear();
             FoF_number_of_groups_reaching_buffer_edge = 0;
@@ -923,4 +951,6 @@ namespace FML {
         }
     } // namespace FOF
 } // namespace FML
+// FoF on a domain (Slab or Pencil)
+#include <FML/FriendsOfFriends/FoFDomain.h>
 #endif

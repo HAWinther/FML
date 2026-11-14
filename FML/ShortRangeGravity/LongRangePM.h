@@ -6,15 +6,17 @@
 namespace FML::SHORT_RANGE_GRAVITY {
     /// Apply to a dedicated Fourier density/potential copy before the ordinary continuous-k PM force solve.
     /// FML wavevectors use box units; convert the kernel's length unit explicitly using boxsize.
-    inline void apply_long_range_filter(FML::GRID::FFTWGrid<3> & fourier, const Kernel & kernel) {
+    /// Any grid (FFTWGrid, PencilGrid, ...)
+    template <class Grid>
+    void apply_long_range_filter(Grid & fourier, const Kernel & kernel) {
         if (fourier.get_grid_status_real())
             throw std::invalid_argument("[ShortRangeGravity] Long-range filter requires a Fourier-space grid");
         const double rs_over_box = kernel.options().split_scale / kernel.options().boxsize;
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-        for (int slice = 0; slice < fourier.get_local_nx(); ++slice)
-            for (auto i : fourier.get_fourier_range(slice, slice + 1)) {
+        for (FML::IndexIntType row = 0; row < fourier.get_local_nrows_fourier(); ++row)
+            for (auto i : fourier.get_fourier_range_of_rows(row, row + 1)) {
                 const auto k = fourier.get_fourier_wavevector_from_index(i);
                 const double k2 = k[0] * k[0] + k[1] * k[1] + k[2] * k[2];
                 const double multiplier =

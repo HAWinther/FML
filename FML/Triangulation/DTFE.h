@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <FML/FFTWGrid/FFTWGrid.h>
+#include <FML/FFTWGrid/GridInterface.h>
 #include <FML/Global/Global.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
 #include <FML/Triangulation/PeriodicDelaunay.h>
@@ -71,8 +72,9 @@ namespace FML {
 
         /// The output of DTFE::velocity_to_grid. Only the grids that are asked for are allocated.
         /// Gradients are \f$ \partial_j v_i \f$ with respect to the positions in units of the box
-        struct DTFEVelocityGrids {
-            using Grid = FML::GRID::FFTWGrid<3>;
+        template <class GridType = FML::GRID::FFTWGrid<3>>
+        struct DTFEVelocityGridsT {
+            using Grid = GridType;
             /// The velocity v_x, v_y, v_z
             std::array<Grid, 3> velocity{};
             /// The divergence \f$ \theta = \nabla\cdot v \f$
@@ -83,6 +85,7 @@ namespace FML {
             /// in the order xx, xy, xz, yy, yz, zz
             std::array<Grid, 6> shear{};
         };
+        using DTFEVelocityGrids = DTFEVelocityGridsT<>;
 
         template <class T>
         class DTFE {
@@ -100,6 +103,18 @@ namespace FML {
 
             Delaunay D;
             size_t NumPart{0};
+            // Experiment: the particles are on a given domain (Slab or Pencil) instead of the slabs of FML::domain
+            bool on_domain{false};
+            FML::Domain domain_given{};
+
+            // A new grid of the type G decomposed as the particles (FFTWGrid: the slabs)
+            template <class G>
+            G new_grid(int Nmesh) const {
+                if constexpr (FML::GRID::is_fftwgrid_v<G>)
+                    return G(Nmesh);
+                else
+                    return FML::GRID::make_grid<G>(Nmesh, 0, 0, particle_domain());
+            }
 
             // DTFE density (in units of the mean) at the regular and boundary particles
             std::vector<double> density{};
@@ -138,6 +153,12 @@ namespace FML {
 
           public:
             DTFE() = default;
+            /// Experiment: the particles are on this domain (Slab or Pencil; e.g. MPIParticles::get_domain()) instead
+            /// of the slabs of FML::domain. The grids are then made on this domain (PencilGrid for pencils)
+            explicit DTFE(const FML::Domain & domain) : D(domain), on_domain(true), domain_given(domain) {}
+
+            /// The domain of the particles
+            const FML::Domain & particle_domain() const { return on_domain ? domain_given : FML::domain; }
 
             /// Free all the memory
             void free() {
@@ -229,16 +250,42 @@ namespace FML {
                                      DTFEWeighting weighting,
                                      int nsub,
                                      F && store) const {
+                interpolate_to_grid(
+                    Nmesh, local_x_start, local_nx, 0, Nmesh, values, nfields, sampling, weighting, nsub, store);
+            }
+
+            /// The same for the grid cells [local_x_start, local_x_start + local_nx) x [local_y_start, local_y_start +
+            /// local_ny) x [0, Nmesh) (e.g. the pencil of a PencilGrid). iy in store is the local index in y
+            template <class F>
+            void interpolate_to_grid(int Nmesh,
+                                     ptrdiff_t local_x_start,
+                                     ptrdiff_t local_nx,
+                                     ptrdiff_t local_y_start,
+                                     ptrdiff_t local_ny,
+                                     const std::vector<double> & values,
+                                     int nfields,
+                                     DTFESampling sampling,
+                                     DTFEWeighting weighting,
+                                     int nsub,
+                                     F && store) const {
 
                 assert_mpi(nfields >= 0 and values.size() == NumPart * size_t(nfields),
                            "[DTFE::interpolate_to_grid] values must have size NumPart * nfields");
                 assert_mpi(Nmesh > 0 and nsub > 0, "[DTFE::interpolate_to_grid] Nmesh and nsub must be positive");
                 const double h = 1.0 / Nmesh;
-                if (local_nx > 0)
+                if (local_nx > 0 and local_ny > 0 and not on_domain)
                     assert_mpi(local_x_start * h >= FML::xmin_domain - 1e-12 and
                                    (local_x_start + local_nx - 1) * h < FML::xmax_domain,
                                "[DTFE::interpolate_to_grid] The grid slab is not inside the particle domain. Nmesh "
                                "must be divisible by the number of tasks");
+                if (local_nx > 0 and local_ny > 0 and on_domain) {
+                    // The centers of the first and the last of our cells are owned by us
+                    const double lo[3] = {(local_x_start + 0.5) * h, (local_y_start + 0.5) * h, 0.0};
+                    const double hi[3] = {(local_x_start + local_nx - 0.5) * h, (local_y_start + local_ny - 0.5) * h,
+                                          0.0};
+                    assert_mpi(domain_given.owner(lo) == FML::ThisTask and domain_given.owner(hi) == FML::ThisTask,
+                               "[DTFE::interpolate_to_grid] The grid cells are not inside the particle domain");
+                }
 
                 const auto & dt = D.get_delaunay_triangulation();
                 const std::vector<double> vals = values_with_boundary(values, nfields);
@@ -330,7 +377,7 @@ namespace FML {
                 const double nan = std::numeric_limits<double>::quiet_NaN();
 
                 for (ptrdiff_t ix = 0; ix < local_nx; ix++) {
-                    for (int iy = 0; iy < Nmesh; iy++) {
+                    for (int iy = 0; iy < int(local_ny); iy++) {
                         for (int iz = 0; iz < Nmesh; iz++) {
                             double sum_weight = 0.0;
                             double sum_rho = 0.0;
@@ -342,7 +389,7 @@ namespace FML {
                                 for (auto oy : offsets)
                                     for (auto oz : offsets) {
                                         const double x[3] = {detail::wrap_periodic((local_x_start + ix + ox) * h),
-                                                             detail::wrap_periodic((iy + oy) * h),
+                                                             detail::wrap_periodic((local_y_start + iy + oy) * h),
                                                              detail::wrap_periodic((iz + oz) * h)};
                                         double dx[3];
                                         relative(x, dx);
@@ -405,14 +452,17 @@ namespace FML {
             /// @param[in] sampling Value at the grid point or average over the cell
             /// @param[in] nsub Number of samples per dimension in a grid cell for CellAverage
             ///
+            template <class G = Grid>
             void density_to_grid(int Nmesh,
-                                 Grid & grid,
+                                 G & grid,
                                  DTFESampling sampling = DTFESampling::CellAverage,
                                  int nsub = 2) const {
-                grid = Grid(Nmesh);
+                grid = new_grid<G>(Nmesh);
                 interpolate_to_grid(Nmesh,
-                                    grid.get_local_x_start(),
-                                    grid.get_local_nx(),
+                                    grid.get_local_range(0)[0],
+                                    grid.get_local_range(0)[1],
+                                    grid.get_local_range(1)[0],
+                                    grid.get_local_range(1)[1],
                                     {},
                                     0,
                                     sampling,
@@ -434,22 +484,25 @@ namespace FML {
             /// @param[in] weighting Volume or mass weighted average
             /// @param[in] nsub Number of samples per dimension in a grid cell for CellAverage
             ///
+            template <class G = Grid>
             void fields_to_grid(int Nmesh,
                                 const std::vector<double> & values,
                                 int nfields,
-                                std::vector<Grid> & field_grids,
-                                std::vector<Grid> * gradient_grids = nullptr,
+                                std::vector<G> & field_grids,
+                                std::vector<G> * gradient_grids = nullptr,
                                 DTFESampling sampling = DTFESampling::CellAverage,
                                 DTFEWeighting weighting = DTFEWeighting::Volume,
                                 int nsub = 2) const {
                 if (nfields <= 0)
                     return;
-                field_grids.assign(nfields, Grid(Nmesh));
+                field_grids.assign(nfields, new_grid<G>(Nmesh));
                 if (gradient_grids)
-                    gradient_grids->assign(3 * nfields, Grid(Nmesh));
+                    gradient_grids->assign(3 * nfields, new_grid<G>(Nmesh));
                 interpolate_to_grid(Nmesh,
-                                    field_grids[0].get_local_x_start(),
-                                    field_grids[0].get_local_nx(),
+                                    field_grids[0].get_local_range(0)[0],
+                                    field_grids[0].get_local_range(0)[1],
+                                    field_grids[0].get_local_range(1)[0],
+                                    field_grids[0].get_local_range(1)[1],
                                     values,
                                     nfields,
                                     sampling,
@@ -474,9 +527,10 @@ namespace FML {
             /// @param[in] weighting Volume or mass weighted average
             /// @param[in] nsub Number of samples per dimension in a grid cell for CellAverage
             ///
+            template <class G = Grid>
             void velocity_to_grid(T * p,
                                   int Nmesh,
-                                  DTFEVelocityGrids & result,
+                                  DTFEVelocityGridsT<G> & result,
                                   DTFESampling sampling = DTFESampling::CellAverage,
                                   DTFEWeighting weighting = DTFEWeighting::Volume,
                                   int nsub = 2,
@@ -492,20 +546,20 @@ namespace FML {
                         vel[3 * i + j] = double(v[j]);
                 }
 
-                result = DTFEVelocityGrids();
+                result = DTFEVelocityGridsT<G>();
                 if (compute_velocity)
                     for (auto & g : result.velocity)
-                        g = Grid(Nmesh);
+                        g = new_grid<G>(Nmesh);
                 if (compute_divergence)
-                    result.divergence = Grid(Nmesh);
+                    result.divergence = new_grid<G>(Nmesh);
                 if (compute_vorticity)
                     for (auto & g : result.vorticity)
-                        g = Grid(Nmesh);
+                        g = new_grid<G>(Nmesh);
                 if (compute_shear)
                     for (auto & g : result.shear)
-                        g = Grid(Nmesh);
+                        g = new_grid<G>(Nmesh);
 
-                const Grid * ref = compute_velocity   ? &result.velocity[0] :
+                const G * ref = compute_velocity   ? &result.velocity[0] :
                                    compute_divergence ? &result.divergence :
                                    compute_vorticity  ? &result.vorticity[0] :
                                    compute_shear      ? &result.shear[0] :
@@ -514,8 +568,10 @@ namespace FML {
                     return;
                 interpolate_to_grid(
                     Nmesh,
-                    ref->get_local_x_start(),
-                    ref->get_local_nx(),
+                    ref->get_local_range(0)[0],
+                    ref->get_local_range(0)[1],
+                    ref->get_local_range(1)[0],
+                    ref->get_local_range(1)[1],
                     vel,
                     3,
                     sampling,

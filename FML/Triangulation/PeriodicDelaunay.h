@@ -12,8 +12,10 @@
 #include <numeric>
 #include <random>
 #include <type_traits>
+#include <memory>
 #include <vector>
 
+#include <FML/Global/DomainBuffer.h>
 #include <FML/Global/Global.h>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
@@ -236,6 +238,13 @@ namespace FML {
             std::vector<size_t> send_left{};
             std::vector<size_t> send_right{};
 
+            // Experiment: the particles on a given domain (Slab or Pencil): the buffer of the box of the task
+            bool on_domain{false};
+            FML::Domain domain_given{};
+            FML::DomainBuffer<CGAL_NDIM> dbuf{};
+            // Is an axis split and only partly covered by the box plus the buffer (so it has guard points)?
+            std::array<bool, CGAL_NDIM> partly_covered{};
+
             template <class F>
             static Point make_point(const F * x) {
 #if CGAL_NDIM == 2
@@ -273,6 +282,9 @@ namespace FML {
             const std::vector<Vertex_handle> & get_vertex_handles_boundary() const { return vs_boundary; }
 
             MPIPeriodicDelaunay() = default;
+            /// Experiment: the particles are on this domain (Slab or Pencil; e.g. MPIParticles::get_domain()) instead
+            /// of the global slabs. The buffer along a split axis is buffer_fraction times the task's part of it
+            explicit MPIPeriodicDelaunay(const FML::Domain & domain) : on_domain(true), domain_given(domain) {}
 
             /// Free all memory associated with this class
             void free() {
@@ -428,6 +440,8 @@ namespace FML {
             std::vector<Q> communicate_boundary_values(const std::vector<Q> & values) const {
                 static_assert(std::is_trivially_copyable_v<Q>, "Can only communicate trivially copyable types");
                 assert(values.size() == vs.size());
+                if (on_domain)
+                    return dbuf.forward(values);
                 const auto received = FML::COMMUNICATION::checked_size_layout(
                     {FML::COMMUNICATION::Count(recv_left), FML::COMMUNICATION::Count(recv_right)},
                     std::vector<Q>().max_size());
@@ -461,6 +475,66 @@ namespace FML {
                                        LeftTask);
 #endif
                 return result;
+            }
+
+            /// Experiment: the buffer, the guard points (uniform in the part of the box not covered by the box of the
+            /// task plus the buffer, and ~10% on its faces) and the copies of the neighbors' particles on a domain
+            void setup_on_domain(T * p, size_t NumPart, double buffer_fraction, size_t nrandom,
+                                 std::vector<double> & positions_random) {
+                FML::DomainBuffer<CGAL_NDIM> probe(domain_given, {}, true);
+                std::array<double, CGAL_NDIM> buffer{};
+                double covered_fraction = 1.0;
+                for (int d = 0; d < CGAL_NDIM; d++) {
+                    partly_covered[d] = false;
+                    if (not probe.split(d))
+                        continue;
+                    const double w = probe.hi(d) - probe.lo(d);
+                    // At most the task's part of the axis, and half of it with 2 tasks along the axis (the two sides
+                    // must not overlap; as the slab version with 2 tasks)
+                    const double max_fraction = probe.get_nparts(d) == 2 ? 0.5 : 1.0 - 1e-10;
+                    buffer[d] = std::min(buffer_fraction, max_fraction) * w;
+                    partly_covered[d] = w + 2.0 * buffer[d] < 1.0;
+                    covered_fraction *= std::min(1.0, w + 2.0 * buffer[d]);
+                }
+                dbuf = FML::DomainBuffer<CGAL_NDIM>(domain_given, buffer, true);
+                dbuf.exchange(p, NumPart, p_boundary, false);
+
+                positions_random.clear();
+                if (nrandom == 0 or covered_fraction >= 1.0)
+                    return;
+                std::mt19937_64 rng(random_seed + FML::ThisTask);
+                std::uniform_real_distribution<double> uniform(0.0, 1.0);
+                const size_t nface = nrandom / 10;
+                const size_t nvolume = nrandom - nface;
+                std::array<double, CGAL_NDIM> x;
+                for (size_t i = 0; i < nvolume;) {
+                    for (int d = 0; d < CGAL_NDIM; d++)
+                        x[d] = uniform(rng);
+                    if (dbuf.in_covered(x.data()))
+                        continue;
+                    positions_random.insert(positions_random.end(), x.begin(), x.end());
+                    i++;
+                }
+                // On the faces of the covered region (along the partly covered axes)
+                std::vector<int> axes;
+                for (int d = 0; d < CGAL_NDIM; d++)
+                    if (partly_covered[d])
+                        axes.push_back(d);
+                for (size_t i = 0; i < nface and not axes.empty(); i++) {
+                    const int d = axes[i % axes.size()];
+                    const bool upper = (i / axes.size()) % 2 == 1;
+                    for (int e = 0; e < CGAL_NDIM; e++) {
+                        if (e == d)
+                            x[e] = upper ? dbuf.hi(e) + dbuf.get_buffer(e) : dbuf.lo(e) - dbuf.get_buffer(e);
+                        else if (dbuf.split(e))
+                            x[e] = dbuf.lo(e) - dbuf.get_buffer(e) +
+                                   uniform(rng) * (dbuf.hi(e) - dbuf.lo(e) + 2 * dbuf.get_buffer(e));
+                        else
+                            x[e] = uniform(rng);
+                        x[e] = detail::wrap_periodic(x[e]);
+                    }
+                    positions_random.insert(positions_random.end(), x.begin(), x.end());
+                }
             }
 
             /// Generate guard points in the part of the box not covered by the local domain plus buffer.
@@ -560,16 +634,21 @@ namespace FML {
                     std::cout << "\n";
                 }
 
-                // The buffersize we communicate particles from neighbor tasks
-                dx_buffer = buffer_fraction * (FML::xmax_domain - FML::xmin_domain);
-
-                // Guard points
                 std::vector<double> positions_random;
-                make_random_points_outside_domain(size_t(NumPart * random_fraction), positions_random);
-                const size_t nrandom = positions_random.size() / CGAL_NDIM;
+                if (on_domain) {
+                    // Experiment: the buffer of the box of the task on the domain
+                    setup_on_domain(p, NumPart, buffer_fraction, size_t(NumPart * random_fraction), positions_random);
+                } else {
+                    // The buffersize we communicate particles from neighbor tasks
+                    dx_buffer = buffer_fraction * (FML::xmax_domain - FML::xmin_domain);
 
-                // Boundary particles
-                communicate_boundary_particles(p, NumPart, p_boundary);
+                    // Guard points
+                    make_random_points_outside_domain(size_t(NumPart * random_fraction), positions_random);
+
+                    // Boundary particles
+                    communicate_boundary_particles(p, NumPart, p_boundary);
+                }
+                const size_t nrandom = positions_random.size() / CGAL_NDIM;
                 const size_t nboundary = p_boundary.size();
 
                 // Total point set. The id tells us what type of point it is:
@@ -724,9 +803,22 @@ namespace FML {
                 auto sub = [](const Point & a, const Point & b) -> Vec {
                     return {a.x() - b.x(), a.y() - b.y(), a.z() - b.z()};
                 };
+                // The cells incident to v. Not dt.incident_cells: it marks the cells it visits, so it is not thread
+                // safe (VoronoiVolume runs this in parallel). Walk the neighbours sharing v instead (read only)
                 thread_local std::vector<Cell_handle> cells;
                 cells.clear();
-                dt.incident_cells(v, std::back_inserter(cells));
+                cells.push_back(v->cell());
+                for (size_t k = 0; k < cells.size(); k++) {
+                    const Cell_handle c = cells[k];
+                    const int iv = c->index(v);
+                    for (int i = 0; i < 4; i++) {
+                        if (i == iv)
+                            continue;
+                        const Cell_handle n = c->neighbor(i);
+                        if (std::find(cells.begin(), cells.end(), n) == cells.end())
+                            cells.push_back(n);
+                    }
+                }
                 double volume = 0.0;
                 for (auto & cell : cells) {
                     const auto ptet = dt.periodic_tetrahedron(cell);
@@ -797,6 +889,8 @@ namespace FML {
             /// are identified by their position. Always true when the buffer covers the whole box. For triangulations
             /// that are not 1-sheeted we cannot check this and return true.
             bool cell_is_reliable(Cell_handle c) const {
+                if (on_domain)
+                    return cell_is_reliable_on_domain(c);
                 const double width = FML::xmax_domain - FML::xmin_domain;
                 if (FML::NTasks == 1 or width + 2.0 * dx_buffer >= 1.0 or not dt.is_1_cover())
                     return true;
@@ -822,6 +916,42 @@ namespace FML {
                 return x - radius >= FML::xmin_domain - dx_buffer and x + radius <= xhigh;
             }
 
+            /// Experiment: the same on a domain: no guard points (outside the covered region, the faces included) and
+            /// the circumsphere inside the covered region along the partly covered axes
+            bool cell_is_reliable_on_domain(Cell_handle c) const {
+                bool any = false;
+                for (int d = 0; d < CGAL_NDIM; d++)
+                    any = any or partly_covered[d];
+                if (not any or not dt.is_1_cover())
+                    return true;
+                for (int k = 0; k <= CGAL_NDIM; k++) {
+                    const auto & q = c->vertex(k)->point();
+                    std::array<double, CGAL_NDIM> x;
+                    for (int d = 0; d < CGAL_NDIM; d++)
+                        x[d] = q[d];
+                    if (not dbuf.in_covered(x.data(), 1e-14))
+                        return false;
+                }
+#if CGAL_NDIM == 3
+                const auto pcell = dt.periodic_tetrahedron(c);
+                const Point q0 = dt.point(pcell[0]);
+                const Point cc = CGAL::circumcenter(q0, dt.point(pcell[1]), dt.point(pcell[2]), dt.point(pcell[3]));
+#elif CGAL_NDIM == 2
+                const auto pcell = dt.periodic_triangle(c);
+                const Point q0 = dt.point(pcell[0]);
+                const Point cc = CGAL::circumcenter(q0, dt.point(pcell[1]), dt.point(pcell[2]));
+#endif
+                const double radius = std::sqrt(CGAL::to_double(CGAL::squared_distance(cc, q0)));
+                for (int d = 0; d < CGAL_NDIM; d++) {
+                    if (not partly_covered[d])
+                        continue;
+                    const double x = dbuf.unwrap(cc[d], d);
+                    if (x - radius < dbuf.lo(d) - dbuf.get_buffer(d) or x + radius > dbuf.hi(d) + dbuf.get_buffer(d))
+                        return false;
+                }
+                return true;
+            }
+
             /// Count the number of cells (tetrahedra in 3D, triangles in 2D) that have at least one regular particle as
             /// a vertex and that are not reliable (see cell_is_reliable). If this is zero then the Voronoi cells of all
             /// the regular particles are exactly the same as if we had tessellated the full box.
@@ -835,8 +965,15 @@ namespace FML {
 #endif
                     bool has_regular = false;
                     for (int k = 0; k <= CGAL_NDIM; k++) {
-                        const double x = c->vertex(k)->point()[0];
-                        has_regular = has_regular or (x >= FML::xmin_domain and x < FML::xmax_domain);
+                        const auto & q = c->vertex(k)->point();
+                        if (on_domain) {
+                            std::array<double, CGAL_NDIM> x;
+                            for (int d = 0; d < CGAL_NDIM; d++)
+                                x[d] = q[d];
+                            has_regular = has_regular or dbuf.in_box(x.data());
+                        } else {
+                            has_regular = has_regular or (q[0] >= FML::xmin_domain and q[0] < FML::xmax_domain);
+                        }
                     }
                     if (has_regular and not cell_is_reliable(c))
                         nbad++;
@@ -1333,7 +1470,10 @@ namespace FML {
             // Create tessellation
             if (FML::ThisTask == 0)
                 std::cout << "[WatershedDensity] Computing tessellation\n";
-            MPIPeriodicDelaunay<T, VertexDataWatershed> D;
+            // (the particles are on FML::domain: the slabs, or e.g. pencils with the domain constructor)
+            auto Dptr = FML::domain.is_slab() ? std::make_unique<MPIPeriodicDelaunay<T, VertexDataWatershed>>() :
+                                                std::make_unique<MPIPeriodicDelaunay<T, VertexDataWatershed>>(FML::domain);
+            auto & D = *Dptr;
             D.create(p, NumPart, buffer_fraction, random_fraction, vertex_assignment_function);
 
             // Compute Voronoi volumes

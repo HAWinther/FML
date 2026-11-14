@@ -72,15 +72,16 @@ namespace FML {
         /// nmembers = the number of particles inside, density_ratio = 0 (not defined). The catalogue is sorted by
         /// radius (largest first).
         ///
-        /// The particles must be in [0,1)^3 and inside the local domain (e.g. MPIParticles). The result is the
-        /// same on all tasks (for a given grid). Smoothing the candidate grid requires FFTW (USE_FFTW).
+        /// The particles must be in [0,1)^3 and inside the local domain of FML::domain (e.g. MPIParticles). The
+        /// result is the same on all tasks (for a given grid). Smoothing the candidate grid requires FFTW (USE_FFTW).
+        /// With a pencil FML::domain use Grid = PencilGrid (the candidate grid is decomposed as the particles).
         ///
         /// @param[in] p Pointer to the particles
         /// @param[in] NumPart Number of local particles
         /// @param[in] options The options
         ///
         //========================================================================================
-        template <class T>
+        template <class T, template <int> class Grid = FML::GRID::FFTWGrid>
         std::vector<Void>
         SphericalVoidFinder(T * p, size_t NumPart, const SphericalOptions & options = SphericalOptions()) {
 
@@ -125,34 +126,47 @@ namespace FML {
                           << " candidate density cut = " << options.candidate_density_cut << " radius range [" << rmin
                           << " , " << rmax << "] (box units)\n";
 
+            // The local domain of the particles: [xlo, xhi) x [ylo, yhi) (slabs: y whole)
+            double xlo = FML::xmin_domain, xhi = FML::xmax_domain, ylo = 0.0, yhi = 1.0;
+            if (FML::domain.holds<FML::PencilDomain>()) {
+                const auto & pencils = FML::domain.get<FML::PencilDomain>();
+                const auto pc = pencils.coords_of(FML::ThisTask);
+                xlo = pencils.x_edges()[pc[0]];
+                xhi = pencils.x_edges()[pc[0] + 1];
+                ylo = pencils.y_edges()[pc[1]];
+                yhi = pencils.y_edges()[pc[1] + 1];
+            }
+
             // Candidate centers from the density grid
-            FML::GRID::FFTWGrid<3> grid;
-            void_density_field(p, NumPart, options.grid, grid);
+            Grid<3> grid;
+            void_density_field<T, Grid>(p, NumPart, options.grid, grid, FML::domain);
             const int Nmesh = grid.get_nmesh();
-            const auto local_nx = grid.get_local_nx();
-            const auto local_x_start = grid.get_local_x_start();
+            const auto local_nx = grid.get_local_range(0)[1], local_x_start = grid.get_local_range(0)[0];
+            const auto local_ny = grid.get_local_range(1)[1], local_y_start = grid.get_local_range(1)[0];
             std::vector<SphereCandidate> candidates;
             for (int ix = 0; ix < local_nx; ix++)
-                for (int iy = 0; iy < Nmesh; iy++)
+                for (int iy = 0; iy < local_ny; iy++)
                     for (int iz = 0; iz < Nmesh; iz++) {
                         const double d = grid.get_real({ix, iy, iz});
                         if (d >= options.candidate_density_cut)
                             continue;
                         SphereCandidate c{};
                         c.candidate[0] = double(local_x_start + ix) / Nmesh;
-                        c.candidate[1] = double(iy) / Nmesh;
+                        c.candidate[1] = double(local_y_start + iy) / Nmesh;
                         c.candidate[2] = double(iz) / Nmesh;
                         for (int j = 0; j < 3; j++)
                             c.center[j] = c.candidate[j];
                         c.candidate_density = d;
-                        c.index = ((local_x_start + ix) * Nmesh + iy) * (long long int)(Nmesh) + iz;
+                        c.index = ((local_x_start + ix) * Nmesh + local_y_start + iy) * (long long int)(Nmesh) + iz;
                         candidates.push_back(c);
                     }
-            grid = FML::GRID::FFTWGrid<3>();
-            if (local_nx > 0)
-                assert_mpi(double(local_x_start) / Nmesh >= FML::xmin_domain - 1e-12 and
-                               double(local_x_start + local_nx - 1) / Nmesh < FML::xmax_domain,
-                           "[SphericalVoidFinder] The grid slab is not inside the particle domain");
+            grid = Grid<3>();
+            if (local_nx > 0 and local_ny > 0)
+                assert_mpi(double(local_x_start) / Nmesh >= xlo - 1e-12 and
+                               double(local_x_start + local_nx - 1) / Nmesh < xhi and
+                               double(local_y_start) / Nmesh >= ylo - 1e-12 and
+                               double(local_y_start + local_ny - 1) / Nmesh < yhi,
+                           "[SphericalVoidFinder] The grid cells are not inside the particle domain");
             long long int ncandidates = (long long int)(candidates.size());
             FML::SumOverTasks(&ncandidates);
             if (FML::ThisTask == 0)
@@ -160,32 +174,37 @@ namespace FML {
                           << "^3 grid\n";
 
             // Get the particles within rmax (+ drift) of our domain from the other tasks
-            const double width = FML::xmax_domain - FML::xmin_domain;
+            const double width = xhi - xlo, ywidth = yhi - ylo;
             const double buffer = rmax + max_drift + 1.0 / Nmesh;
-            // Crossing a thin slab does not require replicating the whole box.
-            // Route to every slab whose periodic buffer overlaps each owned particle.
+            // Crossing a thin slab (pencil) does not require replicating the whole box.
+            // Route to every slab (pencil) whose periodic buffer overlaps each owned particle.
             const bool everything = FML::NTasks == 1 or width + 2.0 * buffer >= 1.0;
-            FML::COMMUNICATION::append_periodic_slab_ghosts(parts, buffer, [](const PosMass & q) { return q.x[0]; });
+            const bool everything_y = FML::NTasks == 1 or ywidth + 2.0 * buffer >= 1.0;
+            FML::COMMUNICATION::append_periodic_domain_ghosts(
+                parts, buffer, [](const PosMass & q) { return std::array<double, 2>{q.x[0], q.x[1]}; });
 
-            // Cell list for the particles we have. Cells of size >= 2 mean separations. In x we only store
-            // the cells covering our domain plus the buffer
+            // Cell list for the particles we have. Cells of size >= 2 mean separations. In x (and y for pencils) we
+            // only store the cells covering our domain plus the buffer
             const int Nc = std::max(1, std::min(1024, int(1.0 / (2.0 * mean_separation))));
-            const int cx0 = everything ? 0 : int(std::floor((FML::xmin_domain - buffer) * Nc));
+            const int cx0 = everything ? 0 : int(std::floor((xlo - buffer) * Nc));
             const int ncx = everything ? Nc : std::min(Nc, int(std::ceil((width + 2.0 * buffer) * Nc)) + 2);
+            const int cy0 = everything_y ? 0 : int(std::floor((ylo - buffer) * Nc));
+            const int ncy = everything_y ? Nc : std::min(Nc, int(std::ceil((ywidth + 2.0 * buffer) * Nc)) + 2);
             auto cell_x = [&](int cx) { return ((cx - cx0) % Nc + Nc) % Nc; };
-            auto cell_of = [&](const double * x, int & lx, int & cy, int & cz) {
+            auto cell_y = [&](int cy) { return ((cy - cy0) % Nc + Nc) % Nc; };
+            auto cell_of = [&](const double * x, int & lx, int & ly, int & cz) {
                 int cx = int(x[0] * Nc);
-                cy = std::min(Nc - 1, int(x[1] * Nc));
+                ly = cell_y(std::min(Nc - 1, int(x[1] * Nc)));
                 cz = std::min(Nc - 1, int(x[2] * Nc));
                 lx = cell_x(std::min(Nc - 1, cx));
             };
-            const size_t ncells = size_t(ncx) * Nc * Nc;
+            const size_t ncells = size_t(ncx) * ncy * Nc;
             std::vector<size_t> offset(ncells + 1, 0);
             std::vector<size_t> cell_index(parts.size());
             for (size_t i = 0; i < parts.size(); i++) {
-                int lx, cy, cz;
-                cell_of(parts[i].x, lx, cy, cz);
-                cell_index[i] = lx < ncx ? (size_t(lx) * Nc + cy) * Nc + cz : ncells;
+                int lx, ly, cz;
+                cell_of(parts[i].x, lx, ly, cz);
+                cell_index[i] = lx < ncx and ly < ncy ? (size_t(lx) * ncy + ly) * Nc + cz : ncells;
                 if (cell_index[i] < ncells)
                     offset[cell_index[i] + 1]++;
             }
@@ -231,9 +250,14 @@ namespace FML {
                             nfailed_buffer++;
                             continue;
                         }
-                        for (int cy : range_y)
+                        for (int cy : range_y) {
+                            const int ly = cell_y(cy);
+                            if (ly >= ncy) {
+                                nfailed_buffer++;
+                                continue;
+                            }
                             for (int cz : range_z) {
-                                const size_t c = (size_t(lx) * Nc + cy) * Nc + cz;
+                                const size_t c = (size_t(lx) * ncy + ly) * Nc + cz;
                                 for (size_t k = offset[c]; k < offset[c + 1]; k++) {
                                     double d2 = 0.0;
                                     for (int j = 0; j < 3; j++) {
@@ -245,6 +269,7 @@ namespace FML {
                                         dist_mass.push_back({std::sqrt(d2), sorted[k].m});
                                 }
                             }
+                        }
                     }
                     std::sort(dist_mass.begin(), dist_mass.end());
                     double mass = 0.0;

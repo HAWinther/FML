@@ -99,7 +99,9 @@ class FofrSolverCosmology {
     int last_nvcycles{0};
 
     /// A previous solution (PhiF, real space) and its scale factor to start from (warm start)
-    FFTWGrid<NDIM> * previous_solution{nullptr};
+    /// (copies the previous solution to an MPIGrid on the grid's decomposition; its number of cells per dim)
+    std::function<void(FML::GRID::MPIGrid<NDIM, SolverType> &)> previous_solution{};
+    int previous_nmesh{0};
     double a_previous{0.0};
 
   public:
@@ -114,6 +116,9 @@ class FofrSolverCosmology {
     }
 
     /// Set convergence criterion
+    /// The number of multigrid levels (-1: as many as the grid and its decomposition allow)
+    void set_nlevels(int _Nlevels) { Nlevels = _Nlevels; }
+
     void set_epsilon(double _epsilon) { epsilon = _epsilon; }
     /// Converged when the rms residual is below epsilon (fiducial) or, with relative = true, below epsilon times the
     /// rms of the linear source of the equation (the residual scale changes by orders of magnitude over a simulation,
@@ -135,8 +140,12 @@ class FofrSolverCosmology {
 
     /// Start the next solve from a previous solution PhiF (real space, same grid) at scale factor a_prev, rescaled by
     /// the change of the background (PhiF / PhiF_bar is kept). The grid must stay alive until solve() is called
-    void set_previous_solution(FFTWGrid<NDIM> & previous_potential_real, double a_prev) {
-        previous_solution = &previous_potential_real;
+    template <template <int> class Grid>
+    void set_previous_solution(Grid<NDIM> & previous_potential_real, double a_prev) {
+        previous_solution = [&previous_potential_real](FML::GRID::MPIGrid<NDIM, SolverType> & guess) {
+            ConvertToMPIGrid(previous_potential_real, guess);
+        };
+        previous_nmesh = previous_potential_real.get_nmesh();
         a_previous = a_prev;
     }
 
@@ -225,7 +234,11 @@ class FofrSolverCosmology {
     }
 
     /// Solve and return the fifth-force potential PhiF = a^2 |f_R| / (2 (H0Box)^2) in real space
-    void solve(double a, FFTWGrid<NDIM> & overdensity_real, FFTWGrid<NDIM> & fifth_force_potential_real) {
+    /// (Grid: FFTWGrid, or a grid with a domain such as PencilGrid: the solver then runs on its pencils)
+    template <template <int> class Grid = FML::GRID::FFTWGrid>
+    void solve(double a, Grid<NDIM> & overdensity_real, Grid<NDIM> & fifth_force_potential_real) {
+        // The domain of the multigrid grids: none (the fiducial slabs) for an FFTWGrid
+        const auto mg_domain = multigrid_domain_of(overdensity_real);
 
         Nmesh = overdensity_real.get_nmesh();
         const bool use_sqrt = (method == "sqrt");
@@ -249,7 +262,9 @@ class FofrSolverCosmology {
         }
 
         // Set up multigrid for density
-        MPIMultiGrid<NDIM, SolverType> density_multigrid(Nmesh, Nlevels, periodic, nleft, nright);
+        MPIMultiGrid<NDIM, SolverType> density_multigrid =
+            mg_domain ? MPIMultiGrid<NDIM, SolverType>(Nmesh, *mg_domain, Nlevels, periodic, nleft, nright) :
+                        MPIMultiGrid<NDIM, SolverType>(Nmesh, Nlevels, periodic, nleft, nright);
         auto & grid = density_multigrid.get_grid();
 
 #ifdef USE_OMP
@@ -279,7 +294,9 @@ class FofrSolverCosmology {
         const double exponent = use_sqrt ? 2.0 / (1.0 + nfofr) : 1.0 / (1.0 + nfofr);
 
         // Set up solver
-        MultiGridSolver<NDIM, SolverType> g(Nmesh, Nlevels, verbose, periodic, nleft, nright);
+        MultiGridSolver<NDIM, SolverType> g =
+            mg_domain ? MultiGridSolver<NDIM, SolverType>(Nmesh, *mg_domain, Nlevels, verbose, periodic, nleft, nright) :
+                        MultiGridSolver<NDIM, SolverType>(Nmesh, Nlevels, verbose, periodic, nleft, nright);
 
         // Set some options
         g.set_epsilon(epsilon);
@@ -288,12 +305,12 @@ class FofrSolverCosmology {
 
         // Set the initial guess: the background value, or a previous solution with the same PhiF / PhiF_bar
         g.set_initial_guess(f0);
-        if (previous_solution and previous_solution->get_nmesh() == Nmesh) {
+        if (previous_solution and previous_nmesh == Nmesh) {
             const double phibar_previous =
                 a_previous * a_previous * get_fofr_background(a_previous) / 2.0 / std::pow(H0Box, 2);
             const double scale = phibar / phibar_previous;
             FML::GRID::MPIGrid<NDIM, SolverType> guess;
-            ConvertToMPIGrid(*previous_solution, guess);
+            previous_solution(guess);
             const IndexInt NtotLocal = guess.get_NtotLocal();
             SolverType * y = guess.get_y();
 #ifdef USE_OMP
@@ -399,7 +416,7 @@ class FofrSolverCosmology {
         }
         last_nvcycles = g.get_number_of_vcycles();
         auto sol = g.get_grid(0);
-        ConvertToFFTWGrid(sol, fifth_force_potential_real);
+        ConvertToGrid(sol, fifth_force_potential_real);
 
         // Convert to fifth-force potential a^2 |f_R| / (2 (H0Box)^2)
         double fmin = std::numeric_limits<double>::max();

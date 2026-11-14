@@ -1,6 +1,7 @@
 #ifndef FML_FIELD_LEVEL_DISTRIBUTED_ASSIGNMENT_H
 #define FML_FIELD_LEVEL_DISTRIBUTED_ASSIGNMENT_H
 #include <FML/FFTWGrid/FFTWGrid.h>
+#include <FML/FFTWGrid/GridInterface.h>
 #include <FML/Global/MPICounts.h>
 #include <unordered_map>
 #include <cstdint>
@@ -11,9 +12,13 @@ namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL {
     // Sparse scatter of global mesh-node contributions to their owning FFT slab.
     // Reverse sends each node's cotangent back in exactly the forward request order.
     // Particles stay on their Lagrangian owners; nodes can be on any rank.
-    class DistributedAssignment {
-        using Grid = FML::GRID::FFTWGrid<3>;
-        std::vector<int> starts, widths, send_count, recv_count, send_offset, recv_offset;
+    // Any grid decomposed in x (FFTWGrid slabs) or in x and y (PencilGrid pencils): the owners from the local boxes
+    template <class GridType = FML::GRID::FFTWGrid<3>>
+    class DistributedAssignmentT {
+        using Grid = GridType;
+        FML::GRID::CellOwners<3> owners;
+        std::array<int, 3> local_start{}, local_count{};
+        std::vector<int> send_count, recv_count, send_offset, recv_offset;
         std::vector<std::uint64_t> sent, received;
         std::unordered_map<std::uint64_t, size_t> slot;
         int mesh, tasks, rank;
@@ -21,7 +26,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL {
         void check(const Grid & grid) const {
             FML::COMMUNICATION::require_count(
                 tasks == FML::NTasks && rank == FML::ThisTask && grid.get_nmesh() == mesh &&
-                    grid.get_local_x_start() == starts[rank] && grid.get_local_nx() == widths[rank],
+                    grid.get_local_range(0)[0] == local_start[0] && grid.get_local_range(0)[1] == local_count[0] &&
+                    grid.get_local_range(1)[0] == local_start[1] && grid.get_local_range(1)[1] == local_count[1],
                 "[Distributed assignment] Incompatible grid/layout");
         }
         static size_t offsets(const std::vector<int> & counts, std::vector<int> & offsets) {
@@ -39,37 +45,27 @@ namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL {
             const auto global_x = node / (std::uint64_t(mesh) * mesh);
             if (global_x >= std::uint64_t(mesh))
                 throw std::invalid_argument("[Distributed assignment] Node outside mesh");
-            const int x = int(global_x);
-            for (int p = 0; p < tasks; ++p)
-                if (x >= starts[p] && x < starts[p] + widths[p])
-                    return p;
-            throw std::invalid_argument("[Distributed assignment] Node outside mesh");
+            const int task = owners.owner({int(global_x), int(node / mesh % mesh), int(node % mesh)});
+            if (task < 0)
+                throw std::invalid_argument("[Distributed assignment] Node outside mesh");
+            return task;
         }
         ptrdiff_t local_index(std::uint64_t node, const Grid & grid) const {
             const auto row = node / mesh;
             const auto x = row / mesh;
-            return grid.get_index_real({int(x) - int(grid.get_local_x_start()), int(row % mesh), int(node % mesh)});
+            return grid.get_index_real(
+                {int(x) - local_start[0], int(row % mesh) - local_start[1], int(node % mesh) - local_start[2]});
         }
 
       public:
-        explicit DistributedAssignment(const Grid & grid)
-            : mesh(grid.get_nmesh()), tasks(FML::NTasks), rank(FML::ThisTask) {
+        explicit DistributedAssignmentT(const Grid & grid)
+            : owners(grid), mesh(grid.get_nmesh()), tasks(FML::NTasks), rank(FML::ThisTask) {
             FML::COMMUNICATION::require_count(mesh > 0 && tasks > 0 && rank >= 0 && rank < tasks,
                                               "[Distributed assignment] Unallocated grid or invalid task metadata");
-            FML::COMMUNICATION::collective_try(
-                [&] {
-                    starts.resize(tasks);
-                    widths.resize(tasks);
-                },
-                "Assignment layouts");
-            int start = int(grid.get_local_x_start()), width = int(grid.get_local_nx());
-#ifdef USE_MPI
-            MPI_Allgather(&start, 1, MPI_INT, starts.data(), 1, MPI_INT, FML::communicator);
-            MPI_Allgather(&width, 1, MPI_INT, widths.data(), 1, MPI_INT, FML::communicator);
-#else
-            starts[0] = start;
-            widths[0] = width;
-#endif
+            for (int d = 0; d < 3; d++) {
+                local_start[d] = int(grid.get_local_range(d)[0]);
+                local_count[d] = int(grid.get_local_range(d)[1]);
+            }
         }
         template <class Visit>
         void deposit(Grid & grid, Visit visit) {
@@ -174,5 +170,6 @@ namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL {
         }
         double at(const std::vector<double> & reversed, std::uint64_t node) const { return reversed[slot.at(node)]; }
     };
+    using DistributedAssignment = DistributedAssignmentT<>;
 } // namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL
 #endif

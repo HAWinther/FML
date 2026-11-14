@@ -14,6 +14,7 @@
 #endif
 
 #include <FML/FFTWGrid/FFTWGrid.h>
+#include <FML/FFTWGrid/GridInterface.h>
 #include <FML/Global/Global.h>
 #include <FML/Global/MPICounts.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
@@ -100,19 +101,23 @@ namespace FML {
             constexpr int get_ndim() const { return N; }
         };
 
-        /// @brief Move a vector of particles (any type with get_pos) to the task that owns their x-coordinate
-        /// (the domain decomposition in FML::xmin_domain / xmax_domain).
+        /// @brief Move a vector of particles (any type with get_pos) to the task that owns their position: slabs (the
+        /// domain decomposition in FML::xmin_domain / xmax_domain) the x-coordinate; other domains (pencils) the owner
         template <class T>
-        void redistribute_particles_by_x(std::vector<T> & part) {
+        void redistribute_particles_by_x(std::vector<T> & part, const FML::Domain & domain = FML::domain) {
 #ifdef USE_MPI
             if (FML::NTasks == 1)
                 return;
             auto xmin_per_task = FML::GatherFromTasks(&FML::xmin_domain);
+            const bool slab = domain.is_slab();
             std::vector<std::vector<T>> send(FML::NTasks);
             for (auto & p : part) {
-                const double x = FML::PARTICLE::GetPos(p)[0];
-                int owner =
-                    int(std::upper_bound(xmin_per_task.begin(), xmin_per_task.end(), x) - xmin_per_task.begin()) - 1;
+                const auto * pos = FML::PARTICLE::GetPos(p);
+                const double x = pos[0];
+                int owner = slab ? int(std::upper_bound(xmin_per_task.begin(), xmin_per_task.end(), x) -
+                                       xmin_per_task.begin()) -
+                                       1 :
+                                   domain.owner(pos);
                 owner = std::max(0, std::min(FML::NTasks - 1, owner));
                 send[owner].push_back(p);
             }
@@ -135,12 +140,13 @@ namespace FML {
         /// @param[out] Psi The displacement field in real space (one grid per component, Nmesh = Npart_1D)
         /// @param[out] lattice_offset The offset of the lattice in units of the lattice spacing
         //================================================================================
-        template <int N, class T>
+        template <int N, class T, template <int> class Grid = FFTWGrid>
         void displacement_field_from_particles(const T * part,
                                                size_t NumPart,
                                                int Npart_1D,
-                                               std::array<FFTWGrid<N>, N> & Psi,
-                                               std::array<double, N> & lattice_offset) {
+                                               std::array<Grid<N>, N> & Psi,
+                                               std::array<double, N> & lattice_offset,
+                                               const FML::Domain & domain = FML::domain) {
             static_assert(FML::PARTICLE::has_get_q<T>(),
                           "displacement_field_from_particles needs particles with a Lagrangian coordinate (get_q)");
             const int Np = Npart_1D;
@@ -166,12 +172,16 @@ namespace FML {
             lattice_offset = offset;
 
             for (int idim = 0; idim < N; idim++) {
-                Psi[idim] = FFTWGrid<N>(Np);
+                Psi[idim] = FML::GRID::make_grid<Grid<N>>(Np, 0, 0, domain);
                 Psi[idim].add_memory_label("FFTWGrid::displacement_field_from_particles::Psi_" + std::to_string(idim));
             }
-            const auto Local_nx = Psi[0].get_local_nx();
-            const auto Local_x_start = Psi[0].get_local_x_start();
-            const int np_per_task = Np / FML::NTasks;
+            // The local box of the lattice grid and the owners of the lattice nodes
+            std::array<int, N> local_start, local_count;
+            for (int idim = 0; idim < N; idim++) {
+                local_start[idim] = int(Psi[0].get_local_range(idim)[0]);
+                local_count[idim] = int(Psi[0].get_local_range(idim)[1]);
+            }
+            const FML::GRID::CellOwners<N> owners(Psi[0]);
 
             // Find the lattice node of each particle and the displacement
             struct Record {
@@ -194,7 +204,10 @@ namespace FML {
                     d -= std::round(d);
                     r.psi[idim] = d;
                 }
-                const int owner = FML::NTasks == 1 ? 0 : r.coord[0] / np_per_task;
+                std::array<int, N> c;
+                for (int idim = 0; idim < N; idim++)
+                    c[idim] = r.coord[idim];
+                const int owner = FML::NTasks == 1 ? 0 : owners.owner(c);
                 send[owner].push_back(r);
             }
             FML::MaxOverTasks(&not_on_lattice);
@@ -209,15 +222,17 @@ namespace FML {
 #endif
 
             // Fill the grids and check that every node gets exactly one particle
-            const size_t ncells_local = size_t(Local_nx) * size_t(FML::power(Np, N - 1));
+            size_t ncells_local = 1;
+            for (int idim = 0; idim < N; idim++)
+                ncells_local *= size_t(local_count[idim]);
             std::vector<char> filled(ncells_local, 0);
             int duplicates = 0;
             for (auto & r : recv) {
                 std::array<int, N> coord;
                 size_t ilocal = 0;
                 for (int idim = 0; idim < N; idim++) {
-                    coord[idim] = r.coord[idim] - (idim == 0 ? int(Local_x_start) : 0);
-                    ilocal = ilocal * Np + coord[idim];
+                    coord[idim] = r.coord[idim] - local_start[idim];
+                    ilocal = ilocal * local_count[idim] + coord[idim];
                 }
                 if (filled[ilocal])
                     duplicates = 1;
@@ -241,19 +256,23 @@ namespace FML {
         /// @param[in] shift The shift s
         /// @param[out] tracers The tracers
         //================================================================================
-        template <int N>
-        void sheet_tracers(const std::array<FFTWGrid<N>, N> & Psi_fourier,
+        template <int N, template <int> class Grid = FFTWGrid>
+        void sheet_tracers(const std::array<Grid<N>, N> & Psi_fourier,
                            const std::array<double, N> & lattice_offset,
                            const std::array<double, N> & shift,
                            std::vector<SheetTracer<N>> & tracers) {
             const int Np = Psi_fourier[0].get_nmesh();
-            const auto Local_nx = Psi_fourier[0].get_local_nx();
-            const auto Local_x_start = Psi_fourier[0].get_local_x_start();
-            const size_t ncells_local = size_t(Local_nx) * size_t(FML::power(Np, N - 1));
+            std::array<int, N> local_start, local_count;
+            size_t ncells_local = 1;
+            for (int idim = 0; idim < N; idim++) {
+                local_start[idim] = int(Psi_fourier[0].get_local_range(idim)[0]);
+                local_count[idim] = int(Psi_fourier[0].get_local_range(idim)[1]);
+                ncells_local *= size_t(local_count[idim]);
+            }
             tracers.resize(ncells_local);
 
             for (int idim = 0; idim < N; idim++) {
-                FFTWGrid<N> psi = Psi_fourier[idim];
+                Grid<N> psi = Psi_fourier[idim];
                 psi.add_memory_label("FFTWGrid::sheet_tracers::psi");
                 FML::GRID::shift_grid_fourier<N>(psi, shift, +1.0);
                 psi.fftw_c2r();
@@ -265,8 +284,8 @@ namespace FML {
                         auto coord = psi.get_coord_from_index(real_index);
                         size_t ilocal = 0;
                         for (int jdim = 0; jdim < N; jdim++)
-                            ilocal = ilocal * Np + coord[jdim];
-                        const int iglobal = coord[idim] + (idim == 0 ? int(Local_x_start) : 0);
+                            ilocal = ilocal * local_count[jdim] + coord[jdim];
+                        const int iglobal = coord[idim] + local_start[idim];
                         double x = (iglobal + lattice_offset[idim]) / double(Np) + shift[idim] +
                                    psi.get_real_from_index(real_index);
                         x -= std::floor(x);
@@ -276,7 +295,7 @@ namespace FML {
                     }
                 }
             }
-            redistribute_particles_by_x(tracers);
+            redistribute_particles_by_x(tracers, FML::GRID::particle_domain_of(Psi_fourier[0]));
         }
 
         //================================================================================
@@ -292,11 +311,11 @@ namespace FML {
         /// the tracers (no window function or aliasing; modes |m_i| < Nmesh/2, see FML::NUFFT)
         /// @param[in] nufft_epsilon The accuracy of the NUFFT (if used)
         //================================================================================
-        template <int N>
-        void sheet_density_fourier(const std::array<FFTWGrid<N>, N> & Psi_fourier,
+        template <int N, template <int> class Grid = FFTWGrid>
+        void sheet_density_fourier(const std::array<Grid<N>, N> & Psi_fourier,
                                    const std::array<double, N> & lattice_offset,
                                    int refinement,
-                                   FFTWGrid<N> & density_fourier,
+                                   Grid<N> & density_fourier,
                                    std::string density_assignment_method,
                                    double nufft_epsilon = 1e-6) {
             const int nmesh = density_fourier.get_nmesh();
@@ -310,11 +329,12 @@ namespace FML {
             // Exact Fourier modes of the tracers with a NUFFT (accumulated in Fourier space)
             if (density_assignment_method == "NUFFT") {
                 FML::NUFFT::ESKernel kernel(nufft_epsilon);
-                FFTWGrid<N> density_shift(nmesh);
+                auto density_shift = make_grid_like(density_fourier, nmesh, 0, 0);
                 density_shift.add_memory_label("FFTWGrid::sheet_density_fourier::density_shift");
-                FFTWGrid<N> sum(nmesh,
-                                density_fourier.get_n_extra_slices_left(),
-                                density_fourier.get_n_extra_slices_right());
+                auto sum = make_grid_like(density_fourier,
+                                          nmesh,
+                                          density_fourier.get_n_extra_slices_left(),
+                                          density_fourier.get_n_extra_slices_right());
                 sum.add_memory_label("FFTWGrid::sheet_density_fourier::sum");
                 sum.fill_fourier_grid(0.0);
                 sum.set_grid_status_real(false);
@@ -335,7 +355,7 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-                    for (FML::IndexIntType irow = 0; irow < sum.get_local_nrows(); irow++) {
+                    for (FML::IndexIntType irow = 0; irow < sum.get_local_nrows_fourier(); irow++) {
                         for (auto && fourier_index : sum.get_fourier_range_of_rows(irow, irow + 1)) {
                             sum.set_fourier_from_index(fourier_index,
                                                        sum.get_fourier_from_index(fourier_index) +
@@ -343,19 +363,20 @@ namespace FML {
                         }
                     }
                 }
-                if (sum.get_local_x_start() == 0)
+                if (FML::GRID::has_dc_mode(sum))
                     sum.set_fourier_from_index(0, 0.0);
                 density_fourier = sum;
                 return;
             }
 
             auto nleftright = get_extra_slices(density_assignment_method);
-            FFTWGrid<N> density_shift(nmesh, nleftright.first, nleftright.second);
+            auto density_shift = make_grid_like(density_fourier, nmesh, nleftright.first, nleftright.second);
             density_shift.add_memory_label("FFTWGrid::sheet_density_fourier::density_shift");
             // Keep the extra slices of the output grid (they are needed if it is used for interpolation later)
-            FFTWGrid<N> sum(nmesh,
-                            density_fourier.get_n_extra_slices_left(),
-                            density_fourier.get_n_extra_slices_right());
+            auto sum = make_grid_like(density_fourier,
+                                      nmesh,
+                                      density_fourier.get_n_extra_slices_left(),
+                                      density_fourier.get_n_extra_slices_right());
             sum.add_memory_label("FFTWGrid::sheet_density_fourier::sum");
 
             std::vector<SheetTracer<N>> tracers;
@@ -375,7 +396,12 @@ namespace FML {
                 for (FML::IndexIntType irow = 0; irow < sum.get_local_nrows(); irow++) {
                     for (auto && real_index : sum.get_real_range_of_rows(irow, irow + 1)) {
                         auto value = sum.get_real_from_index(real_index);
-                        value += density_shift.get_real_from_index(real_index) / FloatType(nshifts);
+                        // (an FFTWGrid real index does not depend on the extra slices; in general it does: the
+                        // grids have different extra cells, so we go by the coordinates)
+                        if constexpr (FML::GRID::is_fftwgrid_v<Grid<N>>)
+                            value += density_shift.get_real_from_index(real_index) / FloatType(nshifts);
+                        else
+                            value += density_shift.get_real(sum.get_coord_from_index(real_index)) / FloatType(nshifts);
                         sum.set_real_from_index(real_index, value);
                     }
                 }
@@ -391,17 +417,18 @@ namespace FML {
         /// displacement field \f$ \Psi = x - q \f$ (particles must have get_q and must have started on a regular
         /// lattice). See sheet_density_fourier.
         //================================================================================
-        template <int N, class T>
+        template <int N, class T, template <int> class Grid = FFTWGrid>
         void particles_to_fourier_grid_sheet(const T * part,
                                              size_t NumPart,
                                              int Npart_1D,
                                              int refinement,
-                                             FFTWGrid<N> & density_fourier,
+                                             Grid<N> & density_fourier,
                                              std::string density_assignment_method,
                                              double nufft_epsilon = 1e-6) {
-            std::array<FFTWGrid<N>, N> Psi;
+            std::array<Grid<N>, N> Psi;
             std::array<double, N> lattice_offset;
-            displacement_field_from_particles<N, T>(part, NumPart, Npart_1D, Psi, lattice_offset);
+            displacement_field_from_particles<N, T>(
+                part, NumPart, Npart_1D, Psi, lattice_offset, FML::GRID::particle_domain_of(density_fourier));
             for (int idim = 0; idim < N; idim++)
                 Psi[idim].fftw_r2c();
             sheet_density_fourier<N>(Psi,

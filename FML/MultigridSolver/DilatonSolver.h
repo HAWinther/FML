@@ -93,7 +93,9 @@ class DilatonSolverCosmology {
     int last_nvcycles{0};
 
     /// A previous solution (PhiF in real space, as returned by solve) and its scale factor: the starting point
-    FFTWGrid<NDIM> * previous_solution{nullptr};
+    /// (copies the previous solution to an MPIGrid on the grid's decomposition; its number of cells per dim)
+    std::function<void(FML::GRID::MPIGrid<NDIM, SolverType> &)> previous_solution{};
+    int previous_nmesh{0};
     double a_previous{-1.0};
 
     /// (a^p - 1)/p as a function of x = ln a (ln a for p = 0) and ln(1 + p y)/p (y for p = 0)
@@ -209,6 +211,9 @@ class DilatonSolverCosmology {
     void set_maxsteps(int _maxsteps) { maxsteps = _maxsteps; }
 
     /// Set convergenc criterion
+    /// The number of multigrid levels (-1: as many as the grid and its decomposition allow)
+    void set_nlevels(int _Nlevels) { Nlevels = _Nlevels; }
+
     void set_epsilon(double _epsilon) { epsilon = _epsilon; }
     /// Converged when the rms residual is below epsilon (fiducial) or, with relative = true, below epsilon times the
     /// rms of the linear source of the equation (norm a^-3 delta)
@@ -216,9 +221,13 @@ class DilatonSolverCosmology {
 
     /// Start the next solve from a previous solution (PhiF, as returned by solve, at the scale factor a_prev) with the
     /// same phi / phi_bar instead of from the background. The grid must outlive the solve
-    void set_previous_solution(FFTWGrid<NDIM> & solution, double a_prev) {
+    template <template <int> class Grid>
+    void set_previous_solution(Grid<NDIM> & solution, double a_prev) {
         if (solution.get_nmesh() > 0 and a_prev > 0.0) {
-            previous_solution = &solution;
+            previous_solution = [&solution](FML::GRID::MPIGrid<NDIM, SolverType> & guess) {
+                ConvertToMPIGrid(solution, guess);
+            };
+            previous_nmesh = solution.get_nmesh();
             a_previous = a_prev;
         }
     }
@@ -237,7 +246,11 @@ class DilatonSolverCosmology {
     }
 
     /// Do the solving and return the fifth-force potential PhiF = a^2 beta(a)^2 w^2 / (2 A2 (H0Box)^2) in real space
-    void solve(double a, FFTWGrid<NDIM> & overdensity_real, FFTWGrid<NDIM> & fifth_force_potential_real) {
+    /// (Grid: FFTWGrid, or a grid with a domain such as PencilGrid: the solver then runs on its pencils)
+    template <template <int> class Grid = FML::GRID::FFTWGrid>
+    void solve(double a, Grid<NDIM> & overdensity_real, Grid<NDIM> & fifth_force_potential_real) {
+        // The domain of the multigrid grids: none (the fiducial slabs) for an FFTWGrid
+        const auto mg_domain = multigrid_domain_of(overdensity_real);
 
         Nmesh = overdensity_real.get_nmesh();
         const double s = get_s();
@@ -264,7 +277,9 @@ class DilatonSolverCosmology {
         }
 
         // Set up multigrid for density
-        MPIMultiGrid<NDIM, SolverType> density_multigrid(Nmesh, Nlevels, periodic, nleft, nright);
+        MPIMultiGrid<NDIM, SolverType> density_multigrid =
+            mg_domain ? MPIMultiGrid<NDIM, SolverType>(Nmesh, *mg_domain, Nlevels, periodic, nleft, nright) :
+                        MPIMultiGrid<NDIM, SolverType>(Nmesh, Nlevels, periodic, nleft, nright);
         auto & grid = density_multigrid.get_grid();
 
 #ifdef USE_OMP
@@ -303,17 +318,19 @@ class DilatonSolverCosmology {
         const double uhi = std::min(u_local_minimum(rho_min * ainv3, Ea, s, p), 700.0);
 
         // Set up solver
-        MultiGridSolver<NDIM, SolverType> g(Nmesh, Nlevels, verbose, periodic, nleft, nright);
+        MultiGridSolver<NDIM, SolverType> g =
+            mg_domain ? MultiGridSolver<NDIM, SolverType>(Nmesh, *mg_domain, Nlevels, verbose, periodic, nleft, nright) :
+                        MultiGridSolver<NDIM, SolverType>(Nmesh, Nlevels, verbose, periodic, nleft, nright);
         g.set_epsilon(epsilon);
         g.set_ngs_sweeps(ngs_fine, ngs_coarse, ngs_first);
         g.set_maxsteps(maxsteps);
 
         // The initial guess: the background (w = 1) or the previous solution's phi / phi_bar
         g.set_initial_guess(SolverType(1.0));
-        if (previous_solution and previous_solution->get_nmesh() == Nmesh) {
+        if (previous_solution and previous_nmesh == Nmesh) {
             const double phifbar_previous = get_phif_background(a_previous);
             FML::GRID::MPIGrid<NDIM, SolverType> guess;
-            ConvertToMPIGrid(*previous_solution, guess);
+            previous_solution(guess);
             const IndexInt NtotLocal = guess.get_NtotLocal();
             SolverType * y = guess.get_y();
 #ifdef USE_OMP
@@ -377,7 +394,7 @@ class DilatonSolverCosmology {
         g.solve(Equation, ConvergenceCriterion);
         last_nvcycles = g.get_number_of_vcycles();
         auto sol = g.get_grid(0);
-        ConvertToFFTWGrid(sol, fifth_force_potential_real);
+        ConvertToGrid(sol, fifth_force_potential_real);
 
         // Convert to the fifth-force potential PhiF = PhiF_bar w^2
         const double phifbar = get_phif_background(a);

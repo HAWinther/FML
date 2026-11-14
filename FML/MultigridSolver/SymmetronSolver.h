@@ -117,6 +117,9 @@ class SymmetronSolverCosmology {
     }
 
     /// Set convergenc criterion
+    /// The number of multigrid levels (-1: as many as the grid and its decomposition allow)
+    void set_nlevels(int _Nlevels) { Nlevels = _Nlevels; }
+
     void set_epsilon(double _epsilon) { epsilon = _epsilon; }
     /// Converged when the rms residual is below epsilon (fiducial) or, with relative = true, below epsilon times the
     /// rms of the linear source of the equation (the residual scale changes by orders of magnitude over a simulation,
@@ -129,7 +132,11 @@ class SymmetronSolverCosmology {
     }
 
     /// Do the solving and return the fifth-force potential PhiF = forcenorm chi^N
-    void solve(double a, FFTWGrid<NDIM> & overdensity_real, FFTWGrid<NDIM> & fifth_force_potential_real) {
+    /// (Grid: FFTWGrid, or a grid with a domain such as PencilGrid: the solver then runs on its pencils)
+    template <template <int> class Grid = FML::GRID::FFTWGrid>
+    void solve(double a, Grid<NDIM> & overdensity_real, Grid<NDIM> & fifth_force_potential_real) {
+        // The domain of the multigrid grids: none (the fiducial slabs) for an FFTWGrid
+        const auto mg_domain = multigrid_domain_of(overdensity_real);
 
         Nmesh = overdensity_real.get_nmesh();
 
@@ -153,7 +160,9 @@ class SymmetronSolverCosmology {
         }
 
         // Set up multigrid for density
-        MPIMultiGrid<NDIM, SolverType> density_multigrid(Nmesh, Nlevels, periodic, nleft, nright);
+        MPIMultiGrid<NDIM, SolverType> density_multigrid =
+            mg_domain ? MPIMultiGrid<NDIM, SolverType>(Nmesh, *mg_domain, Nlevels, periodic, nleft, nright) :
+                        MPIMultiGrid<NDIM, SolverType>(Nmesh, Nlevels, periodic, nleft, nright);
         auto & grid = density_multigrid.get_grid();
 
 #ifdef USE_OMP
@@ -183,7 +192,9 @@ class SymmetronSolverCosmology {
         const double f0 = get_phi_background(a);
 
         // Set up solver
-        MultiGridSolver<NDIM, SolverType> g(Nmesh, Nlevels, verbose, periodic, nleft, nright);
+        MultiGridSolver<NDIM, SolverType> g =
+            mg_domain ? MultiGridSolver<NDIM, SolverType>(Nmesh, *mg_domain, Nlevels, verbose, periodic, nleft, nright) :
+                        MultiGridSolver<NDIM, SolverType>(Nmesh, Nlevels, verbose, periodic, nleft, nright);
 
         // Set some options
         g.set_epsilon(epsilon);
@@ -252,7 +263,7 @@ class SymmetronSolverCosmology {
         g.solve(Equation, ConvergenceCriterion);
         last_nvcycles = g.get_number_of_vcycles();
         auto sol = g.get_grid(0);
-        ConvertToFFTWGrid(sol, fifth_force_potential_real);
+        ConvertToGrid(sol, fifth_force_potential_real);
 
         // Convert to fifth-force potential
         const double forcenorm = get_forcenorm(a);

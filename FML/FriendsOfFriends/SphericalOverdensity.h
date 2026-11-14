@@ -77,6 +77,40 @@ namespace FML {
                 }
                 return shift;
             }
+            // The region of a task in the particle domain FML::domain: its slab ([lo, hi) in x) or its pencil (also
+            // [lo, hi) in y; y_split). The distance of a point to it (periodic): the x-distance for a slab
+            struct Box {
+                double lo[2]{0.0, 0.0}, hi[2]{1.0, 1.0};
+                bool y_split{false};
+            };
+            inline Box box_of(int task) {
+                Box b;
+                if (FML::domain.holds<FML::PencilDomain>()) {
+                    const auto & pencils = FML::domain.get<FML::PencilDomain>();
+                    const auto c = pencils.coords_of(task);
+                    b.lo[0] = pencils.x_edges()[c[0]];
+                    b.hi[0] = pencils.x_edges()[c[0] + 1];
+                    b.lo[1] = pencils.y_edges()[c[1]];
+                    b.hi[1] = pencils.y_edges()[c[1] + 1];
+                    b.y_split = pencils.process_grid()[1] > 1;
+                } else {
+                    // (the slabs: as before from xmin_domain, xmax_domain of this task)
+                    b.lo[0] = task == FML::ThisTask ? FML::xmin_domain : FML::domain.x_min(task);
+                    b.hi[0] = task == FML::ThisTask ? FML::xmax_domain : FML::domain.x_max(task);
+                }
+                return b;
+            }
+            template <class Pos>
+            double distance_to_box(const Pos & x, const Box & b) {
+                const double dx = distance_to_slab(x[0], b.lo[0], b.hi[0]);
+                if (not b.y_split)
+                    return dx;
+                return std::hypot(dx, distance_to_slab(x[1], b.lo[1], b.hi[1]));
+            }
+            template <class Pos>
+            bool in_box(const Pos & x, const Box & b) {
+                return x[0] >= b.lo[0] && x[0] < b.hi[0] && (not b.y_split or (x[1] >= b.lo[1] && x[1] < b.hi[1]));
+            }
         } // namespace SO_DETAIL
 
         /// Collective selective exchange from every intersecting slab, including
@@ -92,11 +126,13 @@ namespace FML {
                                                 size_t max_message_bytes = 8 * 1024 * 1024,
                                                 bool unwrap_periodic_images = true) {
             using SO_DETAIL::Count;
-            const double lo = FML::xmin_domain, hi = FML::xmax_domain;
+            // (the region of this task: its slab or pencil in FML::domain)
+            const auto mybox = SO_DETAIL::box_of(FML::ThisTask);
+            const double lo = mybox.lo[0], hi = mybox.hi[0];
             bool valid = std::isfinite(dx) && dx >= 0 && lo >= 0 && hi <= 1 && lo <= hi && (NumPart == 0 || part);
             for (size_t i = 0; part && i < NumPart; ++i) {
-                double x = FML::PARTICLE::GetPos(part[i])[0];
-                valid &= std::isfinite(x) && x >= lo && x < hi;
+                const auto * x = FML::PARTICLE::GetPos(part[i]);
+                valid &= std::isfinite(x[0]) && SO_DETAIL::in_box(x, mybox);
             }
             valid &= FML::NTasks != 1 || (lo == 0 && hi == 1);
             Count capacity = std::min(max_message_bytes, size_t(INT_MAX));
@@ -108,10 +144,18 @@ namespace FML {
             if (FML::NTasks > 1) {
                 std::array<double, 3> local{lo, hi, dx};
                 const auto slabs = FML::GatherFromTasks(&local);
-                valid = slabs.front()[0] == 0 && slabs.back()[1] == 1;
-                for (int t = 0; t < FML::NTasks; ++t)
-                    valid &= slabs[t][0] <= slabs[t][1] && (!t || slabs[t][0] == slabs[t - 1][1]);
-                SO_DETAIL::require(valid, "[SO exchange] Rank-ordered slabs must partition [0,1]");
+                std::vector<SO_DETAIL::Box> boxes(FML::NTasks);
+                for (int t = 0; t < FML::NTasks; ++t) {
+                    boxes[t] = SO_DETAIL::box_of(t);
+                    boxes[t].lo[0] = slabs[t][0];
+                    boxes[t].hi[0] = slabs[t][1];
+                }
+                if (not mybox.y_split) {
+                    valid = slabs.front()[0] == 0 && slabs.back()[1] == 1;
+                    for (int t = 0; t < FML::NTasks; ++t)
+                        valid &= slabs[t][0] <= slabs[t][1] && (!t || slabs[t][0] == slabs[t - 1][1]);
+                    SO_DETAIL::require(valid, "[SO exchange] Rank-ordered slabs must partition [0,1]");
+                }
                 std::vector<size_t> sizes(NumPart);
                 for (size_t i = 0; i < NumPart; ++i) {
                     auto bytes = FML::PARTICLE::GetSize(part[i]);
@@ -122,7 +166,7 @@ namespace FML {
                 auto needed = [&](size_t i, int dest) {
                     const auto & slab = slabs[dest];
                     return slab[0] < slab[1] &&
-                           SO_DETAIL::distance_to_slab(FML::PARTICLE::GetPos(part[i])[0], slab[0], slab[1]) <= slab[2];
+                           SO_DETAIL::distance_to_box(FML::PARTICLE::GetPos(part[i]), boxes[dest]) <= slab[2];
                 };
                 std::vector<Count> sends(FML::NTasks), receives(FML::NTasks);
                 for (int dest = 0; dest < FML::NTasks; ++dest)
@@ -258,14 +302,16 @@ namespace FML {
                                     valid = false;
                                     break;
                                 }
-                                const double x = FML::PARTICLE::GetPos(particle)[0];
-                                if (!std::isfinite(x) || x < slabs[source][0] || x >= slabs[source][1]) {
+                                const auto * xs = FML::PARTICLE::GetPos(particle);
+                                if (!std::isfinite(xs[0]) || not SO_DETAIL::in_box(xs, boxes[source])) {
                                     valid = false;
                                     break;
                                 }
                                 if (unwrap_periodic_images) {
                                     auto * x = FML::PARTICLE::GetPos(particle);
                                     x[0] += SO_DETAIL::nearest_image(x[0], lo, hi);
+                                    if (mybox.y_split)
+                                        x[1] += SO_DETAIL::nearest_image(x[1], mybox.lo[1], mybox.hi[1]);
                                 }
                                 boundary.push_back(std::move(particle));
                                 position += size_t(bytes);
@@ -465,7 +511,7 @@ namespace FML {
             states.reserve(centers.size());
             double coverage = 0;
             auto requirement = [&](const auto & c, double r) {
-                return r + SO_DETAIL::distance_to_slab(c[0], FML::xmin_domain, FML::xmax_domain);
+                return r + SO_DETAIL::distance_to_box(c, SO_DETAIL::box_of(FML::ThisTask));
             };
             for (size_t i = 0; i < centers.size(); ++i) {
                 auto wrapped = centers[i];

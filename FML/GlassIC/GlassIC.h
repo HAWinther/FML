@@ -1,5 +1,6 @@
 #ifndef FML_GLASS_IC_H
 #define FML_GLASS_IC_H
+#include <FML/FFTWGrid/GridInterface.h>
 #include <FML/Global/Global.h>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
@@ -59,10 +60,12 @@ namespace FML::GLASSIC {
         inline void migrate(Particles & p) {
 #ifdef USE_MPI
             const auto upper = FML::GatherFromTasks(&FML::xmax_domain);
+            const bool slab = FML::domain.is_slab();
             std::vector<unsigned long long> send(FML::NTasks, 0), recv(FML::NTasks, 0);
             for (size_t i = 0; i < p.get_npart(); ++i) {
-                const auto x = p.get_particles_ptr()[i].position[0];
-                const auto owner = std::upper_bound(upper.begin(), upper.end(), x) - upper.begin();
+                const auto & position = p.get_particles_ptr()[i].position;
+                const auto owner = slab ? std::upper_bound(upper.begin(), upper.end(), position[0]) - upper.begin() :
+                                          std::ptrdiff_t(FML::domain.owner(position.data()));
                 ++send.at(size_t(owner));
             }
             MPI_Alltoall(send.data(),
@@ -88,14 +91,37 @@ namespace FML::GLASSIC {
             p.communicate_particles();
             sort(p);
         }
-        inline void check_grid(Grid & grid) {
-            require(grid.get_nmesh() > 0 && grid.get_local_nx() > 0 && grid.get_n_extra_slices_left() >= 1 &&
-                        grid.get_n_extra_slices_right() >= 1 &&
-                        double(grid.get_local_x_start()) / grid.get_nmesh() == FML::xmin_domain &&
-                        double(grid.get_local_x_start() + grid.get_local_nx()) / grid.get_nmesh() == FML::xmax_domain,
-                    "[GlassIC] Need nonempty FFT slabs matching particle domains and one halo on each side");
+        template <class G>
+        void check_grid(G & grid) {
+            if constexpr (FML::GRID::is_fftwgrid_v<G>) {
+                require(grid.get_nmesh() > 0 && grid.get_local_nx() > 0 && grid.get_n_extra_slices_left() >= 1 &&
+                            grid.get_n_extra_slices_right() >= 1 &&
+                            double(grid.get_local_x_start()) / grid.get_nmesh() == FML::xmin_domain &&
+                            double(grid.get_local_x_start() + grid.get_local_nx()) / grid.get_nmesh() ==
+                                FML::xmax_domain,
+                        "[GlassIC] Need nonempty FFT slabs matching particle domains and one halo on each side");
+            } else {
+                // The centers of the first and the last local cells are in the local domain of FML::domain
+                const double h = 1.0 / std::max(1, grid.get_nmesh());
+                const auto rx = grid.get_local_range(0), ry = grid.get_local_range(1);
+                const double lo[3] = {(rx[0] + 0.5) * h, (ry[0] + 0.5) * h, 0.0};
+                const double hi[3] = {(rx[0] + rx[1] - 0.5) * h, (ry[0] + ry[1] - 0.5) * h, 0.0};
+                require(grid.get_nmesh() > 0 && rx[1] > 0 && ry[1] > 0 && grid.get_n_extra_slices_left() >= 1 &&
+                            grid.get_n_extra_slices_right() >= 1 && FML::domain.owner(lo) == FML::ThisTask &&
+                            FML::domain.owner(hi) == FML::ThisTask,
+                        "[GlassIC] Need a grid decomposed as the particle domain FML::domain and one halo on each side");
+            }
+        }
+        // Is a position in the local domain of FML::domain?
+        inline bool owned(const Vector & position) {
+            if (FML::domain.is_slab())
+                return position[0] >= FML::xmin_domain && position[0] < FML::xmax_domain;
+            return FML::domain.owner(position.data()) == FML::ThisTask;
         }
         inline void check_load(Load & load) {
+            // (slabs: FFTWGrid; pencils: PencilGrid, the template parameter of relax etc.)
+            require(FML::domain.is_slab() || FML::domain.holds<FML::PencilDomain>(),
+                    "[GlassIC] FML::domain must be a Slab or a Pencil domain");
             same(load.seed, "[GlassIC] Seed differs between ranks");
             same(load.boxsize, "[GlassIC] Box metadata differs between ranks");
             same(int(load.perturbed), "[GlassIC] Load state differs between ranks");
@@ -106,7 +132,7 @@ namespace FML::GLASSIC {
                 for (int d = 0; d < 3; ++d)
                     good &= std::isfinite(p.position[d]) && p.position[d] >= 0 && p.position[d] < 1 &&
                             std::isfinite(p.velocity[d]) && std::isfinite(p.q[d]) && p.q[d] >= 0 && p.q[d] < 1;
-                good &= p.position[0] >= FML::xmin_domain && p.position[0] < FML::xmax_domain;
+                good &= owned(p.position);
             }
             require(good, "[GlassIC] Invalid load, IDs, coordinates or ownership");
         }
@@ -190,14 +216,17 @@ namespace FML::GLASSIC {
         return {std::sqrt(f2 / n), std::sqrt(fmax), std::sqrt(v2 / n), std::sqrt(vmax)};
     }
     // Persistent four-grid PM workspace. Short-range cells/ghosts rebuild after each drift.
-    class Force {
-        Grid density;
-        std::array<Grid, 3> psi;
+    /// The force on the particles of a load (long range on a grid of type G, decomposed as FML::domain: FFTWGrid
+    /// for slabs, PencilGrid for pencils; short range from the particles within the cutoff)
+    template <class G = Grid>
+    class ForceOn {
+        G density;
+        std::array<G, 3> psi;
         FML::SHORT_RANGE_GRAVITY::Kernel kernel;
         std::uint64_t count;
 
       public:
-        Force(int mesh,
+        ForceOn(int mesh,
               std::uint64_t n,
               double split_cells = 1.25,
               double softening_spacing = .1,
@@ -208,7 +237,8 @@ namespace FML::GLASSIC {
             detail::same(split_cells, "[GlassIC] Split differs between ranks");
             detail::same(softening_spacing, "[GlassIC] Softening differs between ranks");
             detail::same(tolerance, "[GlassIC] Cutoff differs between ranks");
-            detail::require(mesh >= 4 && mesh % FML::NTasks == 0 && n > 0 && std::isfinite(split_cells) &&
+            detail::require(mesh >= 4 && (!FML::GRID::is_fftwgrid_v<G> || mesh % FML::NTasks == 0) && n > 0 &&
+                                std::isfinite(split_cells) &&
                                 split_cells > 0 && std::isfinite(softening_spacing) && softening_spacing > 0 &&
                                 std::isfinite(tolerance) && tolerance > 0 && tolerance < 1,
                             "[GlassIC] Invalid force settings");
@@ -219,10 +249,10 @@ namespace FML::GLASSIC {
             o.coupling = 1 / (4 * std::acos(-1.) * double(n));
             // Kernel construction is identical on all ranks after the collective settings checks.
             kernel = FML::SHORT_RANGE_GRAVITY::Kernel(o);
-            density = Grid(mesh, 1, 1);
+            density = FML::GRID::make_grid<G>(mesh, 1, 1, FML::domain);
             detail::check_grid(density);
             for (auto & g : psi)
-                g = Grid(mesh, 1, 1);
+                g = FML::GRID::make_grid<G>(mesh, 1, 1, FML::domain);
         }
         std::vector<Vector> operator()(Load & load) {
             detail::check_load(load);
@@ -239,8 +269,8 @@ namespace FML::GLASSIC {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (int slab = 0; slab < density.get_local_nx(); ++slab)
-                for (auto i : density.get_fourier_range(slab, slab + 1)) {
+            for (FML::IndexIntType row = 0; row < density.get_local_nrows_fourier(); ++row)
+                for (auto i : density.get_fourier_range_of_rows(row, row + 1)) {
                     const auto k = density.get_fourier_wavevector_from_index(i);
                     double k2 = 0, window = 1;
                     for (int d = 0; d < 3; ++d) {
@@ -270,7 +300,9 @@ namespace FML::GLASSIC {
                 const auto & p = load.particles.get_particles_ptr()[i];
                 owned[i] = {p.position, 1, p.id};
             }
-            auto sources = exchange_slab_ghosts(owned, FML::xmin_domain, FML::xmax_domain, kernel);
+            auto sources = FML::domain.is_slab() ?
+                               exchange_slab_ghosts(owned, FML::xmin_domain, FML::xmax_domain, kernel) :
+                               exchange_domain_ghosts(owned, FML::domain, kernel);
             std::sort(sources.particles.begin(), sources.particles.end(), [](const auto & a, const auto & b) {
                 return a.id < b.id;
             });
@@ -283,13 +315,17 @@ namespace FML::GLASSIC {
             return result;
         }
     };
+    using Force = ForceOn<Grid>;
     /// The default relaxation mesh: the smallest multiple of the task count (and of 2) that is >= 3 N^(1/3), and >= 4
     inline int automatic_mesh(std::uint64_t count) {
         const int step = FML::NTasks % 2 == 0 ? FML::NTasks : 2 * FML::NTasks;
         const int target = std::max(4, int(std::ceil(3.0 * std::cbrt(double(count)) - 1e-9)));
         return ((target + step - 1) / step) * step;
     }
-    inline Result relax(Load & load, Options o = {}) {
+    /// Relax a load to a glass. G: the grid type of the long-range force (FFTWGrid for a Slab FML::domain, PencilGrid
+    /// for a Pencil FML::domain)
+    template <class G = Grid>
+    Result relax(Load & load, Options o = {}) {
         for (int x : {o.max_steps, o.min_steps, o.stable_steps})
             detail::same(x, "[GlassIC] Relaxation settings differ between ranks");
         for (double x : {o.timestep, o.damping, o.max_step_spacing, o.force_tolerance, o.velocity_tolerance})
@@ -303,7 +339,8 @@ namespace FML::GLASSIC {
         detail::check_load(load);
         if (o.mesh <= 0)
             o.mesh = automatic_mesh(load.particles.get_npart_total());
-        Force force(o.mesh, load.particles.get_npart_total(), o.split_cells, o.softening_spacing, o.cutoff_tolerance);
+        ForceOn<G> force(
+            o.mesh, load.particles.get_npart_total(), o.split_cells, o.softening_spacing, o.cutoff_tolerance);
         const double spacing = 1 / std::cbrt(double(load.particles.get_npart_total()));
         auto acceleration = force(load);
         Result result;
@@ -367,7 +404,8 @@ namespace FML::GLASSIC {
     // Apply precombined LPT displacement and velocity fields at the SAME original glass q, then migrate once.
     // displacement is in box lengths; velocity is in explicitly caller-chosen units. Relaxation velocities are
     // replaced.
-    inline void apply_fields(Load & load, std::array<Grid, 3> & displacement, std::array<Grid, 3> & velocity) {
+    template <class G = Grid>
+    void apply_fields(Load & load, std::array<G, 3> & displacement, std::array<G, 3> & velocity) {
         detail::check_load(load);
         detail::require(!load.perturbed, "[GlassIC] ICs already applied");
         for (auto * fields : {&displacement, &velocity})
@@ -421,7 +459,8 @@ namespace FML::GLASSIC {
     }
     // Shared transfer-provider bridge. Query/validate the spectrum outside OpenMP before generating modes.
     // k_grid is in inverse box lengths; provider k is h/Mpc and provider P is (Mpc/h)^3.
-    inline void density_from_provider(Grid & delta,
+    template <class G = Grid>
+    void density_from_provider(G & delta,
                                       const FML::INITIALCONDITIONS::TransferProvider & provider,
                                       FML::INITIALCONDITIONS::Species species,
                                       double a,

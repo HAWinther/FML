@@ -76,7 +76,9 @@ class DGPSolverCosmology {
     long long last_n_negative_discriminant{0};
 
     /// A previous solution (real space, same grid) to start from (warm start)
-    FFTWGrid<NDIM> * previous_solution{nullptr};
+    /// (copies the previous solution to an MPIGrid on the grid's decomposition; its number of cells per dim)
+    std::function<void(FML::GRID::MPIGrid<NDIM, SolverType> &)> previous_solution{};
+    int previous_nmesh{0};
 
   public:
     DGPSolverCosmology(double OmegaM, double rcH0_DGP, double beta_DGP, double H0Box, bool verbose)
@@ -90,6 +92,9 @@ class DGPSolverCosmology {
     }
 
     /// Set convergenc criterion
+    /// The number of multigrid levels (-1: as many as the grid and its decomposition allow)
+    void set_nlevels(int _Nlevels) { Nlevels = _Nlevels; }
+
     void set_epsilon(double _epsilon) { epsilon = _epsilon; }
     /// Converged when the rms residual is below epsilon (fiducial) or, with relative = true, below epsilon times the
     /// rms of the linear source of the equation (the residual scale changes by orders of magnitude over a simulation,
@@ -109,13 +114,21 @@ class DGPSolverCosmology {
 
     /// Start the next solve from a previous solution (the returned fifth-force potential, real space, same grid). The
     /// grid must stay alive until solve() is called
-    void set_previous_solution(FFTWGrid<NDIM> & previous_potential_real) {
-        previous_solution = &previous_potential_real;
+    template <template <int> class Grid>
+    void set_previous_solution(Grid<NDIM> & previous_potential_real) {
+        previous_solution = [&previous_potential_real](FML::GRID::MPIGrid<NDIM, SolverType> & guess) {
+            ConvertToMPIGrid(previous_potential_real, guess);
+        };
+        previous_nmesh = previous_potential_real.get_nmesh();
     }
 
     /// Do the solving and return the fifth-force potential.
     /// We solve for f where a phi / phi0 f_R / (2 (H0Box)^2) = e^f and return e^f
-    void solve(double a, FFTWGrid<NDIM> & overdensity_real, FFTWGrid<NDIM> & fifth_force_potential_real) {
+    /// (Grid: FFTWGrid, or a grid with a domain such as PencilGrid: the solver then runs on its pencils)
+    template <template <int> class Grid = FML::GRID::FFTWGrid>
+    void solve(double a, Grid<NDIM> & overdensity_real, Grid<NDIM> & fifth_force_potential_real) {
+        // The domain of the multigrid grids: none (the fiducial slabs) for an FFTWGrid
+        const auto mg_domain = multigrid_domain_of(overdensity_real);
 
         // The operator splitting with w = 1/3 below (it makes the Jacobian of the square-root term vanish) and the
         // second derivatives are written for three dimensions
@@ -141,7 +154,9 @@ class DGPSolverCosmology {
         }
 
         // Set up multigrid for density
-        MPIMultiGrid<NDIM, SolverType> density_multigrid(Nmesh, Nlevels, periodic, nleft, nright);
+        MPIMultiGrid<NDIM, SolverType> density_multigrid =
+            mg_domain ? MPIMultiGrid<NDIM, SolverType>(Nmesh, *mg_domain, Nlevels, periodic, nleft, nright) :
+                        MPIMultiGrid<NDIM, SolverType>(Nmesh, Nlevels, periodic, nleft, nright);
         auto & grid = density_multigrid.get_grid();
 
 #ifdef USE_OMP
@@ -167,7 +182,9 @@ class DGPSolverCosmology {
         const double f0 = 0.0;
 
         // Set up solver
-        MultiGridSolver<NDIM, SolverType> g(Nmesh, Nlevels, verbose, periodic, nleft, nright);
+        MultiGridSolver<NDIM, SolverType> g =
+            mg_domain ? MultiGridSolver<NDIM, SolverType>(Nmesh, *mg_domain, Nlevels, verbose, periodic, nleft, nright) :
+                        MultiGridSolver<NDIM, SolverType>(Nmesh, Nlevels, verbose, periodic, nleft, nright);
 
         // Set some options
         g.set_epsilon(epsilon);
@@ -187,9 +204,9 @@ class DGPSolverCosmology {
         // Set the initial guess: zero or a previous solution (the returned potential is forcenorm times the field)
         const double forcenorm = 0.5;
         g.set_initial_guess(f0);
-        if (previous_solution and previous_solution->get_nmesh() == Nmesh) {
+        if (previous_solution and previous_nmesh == Nmesh) {
             FML::GRID::MPIGrid<NDIM, SolverType> guess;
-            ConvertToMPIGrid(*previous_solution, guess);
+            previous_solution(guess);
             const IndexInt NtotLocal = guess.get_NtotLocal();
             SolverType * y = guess.get_y();
             for (IndexInt i = 0; i < NtotLocal; i++)
@@ -220,11 +237,14 @@ class DGPSolverCosmology {
         // converts the coordinates of all 27 cells and was most of the cost of the solve. The x-neighbors are in the
         // extra slices with several tasks (the local index is then out of [0, NtotLocal)), the grid wraps in x on one
         // task
-        const bool single_task = (FML::NTasks == 1);
+        // (the fast path needs the layout of the slabs: y held whole by every task. x wraps if held whole)
+        const bool y_whole = not mg_domain or mg_domain->is_slab() or mg_domain->pencil_py() == 1;
         auto cube_gridindex = [&](MultiGridSolver<NDIM, SolverType> * sol, int level, IndexInt index) {
             const int N = sol->get_N(level);
             if constexpr (NDIM == 3) {
-                if (periodic and N >= 2 and (N & (N - 1)) == 0) {
+                if (periodic and y_whole and N >= 2 and (N & (N - 1)) == 0) {
+                    const auto xrange = sol->get_grid(level).get_local_range(0);
+                    const bool single_task = xrange[1] == N;
                     const int p = __builtin_ctz(unsigned(N));
                     const IndexInt m = N - 1;
                     const IndexInt iz = index & m, iy = (index >> p) & m, ix = index >> (2 * p);
@@ -360,7 +380,7 @@ class DGPSolverCosmology {
             }
         }
         auto sol = g.get_grid(0);
-        ConvertToFFTWGrid(sol, fifth_force_potential_real);
+        ConvertToGrid(sol, fifth_force_potential_real);
 
         // Convert to fifth-force potential
 

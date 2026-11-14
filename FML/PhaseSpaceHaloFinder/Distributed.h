@@ -124,15 +124,25 @@ namespace FML::PHASE_SPACE_HALOS {
         }
         detail::collective_require(valid, "Invalid options or particles on at least one rank");
         detail::agree_options(o);
-        const std::array<double, 2> slab{FML::xmin_domain, FML::xmax_domain};
-        auto slab_copy = slab;
-        const auto slabs = FML::GatherFromTasks(&slab_copy);
-        valid = slab[0] >= 0 && slab[1] <= 1 && slab[0] <= slab[1];
-        for (int rank = 0; rank < FML::NTasks; ++rank)
-            valid &=
-                slabs[rank][0] == (rank ? slabs[rank - 1][1] : 0) && (rank != FML::NTasks - 1 || slabs[rank][1] == 1);
-        for (const auto & p : particles)
-            valid &= p.position[0] / o.boxsize >= slab[0] && p.position[0] / o.boxsize < slab[1];
+        if (FML::domain.is_slab()) {
+            const std::array<double, 2> slab{FML::xmin_domain, FML::xmax_domain};
+            auto slab_copy = slab;
+            const auto slabs = FML::GatherFromTasks(&slab_copy);
+            valid = slab[0] >= 0 && slab[1] <= 1 && slab[0] <= slab[1];
+            for (int rank = 0; rank < FML::NTasks; ++rank)
+                valid &= slabs[rank][0] == (rank ? slabs[rank - 1][1] : 0) &&
+                         (rank != FML::NTasks - 1 || slabs[rank][1] == 1);
+            for (const auto & p : particles)
+                valid &= p.position[0] / o.boxsize >= slab[0] && p.position[0] / o.boxsize < slab[1];
+        } else {
+            // (the particles on the pencils of FML::domain)
+            valid = FML::domain.holds<FML::PencilDomain>();
+            for (const auto & p : particles) {
+                const std::array<double, 3> x{p.position[0] / o.boxsize, p.position[1] / o.boxsize,
+                                              p.position[2] / o.boxsize};
+                valid &= FML::domain.owner(x.data()) == FML::ThisTask;
+            }
+        }
         detail::collective_require(valid, "Slabs must partition [0,1) and particles must already have migrated");
         std::vector<std::vector<ID>> ids(FML::NTasks);
         for (const auto & p : particles)
@@ -161,10 +171,12 @@ namespace FML::PHASE_SPACE_HALOS {
         std::vector<detail::Visible> visible;
         for (const auto & p : owned)
             visible.push_back({p, FML::ThisTask, p.id});
-        FML::COMMUNICATION::append_periodic_slab_ghosts(
+        FML::COMMUNICATION::append_periodic_domain_ghosts(
             visible,
             radius / o.boxsize,
-            [&](const auto & x) { return x.p.position[0] / o.boxsize; },
+            [&](const auto & x) {
+                return std::array<double, 2>{x.p.position[0] / o.boxsize, x.p.position[1] / o.boxsize};
+            },
             o.max_message_bytes);
         detail::collective_require(visible.size() <= o.max_local_particles,
                                    "Owned plus ghost particle budget exceeded");

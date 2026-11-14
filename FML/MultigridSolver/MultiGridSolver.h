@@ -189,6 +189,12 @@ namespace FML {
                 MultiGridConvCrit _ConvergenceCriterion;
                 MultiGridUpdateFunction<NDIM, T> _CustomUpdate{};
 
+                // Make the grids (on the domain if given)
+                void init(const std::optional<FML::Domain> & domain,
+                          int Nlevels,
+                          int n_extra_slices_left,
+                          int n_extra_slices_right);
+
               public:
                 // Constructors
                 MultiGridSolver(int N,
@@ -198,6 +204,15 @@ namespace FML {
                                 int n_extra_slices_left,
                                 int n_extra_slices_right);
                 MultiGridSolver(int N) : MultiGridSolver(N, -1, true, true, 1, 1) {}
+                /// The solver on a domain (Slab or Pencil, see MPIGrid): the grids of all levels are split over the
+                /// tasks as the domain
+                MultiGridSolver(int N,
+                                const FML::Domain & domain,
+                                int Nlevels,
+                                bool verbose,
+                                bool periodic,
+                                int n_extra_slices_left,
+                                int n_extra_slices_right);
                 MultiGridSolver() = default;
 
                 // Get a pointer to the solution array / grid
@@ -377,9 +392,35 @@ namespace FML {
                                                       int n_extra_slices_left,
                                                       int n_extra_slices_right)
                 : _N(N), _periodic(periodic), _verbose(verbose) {
+                init(std::nullopt, Nlevels, n_extra_slices_left, n_extra_slices_right);
+            }
+
+            template <int NDIM, class T>
+            MultiGridSolver<NDIM, T>::MultiGridSolver(int N,
+                                                      const FML::Domain & domain,
+                                                      int Nlevels,
+                                                      bool verbose,
+                                                      bool periodic,
+                                                      int n_extra_slices_left,
+                                                      int n_extra_slices_right)
+                : _N(N), _periodic(periodic), _verbose(verbose) {
+                init(domain, Nlevels, n_extra_slices_left, n_extra_slices_right);
+            }
+
+            template <int NDIM, class T>
+            void MultiGridSolver<NDIM, T>::init(const std::optional<FML::Domain> & domain,
+                                                int Nlevels,
+                                                int n_extra_slices_left,
+                                                int n_extra_slices_right) {
+                const bool verbose = _verbose;
+                auto make_multigrid = [&](int nextra_left, int nextra_right) {
+                    return domain ? MPIMultiGrid<NDIM, T>(_N, *domain, Nlevels, _periodic, nextra_left, nextra_right) :
+                                    MPIMultiGrid<NDIM, T>(_N, Nlevels, _periodic, nextra_left, nextra_right);
+                };
                 // The maximum number of levels (log2(N) for N a power of 2, see MPIMultiGrid::max_levels)
                 if (Nlevels > -1) {
-                    if (Nlevels > MPIMultiGrid<NDIM, T>::max_levels(N)) {
+                    if (Nlevels > (domain ? MPIMultiGrid<NDIM, T>::max_levels(_N, *domain) :
+                                            MPIMultiGrid<NDIM, T>::max_levels(_N))) {
                         Nlevels = -1;
                         if (FML::ThisTask == 0)
                             std::cout
@@ -389,12 +430,12 @@ namespace FML {
 
                 _verbose_all_tasks = verbose;
                 _verbose = verbose and (FML::ThisTask == 0);
-                _f = MPIMultiGrid<NDIM, T>(_N, Nlevels, _periodic, n_extra_slices_left, n_extra_slices_right);
+                _f = make_multigrid(n_extra_slices_left, n_extra_slices_right);
                 _f.add_memory_label("MultiGridSolver::MultiGridSolver::_f");
-                _source = MPIMultiGrid<NDIM, T>(_N, Nlevels, _periodic, 0, 0);
+                _source = make_multigrid(0, 0);
                 _source.add_memory_label("MultiGridSolver::MultiGridSolver::_source");
                 // The residual grid is also used for the correction we prolonge up which needs the neighbor cells
-                _res = MPIMultiGrid<NDIM, T>(_N, Nlevels, _periodic, 1, 1);
+                _res = make_multigrid(1, 1);
                 _res.add_memory_label("MultiGridSolver::MultiGridSolver::_res");
                 _Nlevel = _f.get_Nlevel();
                 _NtotLocal = _f.get_NtotLocal();
@@ -655,22 +696,12 @@ namespace FML {
                 gradient.fill(0.0);
                 auto coord = _f.get_grid(level).coord_from_index(index);
                 double norm = double(get_N(level));
-                int N = _f.get_grid(level).get_N();
                 const auto weights = derivative_stencil_weights_deriv1(order);
-                for (int idim = NDIM - 1, Npow = 1; idim >= 0; idim--, Npow *= N) {
+                const auto & grid = _f.get_grid(level);
+                for (int idim = NDIM - 1; idim >= 0; idim--) {
                     for (int i = -order; i <= order; i++) {
-                        int coord_new = coord[idim] + i;
-                        if (_periodic and not(idim == 0 and FML::NTasks > 1)) {
-                            coord_new = (coord_new + N) % N;
-                            coord_new = coord_new % N;
-                        }
-                        // With MPI the x-neighbors are in the extra slices
-                        IndexInt index_cell = index;
-                        if (idim == 0 and FML::NTasks > 1) {
-                            index_cell += i * Npow;
-                        } else {
-                            index_cell += (coord_new - coord[idim]) * Npow;
-                        }
+                        // (periodic in the local grid or in the extra cells of the neighbor tasks)
+                        const IndexInt index_cell = grid.get_shifted_index(index, coord, idim, i);
                         gradient[idim] += weights[order + i] * _f[level][index_cell];
                     }
                     gradient[idim] *= norm;
@@ -691,24 +722,12 @@ namespace FML {
                 auto coord = _f.get_grid(level).coord_from_index(index);
                 double norm = double(get_N(level));
                 norm = norm * norm;
-                int N = _f.get_grid(level).get_N();
                 const auto weights = derivative_stencil_weights_deriv2(order);
-                IndexInt Npow = 1;
-                for (int idim = NDIM - 1; idim >= 0; idim--, Npow *= N) {
+                const auto & grid = _f.get_grid(level);
+                for (int idim = NDIM - 1; idim >= 0; idim--) {
                     gradient[idim] = 0.0;
                     for (int i = -order; i <= order; i++) {
-                        int coord_new = coord[idim] + i;
-                        if (_periodic and not(idim == 0 and FML::NTasks > 1)) {
-                            coord_new = (coord_new + N) % N;
-                            coord_new = coord_new % N;
-                        }
-                        // With MPI the x-neighbors are in the extra slices
-                        IndexInt index_cell = index;
-                        if (idim == 0 and FML::NTasks > 1) {
-                            index_cell += i * Npow;
-                        } else {
-                            index_cell += (coord_new - coord[idim]) * Npow;
-                        }
+                        const IndexInt index_cell = grid.get_shifted_index(index, coord, idim, i);
                         gradient[idim] += weights[order + i] * _f[level][index_cell];
                     }
                     gradient[idim] *= norm;
@@ -732,30 +751,8 @@ namespace FML {
             template <int NDIM, class T>
             std::array<IndexInt, 2 * NDIM + 1> MultiGridSolver<NDIM, T>::get_neighbor_gridindex(int level,
                                                                                                 IndexInt index) {
-                std::array<IndexInt, 2 * NDIM + 1> index_list;
-                index_list[0] = index;
-
-                // Local coordinates
-                auto coord = _f.get_grid(level).coord_from_index(index);
-                int N = _f.get_grid(level).get_N();
-                IndexInt Npow = 1;
-                for (int idim = NDIM - 1; idim >= 0; idim--, Npow *= N) {
-                    int coord_minus = coord[idim] - 1;
-                    int coord_plus = coord[idim] + 1;
-                    if (_periodic and not(idim == 0 and FML::NTasks > 1)) {
-                        coord_minus = (coord_minus + N) % N;
-                        coord_plus = coord_plus % N;
-                    }
-                    if (idim == 0 and FML::NTasks > 1) {
-                        index_list[2 * idim + 1] = index - Npow;
-                        index_list[2 * idim + 2] = index + Npow;
-                    } else {
-                        index_list[2 * idim + 1] = index + (coord_minus - coord[idim]) * Npow;
-                        index_list[2 * idim + 2] = index + (coord_plus - coord[idim]) * Npow;
-                    }
-                }
-
-                return index_list;
+                // (periodic in the local grid or in the extra cells of the neighbor tasks)
+                return _f.get_grid(level).get_neighbor_gridindex(index);
             }
 
             //================================================
@@ -800,26 +797,75 @@ namespace FML {
             template <int NDIM, class T>
             std::array<IndexInt, FML::power(3, NDIM)> MultiGridSolver<NDIM, T>::get_cube_gridindex(int level,
                                                                                                    IndexInt index) {
-                // The index offsets of -1, 0, +1 in each direction (periodic wrap in the local grid, the x-neighbors
-                // in the extra slices with MPI), then all 3^NDIM sums with the x-offset varying fastest
-                const auto coord = _f.get_grid(level).coord_from_index(index);
-                const int N = _f.get_grid(level).get_N();
-                std::array<std::array<IndexInt, 3>, NDIM> offset;
-                IndexInt Npow = 1;
-                for (int idim = NDIM - 1; idim >= 0; idim--, Npow *= N) {
-                    for (int d = -1; d <= 1; d++) {
-                        int c = coord[idim] + d;
-                        if (_periodic and not(idim == 0 and FML::NTasks > 1))
-                            c = (c + N) % N;
-                        offset[idim][d + 1] = (c - coord[idim]) * Npow;
-                    }
-                }
+                // The cells shifted by -1, 0, +1 along each axis with the x-offset varying fastest. We shift along the
+                // axes in increasing order (periodic in the local grid or in the extra cells of the neighbor tasks; the
+                // corners are in the extra y-layers with pencils)
+                const auto & grid = _f.get_grid(level);
+                const auto coord = grid.coord_from_index(index);
+                const int N = grid.get_N();
                 constexpr int ncells = FML::power(3, NDIM);
                 std::array<IndexInt, ncells> index_list;
+
+                // A shift is a fixed index offset along each axis (periodic wrap along an axis held whole, the extra
+                // x-slices continue the grid in memory), except a y-shift out of a split y-range (pencils): those
+                // cells are in the y-layers, found by shifting the axes one after the other below. So the offsets
+                // are computed once per axis and summed (the slabs: always)
+                std::array<std::array<IndexInt, 3>, NDIM> offset;
+                for (int idim = 0; idim < NDIM; idim++) {
+                    const IndexInt stride = grid.get_stride(idim);
+                    const bool wraps = _periodic and grid.get_local_range(idim)[1] == N;
+                    for (int d = -1; d <= 1; d++) {
+                        int c = coord[idim] + d;
+                        if (wraps)
+                            c = c < 0 ? c + N : (c >= N ? c - N : c);
+                        offset[idim][d + 1] = IndexInt(c - coord[idim]) * stride;
+                    }
+                }
+                std::array<bool, 3> y_fixed{true, true, true};
+                if constexpr (NDIM >= 2) {
+                    const auto yrange = grid.get_local_range(1);
+                    if (yrange[1] != N)
+                        for (int d = -1; d <= 1; d++)
+                            y_fixed[d + 1] = coord[1] + d >= 0 and coord[1] + d < yrange[1];
+                }
+                if (y_fixed[0] and y_fixed[2]) {
+                    if constexpr (NDIM == 3) {
+                        for (int dz = 0; dz < 3; dz++)
+                            for (int dy = 0; dy < 3; dy++)
+                                for (int dx = 0; dx < 3; dx++)
+                                    index_list[dx + 3 * dy + 9 * dz] =
+                                        index + offset[0][dx] + offset[1][dy] + offset[2][dz];
+                    } else {
+                        for (int k = 0; k < ncells; k++) {
+                            IndexInt i = index;
+                            for (int idim = 0, kk = k; idim < NDIM; idim++, kk /= 3)
+                                i += offset[idim][kk % 3];
+                            index_list[k] = i;
+                        }
+                    }
+                    return index_list;
+                }
                 for (int k = 0; k < ncells; k++) {
+                    if (y_fixed[(k / 3) % 3]) {
+                        IndexInt i = index;
+                        for (int idim = 0, kk = k; idim < NDIM; idim++, kk /= 3)
+                            i += offset[idim][kk % 3];
+                        index_list[k] = i;
+                        continue;
+                    }
                     IndexInt i = index;
-                    for (int idim = 0, kk = k; idim < NDIM; idim++, kk /= 3)
-                        i += offset[idim][kk % 3];
+                    auto c = coord;
+                    for (int idim = 0, kk = k; idim < NDIM; idim++, kk /= 3) {
+                        const int d = kk % 3 - 1;
+                        if (d != 0) {
+                            i = grid.get_shifted_index(i, c, idim, d);
+                            // (the coordinate of the shifted cell: periodic along an axis held whole by the task)
+                            const auto range = grid.get_local_range(idim);
+                            c[idim] += d;
+                            if (_periodic and range[1] == N)
+                                c[idim] = (c[idim] + N) % N;
+                        }
+                    }
                     index_list[k] = i;
                 }
                 return index_list;
@@ -947,7 +993,9 @@ namespace FML {
                     for (int idim = 0; idim < NDIM; idim++) {
                         coord_bottom[idim] = coord_top[idim] / 2;
                         coord_nbor[idim] = coord_bottom[idim] + (coord_top[idim] % 2 == 0 ? -1 : 1);
-                        const bool in_extra_slices = (idim == 0 and FML::NTasks > 1);
+                        // (the coarse neighbor is in the extra cells if the axis is split over the tasks)
+                        const auto range = Bottom.get_local_range(idim);
+                        const bool in_extra_slices = range[1] < NBottom;
                         if (_periodic and not in_extra_slices) {
                             coord_nbor[idim] = (coord_nbor[idim] + NBottom) % NBottom;
                         } else if (not _periodic and (coord_nbor[idim] < 0 or coord_nbor[idim] >= NBottom)) {
@@ -958,9 +1006,12 @@ namespace FML {
 
                     // Sum over the 2^NDIM coarse cells: (3/4)^(NDIM - nbits) (1/4)^nbits
                     T val{0.0};
+                    // (unrolled: the loops are short and their branches are not predictable)
+#pragma GCC unroll 16
                     for (int k = 0; k < twotondim; k++) {
                         auto coord = coord_bottom;
                         double weight = 1.0;
+#pragma GCC unroll 4
                         for (int idim = 0; idim < NDIM; idim++) {
                             if ((k >> idim) & 1) {
                                 coord[idim] = coord_nbor[idim];
@@ -988,9 +1039,15 @@ namespace FML {
                 // coordinates mod 2 (chess-board) or, with the cube ordering, the parity of each coordinate
                 auto & grid = _f.get_grid(level);
                 const int N = get_N(level);
-                const int xstart = grid.get_xStartLocal();
+                // The local part of every axis (the global coordinate is the local one plus the start)
+                std::array<int, NDIM> nloc, gstart;
+                for (int idim = 0; idim < NDIM; idim++) {
+                    const auto range = grid.get_local_range(idim);
+                    gstart[idim] = range[0];
+                    nloc[idim] = range[1];
+                }
                 // In 1D the rows are single cells (the x-direction is split over the tasks)
-                const int rowlength = NDIM == 1 ? 1 : N;
+                const int rowlength = NDIM == 1 ? 1 : nloc[NDIM - 1];
                 const int rowstep = NDIM == 1 ? 1 : 2;
                 const IndexInt nrows = get_NtotLocal(level) / rowlength;
                 // With N odd (only possible on the coarsest level) the colours do not alternate across the periodic
@@ -1002,19 +1059,19 @@ namespace FML {
 #pragma omp parallel for if (threads)
 #endif
                 for (IndexInt row = 0; row < nrows; row++) {
-                    // The coordinates of the row (all but the last direction)
+                    // The global coordinates of the row (all but the last direction)
                     std::array<int, NDIM> coord{};
                     IndexInt r = row;
                     for (int idim = NDIM - 2; idim >= 0; idim--) {
-                        coord[idim] = int(r % N);
-                        r /= N;
+                        coord[idim] = int(r % nloc[idim]) + gstart[idim];
+                        r /= nloc[idim];
                     }
-                    if constexpr (NDIM > 1)
-                        coord[0] += xstart;
+                    // The global coordinate of the first cell in the row
+                    const int zstart = NDIM == 1 ? 0 : gstart[NDIM - 1];
                     int start;
                     if constexpr (NDIM == 1) {
                         // The colour of the single cell in the row
-                        if (((row + xstart) & 1) != curcolor)
+                        if (((row + gstart[0]) & 1) != curcolor)
                             continue;
                         start = 0;
                     } else if (_cube_ordering) {
@@ -1023,9 +1080,9 @@ namespace FML {
                             match = match and ((coord[idim] & 1) == ((curcolor >> idim) & 1));
                         if (not match)
                             continue;
-                        start = (curcolor >> (NDIM - 1)) & 1;
+                        start = (((curcolor >> (NDIM - 1)) & 1) + zstart) & 1;
                     } else {
-                        int sum = 0;
+                        int sum = zstart;
                         for (int idim = 0; idim < NDIM - 1; idim++)
                             sum += coord[idim];
                         start = ((curcolor - sum) % 2 + 2) % 2;

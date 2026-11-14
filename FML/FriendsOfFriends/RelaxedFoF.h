@@ -172,6 +172,34 @@ namespace FML {
 #ifdef USE_MPI
                 if (FML::NTasks == 1)
                     return result;
+                // Pencils: the 8 neighbors in x and y (also the corners: a group can reach into the diagonal task)
+                if (FML::domain.holds<FML::PencilDomain>()) {
+                    const auto & pencils = FML::domain.get<FML::PencilDomain>();
+                    const auto P = pencils.process_grid();
+                    const auto c = pencils.coords_of(FML::ThisTask);
+                    int tag = 30;
+                    for (int ox = -1; ox <= 1; ox++)
+                        for (int oy = -1; oy <= 1; oy++, tag += 2) {
+                            if (ox == 0 and oy == 0)
+                                continue;
+                            const int to = pencils.rank_of((c[0] + ox + P[0]) % P[0], (c[1] + oy + P[1]) % P[1]);
+                            const int from = pencils.rank_of((c[0] - ox + P[0]) % P[0], (c[1] - oy + P[1]) % P[1]);
+                            if (to == FML::ThisTask and from == FML::ThisTask)
+                                continue;
+                            unsigned long long nsend = mine.size(), nrecv = 0;
+                            MPI_Sendrecv(&nsend, 1, MPI_UNSIGNED_LONG_LONG, to, tag, &nrecv, 1, MPI_UNSIGNED_LONG_LONG,
+                                         from, tag, FML::communicator, MPI_STATUS_IGNORE);
+                            std::vector<size_t> recv(static_cast<size_t>(nrecv));
+                            const int bytes_send =
+                                int(FML::COMMUNICATION::checked_bytes(mine.size(), sizeof(size_t), INT_MAX));
+                            const int bytes_recv =
+                                int(FML::COMMUNICATION::checked_bytes(recv.size(), sizeof(size_t), INT_MAX));
+                            MPI_Sendrecv(mine.data(), bytes_send, MPI_BYTE, to, tag + 1, recv.data(), bytes_recv,
+                                         MPI_BYTE, from, tag + 1, FML::communicator, MPI_STATUS_IGNORE);
+                            result.insert(result.end(), recv.begin(), recv.end());
+                        }
+                    return result;
+                }
                 const int right = (FML::ThisTask + 1) % FML::NTasks;
                 const int left = (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks;
                 for (int dir = 0; dir < 2; dir++) {

@@ -135,9 +135,18 @@ namespace FML::SPH {
         }
         template <class Record, class GetParticle>
         std::vector<Record> migrate(const std::vector<Record> & records, GetParticle get) const {
+            const bool pencils = FML::domain.holds<FML::PencilDomain>();
             auto result = detail::route(
                 records,
                 [&](const Record & r) {
+                    if constexpr (D >= 2) {
+                        if (pencils) {
+                            const double xy[2] = {
+                                std::min(std::nextafter(1., 0.), get(r).position[0] / options_.boxsize),
+                                std::min(std::nextafter(1., 0.), get(r).position[1] / options_.boxsize)};
+                            return FML::domain.owner(xy);
+                        }
+                    }
                     const double x = std::min(std::nextafter(1., 0.), get(r).position[0] / options_.boxsize);
                     const auto it = std::upper_bound(slabs_.begin(), slabs_.end(), x, [](double y, const auto & slab) {
                         return y < slab[1];
@@ -156,13 +165,26 @@ namespace FML::SPH {
         }
         template <class Record, class GetParticle>
         void ghosts(std::vector<Record> & records, double support, GetParticle get) const {
-            detail::C::append_periodic_slab_ghosts(
-                records,
-                support / options_.boxsize,
-                [&](const Record & p) {
-                    return std::min(std::nextafter(1., 0.), get(p).position[0] / options_.boxsize);
-                },
-                options_.max_message_bytes);
+            if constexpr (D >= 2) {
+                // Slabs: the same as append_periodic_slab_ghosts; pencils: the records near each pencil
+                detail::C::append_periodic_domain_ghosts(
+                    records,
+                    support / options_.boxsize,
+                    [&](const Record & p) {
+                        return std::array<double, 2>{
+                            std::min(std::nextafter(1., 0.), get(p).position[0] / options_.boxsize),
+                            std::min(std::nextafter(1., 0.), get(p).position[1] / options_.boxsize)};
+                    },
+                    options_.max_message_bytes);
+            } else {
+                detail::C::append_periodic_slab_ghosts(
+                    records,
+                    support / options_.boxsize,
+                    [&](const Record & p) {
+                        return std::min(std::nextafter(1., 0.), get(p).position[0] / options_.boxsize);
+                    },
+                    options_.max_message_bytes);
+            }
             detail::C::collective_try(
                 [&] {
                     std::sort(records.begin(), records.end(), [&](const auto & a, const auto & b) {
@@ -441,7 +463,12 @@ namespace FML::SPH {
         Solver(std::vector<P> particles, Options options = {}, BackgroundFunction bg = {})
             : options_(options), background_(std::move(bg)) {
             validate_options();
-            slabs_ = detail::slabs();
+            if (FML::domain.holds<FML::PencilDomain>()) {
+                if (D < 2)
+                    throw std::invalid_argument("[SPH] A pencil FML::domain needs D >= 2");
+            } else {
+                slabs_ = detail::slabs();
+            }
             validate_particles(particles);
             std::vector<std::uint64_t> ids;
             detail::C::collective_try(
