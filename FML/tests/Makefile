@@ -197,6 +197,10 @@ test_halomodel: test_halomodel.o Global.o Spline.o ODESolver.o Math.o SphericalC
 test_reconstruction: test_reconstruction.o Global.o Spline.o ODESolver.o
 	$(LINK_EXE)
 
+# Experiment: the RSD reconstruction on pencils
+test_reconstruction_pencil: test_reconstruction_pencil.o PencilGrid.o Global.o
+	$(LINK_EXE)
+
 test_multigrid: test_multigrid.o Global.o
 	$(LINK_EXE)
 
@@ -423,3 +427,107 @@ endif
 	@for m in "spline_npts:needs at least 3 points" "spline2d_deriv:eval_deriv] (2,1)" "spline2d_monotone:is not monotone" "ode_nojacobian:requires the jacobian"; do \
 	  ! $(RUN1) ./test_numcore $${m%%:*} > numcore.log 2>&1 && grep -qF "$${m#*:}" numcore.log && echo "[PASS] test_numcore $${m%%:*} gives an error" || exit 1; \
 	done; rm -f numcore.log
+
+# Experiment: the grid interface
+test_grid_generic: test_grid_generic.o PencilGrid.o Global.o Spline.o ODESolver.o
+	$(LINK_EXE)
+vpath PencilGrid.cpp $(FML_ROOT)/PencilDomain
+
+# Experiment: FoF on a domain
+test_fof_domain: test_fof_domain.o Global.o
+	$(LINK_EXE)
+
+# Experiment: the Delaunay tessellation on a domain (USE_CGAL=true; 2D: CGAL2D=true)
+ifeq ($(CGAL2D),true)
+test_delaunay_domain.o: OPTIONS += -DCGAL_NDIM=2
+endif
+test_delaunay_domain: test_delaunay_domain.o Global.o
+	$(LINK_EXE)
+
+# Experiment: the DTFE on pencils (USE_CGAL=true)
+test_dtfe_pencil: test_dtfe_pencil.o PencilGrid.o Global.o
+	$(LINK_EXE)
+
+# Experiment: the multigrid solver on a domain
+test_multigrid_domain: test_multigrid_domain.o Global.o
+	$(LINK_EXE)
+
+# Experiment: the NUFFT on pencils
+test_nufft_domain: test_nufft_domain.o PencilGrid.o Global.o
+	$(LINK_EXE)
+
+# Experiment: the screened modified gravity solvers on pencils
+test_screened_pencil: test_screened_pencil.o PencilGrid.o Global.o Spline.o ODESolver.o
+	$(LINK_EXE)
+
+# Experiment: LPT, Hessian and smoothing on pencils
+test_lpt_pencil: test_lpt_pencil.o PencilGrid.o Global.o Spline.o ODESolver.o
+	$(LINK_EXE)
+
+# Experiment: the polyspectra on pencils
+test_spectra_pencil: test_spectra_pencil.o PencilGrid.o Global.o Spline.o ODESolver.o
+	$(LINK_EXE)
+
+# Experiment: interlacing and deconvolution on pencils
+test_interp_pencil: test_interp_pencil.o PencilGrid.o Global.o
+	$(LINK_EXE)
+
+# Experiment: per-cell data with ghost layers (GhostedCells) on slabs and pencils
+test_ghosted_cells: test_ghosted_cells.o PencilGrid.o Global.o
+	$(LINK_EXE)
+
+# Experiment: the voxel void finder on pencils
+test_voids_pencil: test_voids_pencil.o PencilGrid.o Global.o
+	$(LINK_EXE)
+
+# Experiment: the voxel morphology on pencils
+test_morphology_pencil: test_morphology_pencil.o PencilGrid.o Global.o
+	$(LINK_EXE)
+
+# Experiment: SPH on pencils
+test_sph_pencil: test_sph_pencil.o Global.o
+	$(LINK_EXE)
+
+# Experiment: the cosmic web on pencils
+test_cosmicweb_pencil: test_cosmicweb_pencil.o PencilGrid.o Global.o
+	$(LINK_EXE)
+
+# Experiment: the hybrid bias spectra and linear field files on pencils
+test_hybridbias_pencil: test_hybridbias_pencil.o PencilGrid.o Global.o Spline.o ODESolver.o
+	$(LINK_EXE)
+
+# Experiment: sheet interpolation on pencils
+test_sheet_pencil: test_sheet_pencil.o PencilGrid.o Global.o
+	$(LINK_EXE)
+
+# Experiment: PencilGrid checkpoints
+test_pencil_checkpoint: test_pencil_checkpoint.o PencilGrid.o Global.o
+	$(LINK_EXE)
+
+# Experiment: the RAMSES reader on pencils
+test_ramses_pencil: test_ramses_pencil.o Global.o
+	$(LINK_EXE)
+
+# Experiment: random fields on pencils
+test_random_pencil: test_random_pencil.o PencilGrid.o Global.o Spline.o ODESolver.o
+	$(LINK_EXE)
+
+# Experiment: the complex-to-complex grids (CFFTWGrid, CPencilGrid)
+test_complex_grids: test_complex_grids.o PencilGrid.o Global.o
+	$(LINK_EXE)
+
+# Experiment: the arbitrary order LPT on pencils
+test_eds_lpt_pencil: test_eds_lpt_pencil.o PencilGrid.o Global.o
+	$(LINK_EXE)
+
+# Experiment: glass ICs on pencils
+test_glass_pencil: test_glass_pencil.o PencilGrid.o Global.o
+	$(LINK_EXE)
+
+# Experiment: the FieldLevel distributed assignment on pencils
+test_assignment_pencil: test_assignment_pencil.o PencilGrid.o Global.o
+	$(LINK_EXE)
+
+# Experiment: the particle buffers (short-range ghosts, record ghosts, FoF, SO) on pencils
+test_ghosts_pencil: test_ghosts_pencil.o Global.o
+	$(LINK_EXE)
