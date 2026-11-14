@@ -1,0 +1,120 @@
+# AMRMultiGridSolver
+
+A Full Approximation Storage (FAS) multigrid solver for (non-linear) PDEs on an adaptively refined grid
+(`AdaptiveMPIGrid`), with MPI. Header: `MultigridSolver/AMRMultiGridSolver.h`. Example and tests:
+`examples/AMRPoissonExample.cpp` (`make amrpoisson && mpirun -np 4 ./amrpoisson [2|3]`).
+
+```cpp
+#include <FML/MultigridSolver/AMRMultiGridSolver.h>
+using namespace FML::SOLVERS::AMRMULTIGRIDSOLVER;
+
+AMRMultiGridSolver<3> solver(grid);             // any AdaptiveMPIGrid<3, T>, after adapt / load_balance
+int id = solver.add_external_field(delta);       // per local leaf, restricted to all levels
+AMREquation<3> eq = [id](const AMRMultiGridSolver<3> & sol, int level, IndexInt i) {
+    auto [lap, dlap] = sol.get_laplacian(level, i);  // D^2 f and d(D^2 f)/df in the cell
+    return std::pair<double, double>{lap - sol.get_external_field(id, level, i), dlap};  // {L, dL/df}, L(f) = 0
+};
+auto result = solver.solve(eq);                  // result.converged(), .iterations, .residual
+const auto & phi = solver.get_solution();       // per local leaf of grid (same indices)
+auto force = solver.get_solution_gradient();     // D phi per leaf
+```
+
+The equation is written as `L(f) = 0`, returning `L` and `dL/df` in a cell, as for `MultiGridSolver`. Helpers:
+`get_field`, `get_laplacian`, `get_laplacian_components` (per axis), `get_hessian` (needs `set_gradient_field(true)`),
+`get_gradient`, `get_external_field`, `get_position`, `get_cell_size`, `get_cell`.
+Level 0 is the grid, higher levels are coarser. Settings: `set_epsilon`, `set_maxsteps`, `set_ngs_sweeps(pre, post,
+first)`, `set_coarsest_solve(reduction, max_sweeps)`, `set_convergence_criterion_residual` (absolute residual instead
+of the reduction relative to the initial residual), `set_initial_guess`, `set_boundary_value` (Dirichlet value on the
+non-periodic faces of the box, default 0), `set_coarse_fine_gradient`, `set_subtract_mean_residual` (solve
+`L(f) = <L(f)>` for equations that fix `f` only up to a constant on a periodic grid, as in `MultiGridSolver`),
+`set_gradient_field`.
+
+## Design
+
+- **Hierarchy.** The levels are the grid truncated at every refinement level (`AdaptiveMPIGrid::truncated`): level 0
+  is the grid (finest leaves at `lmax`), level 1 has every leaf at `lmax` replaced by its parent, and so on down to
+  the base grid and further to uniform grids coarser than the base grid, ending at 4 cells per dimension (periodic)
+  or 2 (otherwise). Every level is a 2:1 balanced grid with its own ghosts. Values move between neighbouring levels
+  with `AdaptiveMPIGridTransfer` (volume-average restriction, gather for prolongation).
+- **Relaxation (multi-level adaptive technique).** On each level only the finest cells are relaxed (red-black
+  Newton-Gauss-Seidel; the ghost exchange after each colour overlaps the interior cells). The coarser cells of a level
+  are the same unknowns as on the next level, where they are relaxed or corrected. The FAS source of a coarse level,
+  `S_c = L_c(R f) + R(S - L(f))`, carries the effect of the refinement on the coarse cells, so the fixed point solves
+  the composite equation on the leaves. Cost per V-cycle is proportional to the number of leaves.
+- **Prolongation** of the correction `e = f_c - R f`: linear (with the gradient of `e`) into the children, injection
+  into the cells that exist on both levels. The coarsest level is relaxed until its residual drops by 10^3.
+- **Laplacian.** Flux-conservative, cell centred. Across a coarse/fine face the fine cell uses a ghost value at its
+  own tangential position (coarse value plus the coarse cell's gradient times the offset; the gradients of the coarse
+  side cells are exchanged before each sweep), and the coarse cell uses the sum of the fluxes through the fine
+  sub-faces. The gradient terms cancel in that sum, so the volume integral of the Laplacian vanishes exactly on a
+  periodic grid (a Poisson source must have zero volume-weighted mean). Without the gradient term the interface is
+  first order (`set_coarse_fine_gradient(false)`).
+
+- **Second derivatives** (`get_hessian`). The diagonal is the flux Laplacian split by axis. The mixed derivatives
+  are the symmetrized derivatives of the gradient field across the faces; on a uniform grid that is exactly the
+  `(f[+,+] - f[+,-] - f[-,+] + f[-,-]) / 4h^2` stencil. The gradient field is computed (and its ghosts exchanged)
+  before each sweep, so the mixed terms are lagged within a sweep (red-black ordering stays valid; the result does
+  not depend on the number of tasks).
+
+## DGP (AMRDGPSolver.h)
+
+`AMRDGPSolverCosmology<3>` is the AMR version of `DGPSolverCosmology` (`DGPSolver.h`): same parameters (`OmegaM`,
+`rcH0`, `beta`, `H0Box`), the same equation and operator splitting (`w = 1/3`), box units and returned potential
+(`0.5 phi`, so the total force is `D(PhiGR + PhiF)`), the negative-discriminant check, warm start
+(`set_previous_solution`) and the relative criterion. Input and output are vectors per local leaf:
+
+```cpp
+#include <FML/MultigridSolver/AMRDGPSolver.h>
+AMRDGPSolverCosmology<3> dgp(OmegaM, rcH0, beta, H0Box, verbose);
+dgp.set_epsilon(1e-6);
+dgp.set_relative_criterion(true);
+std::vector<double> phi;
+std::vector<std::array<double, 3>> force;   // optional: D(phi) per leaf
+dgp.solve(a, grid, delta, phi, &force);
+```
+
+Tests (`examples/AMRDGPExample.cpp`, `make amrdgp`): a spherical compensated overdensity
+`delta = A exp(-r^2/2s^2)(3 - r^2/s^2)`, for which `r^2 phi' + (2/alpha) r phi'^2 = OmegaM a M(r) / beta` gives the
+exact force. With `A = 5, s = 0.05, rcH0 = 2, beta = 2.2` the force at `r = s/2` is 0.47 of the linear one (the
+linear force is off by 31% rms). Radial force error (rms within 3s, in units of the peak force):
+
+| | force error rms | max | V-cycles |
+|---|---|---|---|
+| uniform level 3 | 0.96 | 0.96 | 8 |
+| uniform level 6 | 1.0e-2 | 1.7e-2 | 10 |
+| AMR levels 3-6 (refined within 4s) | 1.3e-2 | 2.9e-2 | 9 |
+| AMR levels 4-7 | 2.6e-3 | 4.2e-3 | 10 |
+
+Second order (2.35); the residual drops by about 0.1 per V-cycle; identical on 1-4 tasks. On a uniform grid
+(32^3) the solution equals that of `DGPSolverCosmology` to 7e-11 (relative). The parameters must satisfy
+`OmegaM a / (beta alpha) < 1/3`, as DGP in a cosmology does, otherwise the discriminant goes negative where
+`delta ~ -1` (and the solve stalls).
+
+## Tests (examples/AMRPoissonExample.cpp)
+
+`D^2 phi = delta` for a Gaussian `phi` (periodic) and `D^2 u - 500 u^3 = s` (Dirichlet, `u = u_exact` on the faces),
+with the grid refined around the peak:
+
+| 2D, refined within 5 sigma | rms error Poisson | rms error non-linear |
+|---|---|---|
+| uniform level 4 | 9.6e-3 | 2.2e-2 |
+| uniform level 8 | 6.1e-5 | 6.9e-5 |
+| AMR levels 4-8 | 6.2e-5 | 6.7e-5 |
+| AMR levels 5-9 | 1.5e-5 | 1.7e-5 |
+
+The AMR solution is as accurate as the uniform grid at its finest level and converges at second order (3D: same
+picture). The residual drops by 0.12-0.13 per V-cycle for Poisson and 0.17-0.21 for the non-linear Dirichlet problem
+(2 pre + 2 post sweeps). The solution is the same on 1, 2, 3, 4, 7 and 13 tasks (to round-off in the reductions),
+including tasks that are empty on the coarse levels, without MPI, and clean under AddressSanitizer.
+
+## Limitations / next steps
+
+- The gradient used for the coarse/fine ghost ignores the tangential offset of a coarser neighbour of the coarse cell
+  (three levels within two cells, only at corners of the refinement).
+- No helper for a variable-coefficient operator `D(b(f) D f)` yet (f(R) in the sqrt(f_R) form, symmetron-like
+  equations need it or a custom pointwise update).
+- DGP is not wired into SimulationCode (which uses uniform grids).
+- Construction: about 3 s for 2M leaves in 3D on one core (was 15 s), versus 1 s per V-cycle. Most of it is
+  now the face-neighbour lookups of the stencils (6 `find_leaf` per leaf and level) and making the truncated cells;
+  `AMRDGPSolverCosmology` builds the hierarchy on every call (sharing one with a Poisson solve would halve it).
+- No OpenMP.

@@ -144,10 +144,9 @@ namespace FML {
             std::vector<IndexInt> _boundary_cells;
             std::vector<IndexInt> _interior_cells;
 
-            // Tag counter so several exchanges can be in flight at the same time. begin calls are
-            // made in the same order on all tasks, so the counters agree.
-            mutable int _tag_counter{0};
-            mutable int _nbx_counter{0};
+            // All grids can see each other's internals (truncated() builds a grid with another data type)
+            template <int, class>
+            friend class AdaptiveMPIGrid;
 
           public:
             //==========================================================================================
@@ -289,6 +288,8 @@ namespace FML {
 
             /// Find the local or ghost leaf containing a given integer point (NONE if not available)
             CellRef find_leaf(const Coord & x) const;
+            /// Find the local or ghost leaf whose key range contains the key (NONE if not available)
+            CellRef find_leaf_by_key(key_type key) const;
             /// Find the local or ghost leaf containing a point in [0,1)^NDIM
             CellRef find_leaf(const std::array<double, NDIM> & x) const;
 
@@ -312,6 +313,20 @@ namespace FML {
 
             /// Repartition the Hilbert curve by weight (default 1 per cell), migrate cells and rebuild ghosts
             void load_balance(WeightFunction weight = nullptr);
+
+            //======================================================================
+            // Coarser grids (e.g. for multigrid)
+            //======================================================================
+            /// The grid truncated at a level (collective): every leaf finer than level is replaced by its ancestor at
+            /// level. For level < levelmin this is the uniform grid at level (a full grid coarser than the base grid),
+            /// and for level >= the finest leaf it is a copy of the leaf set (same partition, same local indices).
+            /// The truncation of a 2:1 balanced grid is 2:1 balanced. The partition is this one with every cut rounded
+            /// down to a cell at level (so a coarse cell is never split), which means a few leaves can change task.
+            /// The cell data is U{}: use AdaptiveMPIGridTransfer to move values between the grids.
+            /// Note: the cuts of the result can fall inside a sibling family, so do not adapt() a truncated grid
+            /// if the leaf set must be independent of the number of tasks.
+            template <class U = T>
+            AdaptiveMPIGrid<NDIM, U> truncated(int level) const;
 
             //======================================================================
             // Ghosts
@@ -368,8 +383,14 @@ namespace FML {
             void check_levels() const;
             void create_uniform(std::vector<key_type> start);
             void build_ghost_pattern();
+            bool neighbourhood_is_local(const Cell & c) const;
+
+          public:
+            /// Buffers for sparse exchanges: task -> buffer (only the tasks we talk to)
             template <class U>
-            using SparseBuffers = std::map<int, std::vector<U>>; // task -> buffer, only tasks we talk to
+            using SparseBuffers = std::map<int, std::vector<U>>;
+            /// Sparse personalized exchange (collective): send[r] goes to task r, the result holds what every task
+            /// sent to us (keyed by sender, in task order). Buffers to ourselves are copied. See nbx_min_tasks.
             template <class U>
             SparseBuffers<U> alltoallv_sparse(const SparseBuffers<U> & send) const;
         };
@@ -404,6 +425,11 @@ namespace FML {
                 x = (x ^ (x >> 27)) * 0x94d049bb133111ebULL;
                 return x ^ (x >> 31);
             }
+            // Tag counters shared by all grids (and AdaptiveMPIGridTransfer), so exchanges on different grids
+            // never use the same tag. Collective calls are made in the same order on all tasks, so they agree.
+            inline int ghost_tag_counter = 0;
+            inline int nbx_tag_counter = 0;
+            inline int transfer_tag_counter = 0;
         } // namespace AMRDETAIL
 
         //==========================================================================================
@@ -551,6 +577,13 @@ namespace FML {
         }
 
         template <int NDIM, class T>
+        AMRCellRef AdaptiveMPIGrid<NDIM, T>::find_leaf_by_key(key_type k) const {
+            if (k >= _domain_start[FML::ThisTask] and k < _domain_start[FML::ThisTask + 1])
+                return search(_cells, k, CellRef::LOCAL);
+            return search(_ghost_cells, k, CellRef::GHOST);
+        }
+
+        template <int NDIM, class T>
         AMRCellRef AdaptiveMPIGrid<NDIM, T>::find_leaf(const std::array<double, NDIM> & x) const {
             std::array<int64_t, NDIM> xi;
             for (int d = 0; d < NDIM; d++)
@@ -685,7 +718,7 @@ namespace FML {
 #ifdef USE_MPI
             // Unique tag per call: a task leaving one exchange may start the next while others are
             // still probing for the previous one. Calls happen in the same order on all tasks.
-            const int tag = 31000 + (_nbx_counter++ % 1000);
+            const int tag = 31000 + (AMRDETAIL::nbx_tag_counter++ % 1000);
             AMRDETAIL::MPIType<U> mtype;
 
             if (FML::NTasks < nbx_min_tasks) {
@@ -768,7 +801,7 @@ namespace FML {
             GhostExchange<U> h;
             h._active = true;
 #ifdef USE_MPI
-            const int tag = 100 + (_tag_counter++ % 30000);
+            const int tag = 100 + (AMRDETAIL::ghost_tag_counter++ % 30000);
             MPI_Type_contiguous(int(sizeof(U)), MPI_BYTE, &h._type);
             MPI_Type_commit(&h._type);
             h._req.resize(_recv_ranks.size() + _send_ranks.size());
@@ -796,14 +829,51 @@ namespace FML {
         }
 
         template <int NDIM, class T>
+        bool AdaptiveMPIGrid<NDIM, T>::neighbourhood_is_local(const Cell & c) const {
+            // The boxes of for_each_touching_box lie in the cell grown by one box (s = one level finer) on
+            // every side. If that region (without wrapping) lies inside an aligned box whose key range
+            // (contiguous on the curve) is inside our part of the curve, every box, and so every leaf
+            // touching the cell, is ours. The smallest aligned box containing [lo, hi] along an axis
+            // has the size of the highest bit where lo and hi differ.
+            const int me = FML::ThisTask;
+            const key_type kbegin = _domain_start[me], kend = _domain_start[me + 1];
+            if (kbegin == 0 and kend == KEY_END)
+                return true; // We own everything (periodic neighbours included)
+            if (kbegin == kend)
+                return true; // No cells
+            const int64_t D = int64_t(1) << LMAX;
+            const int64_t h = int64_t(size_int(c.level));
+            const int64_t s = int64_t(size_int(std::min(int(c.level) + 1, LMAX)));
+            uint64_t diff = 0;
+            Coord lo;
+            for (int d = 0; d < NDIM; d++) {
+                const int64_t a = int64_t(c.anchor[d]) - s;
+                const int64_t b = int64_t(c.anchor[d]) + h + s - 1;
+                if (a < 0 or b >= D)
+                    return false; // Wraps or leaves the domain: use the full test
+                lo[d] = coord_type(a);
+                diff |= uint64_t(a) ^ uint64_t(b);
+            }
+            int nbits = 0; // Size of the containing aligned box is 2^nbits
+            while (diff >> nbits)
+                nbits++;
+            const key_type range = key_type(1) << (NDIM * nbits);
+            const key_type kbox = HC::key_from_coord(lo) & ~(range - 1);
+            return kbox >= kbegin and kbox + range <= kend;
+        }
+
+        template <int NDIM, class T>
         void AdaptiveMPIGrid<NDIM, T>::build_ghost_pattern() {
             const int me = FML::ThisTask;
             SparseBuffers<IndexInt> sendlists;
 
             // A local leaf is a ghost on every other task whose part of the curve intersects one of the
             // boxes (one level finer) touching the leaf. Under 2:1 balance this is exactly the set of
-            // tasks owning a leaf that touches it.
+            // tasks owning a leaf that touches it. Leaves whose neighbourhood is local are skipped
+            // (see neighbourhood_is_local), which is most of them.
             for (IndexInt i = 0; i < get_n_local(); i++) {
+                if (neighbourhood_is_local(_cells[i]))
+                    continue;
                 for_each_touching_box(_cells[i], [&](const Coord & x, int m) {
                     const key_type kb = HC::key_from_coord(x) & ~(key_range(m) - 1);
                     const int rlo = owner_of_key(kb);
@@ -1097,6 +1167,65 @@ namespace FML {
             exchange_ghosts();
         }
 
+        template <int NDIM, class T>
+        template <class U>
+        AdaptiveMPIGrid<NDIM, U> AdaptiveMPIGrid<NDIM, T>::truncated(int level) const {
+            AdaptiveMPIGrid<NDIM, U> g;
+            g._levelmin = std::min(_levelmin, level);
+            g._levelmax = level;
+            g._periodic = _periodic;
+            g.check_levels();
+
+            // Nothing finer than level: the same leaves and partition, so copy the ghost pattern too
+            bool finer = false;
+            for (auto & c : _cells)
+                finer = finer or c.level > level;
+            if (not AMRDETAIL::allreduce_or(finer)) {
+                g._cells = _cells;
+                g._domain_start = _domain_start;
+                g._send_ranks = _send_ranks;
+                g._send_indices = _send_indices;
+                g._recv_ranks = _recv_ranks;
+                g._recv_offset = _recv_offset;
+                g._recv_count = _recv_count;
+                g._ghost_cells = _ghost_cells;
+                g._boundary_cells = _boundary_cells;
+                g._interior_cells = _interior_cells;
+                g._data.assign(g._cells.size(), U{});
+                g._ghost_data.assign(g._ghost_cells.size(), U{});
+                g._flags.assign(g._cells.size(), KEEP);
+                return g;
+            }
+
+            // Round every cut down to a cell at level. A cut that is not on such a cell lies inside a refined box
+            // at level (the leaf after the cut is finer than level), so the rounded cut is a leaf boundary.
+            const key_type step = key_range(level);
+            g._domain_start.resize(_domain_start.size());
+            for (size_t r = 0; r < _domain_start.size(); r++)
+                g._domain_start[r] = (_domain_start[r] / step) * step;
+            g._domain_start.back() = KEY_END;
+
+            // Truncate the local leaves and send each to its new owner. Leaves only move to later tasks (the tail
+            // of our part of the curve), so the buffers received in task order are sorted. Several tasks can make
+            // the same coarse leaf (it straddled a cut), so remove duplicates.
+            SparseBuffers<Cell> send;
+            for (auto & c : _cells) {
+                const Cell t = c.level > level ? make_cell_from_key(c.key, level) : c;
+                auto & buf = send[g.owner_of_key(t.key)];
+                if (buf.empty() or buf.back().key != t.key)
+                    buf.push_back(t);
+            }
+            auto recv = alltoallv_sparse(send);
+            for (auto & [r, buf] : recv)
+                for (auto & c : buf)
+                    if (g._cells.empty() or g._cells.back().key != c.key)
+                        g._cells.push_back(c);
+            g._data.assign(g._cells.size(), U{});
+            g._flags.assign(g._cells.size(), KEEP);
+            g.build_ghost_pattern();
+            return g;
+        }
+
         //==========================================================================================
         // Diagnostics
         //==========================================================================================
@@ -1225,6 +1354,187 @@ namespace FML {
                 std::cout << " | total " << ntot << " | per task min/max " << nmin << "/" << nmax << " | ghosts "
                           << nghost << " | boundary cells " << nboundary << "\n";
             }
+        }
+
+        //==========================================================================================
+        ///
+        /// Moves cell values between a grid ("fine") and a coarsening of it ("coarse"), e.g. the grid and
+        /// grid.truncated(level): every leaf of the fine grid must lie inside a leaf of the coarse grid. The two
+        /// grids can be split differently over the tasks; the communication pattern is built once.
+        ///
+        ///   AdaptiveMPIGridTransfer<NDIM> transfer(fine, coarse);
+        ///   transfer.restrict_average(fine_values, coarse_values);  // volume average over each coarse leaf
+        ///   transfer.gather_from_coarse(coarse_values, fine_values); // every fine leaf gets its coarse leaf's value
+        ///
+        /// The vectors are indexed by the local leaves of the respective grid. Both calls are collective.
+        /// The pattern is invalid once either grid is adapted or load balanced.
+        ///
+        //==========================================================================================
+        template <int NDIM>
+        class AdaptiveMPIGridTransfer {
+          private:
+            IndexInt _nfine{0};
+            IndexInt _ncoarse{0};
+
+            // Pairs where both leaves are on this task: fine index, coarse index, volume ratio
+            std::vector<IndexInt> _local_fine;
+            std::vector<IndexInt> _local_coarse;
+            std::vector<double> _local_weight;
+
+            // Fine side: the fine leaves whose coarse leaf is on another task (per task, in the order sent)
+            std::vector<int> _send_ranks;
+            std::vector<std::vector<IndexInt>> _send_fine;
+
+            // Coarse side: the coarse leaf (and volume ratio) of every fine leaf we receive (per task, same order)
+            std::vector<int> _recv_ranks;
+            std::vector<std::vector<IndexInt>> _recv_coarse;
+            std::vector<std::vector<double>> _recv_weight;
+
+            // Point-to-point exchange along the pattern: fine -> coarse (forward) or coarse -> fine (backward)
+            template <class U>
+            void exchange(bool forward,
+                          const std::vector<std::vector<U>> & sendbufs,
+                          std::vector<std::vector<U>> & recvbufs) const;
+
+          public:
+            AdaptiveMPIGridTransfer() = default;
+
+            template <class TF, class TC>
+            AdaptiveMPIGridTransfer(const AdaptiveMPIGrid<NDIM, TF> & fine, const AdaptiveMPIGrid<NDIM, TC> & coarse);
+
+            IndexInt get_n_fine() const { return _nfine; }
+            IndexInt get_n_coarse() const { return _ncoarse; }
+
+            /// coarse[j] = volume average of the fine leaves inside coarse leaf j
+            void restrict_average(const std::vector<double> & fine, std::vector<double> & coarse) const;
+
+            /// fine[i] = value of the coarse leaf containing fine leaf i (U trivially copyable)
+            template <class U>
+            void gather_from_coarse(const std::vector<U> & coarse, std::vector<U> & fine) const;
+        };
+
+        template <int NDIM>
+        template <class TF, class TC>
+        AdaptiveMPIGridTransfer<NDIM>::AdaptiveMPIGridTransfer(const AdaptiveMPIGrid<NDIM, TF> & fine,
+                                                               const AdaptiveMPIGrid<NDIM, TC> & coarse)
+            : _nfine(fine.get_n_local()), _ncoarse(coarse.get_n_local()) {
+            using Grid = AdaptiveMPIGrid<NDIM, TF>;
+            struct KeyLevel {
+                uint64_t key;
+                int level;
+            };
+            const int me = FML::ThisTask;
+
+            // Every fine leaf goes to the owner of its first key in the coarse partition
+            typename Grid::template SparseBuffers<KeyLevel> sendkeys;
+            std::map<int, std::vector<IndexInt>> sendfine;
+            for (IndexInt i = 0; i < _nfine; i++) {
+                const auto & c = fine.get_cell(i);
+                const int r = coarse.owner_of_key(c.key);
+                if (r == me) {
+                    auto ref = coarse.find_leaf_by_key(c.key);
+                    assert_mpi(ref.is_local(), "AdaptiveMPIGridTransfer: coarse leaf not found");
+                    const int lc = coarse.get_cell(ref.index).level;
+                    assert_mpi(lc <= c.level, "AdaptiveMPIGridTransfer: the coarse grid is finer than the fine grid");
+                    _local_fine.push_back(i);
+                    _local_coarse.push_back(ref.index);
+                    _local_weight.push_back(std::ldexp(1.0, -NDIM * (c.level - lc)));
+                } else {
+                    sendkeys[r].push_back({c.key, int(c.level)});
+                    sendfine[r].push_back(i);
+                }
+            }
+            for (auto & [r, list] : sendfine) {
+                _send_ranks.push_back(r);
+                _send_fine.push_back(std::move(list));
+            }
+
+            auto recvkeys = fine.alltoallv_sparse(sendkeys);
+            for (auto & [r, buf] : recvkeys) {
+                if (r == me)
+                    continue;
+                _recv_ranks.push_back(r);
+                _recv_coarse.emplace_back();
+                _recv_weight.emplace_back();
+                for (auto & kl : buf) {
+                    auto ref = coarse.find_leaf_by_key(kl.key);
+                    assert_mpi(ref.is_local(), "AdaptiveMPIGridTransfer: coarse leaf not found on its owner");
+                    const int lc = coarse.get_cell(ref.index).level;
+                    assert_mpi(lc <= kl.level, "AdaptiveMPIGridTransfer: the coarse grid is finer than the fine grid");
+                    _recv_coarse.back().push_back(ref.index);
+                    _recv_weight.back().push_back(std::ldexp(1.0, -NDIM * (kl.level - lc)));
+                }
+            }
+        }
+
+        template <int NDIM>
+        template <class U>
+        void AdaptiveMPIGridTransfer<NDIM>::exchange(bool forward,
+                                                     const std::vector<std::vector<U>> & sendbufs,
+                                                     std::vector<std::vector<U>> & recvbufs) const {
+            static_assert(std::is_trivially_copyable<U>::value, "AdaptiveMPIGridTransfer: U must be trivially copyable");
+            const auto & sranks = forward ? _send_ranks : _recv_ranks;
+            const auto & rranks = forward ? _recv_ranks : _send_ranks;
+            recvbufs.resize(rranks.size());
+            for (size_t j = 0; j < rranks.size(); j++)
+                recvbufs[j].resize(forward ? _recv_coarse[j].size() : _send_fine[j].size());
+#ifdef USE_MPI
+            const int tag = 32100 + (AMRDETAIL::transfer_tag_counter++ % 600);
+            std::vector<MPI_Request> req(sranks.size() + rranks.size());
+            int nreq = 0;
+            for (size_t j = 0; j < rranks.size(); j++) {
+                assert_mpi(recvbufs[j].size() * sizeof(U) <= size_t(INT_MAX), "AdaptiveMPIGridTransfer: message too large");
+                MPI_Irecv(recvbufs[j].data(), int(recvbufs[j].size() * sizeof(U)), MPI_BYTE, rranks[j], tag,
+                          FML::communicator, &req[nreq++]);
+            }
+            for (size_t j = 0; j < sranks.size(); j++) {
+                assert_mpi(sendbufs[j].size() * sizeof(U) <= size_t(INT_MAX), "AdaptiveMPIGridTransfer: message too large");
+                MPI_Isend(sendbufs[j].data(), int(sendbufs[j].size() * sizeof(U)), MPI_BYTE, sranks[j], tag,
+                          FML::communicator, &req[nreq++]);
+            }
+            MPI_Waitall(nreq, req.data(), MPI_STATUSES_IGNORE);
+#else
+            (void)sendbufs;
+            (void)sranks;
+#endif
+        }
+
+        template <int NDIM>
+        void AdaptiveMPIGridTransfer<NDIM>::restrict_average(const std::vector<double> & fine,
+                                                             std::vector<double> & coarse) const {
+            assert_mpi(IndexInt(fine.size()) == _nfine, "restrict_average: fine vector has wrong size");
+            std::vector<std::vector<double>> sendbufs(_send_ranks.size()), recvbufs;
+            for (size_t j = 0; j < _send_ranks.size(); j++) {
+                sendbufs[j].reserve(_send_fine[j].size());
+                for (auto i : _send_fine[j])
+                    sendbufs[j].push_back(fine[i]);
+            }
+            exchange(true, sendbufs, recvbufs);
+            coarse.assign(_ncoarse, 0.0);
+            for (size_t k = 0; k < _local_fine.size(); k++)
+                coarse[_local_coarse[k]] += _local_weight[k] * fine[_local_fine[k]];
+            for (size_t j = 0; j < _recv_ranks.size(); j++)
+                for (size_t k = 0; k < _recv_coarse[j].size(); k++)
+                    coarse[_recv_coarse[j][k]] += _recv_weight[j][k] * recvbufs[j][k];
+        }
+
+        template <int NDIM>
+        template <class U>
+        void AdaptiveMPIGridTransfer<NDIM>::gather_from_coarse(const std::vector<U> & coarse, std::vector<U> & fine) const {
+            assert_mpi(IndexInt(coarse.size()) == _ncoarse, "gather_from_coarse: coarse vector has wrong size");
+            std::vector<std::vector<U>> sendbufs(_recv_ranks.size()), recvbufs;
+            for (size_t j = 0; j < _recv_ranks.size(); j++) {
+                sendbufs[j].reserve(_recv_coarse[j].size());
+                for (auto i : _recv_coarse[j])
+                    sendbufs[j].push_back(coarse[i]);
+            }
+            exchange(false, sendbufs, recvbufs);
+            fine.resize(_nfine);
+            for (size_t k = 0; k < _local_fine.size(); k++)
+                fine[_local_fine[k]] = coarse[_local_coarse[k]];
+            for (size_t j = 0; j < _send_ranks.size(); j++)
+                for (size_t k = 0; k < _send_fine[j].size(); k++)
+                    fine[_send_fine[j][k]] = recvbufs[j][k];
         }
 
     } // namespace GRID

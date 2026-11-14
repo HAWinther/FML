@@ -5,6 +5,25 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Multigrid on adaptively refined grids
+- `MultigridSolver/AMRMultiGridSolver.h`: FAS multigrid for (non-linear) PDEs `L(f) = 0` on an `AdaptiveMPIGrid`
+  (any dimension, MPI, periodic or Dirichlet). The levels are the grid truncated at every refinement level and
+  uniform grids below the base grid; only the finest cells of each level are relaxed (multi-level adaptive
+  technique). Flux-conservative Laplacian with gradient-corrected coarse/fine ghosts (second order). Example and
+  tests: `examples/AMRPoissonExample.cpp` (`make amrpoisson`); notes in `AMRMultiGridSolver.md`.
+- `MultigridSolver/AMRDGPSolver.h`: `AMRDGPSolverCosmology<3>`, the DGP (normal branch) fifth-force equation on an
+  `AdaptiveMPIGrid` (the equation, parameters, units and returned potential of `DGPSolverCosmology`; equal to it on a
+  uniform grid). Tested against the exact solution for a spherical compensated overdensity (second order; example
+  `examples/AMRDGPExample.cpp`, `make amrdgp`). For it `AMRMultiGridSolver` got `get_hessian` (mixed derivatives from
+  the gradient field), `get_laplacian_components`, `set_gradient_field` and `set_subtract_mean_residual`.
+- `AdaptiveMPIGrid::truncated<U>(level)`: the grid with every leaf finer than `level` replaced by its ancestor (full
+  coarser grids below `levelmin`). `AdaptiveMPIGridTransfer<NDIM>`: restriction (volume average) and gather between
+  a grid and a coarsening of it. `find_leaf_by_key`; `alltoallv_sparse` is public. Tag counters are shared by all
+  grids. Tests for truncation and transfer in `example/Test.cpp`.
+- `AdaptiveMPIGrid`: the ghost-pattern build skips leaves whose neighbourhood is local (an O(1) test against an
+  aligned box inside the task's part of the curve), and `truncated` copies the pattern when nothing is truncated:
+  construction of a 2M-leaf 3D grid 10.7 s -> 0.2 s, AMR solver setup 14.9 s -> 2.9 s (one core). Same ghost sets.
+
 ### Pencils throughout FML: the generic grid interface, complex grids, the codes on pencils
 - `FFTWGrid/GridInterface.h`: the interface generic grid code is written against, so it runs on `FFTWGrid` (slabs) and
   `PencilGrid` (pencils) alike: `make_grid<Grid>(Nmesh, left, right, domain)` / `make_grid_like`, `get_local_range`,

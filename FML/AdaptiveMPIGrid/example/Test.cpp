@@ -210,6 +210,54 @@ bool check_overlap(AdaptiveMPIGrid<NDIM, TestData> & grid) {
     return not FML::GRID::AMRDETAIL::allreduce_or(not ok);
 }
 
+// Truncated grids (every leaf finer than L replaced by its ancestor, uniform below levelmin) and the transfer
+// between a grid and its truncation: restriction conserves the volume integral, gather gives every leaf the
+// value of the coarse leaf containing it. Returns a hash of all the truncated leaf sets.
+template <int NDIM>
+uint64_t check_truncation(const AdaptiveMPIGrid<NDIM, TestData> & grid, bool & ok_out) {
+    using Coarse = AdaptiveMPIGrid<NDIM, double>;
+    const int lmin_trunc = 2;
+    bool ok = true;
+    uint64_t hash = 0;
+    const IndexInt n = grid.get_n_local();
+    std::vector<double> f(n);
+    double integral = 0.0;
+    for (IndexInt i = 0; i < n; i++) {
+        auto & c = grid.get_cell(i);
+        f[i] = double(c.key % 1000003) + 0.25 * c.level;
+        integral += std::ldexp(f[i], -NDIM * c.level);
+    }
+    FML::SumOverTasks(&integral);
+    for (int L = grid.get_levelmax(); L >= lmin_trunc; L--) {
+        Coarse coarse = grid.template truncated<double>(L);
+        ok = ok and coarse.check_invariants();
+        hash = hash * 31 + coarse.global_hash();
+        for (IndexInt j = 0; j < coarse.get_n_local(); j++)
+            ok = ok and coarse.get_cell(j).level <= L and coarse.get_cell(j).level >= std::min(L, grid.get_levelmin());
+
+        AdaptiveMPIGridTransfer<NDIM> transfer(grid, coarse);
+        std::vector<double> fc;
+        transfer.restrict_average(f, fc);
+        double integral_c = 0.0;
+        for (IndexInt j = 0; j < coarse.get_n_local(); j++)
+            integral_c += std::ldexp(fc[j], -NDIM * coarse.get_cell(j).level);
+        FML::SumOverTasks(&integral_c);
+        ok = ok and std::abs(integral_c - integral) < 1e-9 * std::abs(integral);
+
+        std::vector<uint64_t> ckey(coarse.get_n_local()), fkey;
+        for (IndexInt j = 0; j < coarse.get_n_local(); j++)
+            ckey[j] = coarse.get_cell(j).key;
+        transfer.gather_from_coarse(ckey, fkey);
+        for (IndexInt i = 0; i < n; i++) {
+            auto & c = grid.get_cell(i);
+            const uint64_t expect = c.level > L ? (c.key & ~(Coarse::key_range(L) - 1)) : c.key;
+            ok = ok and fkey[i] == expect;
+        }
+    }
+    ok_out = not FML::GRID::AMRDETAIL::allreduce_or(not ok);
+    return hash;
+}
+
 template <int NDIM>
 void test_grid(int levelmin, int levelmax, std::array<bool, NDIM> periodic, int nsteps, bool random_flags) {
     if (FML::ThisTask == 0) {
@@ -264,11 +312,15 @@ void test_grid(int levelmin, int levelmax, std::array<bool, NDIM> periodic, int 
         CHECK(check_ghost_values(grid), "ghost values after load balance step " << step);
         CHECK(check_face_neighbors(grid), "face neighbours step " << step);
         CHECK(check_overlap(grid), "overlapped ghost exchange step " << step);
+        bool ok_trunc = false;
+        const auto hash_trunc = check_truncation(grid, ok_trunc);
+        CHECK(ok_trunc, "truncated grids and transfer step " << step);
 
         auto hash = grid.global_hash();
         auto ntot = grid.get_n_global();
         if (FML::ThisTask == 0)
-            std::cout << "  step " << step << " ncells " << ntot << " hash " << std::hex << hash << std::dec << "\n";
+            std::cout << "  step " << step << " ncells " << ntot << " hash " << std::hex << hash << " truncated "
+                      << hash_trunc << std::dec << "\n";
     }
     grid.info();
 }
