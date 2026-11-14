@@ -232,13 +232,13 @@ void test_mode_redistribution(int source_mesh, int dest_mesh) {
         source.set_fourier_from_index(index, value(source.get_fourier_integer_wavevector_from_index(index)));
     dest.fill_fourier_grid(FML::GRID::ComplexType(123, 456));
     FML::NUFFT::copy_fourier_modes<N>(source, dest, factor);
-    const int cutoff = std::min(source_mesh, dest_mesh) / 2;
+    const int smaller_mesh = std::min(source_mesh, dest_mesh);
     int bad = dest.get_grid_status_real();
     for (auto index : dest.get_fourier_range()) {
         const auto m = dest.get_fourier_integer_wavevector_from_index(index);
         bool keep = true;
         for (auto k : m)
-            keep = keep && std::abs(k) < cutoff;
+            keep = keep && 2 * std::abs(k) < smaller_mesh;
         const auto expected = keep ? value(m) * FloatType(factor(m)) : FML::GRID::ComplexType(0);
         bad = bad || dest.get_fourier_from_index(index) != expected;
     }
@@ -253,7 +253,7 @@ void test_mode_redistribution(int source_mesh, int dest_mesh) {
 
 void test_redistribution_suite() {
     test_chunked_exchange();
-    for (const auto meshes : {std::array<int, 2>{8, 16}, {16, 8}, {12, 8}, {8, 8}, {7, 11}, {2, 2}}) {
+    for (const auto meshes : {std::array<int, 2>{8, 16}, {16, 8}, {12, 8}, {8, 8}, {7, 11}, {11, 7}, {7, 8}, {8, 7}, {7, 7}, {9, 15}, {15, 9}, {9, 12}, {12, 9}, {2, 2}}) {
         // FFTWGrid intentionally requires divisibility by the MPI task count.
         if (meshes[0] % FML::NTasks || meshes[1] % FML::NTasks)
             continue;
