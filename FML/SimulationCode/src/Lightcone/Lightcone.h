@@ -1,6 +1,7 @@
 #ifndef LIGHTCONE_HEADER
 #define LIGHTCONE_HEADER
 
+#include "../SimulationGrid.h"
 #include "../SimulationParameters.h"
 
 #include "LightconeCrossing.h"
@@ -74,7 +75,7 @@ class Lightcone {
     std::shared_ptr<Cosmology> cosmo;
 
     // Phi/c^2 in real space (plc_relativistic_effects) for the step that starts at scale factor phi_a (-1: none)
-    FML::GRID::FFTWGrid<NDIM> phi_grid;
+    SimulationGrid<NDIM> phi_grid;
     double phi_a{-1.0};
 
     // Lightcone parameters
@@ -218,7 +219,7 @@ class Lightcone {
     /// of the step: Phi/c^2(k) = -1.5 Omega_M (H0/c)^2 delta(k) / (a k^2) (the GR Poisson equation, k in h/Mpc).
     /// With deconvolve_window the assignment window W(k)^2 of density_assignment_method is divided out (as for the
     /// force). The boundaries are communicated, ready for interpolation
-    void compute_potential(const FML::GRID::FFTWGrid<NDIM> & density_fourier,
+    void compute_potential(const SimulationGrid<NDIM> & density_fourier,
                            double a,
                            const std::string & density_assignment_method,
                            bool deconvolve_window);
@@ -255,7 +256,7 @@ class Lightcone {
     }
 
     /// Maps of Phi/c^2 sampled at the pixel centers at the mid-radius of the onion shells of the current step
-    void make_potential_maps(const FML::GRID::FFTWGrid<NDIM> & potential_grid,
+    void make_potential_maps(const SimulationGrid<NDIM> & potential_grid,
                              const std::string & interpolation_method);
 
     void create_weak_lensing_maps(std::string particle_type = "cb");
@@ -338,7 +339,7 @@ void Lightcone<NDIM, T, U>::init(std::vector<std::string> & particle_types) {
 // We only take a copy of the particles when they cross the lightcone
 // and store them in part_lc
 template <int NDIM, class T, class U>
-void Lightcone<NDIM, T, U>::compute_potential(const FML::GRID::FFTWGrid<NDIM> & density_fourier,
+void Lightcone<NDIM, T, U>::compute_potential(const SimulationGrid<NDIM> & density_fourier,
                                               double a,
                                               const std::string & density_assignment_method,
                                               bool deconvolve_window) {
@@ -351,7 +352,7 @@ void Lightcone<NDIM, T, U>::compute_potential(const FML::GRID::FFTWGrid<NDIM> & 
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-    for (FML::IndexIntType irow = 0; irow < phi_grid.get_local_nrows(); irow++) {
+    for (FML::IndexIntType irow = 0; irow < phi_grid.get_local_nrows_fourier(); irow++) {
         std::array<double, NDIM> kvec;
         double kmag2;
         for (auto && index : phi_grid.get_fourier_range_of_rows(irow, irow + 1)) {
@@ -762,7 +763,7 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
 } // create_lightcone
 
 template <int NDIM, class T, class U>
-void Lightcone<NDIM, T, U>::make_potential_maps([[maybe_unused]] const FML::GRID::FFTWGrid<NDIM> & potential_grid,
+void Lightcone<NDIM, T, U>::make_potential_maps([[maybe_unused]] const SimulationGrid<NDIM> & potential_grid,
                                                 [[maybe_unused]] const std::string & interpolation_method) {
 #ifdef USE_HEALPIX
     if constexpr (NDIM == 3) {
@@ -795,7 +796,8 @@ void Lightcone<NDIM, T, U>::make_potential_maps([[maybe_unused]] const FML::GRID
                         x = 0.0;
                     pt.pos[idim] = x;
                 }
-                if (pt.pos[0] >= FML::xmin_domain and pt.pos[0] < FML::xmax_domain) {
+                // (the points of the cells of this task: in its part of the domain)
+                if (FML::domain.owner(pt.pos) == FML::ThisTask) {
                     points.push_back(pt);
                     ipixs.push_back(ipix);
                 }
@@ -1063,6 +1065,15 @@ double Lightcone<NDIM, T, U>::local_fraction_of_shell(double rlow, double rhigh)
     auto cross_section = [&](double r, double x) {
         return r * r > x * x ? std::pow(r * r - x * x, 0.5 * (NDIM - 1)) : 0.0;
     };
+    // The x-range of this task and the fraction of y it has (pencils; the shell is taken to be uniform in y)
+    double xlo = FML::xmin_domain, xhi = FML::xmax_domain, yfraction = 1.0;
+    if (FML::domain.holds<FML::PencilDomain>()) {
+        const auto & pencils = FML::domain.get<FML::PencilDomain>();
+        const auto c = pencils.coords_of(FML::ThisTask);
+        xlo = pencils.x_edges()[c[0]];
+        xhi = pencils.x_edges()[c[0] + 1];
+        yfraction = pencils.y_edges()[c[1] + 1] - pencils.y_edges()[c[1]];
+    }
     double local = 0.0, total = 0.0;
     for (int i = 0; i < npts; i++) {
         const double x = xmin + (i + 0.5) * dx;
@@ -1070,10 +1081,10 @@ double Lightcone<NDIM, T, U>::local_fraction_of_shell(double rlow, double rhigh)
         // The position in the box
         const double xbox = x + pos_observer[0] - std::floor(x + pos_observer[0]);
         total += w;
-        if (xbox >= FML::xmin_domain and xbox < FML::xmax_domain)
+        if (xbox >= xlo and xbox < xhi)
             local += w;
     }
-    return total > 0.0 ? local / total : 1.0 / FML::NTasks;
+    return total > 0.0 ? yfraction * local / total : 1.0 / FML::NTasks;
 }
 
 template <int NDIM, class T, class U>

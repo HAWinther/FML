@@ -76,7 +76,7 @@ void NBodySimulation<NDIM, T>::update_ide_masses(double a) {
             }
             const std::string method = "CIC";
             const auto nleftright = FML::INTERPOLATION::get_extra_slices(method);
-            FFTWGrid<NDIM> density(params.particle.Npart_1D, nleftright.first, nleftright.second);
+            auto density = make_simulation_grid<NDIM>(params.particle.Npart_1D, nleftright.first, nleftright.second);
             FML::INTERPOLATION::particles_to_grid(p, np, particles.get_npart_total(), density, method);
             density.communicate_boundaries();
             std::vector<FML::GRID::FloatType> delta_n;

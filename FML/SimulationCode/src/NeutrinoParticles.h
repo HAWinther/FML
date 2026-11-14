@@ -2,7 +2,7 @@
 #define NEUTRINOPARTICLES_HEADER
 
 #include "TransferInput.h"
-#include <FML/FFTWGrid/FFTWGrid.h>
+#include "SimulationGrid.h"
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/MPIParticles/MPIParticles.h>
@@ -92,7 +92,7 @@ namespace SIMCODE {
         /// from the transfer functions. On top of this each particle gets a thermal momentum q = y k_B T_nu0 / c in
         /// a random direction, with y drawn from the Fermi-Dirac distribution (the random numbers depend only on
         /// the seed and the particle ID). We store y and the linear delta_nu at the particle (for the weights)
-        void generate(const FML::GRID::FFTWGrid<NDIM> & delta_cb_fourier,
+        void generate(const SimulationGrid<NDIM> & delta_cb_fourier,
                       const TransferProvider & transfers,
                       double zini,
                       double HoverH0_ini,
@@ -158,7 +158,7 @@ namespace SIMCODE {
         };
 
         /// The neutrino density delta_nu(k) (the grid must be allocated). The k = 0 mode is set to zero
-        void density_fourier(FML::GRID::FFTWGrid<NDIM> & density, const std::string & density_assignment_method);
+        void density_fourier(SimulationGrid<NDIM> & density, const std::string & density_assignment_method);
 
       private:
         Container part;
@@ -173,7 +173,7 @@ namespace SIMCODE {
     };
 
     template <int NDIM>
-    void NeutrinoParticles<NDIM>::generate(const FML::GRID::FFTWGrid<NDIM> & delta_cb_fourier,
+    void NeutrinoParticles<NDIM>::generate(const SimulationGrid<NDIM> & delta_cb_fourier,
                                            const TransferProvider & transfers,
                                            double zini,
                                            double HoverH0_ini,
@@ -326,7 +326,7 @@ namespace SIMCODE {
     }
 
     template <int NDIM>
-    void NeutrinoParticles<NDIM>::density_fourier(FML::GRID::FFTWGrid<NDIM> & density,
+    void NeutrinoParticles<NDIM>::density_fourier(SimulationGrid<NDIM> & density,
                                                   const std::string & density_assignment_method) {
         FML::INTERPOLATION::particles_to_grid(part.get_particles_ptr(),
                                               part.get_npart(),

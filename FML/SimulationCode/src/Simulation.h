@@ -5,7 +5,7 @@
 
 #include "TransferInput.h"
 #include <FML/ComputePowerSpectra/ComputePowerSpectrum.h>
-#include <FML/FFTWGrid/FFTWGrid.h>
+#include "SimulationGrid.h"
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/Interpolation/SheetInterpolation.h>
@@ -79,7 +79,7 @@ template <int NDIM, class T>
 class NBodySimulation {
   public:
     template <int N>
-    using FFTWGrid = FML::GRID::FFTWGrid<N>;
+    using FFTWGrid = SimulationGrid<N>;
     using MPIParticles = FML::PARTICLE::MPIParticles<T>;
     using ParameterMap = FML::UTILS::ParameterMap;
     using Spline = FML::INTERPOLATION::SPLINE::Spline;

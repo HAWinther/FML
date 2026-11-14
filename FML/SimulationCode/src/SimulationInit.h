@@ -297,7 +297,7 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions() {
 
 /// The initial CDM+baryon density field delta(k, zini) (and the linear field for the hybrid bias spectra)
 template <int NDIM, class T>
-FML::GRID::FFTWGrid<NDIM> NBodySimulation<NDIM, T>::make_initial_density_field() {
+SimulationGrid<NDIM> NBodySimulation<NDIM, T>::make_initial_density_field() {
     const auto & ic = params.ic;
     const double boxsize = params.simulation.boxsize;
 
@@ -306,7 +306,7 @@ FML::GRID::FFTWGrid<NDIM> NBodySimulation<NDIM, T>::make_initial_density_field()
         // If read_phases then delta_ini is computed from particles
         nextra = FML::INTERPOLATION::get_extra_slices(ic.reconstruct_assigment_method);
     }
-    FFTWGrid<NDIM> delta_ini_fourier(ic.nmesh, nextra.first, nextra.second);
+    auto delta_ini_fourier = make_simulation_grid<NDIM>(ic.nmesh, nextra.first, nextra.second);
     delta_ini_fourier.add_memory_label("delta_ini_fourier(k)");
     delta_ini_fourier.set_grid_status_real(false);
 
@@ -338,7 +338,7 @@ FML::GRID::FFTWGrid<NDIM> NBodySimulation<NDIM, T>::make_initial_density_field()
     // Keep the linear field for the hybrid bias spectra (the Lagrangian operators are formed at the lattice points so
     // we only need the modes the lattice resolves)
     if (params.hybridbias.enabled) {
-        hybridbias_linear_field_fourier = FFTWGrid<NDIM>(params.particle.Npart_1D);
+        hybridbias_linear_field_fourier = make_simulation_grid<NDIM>(params.particle.Npart_1D);
         hybridbias_linear_field_fourier.add_memory_label("delta_L(k,zini) for hybrid bias");
         FML::NUFFT::copy_fourier_modes<NDIM>(delta_ini_fourier,
                                              hybridbias_linear_field_fourier,

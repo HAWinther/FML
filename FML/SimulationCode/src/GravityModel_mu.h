@@ -1,7 +1,7 @@
 #ifndef GRAVITYMODEL_MU_HEADER
 #define GRAVITYMODEL_MU_HEADER
 
-#include <FML/FFTWGrid/FFTWGrid.h>
+#include "SimulationGrid.h"
 #include <FML/FileUtils/FileUtils.h>
 #include <FML/Global/Global.h>
 #include <FML/NBody/NBody.h>
@@ -36,7 +36,7 @@ template <int NDIM>
 class GravityModelMu final : public GravityModel<NDIM> {
   public:
     template <int N>
-    using FFTWGrid = FML::GRID::FFTWGrid<N>;
+    using FFTWGrid = SimulationGrid<N>;
     using ParameterMap = FML::UTILS::ParameterMap;
     using Spline = FML::INTERPOLATION::SPLINE::Spline;
     using Spline2D = FML::INTERPOLATION::SPLINE::Spline2D;

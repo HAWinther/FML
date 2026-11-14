@@ -9,7 +9,7 @@
 #include "TransferInput.h"
 #include <FML/Cosmology/Growth/LPTGrowthFactors.h>
 #include <FML/Cosmology/Perturbations/QuasiStaticGravity.h>
-#include <FML/FFTWGrid/FFTWGrid.h>
+#include "SimulationGrid.h"
 #include <FML/Global/Global.h>
 #include <FML/LPT/DisplacementFields.h>
 #include <FML/MPIParticles/MPIParticles.h>
@@ -38,7 +38,7 @@ template <int NDIM>
 class GravityModel {
   public:
     template <int N>
-    using FFTWGrid = FML::GRID::FFTWGrid<N>;
+    using FFTWGrid = SimulationGrid<N>;
     using ODESolver = FML::SOLVERS::ODESOLVER::ODESolver;
     using Spline = FML::INTERPOLATION::SPLINE::Spline;
     using Spline2D = FML::INTERPOLATION::SPLINE::Spline2D;

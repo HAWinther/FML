@@ -2,7 +2,7 @@
 #define GRAVITYMODEL_HORNDESKI_HEADER
 
 #include "GravityModel_Screened.h"
-#include <FML/FFTWGrid/FFTWGrid.h>
+#include "SimulationGrid.h"
 #include <FML/Global/Global.h>
 #include <FML/ParameterMap/ParameterMap.h>
 
@@ -28,7 +28,7 @@ class GravityModelHorndeski final : public GravityModelScreened<NDIM> {
 
   public:
     template <int N>
-    using FFTWGrid = FML::GRID::FFTWGrid<N>;
+    using FFTWGrid = SimulationGrid<N>;
     using QuasiStaticGravity_Horndeski = FML::COSMOLOGY::PERTURBATIONS::QuasiStaticGravity_Horndeski;
 
     explicit GravityModelHorndeski(std::shared_ptr<Cosmology> cosmo)

@@ -1,7 +1,7 @@
 #ifndef KICKDRIFT_HEADER
 #define KICKDRIFT_HEADER
 
-#include <FML/FFTWGrid/FFTWGrid.h>
+#include "SimulationGrid.h"
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/MPIParticles/MPIParticles.h>
@@ -32,7 +32,7 @@ namespace SIMCODE {
     template <int NDIM, class P>
     void kick_particles(FML::PARTICLE::MPIParticles<P> & part,
                         const SpeciesInfo & info,
-                        std::array<FML::GRID::FFTWGrid<NDIM>, NDIM> & force_real,
+                        std::array<SimulationGrid<NDIM>, NDIM> & force_real,
                         double apos,
                         double delta_time,
                         double velocity_scale,
@@ -77,7 +77,7 @@ namespace SIMCODE {
     /// Fourier series of the force grid, see FML::NUFFT::nufft_type2; non-relativistic particles)
     template <int NDIM, class P>
     void kick_particles_nufft(FML::PARTICLE::MPIParticles<P> & part,
-                              std::array<FML::GRID::FFTWGrid<NDIM>, NDIM> & force_real,
+                              std::array<SimulationGrid<NDIM>, NDIM> & force_real,
                               double delta_time,
                               double velocity_scale,
                               double nufft_epsilon) {

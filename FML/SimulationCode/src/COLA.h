@@ -1,7 +1,7 @@
 #ifndef COLA_HEADER
 #define COLA_HEADER
 
-#include <FML/FFTWGrid/FFTWGrid.h>
+#include "SimulationGrid.h"
 #include <FML/Global/Global.h>
 #include <FML/LPT/DisplacementFields.h>
 #include <FML/MPIParticles/MPIParticles.h>
@@ -102,8 +102,8 @@ template <int NDIM, class T>
 void cola_add_on_LPT_velocity_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
                                              std::shared_ptr<GravityModel<NDIM>> & grav,
                                              int LPT_order,
-                                             FML::GRID::FFTWGrid<NDIM> & phi_1LPT_ini_fourier,
-                                             FML::GRID::FFTWGrid<NDIM> & phi_2LPT_ini_fourier,
+                                             SimulationGrid<NDIM> & phi_1LPT_ini_fourier,
+                                             SimulationGrid<NDIM> & phi_2LPT_ini_fourier,
                                              double H0Box,
                                              double aini,
                                              double a,
@@ -114,8 +114,8 @@ template <int NDIM, class T>
 void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
                                     std::shared_ptr<GravityModel<NDIM>> & grav,
                                     int LPT_order,
-                                    FML::GRID::FFTWGrid<NDIM> & phi_1LPT_ini_fourier,
-                                    FML::GRID::FFTWGrid<NDIM> & phi_2LPT_ini_fourier,
+                                    SimulationGrid<NDIM> & phi_1LPT_ini_fourier,
+                                    SimulationGrid<NDIM> & phi_2LPT_ini_fourier,
                                     double H0Box,
                                     double aini,
                                     double aold,
@@ -276,11 +276,11 @@ template <int NDIM, class T>
 std::array<std::vector<FML::GRID::FloatType>, NDIM>
 cola_displacement_at_lagrangian_positions(FML::PARTICLE::MPIParticles<T> & part,
                                           int LPT_order,
-                                          const FML::GRID::FFTWGrid<NDIM> & phi_1LPT_ini_fourier,
-                                          const FML::GRID::FFTWGrid<NDIM> & phi_2LPT_ini_fourier,
+                                          const SimulationGrid<NDIM> & phi_1LPT_ini_fourier,
+                                          const SimulationGrid<NDIM> & phi_2LPT_ini_fourier,
                                           const std::array<Spline, 2> & factors,
                                           double lattice_offset) {
-    std::vector<const FML::GRID::FFTWGrid<NDIM> *> potentials{&phi_1LPT_ini_fourier};
+    std::vector<const SimulationGrid<NDIM> *> potentials{&phi_1LPT_ini_fourier};
     if (LPT_order >= 2)
         potentials.push_back(&phi_2LPT_ini_fourier);
     return FML::COSMOLOGY::LPT::displacement_at_lagrangian_positions<NDIM, T>(
@@ -326,8 +326,8 @@ void cola_store_in_particles(FML::PARTICLE::MPIParticles<T> & part,
 /// Check that the particles and the stored potentials have what scale-dependent COLA of order LPT_order needs
 template <int NDIM, class T>
 void cola_check_scaledependent(int LPT_order,
-                               const FML::GRID::FFTWGrid<NDIM> & phi_1LPT_ini_fourier,
-                               const FML::GRID::FFTWGrid<NDIM> & phi_2LPT_ini_fourier,
+                               const SimulationGrid<NDIM> & phi_1LPT_ini_fourier,
+                               const SimulationGrid<NDIM> & phi_2LPT_ini_fourier,
                                const std::string & where) {
     constexpr int LPT_order_particle = cola_LPT_order_of<T>();
     FML::assert_mpi(phi_1LPT_ini_fourier.get_nmesh() > 0,
@@ -397,8 +397,8 @@ template <int NDIM, class T>
 void cola_kick_drift_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
                                     std::shared_ptr<GravityModel<NDIM>> & grav,
                                     int LPT_order,
-                                    FML::GRID::FFTWGrid<NDIM> & phi_1LPT_ini_fourier,
-                                    FML::GRID::FFTWGrid<NDIM> & phi_2LPT_ini_fourier,
+                                    SimulationGrid<NDIM> & phi_1LPT_ini_fourier,
+                                    SimulationGrid<NDIM> & phi_2LPT_ini_fourier,
                                     double H0Box,
                                     double aini,
                                     double aold,
@@ -503,8 +503,8 @@ template <int NDIM, class T>
 void cola_add_on_LPT_velocity_scaledependent(FML::PARTICLE::MPIParticles<T> & part,
                                              std::shared_ptr<GravityModel<NDIM>> & grav,
                                              int LPT_order,
-                                             FML::GRID::FFTWGrid<NDIM> & phi_1LPT_ini_fourier,
-                                             FML::GRID::FFTWGrid<NDIM> & phi_2LPT_ini_fourier,
+                                             SimulationGrid<NDIM> & phi_1LPT_ini_fourier,
+                                             SimulationGrid<NDIM> & phi_2LPT_ini_fourier,
                                              double H0Box,
                                              double aini,
                                              double a,
@@ -571,8 +571,8 @@ class ColaState {
     std::shared_ptr<GravityModel<NDIM>> grav;
 
     // The LPT potentials at the initial time (only allocated for scale-dependent COLA)
-    FML::GRID::FFTWGrid<NDIM> phi_1LPT_ini_fourier;
-    FML::GRID::FFTWGrid<NDIM> phi_2LPT_ini_fourier;
+    SimulationGrid<NDIM> phi_1LPT_ini_fourier;
+    SimulationGrid<NDIM> phi_2LPT_ini_fourier;
 
     /// A species on its own lattice, offset by shift (in each direction) from the lattice of the potentials above
     /// (the baryons with particle_baryon_lattice = offset). Its frame is computed from its own potentials: those of
@@ -583,8 +583,8 @@ class ColaState {
     struct ShiftedSpecies {
         const FML::PARTICLE::MPIParticles<T> * part{nullptr};
         double shift{0.0};
-        FML::GRID::FFTWGrid<NDIM> phi_1LPT_ini_fourier;
-        FML::GRID::FFTWGrid<NDIM> phi_2LPT_ini_fourier;
+        SimulationGrid<NDIM> phi_1LPT_ini_fourier;
+        SimulationGrid<NDIM> phi_2LPT_ini_fourier;
     };
     std::vector<ShiftedSpecies> shifted_species;
 

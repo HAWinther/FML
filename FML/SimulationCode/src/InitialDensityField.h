@@ -1,7 +1,7 @@
 #ifndef SIMCODE_INITIAL_DENSITY_FIELD_HEADER
 #define SIMCODE_INITIAL_DENSITY_FIELD_HEADER
 
-#include <FML/FFTWGrid/FFTWGrid.h>
+#include "SimulationGrid.h"
 #include <FML/Smoothing/SmoothingFourier.h>
 #include <FML/Global/Global.h>
 
@@ -23,7 +23,7 @@ namespace SIMCODE {
     template <int NDIM>
     class InitialDensityField {
       public:
-        using FFTWGrid = FML::GRID::FFTWGrid<NDIM>;
+        using FFTWGrid = SimulationGrid<NDIM>;
 
         /// Is the field needed by the current step stored (the late one, and the early one during the early force)?
         bool stored(bool early_force) const { return late and (not early_force or early); }
@@ -43,7 +43,7 @@ namespace SIMCODE {
             early = density;
             early.add_memory_label("density(k,zini) early-time force");
             if (not late) {
-                late = FFTWGrid(nmesh, nleft, nright);
+                late = make_simulation_grid<NDIM>(nmesh, nleft, nright);
                 late.add_memory_label("density(k,zini)");
                 assign_late(late);
             }

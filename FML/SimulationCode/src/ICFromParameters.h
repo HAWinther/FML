@@ -1,7 +1,7 @@
 #ifndef ICFROMPARAMETERS_HEADER
 #define ICFROMPARAMETERS_HEADER
 
-#include <FML/FFTWGrid/FFTWGrid.h>
+#include "SimulationGrid.h"
 #include <FML/FileUtils/FileUtils.h>
 #include <FML/Global/Global.h>
 #include <FML/InitialConditions/LinearInput.h>
@@ -118,7 +118,7 @@ namespace SIMCODE {
     //=============================================================================
 
     template <int N>
-    using FFTWGrid = FML::GRID::FFTWGrid<N>;
+    using FFTWGrid = SimulationGrid<N>;
     using RandomGenerator = FML::RANDOM::RandomGenerator;
     using GSLRandomGenerator = FML::RANDOM::GSLRandomGenerator;
 

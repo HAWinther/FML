@@ -2,7 +2,7 @@
 #define GRAVITYMODEL_DGP_HEADER
 
 #include "GravityModel_Screened.h"
-#include <FML/FFTWGrid/FFTWGrid.h>
+#include "SimulationGrid.h"
 #include <FML/Global/Global.h>
 #include <FML/LPT/DisplacementFields.h>
 #include <FML/NBody/NBody.h>
@@ -28,7 +28,7 @@ class GravityModelDGP final : public GravityModelScreened<NDIM> {
 
   public:
     template <int N>
-    using FFTWGrid = FML::GRID::FFTWGrid<N>;
+    using FFTWGrid = SimulationGrid<N>;
     using ParameterMap = FML::UTILS::ParameterMap;
     using Spline = FML::INTERPOLATION::SPLINE::Spline;
 

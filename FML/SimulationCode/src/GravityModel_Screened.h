@@ -4,7 +4,7 @@
 #include "ParameterDefaults.h"
 
 #include "GravityModel.h"
-#include <FML/FFTWGrid/FFTWGrid.h>
+#include "SimulationGrid.h"
 #include <FML/Global/Global.h>
 #include <FML/NBody/NBody.h>
 #include <FML/NUFFT/NUFFT.h>
@@ -55,13 +55,13 @@ class GravityModelScreened : public GravityModel<NDIM> {
     // How the density goes to the coarse grid: sharpk or cic (see restrict_to_coarse_grid)
     std::string multigrid_coarse_restriction{"sharpk"};
     // The last exact (multigrid) solution in real space and its scale factor: the starting point of the next solve
-    mutable FML::GRID::FFTWGrid<NDIM> multigrid_previous_solution;
+    mutable SimulationGrid<NDIM> multigrid_previous_solution;
     mutable double multigrid_previous_a{-1.0};
     bool SIMCODE::GravityModelSettings::* exact_solution_flag;
 
   public:
     template <int N>
-    using FFTWGrid = FML::GRID::FFTWGrid<N>;
+    using FFTWGrid = SimulationGrid<N>;
     using ParameterMap = FML::UTILS::ParameterMap;
     using Spline = FML::INTERPOLATION::SPLINE::Spline;
     using CouplingFunction = std::function<double(double)>;
@@ -179,13 +179,13 @@ class GravityModelScreened : public GravityModel<NDIM> {
         FML::assert_mpi(ncoarse * factor == nfine and ncoarse % FML::NTasks == 0,
                         "multigrid_coarse_factor: the force grid / factor must be an integer divisible by the number "
                         "of MPI tasks");
-        FFTWGrid<NDIM> coarse(ncoarse,
+        auto coarse = make_simulation_grid<NDIM>(ncoarse,
                               density_fourier.get_n_extra_slices_left(),
                               density_fourier.get_n_extra_slices_right());
         if (method == "cic") {
             // The fine density in real space with factor - 1 extra slices on each side (the x-slabs of the two grids
             // line up as both sizes are divisible by the number of tasks)
-            FFTWGrid<NDIM> fine(nfine, factor - 1, factor - 1);
+            auto fine = make_simulation_grid<NDIM>(nfine, factor - 1, factor - 1);
             FML::NUFFT::copy_fourier_modes<NDIM>(density_fourier, fine, [](const std::array<int, NDIM> &) {
                 return 1.0;
             });
@@ -287,7 +287,7 @@ class GravityModelScreened : public GravityModel<NDIM> {
         density_fifth_force.fftw_r2c();
         // From the coarse grid: the modes below its Nyquist frequency on the force grid (the others zero)
         if (multigrid_coarse_factor > 1) {
-            FFTWGrid<NDIM> fine(density_fourier.get_nmesh(),
+            auto fine = make_simulation_grid<NDIM>(density_fourier.get_nmesh(),
                                 density_fourier.get_n_extra_slices_left(),
                                 density_fourier.get_n_extra_slices_right());
             FML::NUFFT::copy_fourier_modes<NDIM>(density_fifth_force, fine, [](const std::array<int, NDIM> &) {
@@ -303,15 +303,15 @@ class GravityModelScreened : public GravityModel<NDIM> {
         // k^2 / lambda (+3% at a quarter and +13% at half the Nyquist frequency of the solver grid)
         const double nmesh2x4 = 4.0 * double(nmesh_solver) * double(nmesh_solver);
         const double half_h = 0.5 / double(nmesh_solver);
-        const auto Local_x_start = density_fifth_force.get_local_x_start();
+        const bool has_dc_mode = FML::GRID::has_dc_mode(density_fifth_force);
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-        for (FML::IndexIntType irow = 0; irow < density_fifth_force.get_local_nrows(); irow++) {
+        for (FML::IndexIntType irow = 0; irow < density_fifth_force.get_local_nrows_fourier(); irow++) {
             std::array<double, NDIM> kvec;
             [[maybe_unused]] double kmag2;
             for (auto && fourier_index : density_fifth_force.get_fourier_range_of_rows(irow, irow + 1)) {
-                if (Local_x_start == 0 and fourier_index == 0)
+                if (has_dc_mode and fourier_index == 0)
                     continue; // DC mode (k=0)
                 density_fifth_force.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
                 double lambda = 0.0;
@@ -325,7 +325,7 @@ class GravityModelScreened : public GravityModel<NDIM> {
             }
         }
         // DC mode
-        if (Local_x_start == 0)
+        if (has_dc_mode)
             density_fifth_force.set_fourier_from_index(0, 0.0);
     }
 
@@ -363,7 +363,7 @@ class GravityModelScreened : public GravityModel<NDIM> {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-        for (FML::IndexIntType irow = 0; irow < density_fourier.get_local_nrows(); irow++) {
+        for (FML::IndexIntType irow = 0; irow < density_fourier.get_local_nrows_fourier(); irow++) {
             [[maybe_unused]] std::array<double, NDIM> kvec;
             double kmag;
             for (auto && fourier_index : density_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
@@ -440,7 +440,7 @@ class GravityModelScreened : public GravityModel<NDIM> {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-        for (FML::IndexIntType irow = 0; irow < density_fourier.get_local_nrows(); irow++) {
+        for (FML::IndexIntType irow = 0; irow < density_fourier.get_local_nrows_fourier(); irow++) {
             for (auto && fourier_index : density_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
                 auto delta = density_fourier.get_fourier_from_index(fourier_index);
                 auto delta_fifth_force = density_fifth_force.get_fourier_from_index(fourier_index);

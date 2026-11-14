@@ -2,7 +2,7 @@
 #define GRAVITYMODEL_CUBICGALILEON_HEADER
 
 #include "GravityModel_Screened.h"
-#include <FML/FFTWGrid/FFTWGrid.h>
+#include "SimulationGrid.h"
 #include <FML/Global/Global.h>
 #include <FML/ParameterMap/ParameterMap.h>
 
@@ -23,7 +23,7 @@ class GravityModelCubicGalileon final : public GravityModelScreened<NDIM> {
 
   public:
     template <int N>
-    using FFTWGrid = FML::GRID::FFTWGrid<N>;
+    using FFTWGrid = SimulationGrid<N>;
     using QuasiStaticGravity_CubicGalileon = FML::COSMOLOGY::PERTURBATIONS::QuasiStaticGravity_CubicGalileon;
 
     explicit GravityModelCubicGalileon(std::shared_ptr<Cosmology> cosmo)

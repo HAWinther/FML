@@ -1,7 +1,7 @@
 #ifndef EXTERNALIC_HEADER
 #define EXTERNALIC_HEADER
 
-#include <FML/FFTWGrid/FFTWGrid.h>
+#include "SimulationGrid.h"
 #include <FML/GadgetUtils/GadgetUtils.h>
 #include <FML/GadgetUtils/GadgetUtilsHDF5.h>
 #include <FML/Global/Global.h>
@@ -128,12 +128,12 @@ namespace SIMCODE {
     /// the displacements were W Psi: P(k, z = 0) -16% at k = 0.25 h/Mpc with PCS, 32^3)
     template <int NDIM, class T>
     std::array<std::vector<FML::GRID::FloatType>, NDIM>
-    displacement_field_at_particles(const FML::GRID::FFTWGrid<NDIM> & phi_fourier,
+    displacement_field_at_particles(const SimulationGrid<NDIM> & phi_fourier,
                                     FML::PARTICLE::MPIParticles<T> & part,
                                     const std::string & assignment_method) {
         auto phi_deconvolved = phi_fourier;
         FML::INTERPOLATION::deconvolve_window_function_fourier<NDIM>(phi_deconvolved, assignment_method);
-        std::array<FML::GRID::FFTWGrid<NDIM>, NDIM> psi_vector;
+        std::array<SimulationGrid<NDIM>, NDIM> psi_vector;
         FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector<NDIM>(phi_deconvolved, psi_vector);
         for (int idim = 0; idim < NDIM; idim++) {
             psi_vector[idim].communicate_boundaries();
@@ -284,7 +284,7 @@ namespace SIMCODE {
     /// Compute delta(k) from particles in gadget files (used to take the phases from them).
     /// The result is smoothed with the reconstruct_* settings
     template <int NDIM, class T>
-    void delta_from_gadget_particles(FML::GRID::FFTWGrid<NDIM> & delta_fourier,
+    void delta_from_gadget_particles(SimulationGrid<NDIM> & delta_fourier,
                                      const SimulationParameters & params,
                                      const Cosmology & cosmo) {
         const auto & ic = params.ic;
@@ -357,10 +357,10 @@ namespace SIMCODE {
     /// deconvolved and the modes beyond those of the grid the IC were made with filtered out
     //=============================================================================
     template <int NDIM, class T>
-    FML::GRID::FFTWGrid<NDIM> reconstruction_density_field(FML::PARTICLE::MPIParticles<T> & part, const ICSettings & ic) {
+    SimulationGrid<NDIM> reconstruction_density_field(FML::PARTICLE::MPIParticles<T> & part, const ICSettings & ic) {
         // Assign particles to grid
         const auto nleftright = FML::INTERPOLATION::get_extra_slices(ic.reconstruct_assigment_method);
-        FML::GRID::FFTWGrid<NDIM> delta_fourier(ic.nmesh, nleftright.first, nleftright.second);
+        auto delta_fourier = make_simulation_grid<NDIM>(ic.nmesh, nleftright.first, nleftright.second);
         FML::INTERPOLATION::particles_to_fourier_grid(part.get_particles_ptr(),
                                                       part.get_npart(),
                                                       part.get_npart_total(),
@@ -385,17 +385,17 @@ namespace SIMCODE {
     /// For scale-dependent COLA we store the potential
     //=============================================================================
     template <int NDIM, class T>
-    void reconstruct_1LPT_from_density(const FML::GRID::FFTWGrid<NDIM> & delta_fourier,
+    void reconstruct_1LPT_from_density(const SimulationGrid<NDIM> & delta_fourier,
                                        FML::PARTICLE::MPIParticles<T> & part,
                                        const SimulationParameters & params,
-                                       FML::GRID::FFTWGrid<NDIM> & phi_1LPT_ini_fourier) {
+                                       SimulationGrid<NDIM> & phi_1LPT_ini_fourier) {
         const auto & ic = params.ic;
         const auto & sim = params.simulation;
         if (FML::ThisTask == 0)
             std::cout << "Reconstructing 1LPT displacement field from the density field\n";
 
-        FML::GRID::FFTWGrid<NDIM> temp;
-        FML::GRID::FFTWGrid<NDIM> & phi_1LPT_fourier = sim.use_scaledependent_cola ? phi_1LPT_ini_fourier : temp;
+        SimulationGrid<NDIM> temp;
+        SimulationGrid<NDIM> & phi_1LPT_fourier = sim.use_scaledependent_cola ? phi_1LPT_ini_fourier : temp;
         FML::COSMOLOGY::LPT::compute_1LPT_potential_fourier(delta_fourier, phi_1LPT_fourier);
 
         auto displacements =
@@ -428,17 +428,17 @@ namespace SIMCODE {
     /// (and also update q: it was left at x - Psi_1LPT)
     //=============================================================================
     template <int NDIM, class T>
-    void reconstruct_2LPT_from_density(const FML::GRID::FFTWGrid<NDIM> & delta_fourier,
+    void reconstruct_2LPT_from_density(const SimulationGrid<NDIM> & delta_fourier,
                                        FML::PARTICLE::MPIParticles<T> & part,
                                        const SimulationParameters & params,
-                                       FML::GRID::FFTWGrid<NDIM> & phi_2LPT_ini_fourier) {
+                                       SimulationGrid<NDIM> & phi_2LPT_ini_fourier) {
         const auto & ic = params.ic;
         const auto & sim = params.simulation;
         if (FML::ThisTask == 0)
             std::cout << "Reconstructing 2LPT displacement field from the density field\n";
 
-        FML::GRID::FFTWGrid<NDIM> temp;
-        FML::GRID::FFTWGrid<NDIM> & phi_2LPT_fourier = sim.use_scaledependent_cola ? phi_2LPT_ini_fourier : temp;
+        SimulationGrid<NDIM> temp;
+        SimulationGrid<NDIM> & phi_2LPT_fourier = sim.use_scaledependent_cola ? phi_2LPT_ini_fourier : temp;
         FML::COSMOLOGY::LPT::compute_2LPT_potential_fourier(delta_fourier, phi_2LPT_fourier);
 
         if (not sim.use_scaledependent_cola or FML::PARTICLE::has_get_q<T>()) {
@@ -477,8 +477,8 @@ namespace SIMCODE {
                              const SimulationParameters & params,
                              std::shared_ptr<Cosmology> cosmo,
                              std::shared_ptr<GravityModel<NDIM>> grav_ic,
-                             FML::GRID::FFTWGrid<NDIM> & phi_1LPT_ini_fourier,
-                             FML::GRID::FFTWGrid<NDIM> & phi_2LPT_ini_fourier) {
+                             SimulationGrid<NDIM> & phi_1LPT_ini_fourier,
+                             SimulationGrid<NDIM> & phi_2LPT_ini_fourier) {
         const auto & ic = params.ic;
         const auto & sim = params.simulation;
         if (FML::ThisTask == 0) {

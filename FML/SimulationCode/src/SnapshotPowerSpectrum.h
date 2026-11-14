@@ -1,6 +1,7 @@
 #ifndef SIMCODE_SNAPSHOT_POWER_SPECTRUM_H
 #define SIMCODE_SNAPSHOT_POWER_SPECTRUM_H
 #include <FML/ComputePowerSpectra/ComputePowerSpectrum.h>
+#include "SimulationGrid.h"
 #include "SimulationParameters.h"
 
 namespace SIMCODE {
@@ -13,7 +14,7 @@ namespace SIMCODE {
                                                                                           double boxsize) {
         FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM> result(settings.nmesh / 2);
         result.subtract_shotnoise = settings.subtract_shotnoise;
-        FML::CORRELATIONFUNCTIONS::compute_power_spectrum<NDIM, P>(settings.nmesh,
+        FML::CORRELATIONFUNCTIONS::compute_power_spectrum<NDIM, P, SimulationGrid>(settings.nmesh,
                                                                    particles,
                                                                    count,
                                                                    total,

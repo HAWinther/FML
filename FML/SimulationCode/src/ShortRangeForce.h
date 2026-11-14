@@ -1,6 +1,7 @@
 #ifndef SIMCODE_SHORT_RANGE_FORCE_H
 #define SIMCODE_SHORT_RANGE_FORCE_H
 #include "ShortRangeInteraction.h"
+#include "SimulationGrid.h"
 #include <optional>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/ShortRangeGravity/LongRangePM.h>
@@ -48,7 +49,8 @@ namespace SIMCODE {
         if (!valid)
             throw std::invalid_argument("Invalid short-range kernel settings on at least one rank");
         const auto & kernel = *storage;
-        auto sources = SR::exchange_slab_ghosts(owned, FML::xmin_domain, FML::xmax_domain, kernel);
+        // (the particles in the cutoff of the slab or the pencil of each task)
+        auto sources = SR::exchange_domain_ghosts(owned, FML::domain, kernel);
         if (settings.backend == "cell")
             return SR::CellList(sources.particles, kernel).compute(owned);
         SR::TreeOptions tree;
@@ -76,7 +78,7 @@ namespace SIMCODE {
         }
     }
     template <int D>
-    void filter_short_range_long_force(FML::GRID::FFTWGrid<D> & density,
+    void filter_short_range_long_force(SimulationGrid<D> & density,
                                        const ShortRangeSettings & settings,
                                        double boxsize) {
         if (!settings.enabled)

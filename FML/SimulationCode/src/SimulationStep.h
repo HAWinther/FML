@@ -179,7 +179,7 @@ auto NBodySimulation<NDIM, T>::pm_density_workspace(int nmesh, int nleft, int nr
     auto & grid = pm_density_grid;
     if (grid.get_nmesh() != nmesh or grid.get_n_extra_slices_left() != nleft or
         grid.get_n_extra_slices_right() != nright) {
-        grid = FFTWGrid<NDIM>(nmesh, nleft, nright);
+        grid = make_simulation_grid<NDIM>(nmesh, nleft, nright);
         grid.add_memory_label("NBodySimulation::pm_density_grid");
     }
     grid.set_grid_status_real(true);
@@ -193,7 +193,7 @@ auto NBodySimulation<NDIM, T>::pm_workspace(const std::string & slot, int nmesh,
     auto & grid = pm_extra_grids[slot];
     if (grid.get_nmesh() != nmesh or grid.get_n_extra_slices_left() != nleft or
         grid.get_n_extra_slices_right() != nright) {
-        grid = FFTWGrid<NDIM>(nmesh, nleft, nright);
+        grid = make_simulation_grid<NDIM>(nmesh, nleft, nright);
         grid.add_memory_label("NBodySimulation::pm_workspace " + slot);
     }
     grid.set_grid_status_real(true);
@@ -433,8 +433,11 @@ void NBodySimulation<NDIM, T>::kick_with_interlaced_force(const Step & s) {
     const auto shifts =
         FML::INTERPOLATION::generate_interlacing_shifts<NDIM>(force.interlacing_order, 1.0 / double(force.nmesh));
     // With one task the shifted particles can be wrapped in all directions. Otherwise not in x (they stay on
-    // their task and the grid has one extra slice on the right for the ones that end up outside the domain)
-    const int wrap_type = FML::NTasks == 1 ? 1 : 2;
+    // their task and the grid has one extra slice on the right for the ones that end up outside the domain). With
+    // pencils not in y either
+    const auto & domain = part.get_domain();
+    const bool y_split = not domain.is_slab() and domain.pencil_py() > 1;
+    const int wrap_type = FML::NTasks == 1 ? 1 : (y_split ? 3 : 2);
 
     auto * p = part.get_particles_ptr();
     const size_t npart = part.get_npart();

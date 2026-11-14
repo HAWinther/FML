@@ -7,7 +7,7 @@
 #include <FML/ComputePowerSpectra/HybridBiasOneLoop.h>
 #include <FML/ComputePowerSpectra/HybridBiasOneLoopMG.h>
 #include <FML/ComputePowerSpectra/HybridBiasZeldovich.h>
-#include <FML/FFTWGrid/FFTWGrid.h>
+#include "SimulationGrid.h"
 #include <FML/FileUtils/FileUtils.h>
 #include <FML/FriendsOfFriends/FoF.h>
 #include <FML/GadgetUtils/GadgetUtils.h>
@@ -256,7 +256,7 @@ void compute_bispectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::st
         std::cout << "#=====================================================\n";
     }
 
-    FML::CORRELATIONFUNCTIONS::compute_bispectrum(bispectrum_nmesh,
+    FML::CORRELATIONFUNCTIONS::compute_bispectrum<NDIM, T, false, SimulationGrid>(bispectrum_nmesh,
                                                   part.get_particles_ptr(),
                                                   part.get_npart(),
                                                   part.get_npart_total(),
@@ -817,7 +817,7 @@ compute_power_spectrum_multipoles(NBodySimulation<NDIM, T> & sim, double redshif
     std::vector<FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM>> Pells(pofk_multipole_ellmax + 1,
                                                                              pofk_multipole_nmesh / 2);
     Pells[0].subtract_shotnoise = pofk_multipole_subtract_shotnoise;
-    FML::CORRELATIONFUNCTIONS::compute_power_spectrum_multipoles<NDIM, T>(pofk_multipole_nmesh,
+    FML::CORRELATIONFUNCTIONS::compute_power_spectrum_multipoles<NDIM, T, SimulationGrid>(pofk_multipole_nmesh,
                                                                           part,
                                                                           velocity_to_displacement,
                                                                           Pells,
@@ -892,7 +892,7 @@ measure_species_power_spectra(NBodySimulation<NDIM, T> & sim,
     FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM> pofk_cb_binning(pofk_nmesh / 2);
     const auto nleftright = FML::INTERPOLATION::get_extra_slices(pofk_density_assignment_method);
     auto delta_of = [&](auto & particles) {
-        FML::GRID::FFTWGrid<NDIM> grid(pofk_nmesh, nleftright.first, nleftright.second + (pofk_interlacing ? 1 : 0));
+        auto grid = make_simulation_grid<NDIM>(pofk_nmesh, nleftright.first, nleftright.second + (pofk_interlacing ? 1 : 0));
         if (pofk_interlacing) {
             FML::INTERPOLATION::particles_to_fourier_grid_interlacing(particles.get_particles_ptr(),
                                                                       particles.get_npart(),
@@ -910,7 +910,7 @@ measure_species_power_spectra(NBodySimulation<NDIM, T> & sim,
         FML::INTERPOLATION::deconvolve_window_function_fourier<NDIM>(grid, pofk_density_assignment_method);
         return grid;
     };
-    auto bin = [&](const FML::GRID::FFTWGrid<NDIM> & grid, double shotnoise) {
+    auto bin = [&](const SimulationGrid<NDIM> & grid, double shotnoise) {
         FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<NDIM> binning(pofk_nmesh / 2);
         FML::CORRELATIONFUNCTIONS::bin_up_power_spectrum<NDIM>(grid, binning);
         if (pofk_subtract_shotnoise)
@@ -920,7 +920,7 @@ measure_species_power_spectra(NBodySimulation<NDIM, T> & sim,
         return binning;
     };
     // delta_cb = sum_i w_i delta_i over the CDM and baryon species (and P(k) of each when there are several)
-    FML::GRID::FFTWGrid<NDIM> delta_cb;
+    SimulationGrid<NDIM> delta_cb;
     int icb = 0;
     double weight_first = 1.0;
     sim.for_each_cb_species([&](auto & particles, const SIMCODE::SpeciesInfo & info) {

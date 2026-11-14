@@ -24,6 +24,8 @@ USE_CHUNKPIX        ?= false
 # particle, 7 times the compile time). Otherwise one particle type with all the fields (see src/Particles.h)
 # (make clean when changing it)
 USE_MINIMAL_PARTICLES ?= false
+# Experiment: the grids are PencilGrids (pencils) instead of FFTWGrids (slabs) (the objects are rebuilt when it changes)
+USE_PENCIL_GRID ?= false
 
 TARGETS := nbody
 
@@ -31,6 +33,9 @@ include ../Makefile.config
 
 OPTIONS     += -DNDIM_SPACE=$(NDIM_SPACE)
 FML_MODULES := Global Spline ODESolver GadgetUtils ParameterMap FileUtils Math
+ifeq ($(USE_PENCIL_GRID),true)
+OPTIONS     += -DUSE_PENCIL_GRID
+endif
 EXTRA_VPATH := src
 
 # FML's Einstein-Boltzmann solver (for ic_type_of_input = internal)
@@ -49,8 +54,18 @@ RUN_SIMULATION_OBJS += RunSimulation_COLAWithMass.o RunSimulation_BasicWithMass.
 endif
 
 # The transfer functions (FML/TransferProviders and the Einstein-Boltzmann solver) are made in TransferInput.o
-nbody: $(INTERNAL_COSMO_OBJS) Main.o $(RUN_SIMULATION_OBJS) TransferInput.o BaryonificationOutput.o Global.o Spline.o ODESolver.o GadgetUtils.o ParameterMap.o FileUtils.o Math.o NumericalMethods.o
+PENCIL_OBJS :=
+ifeq ($(USE_PENCIL_GRID),true)
+PENCIL_OBJS := PencilGrid.o
+vpath PencilGrid.cpp $(FML_ROOT)/PencilDomain
+endif
+nbody: $(INTERNAL_COSMO_OBJS) Main.o $(RUN_SIMULATION_OBJS) TransferInput.o BaryonificationOutput.o Global.o Spline.o ODESolver.o GadgetUtils.o ParameterMap.o FileUtils.o Math.o NumericalMethods.o $(PENCIL_OBJS)
 	$(LINK_EXE)
 
 # Rebuild if build options change
 Main.o $(RUN_SIMULATION_OBJS) TransferInput.o: Makefile
+
+# The objects depend on the grid type (rebuilt when USE_PENCIL_GRID changes)
+GRID_FLAVOUR := $(if $(filter true,$(USE_PENCIL_GRID)),pencil,slab)
+$(shell echo $(GRID_FLAVOUR) | cmp -s - .grid_flavour || echo $(GRID_FLAVOUR) > .grid_flavour)
+$(INTERNAL_COSMO_OBJS) Main.o $(RUN_SIMULATION_OBJS) TransferInput.o BaryonificationOutput.o Global.o Spline.o ODESolver.o GadgetUtils.o ParameterMap.o FileUtils.o Math.o NumericalMethods.o $(PENCIL_OBJS): .grid_flavour
