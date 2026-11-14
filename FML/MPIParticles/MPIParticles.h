@@ -16,6 +16,7 @@
 #include <string>
 #include <type_traits>
 #include <utility>
+#include <stdexcept>
 #include <vector>
 
 #ifdef USE_MPI
@@ -92,8 +93,9 @@ namespace FML {
         ///
         /// The particles are distributed according to a Domain (Global/Domain.h): the one given to
         /// the constructor, or else the global FML::domain (a Slab by default) when the particles are created. Every
-        /// method supports every domain except create_particle_grid (Slab only for now); with Pencil and PeanoHilbert
-        /// a warning (the rest of FML assumes slabs)
+        /// method supports every domain (create_particle_grid: Slab and Pencil). With Pencil the grid code needs
+        /// PencilGrids (FML::GRID::make_grid, particle_domain_of); with PeanoHilbert the grid code (grids, density
+        /// assignment, ...) cannot be used on the particles directly (move them with set_domain first)
         ///
         /// External variables/methods we rely on:
         ///
@@ -188,7 +190,8 @@ namespace FML {
             void move_from(Vector<T> && part);
 
             /// Create \f$ {\rm Npart}_{1D}^{\rm NDIM} \f$ particles in a rectangular grid, each task those in its
-            /// part of the domain (for now only a Slab domain). buffer_factor is how much extra to allocate in case
+            /// part of the domain (a Slab or a Pencil domain; other domains throw std::invalid_argument: create the
+            /// lattice on slabs and set_domain to move it). buffer_factor is how much extra to allocate in case
             /// particles move. This method only sets the positions of the particles not id or vel or anything else
             void create_particle_grid(int Npart_1D, double buffer_factor);
 
@@ -237,8 +240,7 @@ namespace FML {
           public:
             /// The particles will use the global particle domain (FML::domain, taken when they are created)
             MPIParticles() = default;
-            /// The particles will use this domain (made for NTasks tasks). Pencil and PeanoHilbert: a warning (only
-            /// some methods support them)
+            /// The particles will use this domain (made for NTasks tasks): Slab, Pencil or PeanoHilbert
             explicit MPIParticles(const FML::Domain & particle_domain_in);
 
             /// The domain of the particles (once created or loaded; else the one given to the constructor, or the
@@ -677,12 +679,6 @@ namespace FML {
         MPIParticles<T>::MPIParticles(const FML::Domain & particle_domain_in)
             : domain(particle_domain_in), domain_given(true) {
             check_domain(*domain);
-            if (not domain->is_slab()) {
-                if (FML::ThisTask == 0)
-                    std::cout << "WARNING: MPIParticles with the " << domain->type_name()
-                              << " particle domain: the rest of FML (grids, density assignment, ...) assumes the "
-                                 "Slab domain\n";
-            }
         }
 
         template <class T>
@@ -712,42 +708,72 @@ namespace FML {
 
         template <class T>
         void MPIParticles<T>::create_particle_grid(int Npart_1D, double buffer_factor) {
-            // The domain (the given one, else the global one): for now a Slab
+            // The domain (the given one, else the global one): a Slab (the lattice slices in [xmin, xmax)) or a Pencil
+            // (the lattice points in the pencil [x0, x1) x [y0, y1))
             set_domain_for_create();
-            assert_mpi(domain->is_slab(),
-                       "[MPIParticles::create_particle_grid] only implemented for the Slab particle domain");
-            const double xmin_local = domain->x_min(ThisTask);
-            const double xmax_local = domain->x_max(ThisTask);
+            // (the domain is the same on every task, so every task throws)
+            if (not domain->is_slab() and not domain->template holds<FML::PencilDomain>())
+                throw std::invalid_argument("[MPIParticles::create_particle_grid] only implemented for the Slab and "
+                                            "Pencil particle domains, not " +
+                                            domain->type_name());
+            T tmp_ndim; // (GetNDIM(T()) needs a particle that can be built at compile time)
+            constexpr int ndim = FML::PARTICLE::GetNDIM(tmp_ndim);
 
-            // Use the local xmin,xmax values to compute how many slices per task
-            int imin = 0;
-            while (imin / double(Npart_1D) < xmin_local) {
-                imin++;
+            // The local edges along x and y
+            std::array<double, 2> lo{0.0, 0.0}, hi{1.0, 1.0};
+            if (domain->is_slab()) {
+                lo[0] = domain->x_min(ThisTask);
+                hi[0] = domain->x_max(ThisTask);
+            } else {
+                assert_mpi(ndim >= 2, "[MPIParticles::create_particle_grid] A Pencil domain needs ndim >= 2");
+                const auto & pencils = domain->template get<FML::PencilDomain>();
+                const auto c = pencils.coords_of(ThisTask);
+                lo = {pencils.x_edges()[c[0]], pencils.y_edges()[c[1]]};
+                hi = {pencils.x_edges()[c[0] + 1], pencils.y_edges()[c[1] + 1]};
             }
-            int imax = imin;
-            while (imax / double(Npart_1D) < xmax_local) {
-                imax++;
-            }
-            const int Local_p_start = imin;
-            int Local_Npart_1D = imax - imin;
 
-            // Sanity check
-            auto Local_Npart_1D_per_task = FML::GatherFromTasks(&Local_Npart_1D);
-            int Local_p_start_computed = 0, Npart_1D_computed = 0;
-            for (int i = 0; i < NTasks; i++) {
-                if (i < ThisTask)
-                    Local_p_start_computed += Local_Npart_1D_per_task[i];
-                Npart_1D_computed += Local_Npart_1D_per_task[i];
+            // The lattice points i / Npart_1D in [lo, hi) along x and y
+            std::array<int, 2> Local_p_start{0, 0}, Local_Npart_1D{Npart_1D, Npart_1D};
+            for (int idim = 0; idim < std::min(ndim, 2); idim++) {
+                int imin = 0;
+                while (imin / double(Npart_1D) < lo[idim]) {
+                    imin++;
+                }
+                int imax = imin;
+                while (imax / double(Npart_1D) < hi[idim]) {
+                    imax++;
+                }
+                Local_p_start[idim] = imin;
+                Local_Npart_1D[idim] = imax - imin;
             }
-            assert_mpi(Npart_1D_computed == Npart_1D,
-                       "[MPIParticles::create_particle_grid] Computed Npart does not match Npart\n");
-            assert_mpi(Local_p_start_computed == Local_p_start,
-                       "[MPIParticles::create_particle_grid] Computed Local_p_start does not match Local_p_start\n");
+
+            // Sanity check (Slab: the slices of the tasks follow each other; all: every lattice point is somewhere)
+            long long int local_count = Local_Npart_1D[0] * (ndim >= 2 ? (long long int)Local_Npart_1D[1] : 1LL);
+            for (int idim = 2; idim < ndim; idim++)
+                local_count *= Npart_1D;
+            if (domain->is_slab()) {
+                auto Local_Npart_1D_per_task = FML::GatherFromTasks(&Local_Npart_1D[0]);
+                int Local_p_start_computed = 0, Npart_1D_computed = 0;
+                for (int i = 0; i < NTasks; i++) {
+                    if (i < ThisTask)
+                        Local_p_start_computed += Local_Npart_1D_per_task[i];
+                    Npart_1D_computed += Local_Npart_1D_per_task[i];
+                }
+                assert_mpi(Npart_1D_computed == Npart_1D,
+                           "[MPIParticles::create_particle_grid] Computed Npart does not match Npart\n");
+                assert_mpi(Local_p_start_computed == Local_p_start[0],
+                           "[MPIParticles::create_particle_grid] Computed Local_p_start does not match Local_p_start\n");
+            } else {
+                long long int total = local_count;
+                FML::SumOverTasks(&total);
+                assert_mpi(total == FML::power((long long int)Npart_1D, ndim),
+                           "[MPIParticles::create_particle_grid] The pencils do not have all the lattice points\n");
+            }
 
 #ifdef DEBUG_MPIPARTICLES
             // Output some info
             for (int taskid = 0; taskid < NTasks; taskid++) {
-                if (ThisTask == 0) {
+                if (ThisTask == 0 and domain->is_slab()) {
                     std::cout << "Task[" << taskid << "]  xmin: " << domain->x_min(taskid)
                               << " xmax: " << domain->x_max(taskid) << "\n";
                 }
@@ -755,32 +781,34 @@ namespace FML {
 #endif
 
             // Total number of particles
-            T tmp_ndim; // (GetNDIM(T()) needs a particle that can be built at compile time)
-            constexpr int ndim = FML::PARTICLE::GetNDIM(tmp_ndim);
             NpartTotal = FML::power(Npart_1D, ndim);
-            NpartLocal_in_use = Local_Npart_1D * FML::power(Npart_1D, ndim - 1);
+            NpartLocal_in_use = size_t(local_count);
 
-            // Allocate particle struct. The capacity is buffer_factor times the largest number of lattice slices
-            // that the local x-range [xmin_local, xmax_local) can hold (for any uniform shift of the lattice), not
-            // times the number of slices we got: with Npart_1D not divisible by NTasks a task can get fewer slices
-            // than its share of the volume (or no slice at all if Npart_1D < NTasks) and would otherwise have no room
-            // for particles moving in. When the domain holds a whole number of slices (the usual case) this is the
-            // same as buffer_factor * NpartLocal_in_use
-            const double nslices_domain = double(Npart_1D) * (xmax_local - xmin_local);
-            const size_t max_slices = size_t(std::max(0.0, std::ceil(nslices_domain - 1e-9)));
-            const size_t npart_per_slice = size_t(FML::power(Npart_1D, ndim - 1));
-            size_t NpartToAllocate =
-                size_t(std::ceil(std::max(buffer_factor, 1.0) * double(max_slices * npart_per_slice)));
+            // Allocate particle struct. The capacity is buffer_factor times the largest number of lattice points that
+            // the local region can hold (for any uniform shift of the lattice), not times the number we got: with
+            // Npart_1D not divisible by the number of parts a task can get fewer points than its share of the volume
+            // (or none) and would otherwise have no room for particles moving in. When the domain holds a whole number
+            // of lattice planes (the usual case) this is the same as buffer_factor * NpartLocal_in_use
+            size_t max_points = 1;
+            for (int idim = 0; idim < ndim; idim++) {
+                const double width = idim < 2 ? hi[idim] - lo[idim] : 1.0;
+                const double nplanes = double(Npart_1D) * width;
+                max_points *= size_t(std::max(0.0, std::ceil(nplanes - 1e-9)));
+            }
+            size_t NpartToAllocate = size_t(std::ceil(std::max(buffer_factor, 1.0) * double(max_points)));
             NpartToAllocate = std::max(NpartToAllocate, size_t(NpartLocal_in_use));
             assert_mpi(NpartToAllocate >= NpartLocal_in_use,
                        "[MPIParticles::create_particle_grid] Allocation is smaller than the number of particles\n");
             p.resize(NpartToAllocate);
             add_memory_label("MPIParticles::create_particle_grid");
 
-            // Initialize the coordinate to the first cell in the local grid
-            std::vector<double> Pos(ndim, 0.0);
-            std::vector<int> coord(ndim, 0);
-            coord[0] = Local_p_start;
+            // The local lattice points (x slowest, the last coordinate fastest)
+            std::vector<int> coord(ndim, 0), cstart(ndim, 0), cend(ndim, Npart_1D);
+            for (int idim = 0; idim < std::min(ndim, 2); idim++) {
+                cstart[idim] = Local_p_start[idim];
+                cend[idim] = Local_p_start[idim] + Local_Npart_1D[idim];
+            }
+            coord = cstart;
             for (size_t i = 0; i < NpartLocal_in_use; i++) {
                 auto * Pos = FML::PARTICLE::GetPos(p[i]);
 
@@ -789,11 +817,11 @@ namespace FML {
                     Pos[idim] = coord[idim] / double(Npart_1D);
                 }
 
-                // This is adding 1 very time in base Npart_1D storing the digits in reverse order in [coord]
+                // The next lattice point
                 int idim = ndim - 1;
-                while (++coord[idim] == Npart_1D) {
-                    coord[idim--] = 0;
-                    if (idim < 0)
+                while (++coord[idim] == cend[idim]) {
+                    coord[idim] = cstart[idim];
+                    if (--idim < 0)
                         break;
                 }
             }

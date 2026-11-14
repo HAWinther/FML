@@ -149,9 +149,9 @@ namespace FML {
             xmin_domain = new_domain.x_min(ThisTask);
             xmax_domain = new_domain.x_max(ThisTask);
         } else if (ThisTask == 0) {
-            std::cout << "WARNING: the domain is " << new_domain.type_name()
-                      << ": only MPIParticles::communicate_particles supports it; the rest of FML (grids, density "
-                         "assignment, ...) assumes the Slab domain (xmin_domain, xmax_domain are unchanged)\n";
+            std::cout << "NB: the domain is " << new_domain.type_name()
+                      << ": xmin_domain, xmax_domain are unchanged (code that uses them assumes the Slab domain); "
+                         "the grids for these particles are PencilGrids (FML::GRID::make_grid)\n";
         }
     }
 

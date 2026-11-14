@@ -536,7 +536,7 @@ namespace FML {
         /// @param[in] sign +1 or -1 (to undo a shift)
         /// @param[in] wrap_type 0: no periodic wrapping, 1: wrap all coordinates into [0,1), 2: wrap all but the
         /// x-coordinate (so particles stay on the task they belong to; with MPI the grid then needs one extra
-        /// slice on the right if the shift is less than a cell)
+        /// slice on the right if the shift is less than a cell), 3: wrap all but the x- and y-coordinates (pencil domains)
         template <class T, int NDIM>
         void shift_particles(T * part,
                              size_t NumPart,
@@ -550,7 +550,7 @@ namespace FML {
                 auto * pos = FML::PARTICLE::GetPos(part[i]);
                 for (int idim = 0; idim < NDIM; idim++) {
                     pos[idim] += sign * shift[idim];
-                    const bool wrap = (wrap_type == 1) or (wrap_type == 2 and idim > 0);
+                    const bool wrap = (wrap_type == 1) or (wrap_type == 2 and idim > 0) or (wrap_type == 3 and idim > 1);
                     if (wrap)
                         pos[idim] = wrap_coordinate_periodic(pos[idim]);
                 }

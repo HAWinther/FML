@@ -35,8 +35,8 @@ namespace FML {
         /// @param[in] sign +1: f(x) -> f(x+s), -1: f(x) -> f(x-s)
         ///
         //===================================================================================
-        template <int N>
-        void shift_grid_fourier(FFTWGrid<N> & fourier_grid, const std::array<double, N> & shift, double sign = +1.0) {
+        template <int N, template <int> class Grid = FFTWGrid>
+        void shift_grid_fourier(Grid<N> & fourier_grid, const std::array<double, N> & shift, double sign = +1.0) {
             const int Nmesh = fourier_grid.get_nmesh();
             assert_mpi(Nmesh > 0, "[shift_grid_fourier] Grid is not allocated\n");
 
@@ -55,7 +55,7 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (FML::IndexIntType irow = 0; irow < fourier_grid.get_local_nrows(); irow++) {
+            for (FML::IndexIntType irow = 0; irow < fourier_grid.get_local_nrows_fourier(); irow++) {
                 for (auto && fourier_index : fourier_grid.get_fourier_range_of_rows(irow, irow + 1)) {
                     auto kint = fourier_grid.get_fourier_integer_wavevector_from_index(fourier_index);
                     std::complex<double> f = factor[0][kint[0] + Nmesh / 2];
@@ -75,12 +75,12 @@ namespace FML {
         /// @tparam N The dimension of the grid
         ///
         //===================================================================================
-        template <int N, class F>
-        void for_each_fourier_mode(const FFTWGrid<N> & fourier_grid, F && f) {
+        template <int N, class F, template <int> class Grid = FFTWGrid>
+        void for_each_fourier_mode(const Grid<N> & fourier_grid, F && f) {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (FML::IndexIntType irow = 0; irow < fourier_grid.get_local_nrows(); irow++) {
+            for (FML::IndexIntType irow = 0; irow < fourier_grid.get_local_nrows_fourier(); irow++) {
                 double kmag;
                 std::array<double, N> kvec;
                 for (auto && fourier_index : fourier_grid.get_fourier_range_of_rows(irow, irow + 1)) {
@@ -91,8 +91,8 @@ namespace FML {
         }
 
         /// @brief Replace every mode by func(kmag, value) (kmag in units of 1/boxsize)
-        template <int N, class F>
-        void transform_fourier_modes(FFTWGrid<N> & fourier_grid, F && func) {
+        template <int N, class F, template <int> class Grid = FFTWGrid>
+        void transform_fourier_modes(Grid<N> & fourier_grid, F && func) {
             for_each_fourier_mode<N>(fourier_grid, [&](size_t fourier_index, double kmag) {
                 fourier_grid.set_fourier_from_index(fourier_index,
                                                     func(kmag, fourier_grid.get_fourier_from_index(fourier_index)));
@@ -100,22 +100,22 @@ namespace FML {
         }
 
         /// @brief Multiply every mode by g(kmag) (kmag in units of 1/boxsize)
-        template <int N, class F>
-        void multiply_fourier_by_function_of_k(FFTWGrid<N> & fourier_grid, F && g) {
+        template <int N, class F, template <int> class Grid = FFTWGrid>
+        void multiply_fourier_by_function_of_k(Grid<N> & fourier_grid, F && g) {
             transform_fourier_modes<N>(fourier_grid,
                                        [&](double kmag, ComplexType value) { return value * FloatType(g(kmag)); });
         }
 
         /// @brief The linear combination a -> wa a + wb b of two grids in fourier space (same layout)
-        template <int N>
-        void linear_combination_fourier(FFTWGrid<N> & a, const FFTWGrid<N> & b, double wa, double wb) {
+        template <int N, template <int> class Grid = FFTWGrid>
+        void linear_combination_fourier(Grid<N> & a, const Grid<N> & b, double wa, double wb) {
             assert_mpi(a.get_nmesh() == b.get_nmesh(), "[linear_combination_fourier] The grids have different sizes\n");
             const auto fa = FloatType(wa);
             const auto fb = FloatType(wb);
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (FML::IndexIntType irow = 0; irow < a.get_local_nrows(); irow++) {
+            for (FML::IndexIntType irow = 0; irow < a.get_local_nrows_fourier(); irow++) {
                 for (auto && fourier_index : a.get_fourier_range_of_rows(irow, irow + 1)) {
                     a.set_fourier_from_index(fourier_index,
                                              a.get_fourier_from_index(fourier_index) * fa +
@@ -126,8 +126,8 @@ namespace FML {
 
         /// @brief Translate a real grid: \f$ f(x) \to f(x + {\rm sign}\cdot s) \f$ using Fourier interpolation (an
         /// r2c, a phase factor and a c2r). See shift_grid_fourier.
-        template <int N>
-        void shift_grid_real(FFTWGrid<N> & real_grid, const std::array<double, N> & shift, double sign = +1.0) {
+        template <int N, template <int> class Grid = FFTWGrid>
+        void shift_grid_real(Grid<N> & real_grid, const std::array<double, N> & shift, double sign = +1.0) {
             real_grid.fftw_r2c();
             shift_grid_fourier<N>(real_grid, shift, sign);
             real_grid.fftw_c2r();
@@ -141,12 +141,12 @@ namespace FML {
         /// @param[out] fourier_grid The fourier grid we do the whitening on
         ///
         //===================================================================================
-        template <int N>
-        void whitening_fourier_space(FFTWGrid<N> & fourier_grid) {
+        template <int N, template <int> class Grid = FFTWGrid>
+        void whitening_fourier_space(Grid<N> & fourier_grid) {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (FML::IndexIntType irow = 0; irow < fourier_grid.get_local_nrows(); irow++) {
+            for (FML::IndexIntType irow = 0; irow < fourier_grid.get_local_nrows_fourier(); irow++) {
                 [[maybe_unused]] double kmag2;
                 [[maybe_unused]] std::array<double, N> kvec;
                 for (auto && fourier_index : fourier_grid.get_fourier_range_of_rows(irow, irow + 1)) {
@@ -158,15 +158,15 @@ namespace FML {
             }
         }
 
-        template <int N>
+        template <int N, template <int> class Grid = FFTWGrid>
         void
-        custom_smoothing_filter_fourier_space(FFTWGrid<N> & fourier_grid,
+        custom_smoothing_filter_fourier_space(Grid<N> & fourier_grid,
                                               const std::function<double(double)> & custom_filter_of_kBox_squared) {
             // Do the smoothing
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (FML::IndexIntType irow = 0; irow < fourier_grid.get_local_nrows(); irow++) {
+            for (FML::IndexIntType irow = 0; irow < fourier_grid.get_local_nrows_fourier(); irow++) {
                 [[maybe_unused]] double kmag2;
                 [[maybe_unused]] std::array<double, N> kvec;
                 for (auto && fourier_index : fourier_grid.get_fourier_range_of_rows(irow, irow + 1)) {
@@ -258,8 +258,8 @@ namespace FML {
         }
 
 
-        template <int N>
-        void smoothing_filter_fourier_space(FFTWGrid<N> & fourier_grid,
+        template <int N, template <int> class Grid = FFTWGrid>
+        void smoothing_filter_fourier_space(Grid<N> & fourier_grid,
                                             double smoothing_scale,
                                             std::string smoothing_method) {
             const auto filter = smoothing_filter_of_k2<N>(smoothing_scale, smoothing_method);
@@ -268,7 +268,7 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (FML::IndexIntType irow = 0; irow < fourier_grid.get_local_nrows(); irow++) {
+            for (FML::IndexIntType irow = 0; irow < fourier_grid.get_local_nrows_fourier(); irow++) {
                 [[maybe_unused]] double kmag2;
                 [[maybe_unused]] std::array<double, N> kvec;
                 for (auto && fourier_index : fourier_grid.get_fourier_range_of_rows(irow, irow + 1)) {
@@ -292,17 +292,17 @@ namespace FML {
         /// @param[out] fourier_grid_result Fourier grid containing the convolution of the two gridsf
         ///
         //===================================================================================
-        template <int N>
-        void convolution_fourier_space(const FFTWGrid<N> & fourier_grid_f,
-                                       const FFTWGrid<N> & fourier_grid_g,
-                                       FFTWGrid<N> & fourier_grid_result) {
+        template <int N, template <int> class Grid = FFTWGrid>
+        void convolution_fourier_space(const Grid<N> & fourier_grid_f,
+                                       const Grid<N> & fourier_grid_g,
+                                       Grid<N> & fourier_grid_result) {
 
             bool f_and_g_are_the_same_grid = (&fourier_grid_f == &fourier_grid_g);
 
             // Make copies: tmp contains f and result contains g
             // unless f = g for which we can don't need the copy
             // and save doing 1 FFT
-            FFTWGrid<N> tmp;
+            Grid<N> tmp;
             fourier_grid_result = fourier_grid_g;
             fourier_grid_result.add_memory_label("FFTWGrid::convolution_fourier_space::fourier_grid_result");
 
@@ -315,7 +315,6 @@ namespace FML {
             }
 
             // Multiply the two grids in real space
-            auto Local_nx = fourier_grid_result.get_local_nx();
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
@@ -348,17 +347,17 @@ namespace FML {
         /// @param[out] real_grid_result Real grid containing the convolution of the two grids.
         ///
         //===================================================================================
-        template <int N>
-        void convolution_real_space(const FFTWGrid<N> & real_grid_f,
-                                    const FFTWGrid<N> & real_grid_g,
-                                    FFTWGrid<N> & real_grid_result) {
+        template <int N, template <int> class Grid = FFTWGrid>
+        void convolution_real_space(const Grid<N> & real_grid_f,
+                                    const Grid<N> & real_grid_g,
+                                    Grid<N> & real_grid_result) {
 
             bool f_and_g_are_the_same_grid = (&real_grid_f == &real_grid_g);
 
             // Make copies: tmp contains f and result contains g
             // unless f = g for which we can don't need the copy
             // and save doing 1 FFT
-            FFTWGrid<N> tmp;
+            Grid<N> tmp;
             real_grid_result = real_grid_g;
             real_grid_result.add_memory_label("FFTWGrid::convolution_real_space::real_grid_result");
 
@@ -374,7 +373,7 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif
-            for (FML::IndexIntType irow = 0; irow < real_grid_result.get_local_nrows(); irow++) {
+            for (FML::IndexIntType irow = 0; irow < real_grid_result.get_local_nrows_fourier(); irow++) {
                 for (auto && fourier_index : real_grid_result.get_fourier_range_of_rows(irow, irow + 1)) {
                     auto g_fourier = real_grid_result.get_fourier_from_index(fourier_index);
                     auto f_fourier = g_fourier;
@@ -401,9 +400,9 @@ namespace FML {
         /// @param[out] pdf The binned PDF normalized such that \f$ \int_{-\infty}^\infty p(x)dx = 1\f$.
         ///
         //===================================================================================
-        template <int N>
+        template <int N, template <int> class Grid = FFTWGrid>
         void
-        compute_grid_PDF(const FFTWGrid<N> & real_grid, int nbins, std::vector<double> & x, std::vector<double> & pdf) {
+        compute_grid_PDF(const Grid<N> & real_grid, int nbins, std::vector<double> & x, std::vector<double> & pdf) {
 
             // Multiply the two grids in real space
 

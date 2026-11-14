@@ -18,6 +18,7 @@
 #include <cstdio>
 #include <random>
 #include <string>
+#include <stdexcept>
 #include <vector>
 #include <FML/tests/TestHelpers.h>
 
@@ -294,6 +295,38 @@ int main() {
         const auto dec = PH::PeanoHilbertDomain::build(keys, 10, 8);
         check_communication<Particle3>(FML::Domain::peano_hilbert(dec), "PeanoHilbert (load-balanced)");
 #endif
+    }
+    // PeanoHilbert: create_particle_grid throws (on every task); the lattice made on slabs and moved there with
+    // set_domain is complete and owned
+    {
+        const auto ph = FML::Domain::uniform_peano_hilbert(N);
+        FML::PARTICLE::MPIParticles<Particle3> lattice(ph);
+        bool threw = false;
+        try {
+            lattice.create_particle_grid(8, 2.0);
+        } catch (const std::invalid_argument &) {
+            threw = true;
+        }
+        int all = threw ? 1 : 0;
+        FML::MinOverTasks(&all);
+        check(all == 1, "create_particle_grid on a PeanoHilbert domain throws on every task");
+        FML::PARTICLE::MPIParticles<Particle3> moved(FML::Domain::uniform_slab(N));
+        moved.create_particle_grid(8, 2.0 * N);
+        moved.set_domain(ph);
+        bool owned = true;
+        double sum = 0;
+        for (auto & q : moved) {
+            owned = owned and ph.owner(q.pos) == FML::ThisTask;
+            sum += q.pos[0] + 2 * q.pos[1] + 3 * q.pos[2];
+        }
+        int ok = owned ? 1 : 0;
+        FML::MinOverTasks(&ok);
+        size_t ntot = moved.get_npart();
+        FML::SumOverTasks(&ntot);
+        FML::SumOverTasks(&sum);
+        // (the sum over the lattice of x + 2y + 3z = 6 * 512 * mean(i/8) = 6 * 512 * 7/16)
+        check(ok == 1 and ntot == 512 and std::abs(sum - 6 * 512 * 7.0 / 16) < 1e-9 and moved.get_domain() == ph,
+              "a slab lattice moved to PeanoHilbert with set_domain: complete and owned");
     }
     return FML::TESTS::summary("domain");
 }

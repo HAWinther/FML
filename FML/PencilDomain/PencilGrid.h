@@ -2,6 +2,7 @@
 #define FML_PENCIL_GRID_H
 
 #include <FML/FFTWGrid/FFTWGrid.h>
+#include <FML/FFTWGrid/GridInterface.h>
 #include <FML/Global/Global.h>
 
 #include <array>
@@ -129,6 +130,43 @@ namespace FML {
             PencilGrid & operator=(PencilGrid && rhs) noexcept;
             ~PencilGrid();
 
+#ifdef USE_GSL
+            /// A spline of a function of |k| (in units of 1/Box) over the wavenumbers of the grid (as FFTWGrid). (A member
+            /// template: not made by the explicit instantiation of the class, so PencilGrid.o needs no Spline.o)
+            template <class F = std::function<double(double)>>
+            FML::INTERPOLATION::SPLINE::Spline
+            make_fourier_spline(F function_of_kBox, std::string label, int sampling_factor = 4) const {
+                FML::assert_mpi(Nmesh > 0, "PencilGrid::make_fourier_spline Grid is not allocated");
+                sampling_factor = std::max(sampling_factor, 1);
+                const int npts = Nmesh * sampling_factor + 1;
+                const double kmax = 2.0 * M_PI * Nmesh / 2.0 * std::sqrt(double(N));
+                std::vector<double> k_vec(npts), func_vec(npts);
+                for (int i = 0; i < npts; i++) {
+                    k_vec[i] = kmax * i / double(npts - 1);
+                    func_vec[i] = function_of_kBox(k_vec[i]);
+                    if (func_vec[i] != func_vec[i] or std::isinf(func_vec[i]))
+                        throw std::runtime_error("PencilGrid::make_fourier_spline The function evaluated to NaN or Inf "
+                                                 "at kBox = " +
+                                                 std::to_string(k_vec[i]));
+                }
+                return FML::INTERPOLATION::SPLINE::Spline(k_vec, func_vec, label);
+            }
+#else
+            std::function<double(double)> make_fourier_spline(std::function<double(double)> function_of_kBox,
+                                                              [[maybe_unused]] std::string label,
+                                                              [[maybe_unused]] int sampling_factor = 4) const {
+                return function_of_kBox;
+            }
+#endif
+
+            /// A grid of the same size, extra cells and pencils with zero values (keeps the status real/Fourier)
+            PencilGrid clone_empty() const {
+                PencilGrid result(Nmesh, n_extra_left, n_extra_right, domain);
+                result.set_grid_status_real(grid_is_in_real_space);
+                result.add_memory_label(name);
+                return result;
+            }
+
             /// Has the grid been allocated
             explicit operator bool() const { return data != nullptr; }
             /// Free all the memory associated with the grid (as if default constructed)
@@ -223,6 +261,30 @@ namespace FML {
             /// Number of local ky-values in the Fourier grid and the first one
             ptrdiff_t get_local_nky() const { return Local_nky; }
             ptrdiff_t get_local_ky_start() const { return Local_ky_start; }
+            /// The local cells along an axis: {first, count} (x and in 3D y: the pencil, the other axes: all)
+            std::array<ptrdiff_t, 2> get_local_range(int axis) const {
+                if (axis == 0)
+                    return {Local_x_start, Local_nx};
+                if (axis == 1)
+                    return {Local_y_start, Local_ny};
+                return {0, Nmesh};
+            }
+            /// The local Fourier cells along an axis: {first, count} in the global Fourier coordinates (the integer
+            /// wavevector modulo Nmesh; the last axis: [0, Nmesh/2]). x: all, y (and z): the local ones
+            std::array<ptrdiff_t, 2> get_local_fourier_range(int axis) const {
+                if (axis == 0)
+                    return {0, Nmesh};
+                if (axis == 1)
+                    return {Local_ky_start, Local_nky};
+                return {Local_kz_start, Local_nkz};
+            }
+            /// The index of a Fourier cell from its global Fourier coordinates (must be local)
+            IndexIntType get_index_fourier_global(std::array<int, N> coord) const {
+                coord[1] -= int(Local_ky_start);
+                if constexpr (N == 3)
+                    coord[2] -= int(Local_kz_start);
+                return get_index_fourier(coord);
+            }
             /// Number of local kz-values in the Fourier grid and the first one (N = 3)
             ptrdiff_t get_local_nkz() const { return Local_nkz; }
             ptrdiff_t get_local_kz_start() const { return Local_kz_start; }
@@ -235,6 +297,8 @@ namespace FML {
             ptrdiff_t get_ntot_fourier_alloc() const { return NComplexAlloc; }
             /// The allocated memory
             size_t allocated_storage_bytes() const { return size_t(NComplexAlloc) * sizeof(ComplexType); }
+            /// The memory a grid without extra cells on a domain would allocate on this task (without allocating it)
+            static size_t storage_bytes(int Nmesh, const PencilDomain & domain);
 
             /// Range iterator over all the active cells of the main real grid by index
             /// [ e.g. for(auto && real_index : grid.get_real_range()) ]
@@ -270,6 +334,14 @@ namespace FML {
 
             /// Print some info about the grid
             void info() const;
+
+            /// Save to file (adds .X to fileprefix where X is ThisTask): a raw copy of the local data (the cells, the
+            /// extra cells and the padding) with the size, the extra cells, the pencil edges and the status, for
+            /// checkpointing. Read it back with load_from_file with the same number of tasks. Collective
+            void dump_to_file(std::string fileprefix) const;
+            /// Load a grid written by dump_to_file (same number of tasks): the grid is made with the size, extra cells
+            /// and pencils of the file. Collective; aborts if a file cannot be read or does not match
+            void load_from_file(std::string fileprefix);
 
             /// Get the status of the grid: is it currently a real grid or a fourier grid?
             bool get_grid_status_real() const { return grid_is_in_real_space; }
@@ -327,6 +399,44 @@ namespace FML {
         void fftw_c2r(const PencilGrid<N> & in_grid, PencilGrid<N> & out_grid) {
             out_grid = in_grid;
             out_grid.fftw_c2r();
+        }
+
+        /// A grid of another size on the same pencils (NUFFT: the fine grid). See fits_grid_like
+        template <int N>
+        PencilGrid<N> make_grid_like(const PencilGrid<N> & grid, int Nmesh, int n_extra_left, int n_extra_right) {
+            return PencilGrid<N>(Nmesh, n_extra_left, n_extra_right, grid.get_domain());
+        }
+        /// Can a grid of Nmesh cells be made on the same pencils (the edges of the pencils on its cells)?
+        template <int N>
+        bool fits_grid_like(const PencilGrid<N> & grid, int Nmesh) {
+            auto on_cells = [&](const std::vector<double> & edges) {
+                for (double e : edges)
+                    if (std::abs(e * Nmesh - std::round(e * Nmesh)) > 1e-6)
+                        return false;
+                for (size_t i = 0; i + 1 < edges.size(); i++)
+                    if (std::round(edges[i + 1] * Nmesh) <= std::round(edges[i] * Nmesh))
+                        return false;
+                return true;
+            };
+            return on_cells(grid.get_domain().x_edges()) and (N == 2 or on_cells(grid.get_domain().y_edges()));
+        }
+
+        /// A PencilGrid on a domain: its pencils, or for a SlabDomain the slabs as P0 x 1 pencils (the tasks in the
+        /// order of the slabs)
+        template <int N>
+        PencilGrid<N> make_grid_on_domain(grid_type_tag<PencilGrid<N>>, int Nmesh, int n_extra_left, int n_extra_right,
+                                          const FML::Domain & domain) {
+            if (domain.holds<PencilDomain>())
+                return PencilGrid<N>(Nmesh, n_extra_left, n_extra_right, domain.get<PencilDomain>());
+            assert_mpi(domain.is_slab(), "[make_grid] A PencilGrid needs a PencilDomain or a SlabDomain");
+            std::vector<double> xedges(FML::NTasks + 1);
+            for (int task = 0; task < FML::NTasks; task++) {
+                assert_mpi(task == 0 or std::abs(domain.x_min(task) - domain.x_max(task - 1)) < 1e-12,
+                           "[make_grid] The slabs must be in the order of the tasks");
+                xedges[task] = domain.x_min(task);
+            }
+            xedges[FML::NTasks] = 1.0;
+            return PencilGrid<N>(Nmesh, n_extra_left, n_extra_right, PencilDomain::from_edges(xedges, {0.0, 1.0}));
         }
 
     } // namespace GRID

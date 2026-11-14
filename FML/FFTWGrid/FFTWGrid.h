@@ -307,6 +307,26 @@ namespace FML {
             ///   for (IndexIntType irow = 0; irow < grid.get_local_nrows(); irow++)
             ///       for (auto && fourier_index : grid.get_fourier_range_of_rows(irow, irow + 1)) ... ]
             IndexIntType get_local_nrows() const;
+            /// The number of local rows of the Fourier grid (lines along the last dimension; the same as
+            /// get_local_nrows here, but not for every grid: generic code loops over the Fourier rows with this)
+            IndexIntType get_local_nrows_fourier() const { return get_local_nrows(); }
+            /// The local cells along an axis: {first, count} (x: the slab, the other axes: all)
+            std::array<ptrdiff_t, 2> get_local_range(int axis) const {
+                return axis == 0 ? std::array<ptrdiff_t, 2>{Local_x_start, Local_nx} :
+                                   std::array<ptrdiff_t, 2>{0, Nmesh};
+            }
+            /// The local Fourier cells along an axis: {first, count} in the global Fourier coordinates (the integer
+            /// wavevector modulo Nmesh; the last axis: [0, Nmesh/2]). x: the slab, the last axis: all Nmesh/2+1
+            std::array<ptrdiff_t, 2> get_local_fourier_range(int axis) const {
+                if (axis == 0)
+                    return {Local_x_start, Local_nx};
+                return {0, axis == N - 1 ? Nmesh / 2 + 1 : Nmesh};
+            }
+            /// The index of a Fourier cell from its global Fourier coordinates (must be local)
+            IndexIntType get_index_fourier_global(std::array<int, N> coord) const {
+                coord[0] -= int(Local_x_start);
+                return get_index_fourier(coord);
+            }
             /// Range iterator over the real grid cells of the rows [row_begin, row_end)
             RealRange get_real_range_of_rows(IndexIntType row_begin, IndexIntType row_end) const;
             /// Range iterator over the Fourier grid cells of the rows [row_begin, row_end)

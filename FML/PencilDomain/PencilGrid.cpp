@@ -1,8 +1,11 @@
 #include "PencilGrid.h"
+#include "CPencilGrid.h"
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
+#include <fstream>
 #include <iostream>
 #include <limits>
 #include <new>
@@ -39,6 +42,10 @@ namespace FML {
             inline my_fftw_plan plan_many(int n, int howmany, my_fftw_complex * data, int sign, unsigned flags) {
                 return fftwf_plan_many_dft(1, &n, howmany, data, nullptr, 1, n, data, nullptr, 1, n, sign, flags);
             }
+            inline my_fftw_plan plan_dft(fftw_iodim_type * dims, int howmany_rank, fftw_iodim_type * howmany,
+                                         my_fftw_complex * data, int sign, unsigned flags) {
+                return fftwf_plan_guru_dft(1, dims, howmany_rank, howmany, data, data, sign, flags);
+            }
             inline void execute_r2c(my_fftw_plan p, FloatType * in, my_fftw_complex * out) {
                 fftwf_execute_dft_r2c(p, in, out);
             }
@@ -71,6 +78,10 @@ namespace FML {
             inline my_fftw_plan plan_many(int n, int howmany, my_fftw_complex * data, int sign, unsigned flags) {
                 return fftwl_plan_many_dft(1, &n, howmany, data, nullptr, 1, n, data, nullptr, 1, n, sign, flags);
             }
+            inline my_fftw_plan plan_dft(fftw_iodim_type * dims, int howmany_rank, fftw_iodim_type * howmany,
+                                         my_fftw_complex * data, int sign, unsigned flags) {
+                return fftwl_plan_guru_dft(1, dims, howmany_rank, howmany, data, data, sign, flags);
+            }
             inline void execute_r2c(my_fftw_plan p, FloatType * in, my_fftw_complex * out) {
                 fftwl_execute_dft_r2c(p, in, out);
             }
@@ -102,6 +113,10 @@ namespace FML {
             }
             inline my_fftw_plan plan_many(int n, int howmany, my_fftw_complex * data, int sign, unsigned flags) {
                 return fftw_plan_many_dft(1, &n, howmany, data, nullptr, 1, n, data, nullptr, 1, n, sign, flags);
+            }
+            inline my_fftw_plan plan_dft(fftw_iodim_type * dims, int howmany_rank, fftw_iodim_type * howmany,
+                                         my_fftw_complex * data, int sign, unsigned flags) {
+                return fftw_plan_guru_dft(1, dims, howmany_rank, howmany, data, data, sign, flags);
             }
             inline void execute_r2c(my_fftw_plan p, FloatType * in, my_fftw_complex * out) {
                 fftw_execute_dft_r2c(p, in, out);
@@ -441,6 +456,28 @@ namespace FML {
 
             allocate();
             fill_real_grid(0.0);
+        }
+
+        template <int N>
+        size_t PencilGrid<N>::storage_bytes(int Nmesh, const PencilDomain & domain) {
+            const auto P = domain.process_grid();
+            const auto p = domain.coords_of(FML::ThisTask);
+            const auto xcells = cell_edges(domain.x_edges(), Nmesh, "x");
+            const ptrdiff_t nx = xcells[p[0] + 1] - xcells[p[0]];
+            const int nlast = Nmesh / 2 + 1;
+            ptrdiff_t ny = Nmesh, nky = 0, nkz = 1;
+            if constexpr (N == 3) {
+                const auto ycells = cell_edges(domain.y_edges(), Nmesh, "y");
+                ny = ycells[p[1] + 1] - ycells[p[1]];
+                nky = split(Nmesh, P[0], p[0])[1];
+                nkz = split(nlast, P[1], p[1])[1];
+            } else {
+                nky = split(nlast, P[0], p[0])[1];
+            }
+            // As the constructor: the real rows of 2 (Nmesh/2+1) reals, the y-pencils (3D) and the Fourier cells
+            const ptrdiff_t ncomplex_real = nx * (N == 3 ? ny : 1) * nlast;
+            const ptrdiff_t ncomplex_ypencils = N == 3 ? nx * nkz * Nmesh : 0;
+            return size_t(std::max({ncomplex_real, ncomplex_ypencils, nky * nkz * Nmesh})) * sizeof(ComplexType);
         }
 
         template <int N>
@@ -1007,6 +1044,84 @@ namespace FML {
             return false;
         }
 
+        namespace {
+            constexpr char pencil_grid_magic[8] = {'F', 'M', 'L', 'P', 'G', 'R', 'D', '1'};
+        }
+
+        template <int N>
+        void PencilGrid<N>::dump_to_file(std::string fileprefix) const {
+            const std::string filename = fileprefix + "." + std::to_string(FML::ThisTask);
+            std::ofstream out(filename, std::ios::binary | std::ios::trunc);
+            bool ok = out.good();
+            if (ok) {
+                const int32_t header[6] = {N, int32_t(Nmesh), int32_t(n_extra_left), int32_t(n_extra_right),
+                                           int32_t(FML::NTasks), int32_t(grid_is_in_real_space)};
+                out.write(pencil_grid_magic, 8);
+                out.write(reinterpret_cast<const char *>(header), sizeof(header));
+                for (const auto * edges : {&domain.x_edges(), &domain.y_edges()}) {
+                    const int64_t n = int64_t(edges->size());
+                    out.write(reinterpret_cast<const char *>(&n), sizeof(n));
+                    out.write(reinterpret_cast<const char *>(edges->data()), std::streamsize(n * sizeof(double)));
+                }
+                const int64_t nalloc = NComplexAlloc;
+                out.write(reinterpret_cast<const char *>(&nalloc), sizeof(nalloc));
+                if (nalloc > 0)
+                    out.write(reinterpret_cast<const char *>(data), std::streamsize(nalloc * sizeof(ComplexType)));
+                out.close();
+                ok = not out.fail();
+            }
+            int good = ok ? 1 : 0;
+            FML::MinOverTasks(&good);
+            assert_mpi(good == 1, ("[PencilGrid::dump_to_file] Failed to write " + fileprefix + ".*").c_str());
+        }
+
+        template <int N>
+        void PencilGrid<N>::load_from_file(std::string fileprefix) {
+            const std::string filename = fileprefix + "." + std::to_string(FML::ThisTask);
+            std::ifstream in(filename, std::ios::binary);
+            char magic[8] = {};
+            int32_t header[6] = {};
+            std::vector<double> edges[2];
+            int64_t nalloc = -1;
+            in.read(magic, 8);
+            in.read(reinterpret_cast<char *>(header), sizeof(header));
+            bool ok = in.good() and std::memcmp(magic, pencil_grid_magic, 8) == 0 and header[0] == N and
+                      header[4] == FML::NTasks and header[1] > 0;
+            for (int k = 0; ok and k < 2; k++) {
+                int64_t n = 0;
+                in.read(reinterpret_cast<char *>(&n), sizeof(n));
+                ok = in.good() and n >= 2 and n <= int64_t(FML::NTasks) + 1;
+                if (ok) {
+                    edges[k].resize(size_t(n));
+                    in.read(reinterpret_cast<char *>(edges[k].data()), std::streamsize(n * sizeof(double)));
+                    ok = in.good();
+                }
+            }
+            if (ok)
+                in.read(reinterpret_cast<char *>(&nalloc), sizeof(nalloc));
+            ok = ok and in.good();
+            int good = ok ? 1 : 0;
+            FML::MinOverTasks(&good);
+            assert_mpi(good == 1,
+                       ("[PencilGrid::load_from_file] Cannot read " + fileprefix +
+                        ".* (missing, not a PencilGrid file, other dimension or other number of tasks)")
+                           .c_str());
+            // All tasks have the same header (the same grid): make it and read our part
+            *this = PencilGrid<N>(header[1], header[2], header[3], PencilDomain::from_edges(edges[0], edges[1]));
+            set_grid_status_real(header[5] != 0);
+            ok = nalloc == int64_t(NComplexAlloc);
+            if (ok and nalloc > 0) {
+                in.read(reinterpret_cast<char *>(data), std::streamsize(nalloc * sizeof(ComplexType)));
+                ok = in.good();
+            }
+            good = ok ? 1 : 0;
+            FML::MinOverTasks(&good);
+            assert_mpi(good == 1,
+                       ("[PencilGrid::load_from_file] The data in " + fileprefix +
+                        ".* does not match the grid (truncated, or written with another layout)")
+                           .c_str());
+        }
+
         template <int N>
         void PencilGrid<N>::info() const {
             if (FML::ThisTask != 0)
@@ -1029,6 +1144,550 @@ namespace FML {
 
         template class PencilGrid<2>;
         template class PencilGrid<3>;
+
+        //=========================================================================
+        // CPencilGrid: the complex-to-complex pencil grid (the same transposes, no r2c / c2r)
+        //=========================================================================
+
+        struct CPencilTransforms {
+            // 3D: position-space pencils (after the FFT along z) -> y-pencils in the row, y-pencils -> x-pencils in
+            // the column. 2D: slabs (after the FFT along y) -> x-pencils in the column
+            Exchange row, column;
+            my_fftw_plan last_forward{nullptr}, last_backward{nullptr};
+            my_fftw_plan y_forward{nullptr}, y_backward{nullptr};
+            my_fftw_plan x_forward{nullptr}, x_backward{nullptr};
+            ComplexType * work{nullptr};
+            size_t nwork{0};
+
+            CPencilTransforms() = default;
+            CPencilTransforms(const CPencilTransforms &) = delete;
+            CPencilTransforms & operator=(const CPencilTransforms &) = delete;
+            ~CPencilTransforms() {
+                for (auto p : {last_forward, last_backward, y_forward, y_backward, x_forward, x_backward})
+                    if (p != nullptr)
+                        destroy_plan(p);
+                free_complex_array(work);
+                int finalized = 0;
+                MPI_Finalized(&finalized);
+                if (finalized)
+                    return;
+                for (auto * comm : {&row.comm, &column.comm})
+                    if (*comm != MPI_COMM_NULL)
+                        MPI_Comm_free(comm);
+            }
+        };
+
+        template <int N>
+        CPencilGrid<N>::CPencilGrid(int Nmesh, int n_extra_left, int n_extra_right)
+            : CPencilGrid(Nmesh, n_extra_left, n_extra_right, default_domain(Nmesh, N)) {}
+
+        template <int N>
+        CPencilGrid<N>::CPencilGrid(int Nmesh, int n_extra_left, int n_extra_right, const PencilDomain & domain)
+            : Nmesh(Nmesh), n_extra_left(n_extra_left), n_extra_right(n_extra_right), domain(domain) {
+            assert_mpi(Nmesh > 0 and n_extra_left >= 0 and n_extra_right >= 0,
+                       "[CPencilGrid] Need Nmesh > 0 and n_extra >= 0");
+            assert_mpi(domain.ntasks() == FML::NTasks, "[CPencilGrid] The domain is not made for NTasks tasks");
+            const auto P = domain.process_grid();
+            const auto p = domain.coords_of(FML::ThisTask);
+            assert_mpi(N == 3 or P[1] == 1, "[CPencilGrid] In 2D the domain must have P1 = 1 (slabs in x)");
+
+            const auto xcells = cell_edges(domain.x_edges(), Nmesh, "x");
+            Local_x_start = xcells[p[0]];
+            Local_nx = xcells[p[0] + 1] - xcells[p[0]];
+            if constexpr (N == 3) {
+                const auto ycells = cell_edges(domain.y_edges(), Nmesh, "y");
+                Local_y_start = ycells[p[1]];
+                Local_ny = ycells[p[1] + 1] - ycells[p[1]];
+            } else {
+                Local_y_start = 0;
+                Local_ny = Nmesh;
+            }
+            const int nextra = std::max(n_extra_left, n_extra_right);
+            assert_mpi(Local_nx >= std::max(1, nextra) and Local_ny >= std::max(1, N == 3 ? nextra : 0),
+                       "[CPencilGrid] Every task needs at least one cell (and as many as the extra cells) in x and y");
+
+            // The Fourier cells: all kx, ky split over P0 and (3D) kz split over P1, both over [0, Nmesh)
+            assert_mpi(Nmesh >= P[0] and Nmesh >= P[1], "[CPencilGrid] Need Nmesh >= P0 and Nmesh >= P1");
+            const auto ky = split(Nmesh, P[0], p[0]);
+            Local_ky_start = ky[0];
+            Local_nky = ky[1];
+            if constexpr (N == 3) {
+                const auto kz = split(Nmesh, P[1], p[1]);
+                Local_kz_start = kz[0];
+                Local_nkz = kz[1];
+            } else {
+                Local_kz_start = 0;
+                Local_nkz = 1;
+            }
+
+            row_stride = Nmesh;
+            if constexpr (N == 3) {
+                slice_stride = (Local_ny + n_extra_left + n_extra_right) * row_stride;
+                real_offset = n_extra_left * slice_stride + n_extra_left * row_stride;
+            } else {
+                slice_stride = row_stride;
+                real_offset = n_extra_left * slice_stride;
+            }
+            const ptrdiff_t ncomplex_real = (Local_nx + n_extra_left + n_extra_right) * slice_stride;
+            const ptrdiff_t ncomplex_ypencils = N == 3 ? Local_nx * Local_nkz * Nmesh : 0;
+            NComplexAlloc = std::max({ncomplex_real, ncomplex_ypencils, get_ntot_fourier()});
+
+            allocate();
+            fill_real_grid(ComplexType(0.0));
+        }
+
+        template <int N>
+        void CPencilGrid<N>::allocate() {
+            data = allocate_complex(size_t(NComplexAlloc));
+
+            const auto P = domain.process_grid();
+            const auto p = domain.coords_of(FML::ThisTask);
+            const int nx = int(Local_nx), ny = int(Local_ny), nky = int(Local_nky), nkz = int(Local_nkz);
+            const int nl = n_extra_left;
+            const auto xcells = cell_edges(domain.x_edges(), Nmesh, "x");
+
+            transforms = std::make_shared<CPencilTransforms>();
+            auto & t = *transforms;
+            MPI_Comm_split(FML::communicator, p[0], p[1], &t.row.comm);
+            MPI_Comm_split(FML::communicator, p[1], p[0], &t.column.comm);
+            t.row.size = P[1];
+            t.column.size = P[0];
+
+            const ptrdiff_t row = row_stride, slice = slice_stride;
+            if constexpr (N == 3) {
+                const auto ycells = cell_edges(domain.y_edges(), Nmesh, "y");
+                // Row: (ix, iy, kz) of the pencils -> the y-pencils (ix, kz, y) at (ix * nkz + kz) * Nmesh + y
+                for (int j = 0; j < P[1]; j++) {
+                    const auto kz = split(Nmesh, P[1], j);
+                    const int ny_j = int(ycells[j + 1] - ycells[j]);
+                    t.row.send.push_back({nl * slice + nl * row + kz[0], {slice, row, 1}, {nx, ny, int(kz[1])}});
+                    t.row.recv.push_back({ptrdiff_t(ycells[j]), {ptrdiff_t(nkz) * Nmesh, 1, Nmesh}, {nx, ny_j, nkz}});
+                }
+                // Column: (ix, kz, ky) of the y-pencils -> the x-pencils (ky, kz, x) at (ky * nkz + kz) * Nmesh + x
+                for (int i = 0; i < P[0]; i++) {
+                    const auto ky = split(Nmesh, P[0], i);
+                    const int nx_i = int(xcells[i + 1] - xcells[i]);
+                    t.column.send.push_back({ky[0], {ptrdiff_t(nkz) * Nmesh, Nmesh, 1}, {nx, nkz, int(ky[1])}});
+                    t.column.recv.push_back(
+                        {ptrdiff_t(xcells[i]), {1, Nmesh, ptrdiff_t(nkz) * Nmesh}, {nx_i, nkz, nky}});
+                }
+                t.row.finalize();
+                t.column.finalize();
+                t.nwork = std::max({t.row.send_total, size_t(nx) * nkz * Nmesh, t.column.recv_total});
+            } else {
+                // Column: (1, ix, ky) of the slabs -> the x-pencils (ky, x) at ky * Nmesh + x
+                for (int i = 0; i < P[0]; i++) {
+                    const auto ky = split(Nmesh, P[0], i);
+                    const int nx_i = int(xcells[i + 1] - xcells[i]);
+                    t.column.send.push_back({nl * row + ky[0], {0, row, 1}, {1, nx, int(ky[1])}});
+                    t.column.recv.push_back({ptrdiff_t(xcells[i]), {0, 1, Nmesh}, {1, nx_i, nky}});
+                }
+                t.column.finalize();
+                t.nwork = t.column.send_total + t.column.recv_total;
+            }
+            t.work = allocate_complex(t.nwork);
+
+            // The plans (made before the grid is filled: the planner flags other than FFTW_ESTIMATE overwrite it)
+            const unsigned flags = FML::GRID::get_fftw_planner_flag();
+            my_fftw_complex * main = as_fftw(data) + real_offset;
+            fftw_iodim_type dim{Nmesh, 1, 1};
+            if constexpr (N == 3) {
+                fftw_iodim_type howmany[2] = {{nx, int(slice), int(slice)}, {ny, int(row), int(row)}};
+                t.last_forward = plan_dft(&dim, 2, howmany, main, FFTW_FORWARD, flags);
+                t.last_backward = plan_dft(&dim, 2, howmany, main, FFTW_BACKWARD, flags);
+                t.y_forward = plan_many(Nmesh, nx * nkz, as_fftw(t.work), FFTW_FORWARD, flags);
+                t.y_backward = plan_many(Nmesh, nx * nkz, as_fftw(t.work), FFTW_BACKWARD, flags);
+            } else {
+                fftw_iodim_type howmany[1] = {{nx, int(slice), int(slice)}};
+                t.last_forward = plan_dft(&dim, 1, howmany, main, FFTW_FORWARD, flags);
+                t.last_backward = plan_dft(&dim, 1, howmany, main, FFTW_BACKWARD, flags);
+            }
+            t.x_forward = plan_many(Nmesh, nky * nkz, as_fftw(data), FFTW_FORWARD, flags);
+            t.x_backward = plan_many(Nmesh, nky * nkz, as_fftw(data), FFTW_BACKWARD, flags);
+            assert_mpi(t.last_forward and t.last_backward and t.x_forward and t.x_backward and
+                           (N == 2 or (t.y_forward and t.y_backward)),
+                       "[CPencilGrid] FFTW failed to make a plan");
+        }
+
+        template <int N>
+        CPencilGrid<N>::CPencilGrid(const CPencilGrid & rhs)
+            : Nmesh(rhs.Nmesh), n_extra_left(rhs.n_extra_left), n_extra_right(rhs.n_extra_right), domain(rhs.domain),
+              Local_nx(rhs.Local_nx), Local_x_start(rhs.Local_x_start), Local_ny(rhs.Local_ny),
+              Local_y_start(rhs.Local_y_start), Local_nky(rhs.Local_nky), Local_ky_start(rhs.Local_ky_start),
+              Local_nkz(rhs.Local_nkz), Local_kz_start(rhs.Local_kz_start), row_stride(rhs.row_stride),
+              slice_stride(rhs.slice_stride), real_offset(rhs.real_offset), NComplexAlloc(rhs.NComplexAlloc),
+              grid_is_in_real_space(rhs.grid_is_in_real_space), name(rhs.name), transforms(rhs.transforms) {
+            if (rhs.data != nullptr) {
+                data = allocate_complex(size_t(NComplexAlloc));
+                std::memcpy(data, rhs.data, size_t(NComplexAlloc) * sizeof(ComplexType));
+            }
+        }
+
+        template <int N>
+        CPencilGrid<N> & CPencilGrid<N>::operator=(const CPencilGrid & rhs) {
+            if (this == &rhs)
+                return *this;
+            // The same layout: copy the values into the memory we have
+            if (data != nullptr and rhs.data != nullptr and transforms == rhs.transforms and
+                NComplexAlloc == rhs.NComplexAlloc) {
+                std::memcpy(data, rhs.data, size_t(NComplexAlloc) * sizeof(ComplexType));
+                grid_is_in_real_space = rhs.grid_is_in_real_space;
+                name = rhs.name;
+                return *this;
+            }
+            *this = CPencilGrid(rhs);
+            return *this;
+        }
+
+        template <int N>
+        CPencilGrid<N>::CPencilGrid(CPencilGrid && rhs) noexcept {
+            *this = std::move(rhs);
+        }
+
+        template <int N>
+        CPencilGrid<N> & CPencilGrid<N>::operator=(CPencilGrid && rhs) noexcept {
+            if (this == &rhs)
+                return *this;
+            free_complex_array(data);
+            Nmesh = std::exchange(rhs.Nmesh, 0);
+            n_extra_left = std::exchange(rhs.n_extra_left, 0);
+            n_extra_right = std::exchange(rhs.n_extra_right, 0);
+            domain = std::move(rhs.domain);
+            Local_nx = std::exchange(rhs.Local_nx, 0);
+            Local_x_start = std::exchange(rhs.Local_x_start, 0);
+            Local_ny = std::exchange(rhs.Local_ny, 0);
+            Local_y_start = std::exchange(rhs.Local_y_start, 0);
+            Local_nky = std::exchange(rhs.Local_nky, 0);
+            Local_ky_start = std::exchange(rhs.Local_ky_start, 0);
+            Local_nkz = std::exchange(rhs.Local_nkz, 1);
+            Local_kz_start = std::exchange(rhs.Local_kz_start, 0);
+            row_stride = std::exchange(rhs.row_stride, 0);
+            slice_stride = std::exchange(rhs.slice_stride, 0);
+            real_offset = std::exchange(rhs.real_offset, 0);
+            data = std::exchange(rhs.data, nullptr);
+            NComplexAlloc = std::exchange(rhs.NComplexAlloc, 0);
+            grid_is_in_real_space = std::exchange(rhs.grid_is_in_real_space, true);
+            name = std::move(rhs.name);
+            transforms = std::move(rhs.transforms);
+            return *this;
+        }
+
+        template <int N>
+        CPencilGrid<N>::~CPencilGrid() {
+            free_complex_array(data);
+        }
+
+        template <int N>
+        void CPencilGrid<N>::free() {
+            *this = CPencilGrid();
+        }
+
+        // Forward: the FFT along the last axis on the pencils, then (3D) the row transpose and the FFT along y, then
+        // the column transpose and the FFT along x
+        template <int N>
+        void CPencilGrid<N>::fftw_forward() {
+            assert_mpi(data != nullptr, "[CPencilGrid::fftw_forward] The grid is not allocated");
+            auto & t = *transforms;
+            ComplexType * W = t.work;
+            execute_dft(t.last_forward, as_fftw(data) + real_offset);
+            if constexpr (N == 3) {
+                run_exchange(t.row, false, data, W, W, data);
+                execute_dft(t.y_forward, as_fftw(W));
+                run_exchange(t.column, false, W, data, data, W);
+            } else {
+                run_exchange(t.column, false, data, data, W, W + t.column.send_total);
+            }
+            execute_dft(t.x_forward, as_fftw(data));
+            FML::PERFORMANCE::record(FML::PERFORMANCE::Counter::ForwardFFTs);
+            grid_is_in_real_space = false;
+
+            const FloatType norm = FloatType(1.0 / std::pow(double(Nmesh), N));
+            const ptrdiff_t ntot = get_ntot_fourier();
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (ptrdiff_t i = 0; i < ntot; i++)
+                data[i] *= norm;
+        }
+
+        template <int N>
+        void CPencilGrid<N>::fftw_backward() {
+            assert_mpi(data != nullptr, "[CPencilGrid::fftw_backward] The grid is not allocated");
+            auto & t = *transforms;
+            ComplexType * W = t.work;
+            execute_dft(t.x_backward, as_fftw(data));
+            if constexpr (N == 3) {
+                run_exchange(t.column, true, data, W, W, data);
+                execute_dft(t.y_backward, as_fftw(W));
+                run_exchange(t.row, true, W, data, data, W);
+            } else {
+                run_exchange(t.column, true, data, data, W, W + t.column.recv_total);
+            }
+            execute_dft(t.last_backward, as_fftw(data) + real_offset);
+            FML::PERFORMANCE::record(FML::PERFORMANCE::Counter::InverseFFTs);
+            grid_is_in_real_space = true;
+        }
+
+        template <int N>
+        void CPencilGrid<N>::communicate_boundaries() {
+            if (n_extra_left + n_extra_right == 0)
+                return;
+            assert_mpi(data != nullptr, "[CPencilGrid::communicate_boundaries] The grid is not allocated");
+            if constexpr (N == 3)
+                exchange_y(false);
+            exchange_x(false);
+        }
+
+        template <int N>
+        void CPencilGrid<N>::add_contribution_from_extra_cells() {
+            if (n_extra_left + n_extra_right == 0)
+                return;
+            assert_mpi(data != nullptr, "[CPencilGrid::add_contribution_from_extra_cells] The grid is not allocated");
+            exchange_x(true);
+            if constexpr (N == 3)
+                exchange_y(true);
+        }
+
+        template <int N>
+        void CPencilGrid<N>::exchange_x(bool add) {
+            const auto p = domain.coords_of(FML::ThisTask);
+            const int left = domain.rank_of(p[0] - 1, p[1]);
+            const int right = domain.rank_of(p[0] + 1, p[1]);
+            ComplexType * grid = get_real_grid();
+            auto slices = [&](ptrdiff_t ix) {
+                return grid + ix * slice_stride - (N == 3 ? n_extra_left * row_stride : 0);
+            };
+            const size_t bytes_per_slice = size_t(slice_stride) * sizeof(ComplexType);
+            const ptrdiff_t nl = n_extra_left, nr = n_extra_right;
+            if (not add) {
+                if (nr > 0)
+                    sendrecv_bytes(slices(0), slices(Local_nx), nr * bytes_per_slice, left, right, 50);
+                if (nl > 0)
+                    sendrecv_bytes(slices(Local_nx - nl), slices(-nl), nl * bytes_per_slice, right, left, 51);
+                return;
+            }
+            std::vector<ComplexType> buffer;
+            auto add_to = [&](ComplexType * target, size_t n) {
+                for (size_t i = 0; i < n; i++)
+                    target[i] += buffer[i];
+            };
+            if (nr > 0) {
+                const size_t n = size_t(nr * slice_stride);
+                buffer.resize(n);
+                sendrecv_bytes(slices(Local_nx), buffer.data(), n * sizeof(ComplexType), right, left, 52);
+                add_to(slices(0), n);
+            }
+            if (nl > 0) {
+                const size_t n = size_t(nl * slice_stride);
+                buffer.resize(n);
+                sendrecv_bytes(slices(-nl), buffer.data(), n * sizeof(ComplexType), left, right, 53);
+                add_to(slices(Local_nx - nl), n);
+            }
+            std::fill(slices(-nl), slices(0), ComplexType(0));
+            std::fill(slices(Local_nx), slices(Local_nx + nr), ComplexType(0));
+        }
+
+        template <int N>
+        void CPencilGrid<N>::exchange_y(bool add) {
+            if constexpr (N == 3) {
+                const auto p = domain.coords_of(FML::ThisTask);
+                const int down = domain.rank_of(p[0], p[1] - 1);
+                const int up = domain.rank_of(p[0], p[1] + 1);
+                ComplexType * grid = get_real_grid();
+                const ptrdiff_t nx = Local_nx, ny = Local_ny;
+                auto pack = [&](ptrdiff_t iy0, ptrdiff_t n, std::vector<ComplexType> & buf) {
+                    const ptrdiff_t block = n * row_stride;
+                    buf.resize(size_t(nx * block));
+                    for (ptrdiff_t ix = 0; ix < nx; ix++)
+                        std::copy(grid + ix * slice_stride + iy0 * row_stride,
+                                  grid + ix * slice_stride + iy0 * row_stride + block,
+                                  buf.begin() + ix * block);
+                };
+                auto unpack = [&](ptrdiff_t iy0, ptrdiff_t n, const std::vector<ComplexType> & buf, bool add_values) {
+                    const ptrdiff_t block = n * row_stride;
+                    for (ptrdiff_t ix = 0; ix < nx; ix++) {
+                        ComplexType * target = grid + ix * slice_stride + iy0 * row_stride;
+                        for (ptrdiff_t i = 0; i < block; i++)
+                            target[i] = add_values ? target[i] + buf[ix * block + i] : buf[ix * block + i];
+                    }
+                };
+                auto exchange =
+                    [&](ptrdiff_t send_iy0, ptrdiff_t recv_iy0, ptrdiff_t n, int dest, int source, int tag) {
+                        if (n == 0)
+                            return;
+                        std::vector<ComplexType> send, recv(size_t(nx * n * row_stride));
+                        pack(send_iy0, n, send);
+                        sendrecv_bytes(send.data(), recv.data(), send.size() * sizeof(ComplexType), dest, source, tag);
+                        unpack(recv_iy0, n, recv, add);
+                    };
+                const ptrdiff_t nl = n_extra_left, nr = n_extra_right;
+                if (not add) {
+                    exchange(0, ny, nr, down, up, 60);
+                    exchange(ny - nl, -nl, nl, up, down, 61);
+                } else {
+                    exchange(ny, 0, nr, up, down, 62);
+                    exchange(-nl, ny - nl, nl, down, up, 63);
+                    std::vector<ComplexType> zeros;
+                    for (auto [iy0, n] : {std::array<ptrdiff_t, 2>{-nl, nl}, std::array<ptrdiff_t, 2>{ny, nr}}) {
+                        zeros.assign(size_t(nx * n * row_stride), ComplexType(0));
+                        unpack(iy0, n, zeros, false);
+                    }
+                }
+            } else {
+                (void)add;
+            }
+        }
+
+        template <int N>
+        void CPencilGrid<N>::fill_real_grid(const ComplexType val) {
+            std::fill(data, data + NComplexAlloc, val);
+            grid_is_in_real_space = true;
+        }
+
+        template <int N>
+        void CPencilGrid<N>::fill_fourier_grid(const ComplexType val) {
+            std::fill(data, data + NComplexAlloc, val);
+            grid_is_in_real_space = false;
+        }
+
+        template <int N>
+        void CPencilGrid<N>::fill_real_grid(const std::function<ComplexType(std::array<double, N> &)> & func) {
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (IndexIntType irow = 0; irow < get_local_nrows(); irow++) {
+                for (auto && real_index : get_real_range_of_rows(irow, irow + 1)) {
+                    auto pos = get_real_position(get_coord_from_index(real_index));
+                    set_real_from_index(real_index, func(pos));
+                }
+            }
+            grid_is_in_real_space = true;
+            communicate_boundaries();
+        }
+
+        template <int N>
+        void CPencilGrid<N>::fill_fourier_grid(const std::function<ComplexType(std::array<double, N> &)> & func) {
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (IndexIntType irow = 0; irow < get_local_nrows_fourier(); irow++) {
+                for (auto && fourier_index : get_fourier_range_of_rows(irow, irow + 1)) {
+                    auto kvec = get_fourier_wavevector_from_index(fourier_index);
+                    set_fourier_from_index(fourier_index, func(kvec));
+                }
+            }
+            grid_is_in_real_space = false;
+        }
+
+        template <int N>
+        bool CPencilGrid<N>::nan_in_grids() const {
+            auto bad = [](ComplexType z) { return not std::isfinite(z.real()) or not std::isfinite(z.imag()); };
+            if (grid_is_in_real_space) {
+                for (auto && index : get_real_range())
+                    if (bad(get_real_from_index(index)))
+                        return true;
+                return false;
+            }
+            for (auto && index : get_fourier_range())
+                if (bad(get_fourier_from_index(index)))
+                    return true;
+            return false;
+        }
+
+        namespace {
+            constexpr char cpencil_grid_magic[8] = {'F', 'M', 'L', 'C', 'P', 'G', 'R', '1'};
+        }
+
+        template <int N>
+        void CPencilGrid<N>::dump_to_file(std::string fileprefix) const {
+            const std::string filename = fileprefix + "." + std::to_string(FML::ThisTask);
+            std::ofstream out(filename, std::ios::binary | std::ios::trunc);
+            bool ok = out.good();
+            if (ok) {
+                const int32_t header[6] = {N, int32_t(Nmesh), int32_t(n_extra_left), int32_t(n_extra_right),
+                                           int32_t(FML::NTasks), int32_t(grid_is_in_real_space)};
+                out.write(cpencil_grid_magic, 8);
+                out.write(reinterpret_cast<const char *>(header), sizeof(header));
+                for (const auto * edges : {&domain.x_edges(), &domain.y_edges()}) {
+                    const int64_t n = int64_t(edges->size());
+                    out.write(reinterpret_cast<const char *>(&n), sizeof(n));
+                    out.write(reinterpret_cast<const char *>(edges->data()), std::streamsize(n * sizeof(double)));
+                }
+                const int64_t nalloc = NComplexAlloc;
+                out.write(reinterpret_cast<const char *>(&nalloc), sizeof(nalloc));
+                if (nalloc > 0)
+                    out.write(reinterpret_cast<const char *>(data), std::streamsize(nalloc * sizeof(ComplexType)));
+                out.close();
+                ok = not out.fail();
+            }
+            int good = ok ? 1 : 0;
+            FML::MinOverTasks(&good);
+            assert_mpi(good == 1, ("[CPencilGrid::dump_to_file] Failed to write " + fileprefix + ".*").c_str());
+        }
+
+        template <int N>
+        void CPencilGrid<N>::load_from_file(std::string fileprefix) {
+            const std::string filename = fileprefix + "." + std::to_string(FML::ThisTask);
+            std::ifstream in(filename, std::ios::binary);
+            char magic[8] = {};
+            int32_t header[6] = {};
+            std::vector<double> edges[2];
+            int64_t nalloc = -1;
+            in.read(magic, 8);
+            in.read(reinterpret_cast<char *>(header), sizeof(header));
+            bool ok = in.good() and std::memcmp(magic, cpencil_grid_magic, 8) == 0 and header[0] == N and
+                      header[4] == FML::NTasks and header[1] > 0;
+            for (int k = 0; ok and k < 2; k++) {
+                int64_t n = 0;
+                in.read(reinterpret_cast<char *>(&n), sizeof(n));
+                ok = in.good() and n >= 2 and n <= int64_t(FML::NTasks) + 1;
+                if (ok) {
+                    edges[k].resize(size_t(n));
+                    in.read(reinterpret_cast<char *>(edges[k].data()), std::streamsize(n * sizeof(double)));
+                    ok = in.good();
+                }
+            }
+            if (ok)
+                in.read(reinterpret_cast<char *>(&nalloc), sizeof(nalloc));
+            ok = ok and in.good();
+            int good = ok ? 1 : 0;
+            FML::MinOverTasks(&good);
+            assert_mpi(good == 1, ("[CPencilGrid::load_from_file] Cannot read " + fileprefix + ".*").c_str());
+            *this = CPencilGrid<N>(header[1], header[2], header[3], PencilDomain::from_edges(edges[0], edges[1]));
+            set_grid_status_real(header[5] != 0);
+            ok = nalloc == int64_t(NComplexAlloc);
+            if (ok and nalloc > 0) {
+                in.read(reinterpret_cast<char *>(data), std::streamsize(nalloc * sizeof(ComplexType)));
+                ok = in.good();
+            }
+            good = ok ? 1 : 0;
+            FML::MinOverTasks(&good);
+            assert_mpi(good == 1, ("[CPencilGrid::load_from_file] The data in " + fileprefix +
+                                   ".* does not match the grid (truncated, or written with another layout)")
+                                      .c_str());
+        }
+
+        template <int N>
+        void CPencilGrid<N>::info() const {
+            if (FML::ThisTask != 0)
+                return;
+            const auto P = domain.process_grid();
+            std::cout << "\n#=====================================================\n";
+            std::cout << "# Info about CPencilGrid. Grid label: [" << name << "]\n";
+            std::cout << "# Status of grid: " << (grid_is_in_real_space ? "[Realspace]" : "[Fourierspace]")
+                      << " NDIM: [" << N << "]\n";
+            std::cout << "# Nmesh                  " << Nmesh << "\n";
+            std::cout << "# Process grid           " << P[0] << " x " << P[1] << "\n";
+            std::cout << "# Local x, y (task 0)    " << Local_nx << " x " << Local_ny << " (+ " << n_extra_left
+                      << " left, " << n_extra_right << " right)\n";
+            std::cout << "# Local ky, kz (task 0)  " << Local_nky << " x " << Local_nkz << "\n";
+            std::cout << "# Allocated (task 0)     " << double(allocated_storage_bytes()) / 1e6 << " MB\n";
+            std::cout << "#=====================================================\n\n";
+        }
+
+        template class CPencilGrid<2>;
+        template class CPencilGrid<3>;
+
 
     } // namespace GRID
 } // namespace FML

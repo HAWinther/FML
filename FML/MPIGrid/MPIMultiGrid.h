@@ -7,6 +7,7 @@
 #include <complex>
 #include <functional>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -45,6 +46,10 @@ namespace FML {
             bool _periodic{true};         // Periodic box
             int _n_extra_slices_left{0};  // Extra x-slices on the left
             int _n_extra_slices_right{0}; // Extra x-slices on the right
+            std::optional<FML::Domain> _domain{}; // The domain of all levels (none: the fiducial slabs)
+
+            // Make the levels (with the domain if we have one)
+            void make_levels(int Nlevel);
 
           public:
             // Constructors
@@ -56,6 +61,15 @@ namespace FML {
                          int n_extra_slices_right = 1);
 
             MPIMultiGrid(MPIGrid<NDIM, T> & y,
+                         int Nlevel = -1,
+                         bool periodic = true,
+                         int n_extra_slices_left = 1,
+                         int n_extra_slices_right = 1);
+
+            /// All levels on the given domain (Slab or Pencil, see MPIGrid): a level is halved while the coarse grid
+            /// fits the domain (the edges on the cells, cells on every task)
+            MPIMultiGrid(int N,
+                         const FML::Domain & domain,
                          int Nlevel = -1,
                          bool periodic = true,
                          int n_extra_slices_left = 1,
@@ -80,6 +94,11 @@ namespace FML {
 
             /// The largest number of levels for N cells per dim with the current number of tasks
             static int max_levels(int N);
+            /// The largest number of levels for N cells per dim on a domain
+            static int max_levels(int N, const FML::Domain & domain);
+
+            /// The domain (none for the fiducial slabs)
+            const std::optional<FML::Domain> & get_domain() const { return _domain; }
 
             // Fetch info about the grid
             IndexInt get_NtotLocal(int level = 0) const;
@@ -203,12 +222,39 @@ namespace FML {
         }
 
         template <int NDIM, class T>
+        int MPIMultiGrid<NDIM, T>::max_levels(int N, const FML::Domain & domain) {
+            // Halve while the coarse grid fits the domain (with one task the coarse level not below 2 cells)
+            int nlevel = 1;
+            for (int n = N; n % 2 == 0; n /= 2) {
+                const int ncoarse = n / 2;
+                if (not MPIGrid<NDIM, T>::fits_domain(ncoarse, domain) or (FML::NTasks == 1 and ncoarse < 2))
+                    break;
+                nlevel++;
+            }
+            return nlevel;
+        }
+
+        template <int NDIM, class T>
+        MPIMultiGrid<NDIM, T>::MPIMultiGrid(int N,
+                                            const FML::Domain & domain,
+                                            int Nlevel,
+                                            bool periodic,
+                                            int n_extra_slices_left,
+                                            int n_extra_slices_right)
+            : _N(N), _periodic(periodic), _n_extra_slices_left(n_extra_slices_left),
+              _n_extra_slices_right(n_extra_slices_right), _domain(domain) {
+            make_levels(Nlevel);
+        }
+
+        template <int NDIM, class T>
         MPIMultiGrid<NDIM, T>::MPIMultiGrid(MPIGrid<NDIM, T> & y,
                                             int Nlevel,
                                             bool periodic,
                                             int n_extra_slices_left,
                                             int n_extra_slices_right)
-            : MPIMultiGrid(y.get_N(), Nlevel, periodic, n_extra_slices_left, n_extra_slices_right) {
+            : _N(y.get_N()), _periodic(periodic), _n_extra_slices_left(n_extra_slices_left),
+              _n_extra_slices_right(n_extra_slices_right), _domain(y.get_domain()) {
+            make_levels(Nlevel);
             _y[0] = y;
         }
 
@@ -220,9 +266,14 @@ namespace FML {
                                             int n_extra_slices_right)
             : _N(N), _periodic(periodic), _n_extra_slices_left(n_extra_slices_left),
               _n_extra_slices_right(n_extra_slices_right) {
+            make_levels(Nlevel);
+        }
 
+        template <int NDIM, class T>
+        void MPIMultiGrid<NDIM, T>::make_levels(int Nlevel) {
+            const int N = _N;
             assert_mpi(N > 0, "[MPIMultiGrid] N must be positive\n");
-            const int Nlevel_max = max_levels(N);
+            const int Nlevel_max = _domain ? max_levels(N, *_domain) : max_levels(N);
             if (Nlevel < 0)
                 Nlevel = Nlevel_max;
             _Nlevel = Nlevel;
@@ -253,7 +304,11 @@ namespace FML {
             //==================================================================================
             // Make all grids
             //==================================================================================
-            _y[0] = MPIGrid<NDIM, T>(_N, _periodic, _n_extra_slices_left, _n_extra_slices_right);
+            auto make_grid = [&](int n) {
+                return _domain ? MPIGrid<NDIM, T>(n, _periodic, *_domain, _n_extra_slices_left, _n_extra_slices_right) :
+                                 MPIGrid<NDIM, T>(n, _periodic, _n_extra_slices_left, _n_extra_slices_right);
+            };
+            _y[0] = make_grid(_N);
             _NtotLocal = _y[0].get_NtotLocal();
             _NtotLocalinLevel.resize(_Nlevel);
             _NtotLocalinLevel[0] = _NtotLocal;
@@ -261,7 +316,7 @@ namespace FML {
             _NinLevel[0] = _N;
             for (int level = 1; level < _Nlevel; level++) {
                 _NinLevel[level] = _NinLevel[level - 1] / 2;
-                _y[level] = MPIGrid<NDIM, T>(_NinLevel[level], _periodic, _n_extra_slices_left, _n_extra_slices_right);
+                _y[level] = make_grid(_NinLevel[level]);
                 _NtotLocalinLevel[level] = _y[level].get_NtotLocal();
             }
         }

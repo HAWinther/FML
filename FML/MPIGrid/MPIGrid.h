@@ -8,6 +8,7 @@
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <optional>
 #include <vector>
 #ifdef USE_MPI
 #include <mpi.h>
@@ -23,6 +24,13 @@ namespace FML {
 
         using IndexInt = long long int;
 
+// The index helpers are in the inner loops of the solvers: inline them (their rare paths are separate functions)
+#if defined(__GNUC__)
+#define FML_GRID_INLINE [[gnu::always_inline]] inline
+#else
+#define FML_GRID_INLINE inline
+#endif
+
         // The absolute value of the type, must be implemented for non-standard types
         template <class T>
         double AbsoluteValue(T & x) {
@@ -34,11 +42,19 @@ namespace FML {
         ///
         /// Bounds-check for array lookups: BOUNDSCHECK
         ///
-        /// Every index is an index in the local main grid unless specified otherwise
-        /// e.g. index = ix*N^2 + iy*N + iz corresponds to (ix + xStartLocal, iy, iz, ...) in the global grid
+        /// The grid is split over the tasks along x (slabs, the fiducial) or, with a FML::Domain, along x and y
+        /// (pencils). Every index is an index in the local main grid unless specified otherwise: the main cells are
+        /// index = ((ix * NLocal_y + iy) * N + iz) in [0, NtotLocal) for the local coordinates (ix, iy, iz) (NLocal_y
+        /// = N for slabs), which is the cell (ix + xStart, iy + yStart, iz) in the global grid
         ///
         /// Every coord is a local coordinate unless specified otherwise
-        /// e.g. (ix, iy, iz, ...) corresponds to (ix + xStartLocal, iy, iz, ...) in the global grid
+        ///
+        /// The extra cells (ghosts) of the neighboring tasks: n_extra_slices_left (right) layers along each axis
+        /// that is split over the tasks. The x-slices are before (after) the main grid in memory, so index - k
+        /// stride_x is the cell k slices to the left also into the extra slices. The y-layers (pencils) are stored
+        /// after the extra x-slices and include the extra x-slices (the corners) so their local index is >=
+        /// NtotLocal: use index_from_coord, get_neighbor_gridindex or get_shifted_index to find them. An axis that
+        /// is not split (the whole axis is on the task) wraps periodically in the local grid
         ///
         /// External methods we rely on:
         ///
@@ -64,12 +80,27 @@ namespace FML {
             int _n_extra_slices_left{0};  // Extra x-slices to the left
             int _n_extra_slices_right{0}; // Extra x-slices to the right
 
+            // The local part of every axis, the extra layers along it and the index strides of the main grid
+            std::array<int, NDIM> _start{};
+            std::array<int, NDIM> _nloc{};
+            std::array<int, NDIM> _nextra_left{};
+            std::array<int, NDIM> _nextra_right{};
+            std::array<IndexInt, NDIM> _stride{};
+            std::array<IndexInt, NDIM> _wrap{}; // N stride along a periodic axis held whole by the task (else 0)
+            bool _ysplit{false};                // Is the y-axis split over the tasks (extra y-layers)?
+            int _DownTask{0}; // The task below (y) with pencils
+            int _UpTask{0};   // The task above (y) with pencils
+            std::optional<FML::Domain> _domain{};
+
             IndexInt _Ntot{0};           // How many cells in main grid in total
             IndexInt _NtotLocalLeft{0};  // Total cells in extra left slices
             IndexInt _NtotLocalRight{0}; // Total cells in extra right slices
             IndexInt _NtotLocal{0};      // How many cells in main grid on local task
-            IndexInt _NtotLocalAlloc{0}; // How many cells we have allocated locally (includes extra slices)
+            IndexInt _NtotLocalAlloc{0}; // How many cells we have allocated locally (includes extra cells)
             IndexInt _NperSlice{0};      // How many cells per x-slice
+            IndexInt _NxExt{0};          // The number of x-slices including the extra slices
+            IndexInt _YExtraStart{0};    // Where the extra y-layers start in the array
+            IndexInt _NperYLayer{0};     // Cells in an extra y-layer (all x-slices including the extra ones)
 
             // std::vector<T> _y;           // The grid data
             Vector<T> _y{}; // The grid data
@@ -77,6 +108,16 @@ namespace FML {
             // Helper functions for bounds-checking
             void assert_index(IndexInt index) const;
             void assert_coord(const std::array<int, NDIM> & coord) const;
+
+            // Set the strides and sizes from _start, _nloc and the extra layers and allocate
+            void allocate();
+
+            // The index and the coordinate of a cell in the extra y-layers (pencils)
+            IndexInt index_from_coord_in_ylayers(const std::array<int, NDIM> & coord) const;
+            std::array<int, NDIM> coord_from_index_in_ylayers(IndexInt index) const;
+
+            // Send a block of cells to dest and receive one from source (a copy if dest is this task)
+            void sendrecv_block(T * send, T * recv, IndexInt n, int dest, int source);
 
 #ifdef USE_MPI
             // MPI_Sendrecv of a byte buffer of any size (split into chunks whose count fits in an int)
@@ -88,14 +129,27 @@ namespace FML {
             MPIGrid() = default;
             MPIGrid(int N, bool periodic, int n_extra_slices_left = 0, int n_extra_slices_right = 0);
 
+            /// A grid on the given domain (Slab or Pencil): the edges of the domain must lie on the cells and every
+            /// task must have cells. With a Pencil domain the grid is split along x and y (NDIM >= 2)
+            MPIGrid(int N,
+                    bool periodic,
+                    const FML::Domain & domain,
+                    int n_extra_slices_left = 0,
+                    int n_extra_slices_right = 0);
+
+            /// Does the domain split N cells per dim into whole cells with cells on every task?
+            static bool fits_domain(int N, const FML::Domain & domain);
+
             // Get a pointer to the start of the main grid
             T * get_y();
+            const T * get_y() const;
 
             // Get a reference to the cell at a given index
             T & get_y(IndexInt index);
 
             // Allow syntax grid[i] to get/set cells with a given index
             T & operator[](IndexInt index);
+            const T & operator[](IndexInt index) const;
 
             // Assign value in the grid by index
             void set_y(IndexInt index, const T & value);
@@ -108,32 +162,44 @@ namespace FML {
 
             // Grid-index -> Local coordinate list
             // e.g. index = ix1_local * N^2 + ix2 * N + ix3 -> (ix1_local, ix2, ix3)
-            std::array<int, NDIM> coord_from_index(IndexInt index) const;
+            FML_GRID_INLINE std::array<int, NDIM> coord_from_index(IndexInt index) const;
 
-            // Local coordinates -> Grid-index
+            // Local coordinates -> Grid-index (also the extra cells)
             // e.g. index = ix1_local * N^2 + ix2 * N + ix3
-            IndexInt index_from_coord(const std::array<int, NDIM> & coord) const;
+            FML_GRID_INLINE IndexInt index_from_coord(const std::array<int, NDIM> & coord) const;
 
             // From local index to global coordinates
             std::array<int, NDIM> globalcoord_from_index(IndexInt index) const;
 
             // From global coordinates to local index
-            IndexInt index_from_globalcoord(const std::array<int, NDIM> & globalcoord) const;
+            FML_GRID_INLINE IndexInt index_from_globalcoord(const std::array<int, NDIM> & globalcoord) const;
 
             // The closest 2NDIM+1 cells to a given cell (including the cell itself at 0)
-            std::array<IndexInt, 2 * NDIM + 1> get_neighbor_gridindex(IndexInt index) const;
+            FML_GRID_INLINE std::array<IndexInt, 2 * NDIM + 1> get_neighbor_gridindex(IndexInt index) const;
+
+            /// The index of the cell offset cells along axis from the cell (index, coord) (coord =
+            /// coord_from_index(index)): periodic in the local grid along an axis that is not split, in the extra
+            /// cells otherwise. Shift along the axes in increasing order to reach the corners (x first)
+            IndexInt get_shifted_index(IndexInt index, const std::array<int, NDIM> & coord, int axis, int offset) const;
 
             // Gradient at a given cell (simple 2-point symmetric stensil)
             std::array<T, NDIM> get_gradient(IndexInt index) const;
 
             // Get some info about the grid
             IndexInt get_Ntot();
-            IndexInt get_NtotLocal();
-            int get_N();
+            IndexInt get_NtotLocal() const;
+            int get_N() const;
             int get_NLocal();
-            int get_xStartLocal();
-            int get_n_extra_slices_left();
-            int get_n_extra_slices_right();
+            int get_xStartLocal() const;
+            int get_n_extra_slices_left() const;
+            int get_n_extra_slices_right() const;
+            bool get_periodic() const { return _periodic; }
+            /// The index step between neighbouring cells along an axis (in the main grid and the extra x-slices)
+            IndexInt get_stride(int axis) const { return _stride[axis]; }
+            /// The global cells along an axis on this task: {first, count} (as FFTWGrid and PencilGrid)
+            std::array<int, 2> get_local_range(int axis) const { return {_start[axis], _nloc[axis]}; }
+            /// The domain the grid was made on (none for the fiducial slabs)
+            const std::optional<FML::Domain> & get_domain() const { return _domain; }
 
             // Returns the position of the cell in the global grid
             std::array<double, NDIM> get_pos(IndexInt index);
@@ -145,9 +211,10 @@ namespace FML {
             // The rms of the main grid sqrt(Sum y^2/N)
             double norm();
 
-            // Communicate all the extra slices left and right. With more extra slices than local slices the
-            // slices are forwarded from tasks further away. With one task (periodic) the ghosts are copies of the
-            // periodic images of our own slices. For a non-periodic grid the ghosts outside the box are not touched
+            // Communicate all the extra cells. With more extra layers than local layers the layers are forwarded
+            // from tasks further away. With one task along an axis (periodic) the extra cells are copies of the
+            // periodic images of our own cells. For a non-periodic grid the extra cells outside the box are not
+            // touched. Along x first and then along y (the y-layers include the extra x-slices: the corners)
             void communicate_boundaries();
 
             // Send slice ix (local index, can be an extra slice) of the grid to the left or right task and receive
@@ -281,6 +348,33 @@ namespace FML {
             return res;
         }
 
+        template <int NDIM, class T>
+        void MPIGrid<NDIM, T>::allocate() {
+            // The strides of the main grid (the last axis is contiguous)
+            _stride[NDIM - 1] = 1;
+            for (int idim = NDIM - 2; idim >= 0; idim--)
+                _stride[idim] = _stride[idim + 1] * _nloc[idim + 1];
+            _NLocal = _nloc[0];
+            _xStartLocal = _start[0];
+            _n_extra_slices_left = _nextra_left[0];
+            _n_extra_slices_right = _nextra_right[0];
+            _NperSlice = _stride[0];
+            _NtotLocalLeft = _NperSlice * _nextra_left[0];
+            _NtotLocalRight = _NperSlice * _nextra_right[0];
+            _NtotLocal = _NperSlice * _nloc[0];
+            _Ntot = FML::power(IndexInt(_N), NDIM);
+            _NxExt = _nextra_left[0] + _nloc[0] + _nextra_right[0];
+            _YExtraStart = _NtotLocalLeft + _NtotLocal + _NtotLocalRight;
+            _NperYLayer = NDIM > 1 ? _NxExt * _stride[NDIM > 1 ? 1 : 0] : 0;
+            for (int idim = 0; idim < NDIM; idim++)
+                _wrap[idim] = (_periodic and _nloc[idim] == _N) ? IndexInt(_N) * _stride[idim] : 0;
+            _ysplit = NDIM > 1 and _nloc[NDIM > 1 ? 1 : 0] < _N;
+            const IndexInt nylayers = NDIM > 1 ? _nextra_left[NDIM > 1 ? 1 : 0] + _nextra_right[NDIM > 1 ? 1 : 0] : 0;
+            _NtotLocalAlloc = _YExtraStart + nylayers * _NperYLayer;
+            _y.resize(_NtotLocalAlloc);
+            add_memory_label("MPIGrid");
+        }
+
         // Constructor with initial value
         template <int NDIM, class T>
         MPIGrid<NDIM, T>::MPIGrid(int N, bool periodic, int n_extra_slices_left, int n_extra_slices_right) {
@@ -304,24 +398,22 @@ namespace FML {
 
             _periodic = periodic;
             _N = N;
-            _NLocal = slices_per_task[FML::ThisTask];
-            _xStartLocal = sumslicesbeforethistask;
-            _n_extra_slices_left = n_extra_slices_left;
-            _n_extra_slices_right = n_extra_slices_right;
-            _NperSlice = FML::power(_N, NDIM - 1);
-            _NtotLocalLeft = _NperSlice * _n_extra_slices_left;
-            _NtotLocalRight = _NperSlice * _n_extra_slices_right;
-            _NtotLocal = _NperSlice * _NLocal;
-            _Ntot = _NperSlice * _N;
-            _NtotLocalAlloc = _NtotLocalLeft + _NtotLocal + _NtotLocalRight;
+            _start.fill(0);
+            _nloc.fill(N);
+            _nextra_left.fill(0);
+            _nextra_right.fill(0);
+            _start[0] = sumslicesbeforethistask;
+            _nloc[0] = slices_per_task[FML::ThisTask];
+            _nextra_left[0] = n_extra_slices_left;
+            _nextra_right[0] = n_extra_slices_right;
             _RightTask = (FML::ThisTask + 1) % FML::NTasks;
             _LeftTask = (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks;
+            _DownTask = _UpTask = FML::ThisTask;
 
-            if (_NLocal == 0) {
+            if (_nloc[0] == 0) {
                 // Tasks with 0 cells does nothing
                 _RightTask = _LeftTask = FML::ThisTask;
-                _n_extra_slices_left = _n_extra_slices_right = 0;
-                _NtotLocalLeft = _NtotLocalRight = _NtotLocal = _NtotLocalAlloc = 0;
+                _nextra_left[0] = _nextra_right[0] = 0;
             } else {
                 // Find right CPU with cells
                 while (slices_per_task[_RightTask] == 0) {
@@ -338,8 +430,7 @@ namespace FML {
             }
 
             // Allocate memory
-            _y.resize(_NtotLocalAlloc);
-            add_memory_label("MPIGrid");
+            allocate();
 
             // Show some info
 #ifdef DEBUG
@@ -353,8 +444,109 @@ namespace FML {
 #endif
         }
 
+        namespace detail {
+            // The cell of a domain edge (which must lie on a cell): -1 if it does not
+            inline int cell_of_edge(double edge, int N) {
+                const double x = edge * N;
+                const double c = std::round(x);
+                return std::abs(x - c) < 1e-6 ? int(c) : -1;
+            }
+            // The cell ranges [start, end) along x and y (N for an axis that is not split) of a task
+            inline bool domain_cell_ranges(int N, const FML::Domain & domain, int task, std::array<int, 2> & start,
+                                           std::array<int, 2> & end) {
+                start = {0, 0};
+                end = {N, N};
+                if (domain.is_slab()) {
+                    start[0] = cell_of_edge(domain.x_min(task), N);
+                    end[0] = cell_of_edge(domain.x_max(task), N);
+                } else if (domain.holds<FML::PencilDomain>()) {
+                    const auto c = domain.get<FML::PencilDomain>().coords_of(task);
+                    start[0] = cell_of_edge(domain.x_edges()[c[0]], N);
+                    end[0] = cell_of_edge(domain.x_edges()[c[0] + 1], N);
+                    start[1] = cell_of_edge(domain.y_edges()[c[1]], N);
+                    end[1] = cell_of_edge(domain.y_edges()[c[1] + 1], N);
+                } else {
+                    return false;
+                }
+                for (int i = 0; i < 2; i++)
+                    if (start[i] < 0 or end[i] < 0 or end[i] <= start[i])
+                        return false;
+                return true;
+            }
+        } // namespace detail
+
+        template <int NDIM, class T>
+        bool MPIGrid<NDIM, T>::fits_domain(int N, const FML::Domain & domain) {
+            if (N <= 0 or domain.ntasks() != FML::NTasks)
+                return false;
+            if (not domain.is_slab() and (NDIM < 2 or not domain.holds<FML::PencilDomain>()))
+                return false;
+            for (int task = 0; task < FML::NTasks; task++) {
+                std::array<int, 2> start, end;
+                if (not detail::domain_cell_ranges(N, domain, task, start, end))
+                    return false;
+            }
+            return true;
+        }
+
+        template <int NDIM, class T>
+        MPIGrid<NDIM, T>::MPIGrid(
+            int N, bool periodic, const FML::Domain & domain, int n_extra_slices_left, int n_extra_slices_right) {
+            assert_mpi(N > 0, "[MPIGrid] We need Ngrid > 0\n");
+            assert_mpi(n_extra_slices_left >= 0 and n_extra_slices_right >= 0,
+                       "[MPIGrid] Number of extra slices cannot be negative\n");
+            assert_mpi(domain.is_slab() or (NDIM >= 2 and domain.holds<FML::PencilDomain>()),
+                       "[MPIGrid] The domain must be a Slab or (NDIM >= 2) a Pencil domain\n");
+            assert_mpi(fits_domain(N, domain),
+                       "[MPIGrid] The edges of the domain must lie on the cells and every task must have cells\n");
+            _periodic = periodic;
+            _N = N;
+            _domain = domain;
+            _start.fill(0);
+            _nloc.fill(N);
+            _nextra_left.fill(0);
+            _nextra_right.fill(0);
+
+            // The local ranges and the neighbors along x and y (the tasks whose range starts where ours ends and
+            // the other way around, periodic)
+            std::array<int, 2> start, end;
+            detail::domain_cell_ranges(N, domain, FML::ThisTask, start, end);
+            const int nsplit = NDIM >= 2 ? 2 : 1;
+            for (int i = 0; i < nsplit; i++) {
+                _start[i] = start[i];
+                _nloc[i] = end[i] - start[i];
+            }
+            _LeftTask = _RightTask = _DownTask = _UpTask = FML::ThisTask;
+            for (int task = 0; task < FML::NTasks; task++) {
+                std::array<int, 2> s, e;
+                detail::domain_cell_ranges(N, domain, task, s, e);
+                if (s[1] == start[1] and e[0] % N == start[0])
+                    _LeftTask = task;
+                if (s[1] == start[1] and s[0] == end[0] % N)
+                    _RightTask = task;
+                if (s[0] == start[0] and e[1] % N == start[1])
+                    _DownTask = task;
+                if (s[0] == start[0] and s[1] == end[1] % N)
+                    _UpTask = task;
+            }
+
+            // The extra slices along x (also on one task, as for the slabs) and the extra layers along y if split
+            _nextra_left[0] = n_extra_slices_left;
+            _nextra_right[0] = n_extra_slices_right;
+            if (NDIM >= 2 and _nloc[NDIM >= 2 ? 1 : 0] < N) {
+                _nextra_left[NDIM >= 2 ? 1 : 0] = n_extra_slices_left;
+                _nextra_right[NDIM >= 2 ? 1 : 0] = n_extra_slices_right;
+            }
+            allocate();
+        }
+
         template <int NDIM, class T>
         T * MPIGrid<NDIM, T>::get_y() {
+            return &_y[_NtotLocalLeft];
+        }
+
+        template <int NDIM, class T>
+        const T * MPIGrid<NDIM, T>::get_y() const {
             return &_y[_NtotLocalLeft];
         }
 
@@ -370,6 +562,14 @@ namespace FML {
         template <int NDIM, class T>
         T & MPIGrid<NDIM, T>::operator[](IndexInt index) {
             return get_y(index);
+        }
+
+        template <int NDIM, class T>
+        const T & MPIGrid<NDIM, T>::operator[](IndexInt index) const {
+#ifdef BOUNDSCHECK
+            assert_index(index);
+#endif
+            return _y[_NtotLocalLeft + index];
         }
 
         // Set a cell denoted by a (local) index in the grid
@@ -406,12 +606,30 @@ namespace FML {
             assert_index(index);
 #endif
             index += _NtotLocalLeft;
+            if (index >= _YExtraStart)
+                return coord_from_index_in_ylayers(index - _YExtraStart);
             std::array<int, NDIM> coord;
             for (int idim = NDIM - 1; idim >= 1; idim--) {
-                coord[idim] = index % _N;
-                index = (index / _N);
+                coord[idim] = index % _nloc[idim];
+                index = (index / _nloc[idim]);
             }
             coord[0] = index - _n_extra_slices_left;
+            return coord;
+        }
+
+        template <int NDIM, class T>
+        std::array<int, NDIM> MPIGrid<NDIM, T>::coord_from_index_in_ylayers(IndexInt index) const {
+            // In the extra y-layers: [layer][x][the other axes]
+            std::array<int, NDIM> coord{};
+            if constexpr (NDIM > 1) {
+                for (int idim = NDIM - 1; idim >= 2; idim--) {
+                    coord[idim] = index % _nloc[idim];
+                    index = (index / _nloc[idim]);
+                }
+                coord[0] = int(index % _NxExt) - _nextra_left[0];
+                const int layer = int(index / _NxExt);
+                coord[1] = layer < _nextra_left[1] ? -1 - layer : _nloc[1] + layer - _nextra_left[1];
+            }
             return coord;
         }
 
@@ -421,25 +639,17 @@ namespace FML {
             assert_index(index);
 #endif
             auto globalcoord = coord_from_index(index);
-            globalcoord[0] += _xStartLocal;
+            for (int idim = 0; idim < NDIM; idim++)
+                globalcoord[idim] += _start[idim];
             return globalcoord;
         }
 
         template <int NDIM, class T>
         IndexInt MPIGrid<NDIM, T>::index_from_globalcoord(const std::array<int, NDIM> & globalcoord) const {
-#ifdef BOUNDSCHECK
             auto coord = globalcoord;
-            coord[0] -= _xStartLocal;
-            assert_coord(coord);
-#endif
-            IndexInt index = 0;
-            IndexInt n = 1;
-            for (int idim = NDIM - 1; idim >= 0; idim--, n *= _N) {
-                index += IndexInt(globalcoord[idim]) * n;
-                if (idim == 0)
-                    index -= IndexInt(_xStartLocal) * n;
-            }
-            return index;
+            for (int idim = 0; idim < NDIM; idim++)
+                coord[idim] -= _start[idim];
+            return index_from_coord(coord);
         }
 
         template <int NDIM, class T>
@@ -447,11 +657,27 @@ namespace FML {
 #ifdef BOUNDSCHECK
             assert_coord(coord);
 #endif
+            if constexpr (NDIM > 1) {
+                if (coord[1] < 0 or coord[1] >= _nloc[1])
+                    return index_from_coord_in_ylayers(coord);
+            }
             IndexInt index = 0;
-            IndexInt n = 1;
-            for (int idim = NDIM - 1; idim >= 0; idim--, n *= _N)
-                index += IndexInt(coord[idim]) * n;
+            for (int idim = 0; idim < NDIM; idim++)
+                index += IndexInt(coord[idim]) * _stride[idim];
             return index;
+        }
+
+        template <int NDIM, class T>
+        IndexInt MPIGrid<NDIM, T>::index_from_coord_in_ylayers(const std::array<int, NDIM> & coord) const {
+            if constexpr (NDIM > 1) {
+                IndexInt rest = 0;
+                for (int idim = 2; idim < NDIM; idim++)
+                    rest = rest * _nloc[idim] + coord[idim];
+                const IndexInt layer = coord[1] < 0 ? -1 - coord[1] : _nextra_left[1] + coord[1] - _nloc[1];
+                return _YExtraStart - _NtotLocalLeft + (layer * _NxExt + coord[0] + _nextra_left[0]) * _stride[1] +
+                       rest;
+            }
+            return 0;
         }
 
         template <int NDIM, class T>
@@ -484,22 +710,18 @@ namespace FML {
                        "slices\n");
             assert_mpi(index < _NtotLocalAlloc,
                        "[MPIGrid::assert_index] OutOfBounds. Index corresponds to cells to the right of the extra "
-                       "right slices\n");
+                       "cells\n");
         }
 
         template <int NDIM, class T>
         void MPIGrid<NDIM, T>::assert_coord(const std::array<int, NDIM> & coord) const {
             assert_mpi(coord.size() == NDIM, "");
-            for (int idim = NDIM - 1; idim >= 1; idim--) {
-                assert_mpi(coord[idim] >= 0,
-                           "[MPIGrid::assert_coord] Coordinate < 0. Do not correspond to a cell in the grid\n");
-                assert_mpi(coord[idim] < _N,
-                           "[MPIGrid::assert_coord] Coordinate >= N. Do not correspond to a cell in the grid\n");
+            for (int idim = NDIM - 1; idim >= 0; idim--) {
+                assert_mpi(coord[idim] + _nextra_left[idim] >= 0,
+                           "[MPIGrid::assert_coord] Coordinate is too small. Do not correspond to a cell in the grid\n");
+                assert_mpi(coord[idim] - _nextra_right[idim] < _nloc[idim],
+                           "[MPIGrid::assert_coord] Coordinate is too large. Do not correspond to a cell in the grid\n");
             }
-            assert_mpi(coord[0] + _n_extra_slices_left >= 0,
-                       "[MPIGrid::assert_coord] x-coordinate is too small. Do not correspond to a cell in the grid\n");
-            assert_mpi(coord[0] - _n_extra_slices_right < _NLocal,
-                       "[MPIGrid::assert_coord] x-coordinate is too large. Do not correspond to a cell in the grid\n");
         }
 
         template <int NDIM, class T>
@@ -508,24 +730,20 @@ namespace FML {
             assert_coord(coord);
 #endif
             std::array<double, NDIM> pos;
-            for (int idim = NDIM - 1; idim >= 1; idim--) {
-                pos[idim] = coord[idim] / double(_N);
+#pragma GCC unroll 4
+            for (int idim = NDIM - 1; idim >= 0; idim--) {
+                pos[idim] = (coord[idim] + _start[idim]) / double(_N);
+                if (_periodic) {
+                    pos[idim] += pos[idim] < 0.0 ? 1.0 : 0.0;
+                    pos[idim] -= pos[idim] >= 1.0 ? 1.0 : 0.0;
+                }
             }
-            pos[0] = (coord[0] + _xStartLocal) / double(_N);
-
-            if (_periodic) {
-                if (pos[0] < 0.0)
-                    pos[0] += 1.0;
-                if (pos[0] >= 1.0)
-                    pos[0] -= 1.0;
-            }
-
             return pos;
         }
 
         // Returns number of cells per dim
         template <int NDIM, class T>
-        int MPIGrid<NDIM, T>::get_N() {
+        int MPIGrid<NDIM, T>::get_N() const {
             return _N;
         }
 
@@ -541,22 +759,22 @@ namespace FML {
         }
 
         template <int NDIM, class T>
-        IndexInt MPIGrid<NDIM, T>::get_NtotLocal() {
+        IndexInt MPIGrid<NDIM, T>::get_NtotLocal() const {
             return _NtotLocal;
         }
 
         template <int NDIM, class T>
-        int MPIGrid<NDIM, T>::get_xStartLocal() {
+        int MPIGrid<NDIM, T>::get_xStartLocal() const {
             return _xStartLocal;
         }
 
         template <int NDIM, class T>
-        int MPIGrid<NDIM, T>::get_n_extra_slices_left() {
+        int MPIGrid<NDIM, T>::get_n_extra_slices_left() const {
             return _n_extra_slices_left;
         }
 
         template <int NDIM, class T>
-        int MPIGrid<NDIM, T>::get_n_extra_slices_right() {
+        int MPIGrid<NDIM, T>::get_n_extra_slices_right() const {
             return _n_extra_slices_right;
         }
 
@@ -593,6 +811,21 @@ namespace FML {
 #endif
 
         template <int NDIM, class T>
+        void MPIGrid<NDIM, T>::sendrecv_block(T * send, T * recv, IndexInt n, int dest, int source) {
+            if (dest == FML::ThisTask and source == FML::ThisTask) {
+                std::copy(send, send + n, recv);
+                return;
+            }
+#ifdef USE_MPI
+            sendrecv_bytes(reinterpret_cast<char *>(send),
+                           reinterpret_cast<char *>(recv),
+                           size_t(n) * sizeof(T),
+                           dest,
+                           source);
+#endif
+        }
+
+        template <int NDIM, class T>
         void MPIGrid<NDIM, T>::send_slice_right(int ix, std::vector<T> & recv_slice) {
             recv_slice.resize(_NperSlice);
             T * slice_tosend = _y.data() + _NtotLocalLeft + _NperSlice * ix;
@@ -601,13 +834,7 @@ namespace FML {
                 std::copy(slice_tosend, slice_tosend + _NperSlice, recv_slice.data());
                 return;
             }
-
-#ifdef USE_MPI
-            const size_t bytes_slice = size_t(_NperSlice) * sizeof(T);
-            char * sendbuf = reinterpret_cast<char *>(slice_tosend);
-            char * recvbuf = reinterpret_cast<char *>(recv_slice.data());
-            sendrecv_bytes(sendbuf, recvbuf, bytes_slice, _RightTask, _LeftTask);
-#endif
+            sendrecv_block(slice_tosend, recv_slice.data(), _NperSlice, _RightTask, _LeftTask);
         }
 
         template <int NDIM, class T>
@@ -619,13 +846,7 @@ namespace FML {
                 std::copy(slice_tosend, slice_tosend + _NperSlice, recv_slice.data());
                 return;
             }
-
-#ifdef USE_MPI
-            const size_t bytes_slice = size_t(_NperSlice) * sizeof(T);
-            char * sendbuf = reinterpret_cast<char *>(slice_tosend);
-            char * recvbuf = reinterpret_cast<char *>(recv_slice.data());
-            sendrecv_bytes(sendbuf, recvbuf, bytes_slice, _LeftTask, _RightTask);
-#endif
+            sendrecv_block(slice_tosend, recv_slice.data(), _NperSlice, _LeftTask, _RightTask);
         }
 
         template <int NDIM, class T>
@@ -658,6 +879,38 @@ namespace FML {
                 if (not do_not_store)
                     std::memcpy(slice_right_torecv, recv_array.data(), _NperSlice * sizeof(T));
             }
+
+            // The extra y-layers (pencils): the rows of all x-slices (with the extra ones, i.e. the corners) the
+            // same way. A row of fixed (x, y) is contiguous (the other axes) both in the main grid and in the layers
+            if constexpr (NDIM > 1) {
+                if (_nextra_left[1] + _nextra_right[1] == 0)
+                    return;
+                const IndexInt rowsize = _stride[1];
+                std::vector<T> send(_NperYLayer), recv(_NperYLayer);
+                auto pack_row = [&](int iy) {
+                    std::array<int, NDIM> coord{};
+                    coord[1] = iy;
+                    for (int ix = -_nextra_left[0]; ix < _nloc[0] + _nextra_right[0]; ix++) {
+                        coord[0] = ix;
+                        const T * row = &_y[_NtotLocalLeft + index_from_coord(coord)];
+                        std::copy(row, row + rowsize, send.data() + (ix + _nextra_left[0]) * rowsize);
+                    }
+                };
+                for (int i = 0; i < _nextra_left[1]; i++) {
+                    pack_row(_nloc[1] - 1 - i);
+                    sendrecv_block(send.data(), recv.data(), _NperYLayer, _UpTask, _DownTask);
+                    if (_periodic or _start[1] != 0)
+                        std::copy(recv.begin(), recv.end(), _y.data() + _YExtraStart + i * _NperYLayer);
+                }
+                for (int i = 0; i < _nextra_right[1]; i++) {
+                    pack_row(i);
+                    sendrecv_block(send.data(), recv.data(), _NperYLayer, _DownTask, _UpTask);
+                    if (_periodic or _start[1] + _nloc[1] != _N)
+                        std::copy(recv.begin(),
+                                  recv.end(),
+                                  _y.data() + _YExtraStart + (_nextra_left[1] + i) * _NperYLayer);
+                }
+            }
         }
 
         template <int NDIM, class T>
@@ -673,29 +926,46 @@ namespace FML {
             return sqrt(norm2 / double(_Ntot));
         }
 
+        template <int NDIM, class T>
+        IndexInt MPIGrid<NDIM, T>::get_shifted_index(IndexInt index,
+                                                     const std::array<int, NDIM> & coord,
+                                                     int axis,
+                                                     int offset) const {
+            const int c = coord[axis] + offset;
+            // The whole axis is on this task: periodic in the local grid
+            if (_nloc[axis] == _N) {
+                int cnew = c;
+                if (_periodic)
+                    cnew = ((c % _N) + _N) % _N;
+                return index + IndexInt(cnew - coord[axis]) * _stride[axis];
+            }
+            // In the extra cells: the x-slices continue the main grid in memory, the y-layers are elsewhere
+            if (axis == 0 or (c >= 0 and c < _nloc[axis]))
+                return index + IndexInt(offset) * _stride[axis];
+            auto coord_new = coord;
+            coord_new[axis] = c;
+            return index_from_coord(coord_new);
+        }
+
         // The closted 2NDIM+1 cells (including the cell itself at 0) to a given cell
         template <int NDIM, class T>
         std::array<IndexInt, 2 * NDIM + 1> MPIGrid<NDIM, T>::get_neighbor_gridindex(IndexInt index) const {
             std::array<IndexInt, 2 * NDIM + 1> index_list;
             index_list[0] = index;
-
-            // Local coordinates
-            auto coord = coord_from_index(index);
-            IndexInt Npow = 1;
-            for (int idim = NDIM - 1; idim >= 0; idim--, Npow *= _N) {
-                int coord_minus = coord[idim] - 1;
-                int coord_plus = coord[idim] + 1;
-                if (_periodic and not(idim == 0 and FML::NTasks > 1)) {
-                    coord_minus = (coord_minus + _N) % _N;
-                    coord_plus = coord_plus % _N;
+            const auto coord = coord_from_index(index);
+            for (int idim = NDIM - 1; idim >= 0; idim--) {
+                const IndexInt st = _stride[idim];
+                const int c = coord[idim];
+                // (the whole axis on this task: periodic in the local grid)
+                IndexInt minus = index - st + (c == 0 ? _wrap[idim] : 0);
+                IndexInt plus = index + st - (c == _nloc[idim] - 1 ? _wrap[idim] : 0);
+                if (idim == 1 and _ysplit and (c == 0 or c == _nloc[idim] - 1)) {
+                    // In the extra y-layers
+                    minus = get_shifted_index(index, coord, idim, -1);
+                    plus = get_shifted_index(index, coord, idim, +1);
                 }
-                if (idim == 0 and FML::NTasks > 1) {
-                    index_list[2 * idim + 1] = index - Npow;
-                    index_list[2 * idim + 2] = index + Npow;
-                } else {
-                    index_list[2 * idim + 1] = index + (coord_minus - coord[idim]) * Npow;
-                    index_list[2 * idim + 2] = index + (coord_plus - coord[idim]) * Npow;
-                }
+                index_list[2 * idim + 1] = minus;
+                index_list[2 * idim + 2] = plus;
             }
             return index_list;
         }

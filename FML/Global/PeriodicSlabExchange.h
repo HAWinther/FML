@@ -2,6 +2,7 @@
 #define FML_PERIODIC_SLAB_EXCHANGE_HEADER
 
 #include <FML/Global/ChunkedExchange.h>
+#include <FML/Global/Global.h>
 #include <array>
 #include <cmath>
 
@@ -90,6 +91,65 @@ namespace FML::COMMUNICATION {
                     // Trivial records and sufficient capacity: no allocation during receipt.
                     records.insert(records.end(), data, data + count);
                 },
+                max_message_bytes);
+        }
+#else
+        (void)max_message_bytes;
+#endif
+    }
+    /// The same for the particle domain FML::domain (Slab: the function above; Pencil: the records within buffer of
+    /// the pencil of each task, the corners included). get_xy(record) returns {x, y} (in [0,1)); with a Slab domain
+    /// only x is used
+    template <class Record, class GetXY>
+    void append_periodic_domain_ghosts(std::vector<Record> & records,
+                                       double buffer,
+                                       GetXY get_xy,
+                                       size_t max_message_bytes = 8 * 1024 * 1024) {
+        if (not FML::domain.holds<FML::PencilDomain>()) {
+            append_periodic_slab_ghosts(
+                records, buffer, [&](const Record & r) { return double(get_xy(r)[0]); }, max_message_bytes);
+            return;
+        }
+        static_assert(std::is_trivially_copyable_v<Record>, "Records must be trivially copyable");
+        const auto & pencils = FML::domain.get<FML::PencilDomain>();
+        auto box_of = [&](int task) {
+            const auto c = pencils.coords_of(task);
+            return std::array<double, 4>{pencils.x_edges()[c[0]],
+                                         pencils.x_edges()[c[0] + 1],
+                                         pencils.y_edges()[c[1]],
+                                         pencils.y_edges()[c[1] + 1]};
+        };
+        const auto mine = box_of(FML::ThisTask);
+        bool owned = std::isfinite(buffer) && buffer >= 0;
+        for (const auto & record : records) {
+            const auto xy = get_xy(record);
+            owned = owned && xy[0] >= mine[0] && xy[0] < mine[1] && xy[1] >= mine[2] && xy[1] < mine[3];
+        }
+        assert_mpi(owned, "[append_periodic_domain_ghosts] Invalid buffer or records that are not owned");
+#ifdef USE_MPI
+        if (FML::NTasks > 1) {
+            std::vector<double> buffers(FML::NTasks);
+            MPI_Allgather(&buffer, 1, MPI_DOUBLE, buffers.data(), 1, MPI_DOUBLE, FML::communicator);
+            std::vector<std::vector<Record>> outgoing(FML::NTasks);
+            for (int peer = 0; peer < FML::NTasks; ++peer) {
+                if (peer == FML::ThisTask)
+                    continue;
+                const auto b = box_of(peer);
+                for (const auto & record : records) {
+                    const auto xy = get_xy(record);
+                    const double dx = detail::periodic_distance_to_slab(xy[0], b[0], b[1]);
+                    const double dy = detail::periodic_distance_to_slab(xy[1], b[2], b[3]);
+                    if (std::hypot(dx, dy) <= buffers[peer])
+                        outgoing[peer].push_back(record);
+                }
+            }
+            size_t total = records.size();
+            for (const auto & o : outgoing)
+                total += o.size(); // (a guess of what we receive: the same order)
+            records.reserve(total);
+            exchange_records_chunked(
+                outgoing,
+                [&](const Record * data, size_t count) { records.insert(records.end(), data, data + count); },
                 max_message_bytes);
         }
 #else

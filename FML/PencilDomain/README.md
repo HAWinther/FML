@@ -72,3 +72,14 @@ The methods have the names and meaning of `FFTWGrid`: `get_index_real`, `get_coo
 the layout, indices and coordinates, the Fourier transform against `FFTWGrid`, the round trip, the extra cells (with
 the corners) and their contribution back, copies, and the particle domain, for 2D and 3D, every process grid, uneven
 pencils and odd meshes.
+
+## CPencilGrid: complex fields (complex-to-complex FFTs)
+
+`CPencilGrid<N>` (`CPencilGrid.h`, compiled in `PencilGrid.cpp`) is the complex counterpart of `PencilGrid`, as
+`CFFTWGrid<N>` (`FFTWGrid/CFFTWGrid.h`) is of `FFTWGrid`: the same pencils, extra cells, interface and transposes,
+but the values in position space are complex (`get_real` returns a `ComplexType`; no row padding) and the Fourier grid
+has all `Nmesh^N` modes (3D: all kx, ky and kz both split over `[0, Nmesh)`; every mode has multiplicity 1 and the
+integer wave-vector is in `(-Nmesh/2, Nmesh/2]`). The transforms are `fftw_forward()` (normalized by `1/Nmesh^N`) and
+`fftw_backward()`: an FFT along the last axis on the pencils, then the same row / column transposes and FFTs as
+`PencilGrid`. The wave dark matter solver runs on either (`WaveDarkMatter`: `SolverT<CPencilGrid<3>>`).
+`tests/test_complex_grids` checks both against the exact coefficients of plane waves and against each other.

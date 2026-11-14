@@ -199,3 +199,5 @@ HOD/tests/test_hod
 Survey/tests/test_mocks
 Survey/tests/test_workflow
 VoidFinders/tests/test_spherical
+# The grid type of the last build (SimulationCode, SnapshotAnalyzer: USE_PENCIL_GRID)
+.grid_flavour
