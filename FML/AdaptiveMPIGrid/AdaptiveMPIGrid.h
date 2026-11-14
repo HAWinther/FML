@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <climits>
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
@@ -691,8 +692,10 @@ namespace FML {
                 // Dense variant: exchange counts with a collective, then point-to-point
                 std::vector<int> nsend(FML::NTasks, 0), nrecv(FML::NTasks, 0);
                 for (auto & [r, buf] : send)
-                    if (r != FML::ThisTask)
+                    if (r != FML::ThisTask) {
+                        assert_mpi(buf.size() <= size_t(INT_MAX), "alltoallv_sparse: message count exceeds INT_MAX");
                         nsend[r] = int(buf.size());
+                    }
                 MPI_Alltoall(nsend.data(), 1, MPI_INT, nrecv.data(), 1, MPI_INT, FML::communicator);
                 std::vector<MPI_Request> req;
                 for (int r = 0; r < FML::NTasks; r++) {
@@ -717,6 +720,7 @@ namespace FML {
             for (auto & [r, buf] : send) {
                 if (r == FML::ThisTask or buf.empty())
                     continue;
+                assert_mpi(buf.size() <= size_t(INT_MAX), "alltoallv_sparse: message count exceeds INT_MAX");
                 sreq.emplace_back();
                 MPI_Issend(buf.data(), int(buf.size()), mtype.type, r, tag, FML::communicator, &sreq.back());
             }
@@ -769,6 +773,10 @@ namespace FML {
             MPI_Type_commit(&h._type);
             h._req.resize(_recv_ranks.size() + _send_ranks.size());
             int nreq = 0;
+            for (size_t j = 0; j < _recv_ranks.size(); j++)
+                assert_mpi(size_t(_recv_count[j]) <= size_t(INT_MAX), "communicate_ghosts: count exceeds INT_MAX");
+            for (size_t j = 0; j < _send_indices.size(); j++)
+                assert_mpi(_send_indices[j].size() <= size_t(INT_MAX), "communicate_ghosts: count exceeds INT_MAX");
             for (size_t j = 0; j < _recv_ranks.size(); j++)
                 MPI_Irecv(ghost.data() + _recv_offset[j], int(_recv_count[j]), h._type, _recv_ranks[j], tag,
                           FML::communicator, &h._req[nreq++]);
@@ -917,7 +925,11 @@ namespace FML {
                 ok = ok and _cells[i + NCHILD - 1].key + key_range(l) == c.key + key_range(l - 1);
                 for (int j = 0; ok and j < NCHILD; j++) {
                     for_each_touching_box(_cells[i + j], [&](const Coord & x, int) {
-                        ok = ok and target_of(find_leaf(x)) <= l;
+                        if (not ok)
+                            return;
+                        CellRef r = find_leaf(x);
+                        assert_mpi(bool(r), "adapt: missing neighbour leaf");
+                        ok = target_of(r) <= l;
                     });
                 }
                 if (ok) {

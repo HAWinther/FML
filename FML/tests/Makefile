@@ -13,7 +13,7 @@ USE_LUA             ?= true
 
 TARGETS := test_core test_mpi_counts test_grid_tools test_fof test_so test_so_multislab test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_sphericalcollapse test_screened_collapse test_halomodel test_halomodel_reaction test_gadget test_ramses test_camb test_numcore test_fftlog test_emulator test_utils test_interpolation test_grids test_particles test_domain test_lpt test_nbody
 TARGETS += test_baryonification test_numericalmethods test_interlacing_offset test_streamed_kick test_lightcone test_random_fields test_timestepping test_transfers
-TARGETS += test_fourier_resampling test_testhelpers
+TARGETS += test_fourier_resampling test_testhelpers test_review_fixes
 TARGETS += test_four_point
 TARGETS += test_cosmicweb test_short_range test_yukawa test_phase_space_halos test_control test_morphology test_environment test_pt_direct test_halo_history
 
@@ -63,6 +63,9 @@ test_timestepping: test_timestepping.o TransferInput.o $(INTERNAL_COSMO_OBJS) Gl
 	$(LINK_EXE)
 
 test_fourier_resampling: test_fourier_resampling.o Global.o
+	$(LINK_EXE)
+
+test_review_fixes: test_review_fixes.o Global.o
 	$(LINK_EXE)
 
 test_random_fields: test_random_fields.o TransferInput.o $(INTERNAL_COSMO_OBJS) Global.o Spline.o ODESolver.o ParameterMap.o FileUtils.o

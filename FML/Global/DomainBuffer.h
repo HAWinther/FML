@@ -288,19 +288,26 @@ namespace FML {
         }
 
 #ifdef USE_MPI
-        // MPI_Sendrecv of any number of bytes (in chunks whose count fits in an int)
+        // Send sbytes to dest and receive rbytes from source, any number of bytes (in chunks whose count fits in an
+        // int). The send and the receive peers differ, so each side posts exactly the chunks of its own message
+        // (non-blocking): the number of messages to dest is set by sbytes alone (= the rbytes dest expects) and
+        // likewise for the receive. Messages between a pair with the same tag arrive in order
         static void detail_sendrecv(const void * send, size_t sbytes, int dest, void * recv, size_t rbytes, int source,
                                     int tag) {
             const size_t chunk = size_t(1) << 30;
-            size_t so = 0, ro = 0;
-            do {
-                const int ns = int(std::min(chunk, sbytes - so)), nr = int(std::min(chunk, rbytes - ro));
-                MPI_Sendrecv(static_cast<const char *>(send) + so, ns, MPI_BYTE, dest, tag,
-                             static_cast<char *>(recv) + ro, nr, MPI_BYTE, source, tag, FML::communicator,
-                             MPI_STATUS_IGNORE);
-                so += size_t(ns);
-                ro += size_t(nr);
-            } while (so < sbytes or ro < rbytes);
+            std::vector<MPI_Request> requests;
+            requests.reserve((sbytes + chunk - 1) / chunk + (rbytes + chunk - 1) / chunk);
+            for (size_t ro = 0; ro < rbytes; ro += chunk) {
+                requests.emplace_back();
+                MPI_Irecv(static_cast<char *>(recv) + ro, int(std::min(chunk, rbytes - ro)), MPI_BYTE, source, tag,
+                          FML::communicator, &requests.back());
+            }
+            for (size_t so = 0; so < sbytes; so += chunk) {
+                requests.emplace_back();
+                MPI_Isend(static_cast<const char *>(send) + so, int(std::min(chunk, sbytes - so)), MPI_BYTE, dest, tag,
+                          FML::communicator, &requests.back());
+            }
+            MPI_Waitall(int(requests.size()), requests.data(), MPI_STATUSES_IGNORE);
         }
 #endif
     };

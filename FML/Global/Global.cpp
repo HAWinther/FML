@@ -22,6 +22,10 @@
 
 static std::string processor_name{"NameIsOnlyKnownWithMPI"};
 
+// Did FML call MPI_Init (and so should call MPI_Finalize)? Not if the host program (or another library, e.g.
+// mpi4py) initialized MPI before FML
+[[maybe_unused]] static bool fml_initialized_mpi = false;
+
 namespace FML {
 
 #ifdef USE_MPI
@@ -77,6 +81,16 @@ namespace FML {
     //============================================
     void init_mpi([[maybe_unused]] int * argc, [[maybe_unused]] char *** argv) {
 #ifdef USE_MPI
+        // MPI is already running (started by the host program): use it as it is and leave finalizing to the host
+        int already_initialized = 0;
+        MPI_Initialized(&already_initialized);
+        if (already_initialized) {
+            int provided = MPI_THREAD_SINGLE;
+            MPI_Query_thread(&provided);
+            MPIThreadsOK = provided >= MPI_THREAD_FUNNELED;
+            return;
+        }
+        fml_initialized_mpi = true;
 #ifdef USE_OMP
         int provided;
         MPI_Init_thread(argc, argv, MPI_THREAD_FUNNELED, &provided);
@@ -271,7 +285,11 @@ namespace FML {
         return;
 #endif
 #ifdef USE_MPI
-        MPI_Finalize();
+        // Only if FML started MPI (and nobody has finalized it yet)
+        int already_finalized = 0;
+        MPI_Finalized(&already_finalized);
+        if (fml_initialized_mpi and not already_finalized)
+            MPI_Finalize();
 #endif
     }
 
@@ -490,7 +508,11 @@ namespace FML {
 #endif
 #if defined(USE_FFTW) && defined(USE_MPI)
             CLEANUP_FFTW_MPI();
-            MPI_Finalize();
+            // Only if FML started MPI (and nobody has finalized it yet)
+            int already_finalized = 0;
+            MPI_Finalized(&already_finalized);
+            if (fml_initialized_mpi and not already_finalized)
+                MPI_Finalize();
 #endif
         }
 

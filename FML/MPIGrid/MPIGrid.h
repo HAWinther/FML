@@ -9,6 +9,7 @@
 #include <functional>
 #include <iostream>
 #include <optional>
+#include <type_traits>
 #include <vector>
 #ifdef USE_MPI
 #include <mpi.h>
@@ -70,6 +71,8 @@ namespace FML {
 
         template <int NDIM, class T>
         class MPIGrid {
+            static_assert(std::is_trivially_copyable_v<T>, "[MPIGrid] T is sent over MPI as bytes: it must be trivially copyable");
+
           private:
             bool _periodic{true};         // Is the box periodic or not
             int _N{0};                    // Gridcells per dimension in the global grid
@@ -174,7 +177,10 @@ namespace FML {
             // From global coordinates to local index
             FML_GRID_INLINE IndexInt index_from_globalcoord(const std::array<int, NDIM> & globalcoord) const;
 
-            // The closest 2NDIM+1 cells to a given cell (including the cell itself at 0)
+            // The closest 2NDIM+1 cells to a given cell (including the cell itself at 0). NB: for a non-periodic
+            // grid the neighbours outside the box (of the cells on the global boundary) are not meaningful (they can
+            // be cells in another row): treat the boundary cells separately (as MultiGridSolver does with Dirichlet
+            // boundary cells)
             FML_GRID_INLINE std::array<IndexInt, 2 * NDIM + 1> get_neighbor_gridindex(IndexInt index) const;
 
             /// The index of the cell offset cells along axis from the cell (index, coord) (coord =
@@ -182,7 +188,8 @@ namespace FML {
             /// cells otherwise. Shift along the axes in increasing order to reach the corners (x first)
             IndexInt get_shifted_index(IndexInt index, const std::array<int, NDIM> & coord, int axis, int offset) const;
 
-            // Gradient at a given cell (simple 2-point symmetric stensil)
+            // Gradient at a given cell (simple 2-point symmetric stensil). Not meaningful on the global boundary of a
+            // non-periodic grid (see get_neighbor_gridindex)
             std::array<T, NDIM> get_gradient(IndexInt index) const;
 
             // Get some info about the grid

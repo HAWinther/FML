@@ -850,8 +850,21 @@ namespace FML {
 
         template <class T>
         void MPIParticles<T>::copy_over_received_data(std::vector<char> & recv_buffer, size_t Npart_recv) {
-            assert_mpi(NpartLocal_in_use <= p.size() && Npart_recv <= p.size() - NpartLocal_in_use,
-                       "[MPIParticles::copy_over_received_data] Too many particles received! Increase buffer\n");
+            assert_mpi(NpartLocal_in_use <= p.size() && Npart_recv <= p.max_size() - NpartLocal_in_use,
+                       "[MPIParticles::copy_over_received_data] Too many particles received\n");
+
+            // More particles than we have room for: grow the storage (with 25% headroom) rather than abort. NB: this
+            // invalidates pointers and references to the particles (get_particles_ptr() etc. must be called again)
+            if (Npart_recv > p.size() - NpartLocal_in_use) {
+                const size_t needed = NpartLocal_in_use + Npart_recv;
+                const size_t newsize = std::max(needed, needed + needed / 4);
+                std::cout << "[MPIParticles] Task " << FML::ThisTask << " receives more particles than it has room "
+                          << "for: growing the capacity from " << p.size() << " to " << newsize << "\n";
+                p.resize(newsize);
+#ifdef MEMORY_LOGGING
+                FML::MemoryLog::get()->add_label(p.data(), p.capacity(), "MPIParticles");
+#endif
+            }
 
             char * buffer = recv_buffer.data();
             size_t bytes_processed = 0;
@@ -1060,9 +1073,10 @@ namespace FML {
                            ntot_to_send == NpartLocal_in_use_pre_comm - NpartLocal_in_use,
                        error.c_str());
 
+            // More particles arrive than fit: grow the storage (copy_over_received_data does it)
             FML::COMMUNICATION::require_count(NpartLocal_in_use <= p.size() &&
-                                                  ntot_to_recv <= p.size() - NpartLocal_in_use,
-                                              "[MPIParticles] Receive count exceeds allocated particle capacity");
+                                                  ntot_to_recv <= p.max_size() - NpartLocal_in_use,
+                                              "[MPIParticles] Receive count exceeds the maximum particle capacity");
 
             // Allocate send buffer
             std::vector<char> send_buffer(ntot_bytes_to_send);
@@ -1168,16 +1182,31 @@ namespace FML {
 
         template <class T>
         void MPIParticles<T>::dump_to_file(std::string fileprefix, size_t max_bytesize_buffer) {
-            std::string filename = fileprefix + "." + std::to_string(FML::ThisTask);
-            auto myfile = std::fstream(filename, std::ios::out | std::ios::binary);
+            // Write to a temporary file and rename it when complete, so a crash or full disk while writing leaves
+            // any previous file (e.g. the last checkpoint) intact
+            const std::string filename = fileprefix + "." + std::to_string(FML::ThisTask);
+            const std::string tmpfilename = filename + ".tmp";
+            auto myfile = std::fstream(tmpfilename, std::ios::out | std::ios::binary | std::ios::trunc);
 
-            // If we fail to write give a warning, but continue
+            // A checkpoint we cannot write is an error (as for FFTWGrid::dump_to_file)
             if (not myfile.good()) {
-                std::string error = "[MPIParticles::dump_to_file] Failed to save the particle data on task " +
-                                    std::to_string(FML::ThisTask) + " Filename: " + filename;
-                std::cout << error << "\n";
-                return;
+                std::string error = "[MPIParticles::dump_to_file] Failed to open the file for writing on task " +
+                                    std::to_string(FML::ThisTask) + " Filename: " + tmpfilename + "\n";
+                assert_mpi(false, error.c_str());
             }
+            auto finish = [&]() {
+                myfile.close();
+                if (myfile.fail()) {
+                    std::string error = "[MPIParticles::dump_to_file] Error writing the particle data on task " +
+                                        std::to_string(FML::ThisTask) + " Filename: " + tmpfilename + "\n";
+                    assert_mpi(false, error.c_str());
+                }
+                if (std::rename(tmpfilename.c_str(), filename.c_str()) != 0) {
+                    std::string error = "[MPIParticles::dump_to_file] Failed to rename " + tmpfilename + " to " +
+                                        filename + " on task " + std::to_string(FML::ThisTask) + "\n";
+                    assert_mpi(false, error.c_str());
+                }
+            };
 
             // Write the header: magic string, version, tasks, NDIM, sizeof(T), the counts and the domain
             MPIParticlesFileHeader header;
@@ -1192,7 +1221,7 @@ namespace FML {
             get_domain().write(myfile);
 
             if (NpartLocal_in_use == 0) {
-                myfile.close();
+                finish();
                 return;
             }
 
@@ -1232,10 +1261,7 @@ namespace FML {
 
                 nwritten += n_to_write;
             }
-            if (not myfile.good())
-                std::cout << "[MPIParticles::dump_to_file] Error writing the particle data on task " +
-                                 std::to_string(FML::ThisTask) + " Filename: " + filename + "\n";
-            myfile.close();
+            finish();
         }
 
         template <class T>

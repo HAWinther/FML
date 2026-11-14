@@ -97,7 +97,7 @@ namespace FML {
         } // namespace detail
 
         //================================================================================
-        /// @brief Copy all Fourier modes with \f$ |m_i| < \min(N_{\rm src},N_{\rm dst})/2 \f$ from one grid to
+        /// @brief Copy all Fourier modes with \f$ |m_i| \leq (\min(N_{\rm src},N_{\rm dst})-1)/2 \f$ from one grid to
         /// another of a different size, multiplying by factor(m). All other modes of dst are set to zero. Works with
         /// MPI (the modes are sent to the task that owns them in dst).
         ///
@@ -115,7 +115,9 @@ namespace FML {
             const int nsrc = src.get_nmesh();
             const int ndst = dst.get_nmesh();
             assert_mpi(not all_modes or nsrc == ndst, "[copy_fourier_modes] all modes needs grids of the same size");
-            const int mmax = all_modes ? nsrc : std::min(nsrc, ndst) / 2; // keep |m| < mmax
+            // Keep |m| <= (min(nsrc, ndst) - 1) / 2: for even meshes this drops the Nyquist plane, for odd meshes
+            // there is no Nyquist plane and all modes of the smaller grid are kept (as FourierResamplingPlan)
+            const int mmax = all_modes ? nsrc : (std::min(nsrc, ndst) - 1) / 2 + 1; // keep |m| < mmax
             assert_mpi(nsrc > 0 && ndst > 0, "[NUFFT::copy_fourier_modes] Grids must be allocated");
 
             dst.fill_fourier_grid(0.0);
@@ -158,8 +160,9 @@ namespace FML {
         } // namespace detail
 
         /// Copy the Fourier modes of src into dst (any sizes, decompositions and grid types), each times factor(integer
-        /// wave-vector). Only the modes strictly inside the Nyquist cube of the smaller mesh are kept (|m| < min(Nsrc, Ndst) / 2
-        /// along every axis); the others are zero in dst. Collective: each mode is sent to its owner in dst
+        /// wave-vector). Only the modes strictly inside the Nyquist cube of the smaller mesh are kept (|m| <= (min(Nsrc, Ndst) -
+        /// 1) / 2 along every axis: the Nyquist plane of an even mesh is dropped, an odd mesh has none); the others are
+        /// zero in dst. Collective: each mode is sent to its owner in dst
         template <int N, template <int> class GridSrc, template <int> class GridDst>
         void copy_fourier_modes(const GridSrc<N> & src,
                                 GridDst<N> & dst,

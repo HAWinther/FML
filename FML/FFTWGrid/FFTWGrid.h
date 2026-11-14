@@ -292,13 +292,16 @@ namespace FML {
 
             /// Range iterator for going through all active cells in the main real real grid by index
             /// [ e.g. for(auto and real_index: grid.real_range()) ]
-            /// If you add the slice numbers we only loop over the given slice range
-            RealRange get_real_range(int islice_begin = 0, int islice_end = 0) const;
+            /// If you add the slice numbers we only loop over the given slice range [islice_begin, islice_end)
+            /// (an empty range if islice_begin == islice_end)
+            RealRange get_real_range() const;
+            RealRange get_real_range(int islice_begin, int islice_end) const;
             /// Range iterator for going through all active cells in the main fourier grid by index
             /// [ e.g. for(auto and real_index: grid.real_range()) ]
             /// If you add the slice numbers we only loop over the given slice range
-            /// For the Fourier range islice denotes the ikx value
-            FourierRange get_fourier_range(int islice_begin = 0, int islice_end = 0) const;
+            /// For the Fourier range islice denotes the ikx value (an empty range if islice_begin == islice_end)
+            FourierRange get_fourier_range() const;
+            FourierRange get_fourier_range(int islice_begin, int islice_end) const;
 
             /// The number of local rows: lines of cells along the last dimension, Local_nx * Nmesh^(N-2). Rows are
             /// stored one after the other, so looping over rows visits the grid in memory order. Parallelize grid
@@ -527,11 +530,12 @@ namespace FML {
         };
 
         template <int N>
-        RealRange FFTWGrid<N>::get_real_range(int islice_begin, int islice_end) const {
+        RealRange FFTWGrid<N>::get_real_range() const {
+            return get_real_range(0, int(Local_nx));
+        }
 
-            // If fiducial parameters are used then we loop over all cells
-            if (islice_begin == 0 and islice_end == 0)
-                islice_end = int(Local_nx);
+        template <int N>
+        RealRange FFTWGrid<N>::get_real_range(int islice_begin, int islice_end) const {
 
 #ifdef DEBUG_FFTWGRID
             if (not grid_is_in_real_space) {
@@ -540,6 +544,9 @@ namespace FML {
                                      name + "\n";
             }
 #endif
+            // No cells if the grid is not allocated or has no local slices
+            if (Nmesh == 0 or Local_nx == 0)
+                return RealRange(0, 0, 1);
             // Here NmeshTotReal = LocalNx * Nmesh^N-1
             IndexIntType cellsperslice = NmeshTotReal / Local_nx;
             return RealRange(cellsperslice * islice_begin, cellsperslice * islice_end, Nmesh);
@@ -578,11 +585,12 @@ namespace FML {
         }
 
         template <int N>
-        FourierRange FFTWGrid<N>::get_fourier_range(int islice_begin, int islice_end) const {
+        FourierRange FFTWGrid<N>::get_fourier_range() const {
+            return get_fourier_range(0, int(Local_nx));
+        }
 
-            // If fiducial parameters are used then we loop over all cells
-            if (islice_begin == 0 and islice_end == 0)
-                islice_end = int(Local_nx);
+        template <int N>
+        FourierRange FFTWGrid<N>::get_fourier_range(int islice_begin, int islice_end) const {
 
 #ifdef DEBUG_FFTWGRID
             if (grid_is_in_real_space) {
@@ -1008,6 +1016,9 @@ namespace FML {
             : Nmesh(Nmesh), Local_nx(Nmesh), n_extra_x_slices_left(n_extra_x_slices_left),
               n_extra_x_slices_right(n_extra_x_slices_right) {
 
+            assert_mpi(Nmesh > 0 and n_extra_x_slices_left >= 0 and n_extra_x_slices_right >= 0,
+                       "[FFTWGrid] Nmesh must be positive and the number of extra slices non-negative\n");
+
 #ifdef USE_MPI
             // FFTW with MPI not implemented in FFTW for Ndim = 1 so abort
             assert_mpi(N > 1, "[FFTWGrid] FFTW r2c and c2r with MPI currently not supported for 1D\n");
@@ -1060,7 +1071,9 @@ namespace FML {
 #endif
             std::array<int, N> coord;
             int nmesh_plus_padding = (2 * (Nmesh / 2 + 1));
-            IndexIntType index = index_real;
+            // Shift by the left extra slices so that the index is non-negative (% and / truncate towards zero) and
+            // shift the x-coordinate back at the end
+            IndexIntType index = index_real + IndexIntType(NmeshTotRealSlice) * n_extra_x_slices_left;
             coord[N - 1] = int(index % nmesh_plus_padding);
             index /= nmesh_plus_padding;
 
@@ -1076,6 +1089,8 @@ namespace FML {
                 }
                 coord[0] = index;
             }
+            if constexpr (N > 1)
+                coord[0] -= n_extra_x_slices_left;
             return coord;
         }
 
@@ -1549,7 +1564,6 @@ namespace FML {
 
         template <int N>
         void FFTWGrid<N>::dump_to_file(std::string fileprefix) {
-            std::ios_base::sync_with_stdio(false);
             std::string filename = fileprefix + "." + std::to_string(FML::ThisTask);
             auto myfile = std::fstream(filename, std::ios::out | std::ios::binary);
 
@@ -1589,7 +1603,6 @@ namespace FML {
 
         template <int N>
         void FFTWGrid<N>::load_from_file(std::string fileprefix) {
-            std::ios_base::sync_with_stdio(false);
             std::string filename = fileprefix + "." + std::to_string(FML::ThisTask);
             auto myfile = std::ifstream(filename, std::ios::binary);
 
@@ -1660,6 +1673,13 @@ namespace FML {
             size_t bytes = sizeof(ComplexType) * _NmeshTotComplexAlloc;
             myfile.read((char *)data.data(), bytes);
             check_read("the grid data");
+            // Nothing may be left: a longer file was written with another precision (e.g. double vs float)
+            if (myfile.peek() != std::ifstream::traits_type::eof()) {
+                std::string error = "[FFTWGrid::load_from_file] The file is larger than the grid (written with another "
+                                    "floating point precision?) on task " +
+                                    std::to_string(FML::ThisTask) + " Filename: " + filename + "\n";
+                assert_mpi(false, error.c_str());
+            }
             myfile.close();
 
             fourier_grid_raw = std::move(data);

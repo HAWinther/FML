@@ -3,6 +3,7 @@
 
 #include <FML/Global/ChunkedExchange.h>
 #include <FML/Global/Global.h>
+#include <algorithm>
 #include <array>
 #include <cmath>
 
@@ -131,10 +132,22 @@ namespace FML::COMMUNICATION {
             std::vector<double> buffers(FML::NTasks);
             MPI_Allgather(&buffer, 1, MPI_DOUBLE, buffers.data(), 1, MPI_DOUBLE, FML::communicator);
             std::vector<std::vector<Record>> outgoing(FML::NTasks);
+            // The periodic gap between the intervals [a0,a1] and [b0,b1] (0 if they overlap)
+            auto interval_gap = [](double a0, double a1, double b0, double b1) {
+                double gap = 1.0;
+                for (int image = -1; image <= 1; ++image)
+                    gap = std::min(gap, std::max(0.0, std::max(a0 - (b1 + image), (b0 + image) - a1)));
+                return gap;
+            };
             for (int peer = 0; peer < FML::NTasks; ++peer) {
                 if (peer == FML::ThisTask)
                     continue;
                 const auto b = box_of(peer);
+                // No record of ours can be within the buffer of the peer if our whole box is not (skipping these
+                // peers makes the cost O(neighbours x records) rather than O(NTasks x records))
+                if (std::hypot(interval_gap(mine[0], mine[1], b[0], b[1]), interval_gap(mine[2], mine[3], b[2], b[3])) >
+                    buffers[peer])
+                    continue;
                 for (const auto & record : records) {
                     const auto xy = get_xy(record);
                     const double dx = detail::periodic_distance_to_slab(xy[0], b[0], b[1]);

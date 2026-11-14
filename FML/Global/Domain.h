@@ -112,7 +112,8 @@ namespace FML {
             return true;
         }
 
-        /// The task whose range holds x (the first non-empty one with x < x_max), compared in the type of x
+        /// The task whose range holds x (the first non-empty one with x < x_max), compared in the type of x.
+        /// x must be in [0,1): for x >= 1 or NaN the result is NTasks (not a valid rank)
         template <class X>
         int owner_x(X x) const {
             return int(std::upper_bound(xmax.begin(), xmax.end(), x, [](const X & v, double e) { return v < e; }) -
@@ -192,6 +193,7 @@ namespace FML {
             return {rank / process_grid_[1], rank % process_grid_[1]};
         }
 
+        /// The task holding pos. pos[0], pos[1] must be in [0,1): otherwise the result is not a valid rank
         template <class Pos>
         int owner(const Pos * pos) const {
             return DOMAIN_DETAIL::edge_index(xedges, pos[0]) * process_grid_[1] +

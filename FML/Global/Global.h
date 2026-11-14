@@ -338,14 +338,22 @@ namespace FML {
 #define assert_mpi(Expr, Msg) assert_mpi_impl(#Expr, Expr, __FILE__, __LINE__, Msg)
 
     //============================================
-    /// Simple integer a^b power-function by squaring (b >= 0; returns 0 for b < 0 instead of recursing forever)
+    /// Simple integer a^b power-function by squaring (b >= 0; returns 0 for b < 0 instead of recursing forever).
+    /// The result must fit in a long long int (it is meant for sizes like Nmesh^N)
     //============================================
     constexpr long long int power(int base, int exponent) {
-        return exponent < 0  ? 0 :
-               exponent == 0 ? 1 :
-                               (exponent % 2 == 0 ? power(base, exponent / 2) * power(base, exponent / 2) :
-                                                    (long long int)(base)*power(base, (exponent - 1) / 2) *
-                                                        power(base, (exponent - 1) / 2));
+        if (exponent < 0)
+            return 0;
+        long long int result = 1;
+        long long int b = base;
+        while (exponent > 0) {
+            if (exponent & 1)
+                result *= b;
+            exponent >>= 1;
+            if (exponent > 0)
+                b *= b;
+        }
+        return result;
     }
 
     //============================================

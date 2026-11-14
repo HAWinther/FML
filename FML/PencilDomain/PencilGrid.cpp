@@ -1114,11 +1114,13 @@ namespace FML {
                 in.read(reinterpret_cast<char *>(data), std::streamsize(nalloc * sizeof(ComplexType)));
                 ok = in.good();
             }
+            // Nothing may be left: a longer file was written with another precision (e.g. double vs float)
+            ok = ok and in.peek() == std::ifstream::traits_type::eof();
             good = ok ? 1 : 0;
             FML::MinOverTasks(&good);
             assert_mpi(good == 1,
                        ("[PencilGrid::load_from_file] The data in " + fileprefix +
-                        ".* does not match the grid (truncated, or written with another layout)")
+                        ".* does not match the grid (truncated, or written with another layout or precision)")
                            .c_str());
         }
 
@@ -1660,10 +1662,12 @@ namespace FML {
                 in.read(reinterpret_cast<char *>(data), std::streamsize(nalloc * sizeof(ComplexType)));
                 ok = in.good();
             }
+            // Nothing may be left: a longer file was written with another precision (e.g. double vs float)
+            ok = ok and in.peek() == std::ifstream::traits_type::eof();
             good = ok ? 1 : 0;
             FML::MinOverTasks(&good);
             assert_mpi(good == 1, ("[CPencilGrid::load_from_file] The data in " + fileprefix +
-                                   ".* does not match the grid (truncated, or written with another layout)")
+                                   ".* does not match the grid (truncated, or written with another layout or precision)")
                                       .c_str());
         }
 

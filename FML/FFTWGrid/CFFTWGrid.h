@@ -514,13 +514,14 @@ namespace FML {
                 ok = Local_nx == header[4] and Local_x_start == header[5] and int64_t(raw.size()) == header[6];
                 if (ok) {
                     in.read(reinterpret_cast<char *>(raw.data()), std::streamsize(raw.size() * sizeof(ComplexType)));
-                    ok = in.good();
+                    // Nothing may be left: a longer file was written with another precision (e.g. double vs float)
+                    ok = in.good() and in.peek() == std::ifstream::traits_type::eof();
                 }
                 grid_is_in_real_space = header[7] != 0;
                 good = ok ? 1 : 0;
                 FML::MinOverTasks(&good);
                 assert_mpi(good == 1, ("[CFFTWGrid::load_from_file] The data in " + fileprefix +
-                                       ".* does not match the grid (truncated or another decomposition)")
+                                       ".* does not match the grid (truncated, another decomposition or another precision)")
                                           .c_str());
             }
         };
