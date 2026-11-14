@@ -1,6 +1,7 @@
 #ifndef FML_ANALYSIS_DENSITYGRID_H
 #define FML_ANALYSIS_DENSITYGRID_H
 
+#include <FML/Analysis/AnalysisGrid.h>
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
@@ -20,19 +21,19 @@ namespace FML {
 
         /// The density contrast delta of the particles on an nmesh^3 grid (real space). Collective
         template <class P>
-        FML::GRID::FFTWGrid<3> density_contrast_grid(P * part, size_t npart, int nmesh, const std::string & method) {
+        AnalysisGrid<3> density_contrast_grid(P * part, size_t npart, int nmesh, const std::string & method) {
             size_t ntot = npart;
             FML::SumOverTasks(&ntot);
             if (ntot == 0)
                 throw std::runtime_error("density_contrast_grid: no particles");
             const auto nextra = FML::INTERPOLATION::get_extra_slices(method);
-            FML::GRID::FFTWGrid<3> delta(nmesh, nextra.first, nextra.second);
+            auto delta = make_analysis_grid<3>(nmesh, nextra.first, nextra.second);
             FML::INTERPOLATION::particles_to_grid(part, npart, ntot, delta, method);
             return delta;
         }
 
         /// Gaussian smoothing exp(-k^2 R^2 / 2) of a real-space grid in place (R in units of the box; R <= 0: none)
-        inline void gaussian_smooth(FML::GRID::FFTWGrid<3> & grid, double R_box) {
+        inline void gaussian_smooth(AnalysisGrid<3> & grid, double R_box) {
             if (not(R_box > 0.0))
                 return;
             grid.fftw_r2c();
@@ -46,7 +47,9 @@ namespace FML {
                                                int nmesh,
                                                double smoothing_scale_mpch,
                                                const std::string & method) {
-                if (nmesh < 2 or nmesh % FML::NTasks != 0)
+                // (slabs: nmesh divisible by the number of tasks; pencils: by the number of pencils in x and y, checked
+                // when the grid is made)
+                if (nmesh < 2 or (analysis_grid_is_fftwgrid<3> and nmesh % FML::NTasks != 0))
                     throw std::runtime_error(prefix + "nmesh must be >= 2 and divisible by the number of MPI tasks");
                 if (not std::isfinite(smoothing_scale_mpch) or smoothing_scale_mpch < 0.0)
                     throw std::runtime_error(prefix + "smoothing_scale_mpch must be >= 0");

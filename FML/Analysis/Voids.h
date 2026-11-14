@@ -1,6 +1,7 @@
 #ifndef FML_ANALYSIS_VOIDS_H
 #define FML_ANALYSIS_VOIDS_H
 
+#include <FML/Analysis/AnalysisGrid.h>
 #include <FML/Analysis/AnalysisContext.h>
 #include <FML/Analysis/Output.h>
 #include <FML/Global/Global.h>
@@ -60,7 +61,8 @@ namespace FML {
             }
 
             void validate() const {
-                if (nmesh < 0 or (nmesh > 0 and (nmesh < FML::NTasks or nmesh % FML::NTasks != 0)))
+                if (nmesh < 0 or
+                    (nmesh > 0 and analysis_grid_is_fftwgrid<3> and (nmesh < FML::NTasks or nmesh % FML::NTasks != 0)))
                     throw std::runtime_error("void_nmesh must be 0 or a multiple of the number of MPI tasks");
                 if (not std::isfinite(smoothing_scale) or not(min_density > 0.0) or
                     not(link_density_threshold > 0.0))
@@ -159,7 +161,8 @@ namespace FML {
         template <class P>
         std::vector<FML::VOIDFINDER::Void> find_voxel_voids(P * part, size_t npart, const VoidSettings & settings) {
             settings.validate();
-            return FML::VOIDFINDER::VoxelVoidFinder(part, npart, settings.voxel_options());
+            return FML::VOIDFINDER::VoxelVoidFinder<P, AnalysisGrid>(
+                part, npart, settings.voxel_options(), nullptr, FML::domain);
         }
 
         template <class P>
@@ -177,7 +180,7 @@ namespace FML {
             o.min_radius_in_mean_separation = settings.min_radius_mean_separation;
             o.recentering_steps = settings.recentering_steps;
             o.max_overlap = settings.max_overlap;
-            return FML::VOIDFINDER::SphericalVoidFinder(part, npart, o);
+            return FML::VOIDFINDER::SphericalVoidFinder<P, AnalysisGrid>(part, npart, o);
         }
 
 #ifdef USE_CGAL

@@ -1,6 +1,7 @@
 #ifndef FML_ANALYSIS_HYBRIDBIAS_H
 #define FML_ANALYSIS_HYBRIDBIAS_H
 
+#include <FML/Analysis/AnalysisGrid.h>
 #include <FML/Analysis/AnalysisContext.h>
 #include <FML/Analysis/Output.h>
 #include <FML/ComputePowerSpectra/ComputePowerSpectrum.h>
@@ -115,7 +116,7 @@ namespace FML {
             }
 
             void validate() const {
-                if (nmesh < 2 or nmesh % FML::NTasks != 0)
+                if (nmesh < 2 or (analysis_grid_is_fftwgrid<3> and nmesh % FML::NTasks != 0))
                     throw std::runtime_error("hybridbias_nmesh must be >= 2 and divisible by the number of MPI tasks");
                 if (noperators < 1 or noperators > 5)
                     throw std::runtime_error("hybridbias_noperators must be 1-5");
@@ -143,7 +144,7 @@ namespace FML {
 
         /// The linear field on the lattice and where it came from
         struct HybridBiasLinearField {
-            FML::GRID::FFTWGrid<3> delta_fourier;     // delta_L(k) at the redshift below (Fourier space, nlattice^3)
+            AnalysisGrid<3> delta_fourier;     // delta_L(k) at the redshift below (Fourier space, nlattice^3)
             int nlattice{0};
             double redshift{0.0};
             std::string source;
@@ -203,23 +204,6 @@ namespace FML {
                 return int(x % uint64_t(FML::NTasks));
             }
 
-            /// The task that owns each x slice of grids with the layout of this one
-            inline std::vector<int> slab_owners(const FML::GRID::FFTWGrid<3> & layout) {
-                const int N = layout.get_nmesh();
-                long long int mine[2] = {layout.get_local_x_start(), layout.get_local_nx()};
-                std::vector<long long int> all(2 * size_t(FML::NTasks), 0);
-#ifdef USE_MPI
-                MPI_Allgather(mine, 2, MPI_LONG_LONG, all.data(), 2, MPI_LONG_LONG, FML::communicator);
-#else
-                all[0] = mine[0];
-                all[1] = mine[1];
-#endif
-                std::vector<int> owner(static_cast<size_t>(N), -1);
-                for (int t = 0; t < FML::NTasks; t++)
-                    for (long long int ix = all[2 * size_t(t)]; ix < all[2 * size_t(t)] + all[2 * size_t(t) + 1]; ix++)
-                        owner[size_t(ix)] = t;
-                return owner;
-            }
 
             /// The linear growth factor D(a) (unnormalized) of an expansion history: D'' + (2 + dlnE/dlna) D' =
             /// 3/2 Omega_m(a) D in ln a, from the growing mode D = a deep in matter domination
@@ -291,7 +275,7 @@ namespace FML {
             if ((long long int)N * N * N != (long long int)ntot)
                 throw std::runtime_error("Hybrid bias: the initial-conditions snapshot has " + std::to_string(ntot) +
                                          " particles, not a lattice N^3");
-            if (N < FML::NTasks)
+            if (analysis_grid_is_fftwgrid<3> and N < FML::NTasks)
                 throw std::runtime_error("Hybrid bias: the lattice is smaller than the number of MPI tasks");
 
             // The lattice offset: the circular mean of the position within a lattice cell
@@ -314,11 +298,12 @@ namespace FML {
                 out.lattice_offset[d] = o - std::floor(o);
             }
 
-            // Lattice point and displacement of each IC particle, sent to the task owning the x slice
-            std::array<FML::GRID::FFTWGrid<3>, 3> psi;
+            // Lattice point and displacement of each IC particle, sent to the task owning the lattice point (slabs:
+            // the x slice; pencils: the pencil)
+            std::array<AnalysisGrid<3>, 3> psi;
             for (auto & g : psi)
-                g = FML::GRID::FFTWGrid<3>(N);
-            const auto owner = detail::slab_owners(psi[0]);
+                g = make_analysis_grid<3>(N);
+            const FML::GRID::CellOwners<3> owners(psi[0]);
             std::vector<std::vector<detail::LatticeRecord>> out_records(static_cast<size_t>(FML::NTasks));
             id_lattice.clear();
             id_lattice.reserve(nic);
@@ -335,20 +320,20 @@ namespace FML {
                     q[d] = ((long long int)qu % N + N) % N;
                 }
                 rec.lattice = (q[0] * N + q[1]) * N + q[2];
-                out_records[size_t(owner[size_t(q[0])])].push_back(rec);
+                out_records[size_t(owners.owner({int(q[0]), int(q[1]), int(q[2])}))].push_back(rec);
                 id_lattice.push_back({(long long int)FML::PARTICLE::GetID(ic[i]), rec.lattice});
             }
             FML::MaxOverTasks(&maxdisp);
             out.max_displacement_cells = maxdisp;
             const auto received = detail::exchange_records(out_records);
 
-            const long long int x_start = psi[0].get_local_x_start();
-            const long long int local_nx = psi[0].get_local_nx();
-            std::vector<int> occupancy(static_cast<size_t>(local_nx) * size_t(N) * size_t(N), 0);
+            const long long int x_start = psi[0].get_local_range(0)[0], y_start = psi[0].get_local_range(1)[0];
+            const long long int local_nx = psi[0].get_local_range(0)[1], local_ny = psi[0].get_local_range(1)[1];
+            std::vector<int> occupancy(static_cast<size_t>(local_nx) * size_t(local_ny) * size_t(N), 0);
             for (auto & rec : received) {
                 const long long int ix = rec.lattice / ((long long int)N * N) - x_start;
-                const int iy = int(rec.lattice / N % N), iz = int(rec.lattice % N);
-                occupancy[(static_cast<size_t>(ix) * size_t(N) + size_t(iy)) * size_t(N) + size_t(iz)]++;
+                const int iy = int(rec.lattice / N % N - y_start), iz = int(rec.lattice % N);
+                occupancy[(static_cast<size_t>(ix) * size_t(local_ny) + size_t(iy)) * size_t(N) + size_t(iz)]++;
                 for (int d = 0; d < 3; d++)
                     psi[size_t(d)].set_real({int(ix), iy, iz}, FML::GRID::FloatType(rec.psi[d]));
             }
@@ -367,7 +352,7 @@ namespace FML {
             for (auto & g : psi)
                 g.fftw_r2c();
             const double knyquist = M_PI * N * (1.0 - 1e-10);
-            FML::GRID::FFTWGrid<3> delta = psi[0];
+            AnalysisGrid<3> delta = psi[0];
             FML::GRID::for_each_fourier_mode<3>(delta, [&](size_t index, double) {
                 std::array<double, 3> kvec;
                 double kmag;
@@ -379,14 +364,14 @@ namespace FML {
                 delta.set_fourier_from_index(index, -div);
             });
             for (auto & g : psi)
-                g = FML::GRID::FFTWGrid<3>();
+                g = AnalysisGrid<3>();
 
             // 2LPT: -div Psi = D1 delta_1 - D2 S[phi_1] with D2 = -3/7 D1^2, so the linear field is
             // -div Psi - 3/7 S[phi] with nabla^2 phi = -div Psi, S = sum_{i<j} (phi_ii phi_jj - phi_ij^2)
             if (correct_2lpt) {
                 const int ii[6] = {0, 1, 2, 0, 0, 1};
                 const int jj[6] = {0, 1, 2, 1, 2, 2};
-                std::array<FML::GRID::FFTWGrid<3>, 6> phi;
+                std::array<AnalysisGrid<3>, 6> phi;
                 for (int c = 0; c < 6; c++) {
                     phi[size_t(c)] = delta;
                     auto & g = phi[size_t(c)];
@@ -404,9 +389,9 @@ namespace FML {
                     });
                     g.fftw_c2r();
                 }
-                FML::GRID::FFTWGrid<3> S(N);
+                auto S = make_grid_like(delta, N, 0, 0);
                 for (int ix = 0; ix < local_nx; ix++)
-                    for (int iy = 0; iy < N; iy++)
+                    for (int iy = 0; iy < local_ny; iy++)
                         for (int iz = 0; iz < N; iz++) {
                             const std::array<int, 3> c{ix, iy, iz};
                             const double xx = phi[0].get_real(c), yy = phi[1].get_real(c), zz = phi[2].get_real(c);
@@ -414,7 +399,7 @@ namespace FML {
                             S.set_real(c, FML::GRID::FloatType(xx * yy + xx * zz + yy * zz - xy * xy - xz * xz - yz * yz));
                         }
                 for (auto & g : phi)
-                    g = FML::GRID::FFTWGrid<3>();
+                    g = AnalysisGrid<3>();
                 S.fftw_r2c();
                 FML::GRID::linear_combination_fourier<3>(delta, S, 1.0, -3.0 / 7.0);
             }
@@ -426,7 +411,7 @@ namespace FML {
         inline HybridBiasLinearField linear_field_from_file(const std::string & filename, double boxsize) {
             namespace HB = FML::CORRELATIONFUNCTIONS::HYBRIDBIAS;
             HB::LinearFieldFileHeader header;
-            auto grid = HB::read_linear_field<3>(filename, header);
+            auto grid = HB::read_linear_field<3, AnalysisGrid>(filename, header, FML::domain);
             if (std::abs(header.boxsize / boxsize - 1.0) > 1e-6)
                 throw std::runtime_error("Hybrid bias: the linear field file has boxsize " +
                                          std::to_string(header.boxsize) + " Mpc/h, the snapshot " +

@@ -1,6 +1,7 @@
 #ifndef FML_ANALYSIS_MINKOWSKI_H
 #define FML_ANALYSIS_MINKOWSKI_H
 
+#include <FML/Analysis/AnalysisGrid.h>
 #include <FML/Analysis/AnalysisContext.h>
 #include <FML/Analysis/DensityGrid.h>
 #include <FML/Analysis/Output.h>
@@ -114,7 +115,7 @@ namespace FML {
         }
 
         /// The Minkowski functionals of a density contrast grid (real space; smoothed here, not changed). Collective
-        inline MinkowskiFunctionals minkowski_from_delta(const FML::GRID::FFTWGrid<3> & delta,
+        inline MinkowskiFunctionals minkowski_from_delta(const AnalysisGrid<3> & delta,
                                                          const MinkowskiSettings & settings,
                                                          double boxsize) {
             settings.validate();
@@ -122,9 +123,10 @@ namespace FML {
             const double R = settings.smoothing_scale_mpch / boxsize;
 
             // The smoothed field and its Fourier modes (for the gradient)
-            FML::GRID::FFTWGrid<3> field(N);
-            for (int ix = 0; ix < delta.get_local_nx(); ix++)
-                for (int iy = 0; iy < N; iy++)
+            auto field = make_grid_like(delta, N, 0, 0);
+            const auto nxy = local_nxy(delta);
+            for (int ix = 0; ix < nxy[0]; ix++)
+                for (int iy = 0; iy < nxy[1]; iy++)
                     for (int iz = 0; iz < N; iz++)
                         field.set_real({ix, iy, iz}, delta.get_real({ix, iy, iz}));
             field.fftw_r2c();
@@ -150,8 +152,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for collapse(2) reduction(+ : s)
 #endif
-                for (int ix = 0; ix < g.get_local_nx(); ix++)
-                    for (int iy = 0; iy < N; iy++)
+                for (int ix = 0; ix < nxy[0]; ix++)
+                    for (int iy = 0; iy < nxy[1]; iy++)
                         for (int iz = 0; iz < N; iz++) {
                             const double v = g.get_real({ix, iy, iz});
                             s += v * v;
@@ -164,8 +166,8 @@ namespace FML {
 #ifdef USE_OMP
 #pragma omp parallel for collapse(2) reduction(+ : sum, sum2)
 #endif
-            for (int ix = 0; ix < field.get_local_nx(); ix++)
-                for (int iy = 0; iy < N; iy++)
+            for (int ix = 0; ix < nxy[0]; ix++)
+                for (int iy = 0; iy < nxy[1]; iy++)
                     for (int iz = 0; iz < N; iz++) {
                         const double v = field.get_real({ix, iy, iz});
                         sum += v;

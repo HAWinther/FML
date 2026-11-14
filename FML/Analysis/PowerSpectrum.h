@@ -1,6 +1,7 @@
 #ifndef FML_ANALYSIS_POWERSPECTRUM_H
 #define FML_ANALYSIS_POWERSPECTRUM_H
 
+#include <FML/Analysis/AnalysisGrid.h>
 #include <FML/Analysis/AnalysisContext.h>
 #include <FML/Analysis/Output.h>
 #include <FML/ComputePowerSpectra/ComputePowerSpectrum.h>
@@ -28,7 +29,7 @@ namespace FML {
                                                    const std::string & method) {
                 if (nmesh < 2)
                     throw std::runtime_error(prefix + "nmesh must be >= 2");
-                if (nmesh % FML::NTasks != 0)
+                if (analysis_grid_is_fftwgrid<3> and nmesh % FML::NTasks != 0)
                     throw std::runtime_error(prefix + "nmesh must be divisible by the number of MPI tasks");
                 if (nbins < 0)
                     throw std::runtime_error(prefix + "nbins must be >= 0 (0: nmesh/2 linear bins)");
@@ -180,7 +181,7 @@ namespace FML {
             settings.validate();
             auto binning = detail::make_binning<NDIM>(settings.nmesh, settings.nbins, settings.log_binning);
             binning.subtract_shotnoise = settings.subtract_shotnoise;
-            FML::CORRELATIONFUNCTIONS::compute_power_spectrum<NDIM, P>(settings.nmesh,
+            FML::CORRELATIONFUNCTIONS::compute_power_spectrum<NDIM, P, AnalysisGrid>(settings.nmesh,
                                                                        particles,
                                                                        npart,
                                                                        npart_total,
@@ -202,7 +203,7 @@ namespace FML {
             using Binning = FML::CORRELATIONFUNCTIONS::BispectrumBinning<NDIM>;
             Binning bofk(0.0, 2.0 * M_PI * settings.nmesh / 2, settings.nbins, Binning::LINEAR_SPACING);
             bofk.subtract_shotnoise = settings.subtract_shotnoise;
-            FML::CORRELATIONFUNCTIONS::compute_bispectrum(settings.nmesh,
+            FML::CORRELATIONFUNCTIONS::compute_bispectrum<NDIM, P, false, AnalysisGrid>(settings.nmesh,
                                                           particles,
                                                           npart,
                                                           npart_total,
@@ -250,7 +251,7 @@ namespace FML {
                 settings.ellmax + 1,
                 detail::make_binning<NDIM>(settings.nmesh, settings.nbins, settings.log_binning));
             pell[0].subtract_shotnoise = settings.subtract_shotnoise;
-            FML::CORRELATIONFUNCTIONS::compute_power_spectrum_multipoles<NDIM, P>(settings.nmesh,
+            FML::CORRELATIONFUNCTIONS::compute_power_spectrum_multipoles<NDIM, P, AnalysisGrid>(settings.nmesh,
                                                                                   particles,
                                                                                   context.velocity_to_displacement(),
                                                                                   pell,

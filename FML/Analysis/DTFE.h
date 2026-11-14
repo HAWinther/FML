@@ -1,6 +1,7 @@
 #ifndef FML_ANALYSIS_DTFE_H
 #define FML_ANALYSIS_DTFE_H
 
+#include <FML/Analysis/AnalysisGrid.h>
 #include <FML/Analysis/AnalysisContext.h>
 #include <FML/Analysis/Output.h>
 #include <FML/ComputePowerSpectra/ComputePowerSpectrum.h>
@@ -12,6 +13,7 @@
 #endif
 
 #include <array>
+#include <memory>
 #include <cmath>
 #include <fstream>
 #include <iomanip>
@@ -62,7 +64,7 @@ namespace FML {
             }
 
             void validate() const {
-                if (nmesh < 3 or nmesh % FML::NTasks != 0 or nsub < 1 or nbins < 1 or
+                if (nmesh < 3 or (analysis_grid_is_fftwgrid<3> and nmesh % FML::NTasks != 0) or nsub < 1 or nbins < 1 or
                     not(buffer_fraction >= 0.0) or not(random_fraction >= 0.0))
                     throw std::runtime_error("Invalid DTFE settings: dtfe_nmesh must divide across the tasks, "
                                              "dtfe_nsub and dtfe_nbins >= 1 and the fractions >= 0");
@@ -77,8 +79,8 @@ namespace FML {
         /// The DTFE fields on a grid: density in units of the mean, velocity in peculiar km/s, divergence and
         /// vorticity in km/s per Mpc/h
         struct DTFEFields {
-            FML::GRID::FFTWGrid<3> density;
-            FML::TRIANGULATION::DTFEVelocityGrids velocity;
+            AnalysisGrid<3> density;
+            FML::TRIANGULATION::DTFEVelocityGridsT<AnalysisGrid<3>> velocity;
         };
 
         template <class P>
@@ -88,18 +90,22 @@ namespace FML {
             context.validate();
             const auto sampling = settings.sampling == "grid_point" ? DTFESampling::GridPoint : DTFESampling::CellAverage;
             const auto weighting = settings.weighting == "mass" ? DTFEWeighting::Mass : DTFEWeighting::Volume;
-            DTFE<P> dtfe;
+            // (slabs: the slabs of FML::domain; other domains: the particles are on FML::domain)
+            auto dtfe_ptr = analysis_grid_is_fftwgrid<3> ? std::make_unique<DTFE<P>>() :
+                                                           std::make_unique<DTFE<P>>(FML::domain);
+            auto & dtfe = *dtfe_ptr;
             dtfe.create(part, npart, settings.buffer_fraction, settings.random_fraction);
             DTFEFields f;
-            dtfe.density_to_grid(settings.nmesh, f.density, sampling, settings.nsub);
-            dtfe.velocity_to_grid(part, settings.nmesh, f.velocity, sampling, weighting, settings.nsub, true, true, true,
-                                  false);
+            dtfe.template density_to_grid<AnalysisGrid<3>>(settings.nmesh, f.density, sampling, settings.nsub);
+            dtfe.template velocity_to_grid<AnalysisGrid<3>>(
+                part, settings.nmesh, f.velocity, sampling, weighting, settings.nsub, true, true, true, false);
             // Particle velocity units -> km/s, and the gradients (with respect to box units) per Mpc/h
             const double vnorm = context.velocity_to_kms;
             const double gnorm = context.velocity_to_kms / context.boxsize;
             const int n = settings.nmesh;
-            for (int ix = 0; ix < f.density.get_local_nx(); ix++)
-                for (int iy = 0; iy < n; iy++)
+            const auto nxy = local_nxy(f.density);
+            for (int ix = 0; ix < nxy[0]; ix++)
+                for (int iy = 0; iy < nxy[1]; iy++)
                     for (int iz = 0; iz < n; iz++) {
                         const std::array<int, 3> c{ix, iy, iz};
                         for (auto & g : f.velocity.velocity)
@@ -113,12 +119,13 @@ namespace FML {
 
         /// The power spectrum of a field (a copy; subtract_mean for the density in mean units)
         inline FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<3>
-        dtfe_field_spectrum(const FML::GRID::FFTWGrid<3> & field, bool subtract_mean, int nbins, double boxsize) {
+        dtfe_field_spectrum(const AnalysisGrid<3> & field, bool subtract_mean, int nbins, double boxsize) {
             auto grid = field;
             const int nmesh = grid.get_nmesh();
+            const auto nxy = local_nxy(grid);
             if (subtract_mean)
-                for (int ix = 0; ix < grid.get_local_nx(); ix++)
-                    for (int iy = 0; iy < nmesh; iy++)
+                for (int ix = 0; ix < nxy[0]; ix++)
+                    for (int iy = 0; iy < nxy[1]; iy++)
                         for (int iz = 0; iz < nmesh; iz++) {
                             const std::array<int, 3> c{ix, iy, iz};
                             grid.set_real(c, grid.get_real(c) - 1.0);
@@ -179,15 +186,19 @@ namespace FML {
                 if (field.good()) {
                     const auto & density = f.density;
                     const int nmesh = density.get_nmesh();
-                    field << "# local DTFE field slab; x0 " << density.get_local_x_start() << " nx "
-                          << density.get_local_nx() << " Nmesh " << nmesh << "\n"
-                          << "# ix iy iz density vx vy vz divergence wx wy wz\n"
-                          << std::setprecision(12);
-                    for (int ix = 0; ix < density.get_local_nx(); ix++)
-                        for (int iy = 0; iy < nmesh; iy++)
+                    const auto rx = density.get_local_range(0), ry = density.get_local_range(1);
+                    if (analysis_grid_is_fftwgrid<3>)
+                        field << "# local DTFE field slab; x0 " << rx[0] << " nx " << rx[1] << " Nmesh " << nmesh
+                              << "\n";
+                    else
+                        field << "# local DTFE field pencil; x0 " << rx[0] << " nx " << rx[1] << " y0 " << ry[0]
+                              << " ny " << ry[1] << " Nmesh " << nmesh << "\n";
+                    field << "# ix iy iz density vx vy vz divergence wx wy wz\n" << std::setprecision(12);
+                    for (int ix = 0; ix < int(rx[1]); ix++)
+                        for (int iy = 0; iy < int(ry[1]); iy++)
                             for (int iz = 0; iz < nmesh; iz++) {
                                 const std::array<int, 3> c{ix, iy, iz};
-                                field << density.get_local_x_start() + ix << " " << iy << " " << iz << " "
+                                field << rx[0] + ix << " " << ry[0] + iy << " " << iz << " "
                                       << density.get_real(c);
                                 for (const auto & component : f.velocity.velocity)
                                     field << " " << component.get_real(c);

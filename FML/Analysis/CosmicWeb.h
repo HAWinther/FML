@@ -1,6 +1,7 @@
 #ifndef FML_ANALYSIS_COSMICWEB_H
 #define FML_ANALYSIS_COSMICWEB_H
 
+#include <FML/Analysis/AnalysisGrid.h>
 #include <FML/Analysis/AnalysisContext.h>
 #include <FML/Analysis/DensityGrid.h>
 #include <FML/Analysis/Output.h>
@@ -76,21 +77,22 @@ namespace FML {
         };
 
         /// The T-web fractions of a density contrast grid (real space; not changed). Collective
-        inline CosmicWebFractions cosmic_web_from_delta(const FML::GRID::FFTWGrid<3> & delta,
+        inline CosmicWebFractions cosmic_web_from_delta(const AnalysisGrid<3> & delta,
                                                         const CosmicWebSettings & settings,
                                                         double boxsize) {
             settings.validate();
             namespace CW = FML::COSMICWEB;
             const int N = delta.get_nmesh();
             // The tidal tensor once (smoothed in Fourier space), the density 1 + delta for the mass fractions
-            std::array<FML::GRID::FFTWGrid<3>, 6> tensor;
+            std::array<AnalysisGrid<3>, 6> tensor;
             CW::tidal_tensor(delta, settings.smoothing_scale_mpch / boxsize, tensor);
-            FML::GRID::FFTWGrid<3> density(N);
+            auto density = make_grid_like(delta, N, 0, 0);
+            const auto nxy = local_nxy(delta);
 #ifdef USE_OMP
 #pragma omp parallel for collapse(2) schedule(static)
 #endif
-            for (int ix = 0; ix < delta.get_local_nx(); ix++)
-                for (int iy = 0; iy < N; iy++)
+            for (int ix = 0; ix < nxy[0]; ix++)
+                for (int iy = 0; iy < nxy[1]; iy++)
                     for (int iz = 0; iz < N; iz++)
                         density.set_real({ix, iy, iz}, 1.0 + delta.get_real({ix, iy, iz}));
 
@@ -98,7 +100,7 @@ namespace FML {
             out.smoothing_scale_mpch = settings.smoothing_scale_mpch;
             out.nmesh = N;
             for (double th : settings.lambda_thresholds) {
-                CW::CosmicWeb result;
+                CW::CosmicWebT<AnalysisGrid<3>> result;
                 CW::classify_tensor(tensor, th, result, CW::ClassificationStorage::Bytes, false, &density);
                 out.lambda_thresholds.push_back(th);
                 out.volume_fraction.push_back(result.volume_fraction);

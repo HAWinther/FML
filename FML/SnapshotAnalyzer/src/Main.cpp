@@ -3,12 +3,27 @@
 #include "SnapshotAnalyzer.h"
 
 #include <chrono>
+#include <cstdio>
+#include <cstdlib>
 #include <iostream>
 #include <stdexcept>
 #include <thread>
 
 int main(int argc, char ** argv) {
     FML::FMLSetup::init(&argc, &argv);
+#ifdef USE_PENCIL_GRID
+    // The grids are PencilGrids: the particles are on the pencils (FML::pencil_domain: the process grid of
+    // MPI_Dims_create, or FML_PENCILS="px py" from the environment)
+    {
+        int px = 0, py = 0;
+        if (const char * env = std::getenv("FML_PENCILS"))
+            std::sscanf(env, "%d %d", &px, &py);
+        FML::set_domain(FML::pencil_domain(px, py));
+        if (FML::ThisTask == 0)
+            std::cout << "The domain: " << FML::domain.pencil_px() << " x " << FML::domain.pencil_py()
+                      << " pencils (USE_PENCIL_GRID)\n";
+    }
+#endif
     try {
         if (argc != 2) {
             if (FML::ThisTask == 0)

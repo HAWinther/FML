@@ -12,7 +12,7 @@
 namespace FML {
     namespace ANALYSIS {
 
-        /// Send the particles to the task whose domain [xmin_domain, xmax_domain) holds their x-coordinate after
+        /// Send the particles to the task whose domain (slabs: [xmin_domain, xmax_domain)) holds their position after
         /// they have moved (positions in [0,1)), growing the storage first so that the receiving task has room for
         /// all its particles: MPIParticles::communicate_particles only uses the storage it has. Collective
         template <class P>
@@ -20,10 +20,14 @@ namespace FML {
             if (FML::NTasks == 1)
                 return;
             const auto xmin = FML::GatherFromTasks(&FML::xmin_domain);
+            const auto & domain = particles.get_domain();
             std::vector<size_t> counts(size_t(FML::NTasks), 0);
             for (size_t i = 0; i < particles.get_npart(); ++i) {
-                const double x = double(FML::PARTICLE::GetPos(particles[i])[0]);
-                const int rank = int(std::upper_bound(xmin.begin(), xmin.end(), x) - xmin.begin()) - 1;
+                const auto * pos = FML::PARTICLE::GetPos(particles[i]);
+                // Slabs: the x-edges of the tasks; other domains (pencils): the owner
+                const int rank = domain.is_slab() ?
+                                     int(std::upper_bound(xmin.begin(), xmin.end(), double(pos[0])) - xmin.begin()) - 1 :
+                                     domain.owner(pos);
                 ++counts[size_t(std::clamp(rank, 0, FML::NTasks - 1))];
             }
             FML::SumArrayOverTasks(counts.data(), FML::NTasks);
