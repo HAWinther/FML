@@ -32,7 +32,9 @@ with fixed flat matter/Lambda dynamics on slabs or pencils. This forward-only
 milestone supplies final matter/particle fields. Its [discrete adjoint](PM_ADJOINT.md)
 now supplies white/spectrum gradients with bounded checkpoint/recomputation.
 The [periodic PM Gaussian posterior and MAP adapter](PM_POSTERIOR.md) connects it
-to the shared likelihood, priors and optimizer; bounded HMC validation is next.
+to the shared likelihood, priors and optimizer. [Bounded HMC validation](pm_hmc_validation/README.md)
+compares a two-mode conditional posterior with quadrature and checks short full-field
+and joint-parameter runs; wider full-field calibration remains open.
 
 ## BAO application (prototype)
 

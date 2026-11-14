@@ -236,3 +236,16 @@ validate the increment. A bounded joint fit exercises spectrum/noise updates.
 An exploratory broader-band line-search limit remains documented. Next: bounded
 HMC recovery, divergence/step-size and mixing tests; wider coverage and PM-specific
 restart/survey/tracer/cosmological derivatives remain separate.
+
+## Bounded periodic PM HMC validation
+
+[The validation driver](pm_hmc_validation/README.md) compares fixed-step and
+adapted HMC with refined two-dimensional quadrature for two active IC modes,
+conditioning on the other white coordinates and scalar parameters. Both ensembles
+pass the recorded moment/Monte Carlo error checks with no post-warmup divergences.
+Energy/reversibility probes and serial/MPI/pencil/thread/sanitizer replays pass.
+Short full-field and joint spectrum/noise traces exercise the public sampler and
+canonical replay; they do not establish full-posterior mixing or calibration.
+See [results and limitations](pm_hmc_validation/RESULTS.md). Larger fields, longer
+joint runs, posterior predictive checks, repeated-mock coverage and PM-specific
+restart/survey/tracer/cosmological derivatives remain separate; item 52 stays open.

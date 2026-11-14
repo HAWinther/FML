@@ -299,3 +299,16 @@ and MPI/pencil builds. A bounded fixed-parameter mock converges and a short join
 fit exercises spectrum/noise updates; broader-band line-search limits are retained.
 See [the periodic PM inference guide](FieldLevel/PM_POSTERIOR.md). Next is bounded
 HMC scientific validation; #52 remains open beyond these milestones.
+
+### Item 52: bounded periodic PM HMC validation
+
+[The validation driver](FieldLevel/pm_hmc_validation/README.md) compares fixed-step and
+adapted HMC with refined two-dimensional quadrature for two active IC modes,
+conditioning on the other white coordinates and scalar parameters. Both ensembles
+pass the recorded moment/Monte Carlo error checks with no post-warmup divergences.
+Energy/reversibility probes and serial/MPI/pencil/thread/sanitizer replays pass.
+Short full-field and joint spectrum/noise traces exercise the public sampler and
+canonical replay; they do not establish full-posterior mixing or calibration.
+See [results and limitations](FieldLevel/pm_hmc_validation/RESULTS.md). Larger fields, longer
+joint runs, posterior predictive checks, repeated-mock coverage and PM-specific
+restart/survey/tracer/cosmological derivatives remain separate; item 52 stays open.

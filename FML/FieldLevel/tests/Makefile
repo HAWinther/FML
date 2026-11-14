@@ -149,3 +149,9 @@ checkpoint-grid-mpi: test_checkpoint_grid_mpi
 ifeq ($(USE_MPI),true)
 run: survey-grid-mpi checkpoint-grid-mpi
 endif
+
+.PHONY: pm-hmc-smoke
+pm-hmc-smoke:
+	$(MAKE) -C ../pm_hmc_validation pm_hmc
+	python3 ../pm_hmc_validation/smoke.py --exe ../pm_hmc_validation/pm_hmc --mpi $(USE_MPI) --mpirun "$(MPIRUN)" --np-list "$(NP_LIST)"
+run: pm-hmc-smoke

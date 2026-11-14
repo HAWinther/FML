@@ -5,8 +5,9 @@
 The model adapts the [PM forward/adjoint](PM_ADJOINT.md) to the existing normalized
 Fourier-Gaussian likelihood, white/scalar priors and `map()` optimizer. It predicts
 periodic real-space matter, with a fixed background/schedule and no tracer bias/RSD
-or survey observation operator. The later HMC scientific-validation milestone is
-separate.
+or survey observation operator. [Bounded HMC validation](pm_hmc_validation/README.md)
+now compares a two-mode conditional posterior with quadrature and exercises the
+public full-field and joint-parameter sampler.
 
 ## Use
 
@@ -112,7 +113,9 @@ PM survey likelihoods need their own observation adapter and validation. Generic
 restart identity also lacks the PM background/time settings; no PM `response()`
 identity accessor is exposed, so PM checkpoint integration is not silently enabled.
 
-Small fixed-target HMC experiments, divergence/step-size/mixing checks and posterior
-recovery are next. Broad scientific calibration, smooth assignment alternatives,
+[Conditional HMC results](pm_hmc_validation/RESULTS.md) include moment comparisons,
+step-size/reversibility probes and dispersed-chain diagnostics. Short full-field
+and joint-parameter traces establish integration and replay, not their posterior
+calibration. Broad scientific calibration, smooth assignment alternatives,
 preconditioning, PM-specific restart identities, tracer/RSD/survey models,
 cosmological derivatives, 2LPT/COLA starts and production performance remain open.

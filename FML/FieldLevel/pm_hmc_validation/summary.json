@@ -1,0 +1,900 @@
+{
+  "gates": [
+    {
+      "check": "quadrature moment refinement",
+      "passed": true
+    },
+    {
+      "check": "quadrature range expansion/boundary mass",
+      "passed": true
+    },
+    {
+      "check": "fixed conditional acceptance/no post-warmup divergences",
+      "passed": true
+    },
+    {
+      "check": "fixed z0 Rhat/ESS",
+      "passed": true
+    },
+    {
+      "check": "fixed z1 Rhat/ESS",
+      "passed": true
+    },
+    {
+      "check": "fixed z0 quadrature moment agreement",
+      "passed": true
+    },
+    {
+      "check": "fixed z1 quadrature moment agreement",
+      "passed": true
+    },
+    {
+      "check": "fixed z0_squared quadrature moment agreement",
+      "passed": true
+    },
+    {
+      "check": "fixed z1_squared quadrature moment agreement",
+      "passed": true
+    },
+    {
+      "check": "fixed cross quadrature moment agreement",
+      "passed": true
+    },
+    {
+      "check": "adapt conditional acceptance/no post-warmup divergences",
+      "passed": true
+    },
+    {
+      "check": "adapt z0 Rhat/ESS",
+      "passed": true
+    },
+    {
+      "check": "adapt z1 Rhat/ESS",
+      "passed": true
+    },
+    {
+      "check": "adapt z0 quadrature moment agreement",
+      "passed": true
+    },
+    {
+      "check": "adapt z1 quadrature moment agreement",
+      "passed": true
+    },
+    {
+      "check": "adapt z0_squared quadrature moment agreement",
+      "passed": true
+    },
+    {
+      "check": "adapt z1_squared quadrature moment agreement",
+      "passed": true
+    },
+    {
+      "check": "adapt cross quadrature moment agreement",
+      "passed": true
+    },
+    {
+      "check": "energy error decreases at finer steps",
+      "passed": true
+    },
+    {
+      "check": "deterministic leapfrog reversibility",
+      "passed": true
+    },
+    {
+      "check": "serial conditional schema/finite draws",
+      "passed": true
+    },
+    {
+      "check": "serial conditional rank/backend/thread replay",
+      "passed": true
+    },
+    {
+      "check": "serial conditional acceptance/divergences",
+      "passed": true
+    },
+    {
+      "check": "serial full-fixed schema/finite draws",
+      "passed": true
+    },
+    {
+      "check": "serial full-fixed rank/backend/thread replay",
+      "passed": true
+    },
+    {
+      "check": "serial full-fixed acceptance/divergences",
+      "passed": true
+    },
+    {
+      "check": "serial full-fixed canonical last state",
+      "passed": true
+    },
+    {
+      "check": "serial full-fixed field/parameter block sizes",
+      "passed": true
+    },
+    {
+      "check": "serial full-fixed parameter support",
+      "passed": true
+    },
+    {
+      "check": "serial full-joint schema/finite draws",
+      "passed": true
+    },
+    {
+      "check": "serial full-joint rank/backend/thread replay",
+      "passed": true
+    },
+    {
+      "check": "serial full-joint acceptance/divergences",
+      "passed": true
+    },
+    {
+      "check": "serial full-joint canonical last state",
+      "passed": true
+    },
+    {
+      "check": "serial full-joint field/parameter block sizes",
+      "passed": true
+    },
+    {
+      "check": "serial full-joint parameter support",
+      "passed": true
+    },
+    {
+      "check": "mpi1 conditional schema/finite draws",
+      "passed": true
+    },
+    {
+      "check": "mpi1 conditional rank/backend/thread replay",
+      "passed": true
+    },
+    {
+      "check": "mpi1 conditional acceptance/divergences",
+      "passed": true
+    },
+    {
+      "check": "mpi1 full-fixed schema/finite draws",
+      "passed": true
+    },
+    {
+      "check": "mpi1 full-fixed rank/backend/thread replay",
+      "passed": true
+    },
+    {
+      "check": "mpi1 full-fixed acceptance/divergences",
+      "passed": true
+    },
+    {
+      "check": "mpi1 full-fixed canonical last state",
+      "passed": true
+    },
+    {
+      "check": "mpi1 full-fixed field/parameter block sizes",
+      "passed": true
+    },
+    {
+      "check": "mpi1 full-fixed parameter support",
+      "passed": true
+    },
+    {
+      "check": "mpi1 full-joint schema/finite draws",
+      "passed": true
+    },
+    {
+      "check": "mpi1 full-joint rank/backend/thread replay",
+      "passed": true
+    },
+    {
+      "check": "mpi1 full-joint acceptance/divergences",
+      "passed": true
+    },
+    {
+      "check": "mpi1 full-joint canonical last state",
+      "passed": true
+    },
+    {
+      "check": "mpi1 full-joint field/parameter block sizes",
+      "passed": true
+    },
+    {
+      "check": "mpi1 full-joint parameter support",
+      "passed": true
+    },
+    {
+      "check": "mpi2 conditional schema/finite draws",
+      "passed": true
+    },
+    {
+      "check": "mpi2 conditional rank/backend/thread replay",
+      "passed": true
+    },
+    {
+      "check": "mpi2 conditional acceptance/divergences",
+      "passed": true
+    },
+    {
+      "check": "mpi2 full-fixed schema/finite draws",
+      "passed": true
+    },
+    {
+      "check": "mpi2 full-fixed rank/backend/thread replay",
+      "passed": true
+    },
+    {
+      "check": "mpi2 full-fixed acceptance/divergences",
+      "passed": true
+    },
+    {
+      "check": "mpi2 full-fixed canonical last state",
+      "passed": true
+    },
+    {
+      "check": "mpi2 full-fixed field/parameter block sizes",
+      "passed": true
+    },
+    {
+      "check": "mpi2 full-fixed parameter support",
+      "passed": true
+    },
+    {
+      "check": "mpi2 full-joint schema/finite draws",
+      "passed": true
+    },
+    {
+      "check": "mpi2 full-joint rank/backend/thread replay",
+      "passed": true
+    },
+    {
+      "check": "mpi2 full-joint acceptance/divergences",
+      "passed": true
+    },
+    {
+      "check": "mpi2 full-joint canonical last state",
+      "passed": true
+    },
+    {
+      "check": "mpi2 full-joint field/parameter block sizes",
+      "passed": true
+    },
+    {
+      "check": "mpi2 full-joint parameter support",
+      "passed": true
+    },
+    {
+      "check": "mpi4 conditional schema/finite draws",
+      "passed": true
+    },
+    {
+      "check": "mpi4 conditional rank/backend/thread replay",
+      "passed": true
+    },
+    {
+      "check": "mpi4 conditional acceptance/divergences",
+      "passed": true
+    },
+    {
+      "check": "mpi4 full-fixed schema/finite draws",
+      "passed": true
+    },
+    {
+      "check": "mpi4 full-fixed rank/backend/thread replay",
+      "passed": true
+    },
+    {
+      "check": "mpi4 full-fixed acceptance/divergences",
+      "passed": true
+    },
+    {
+      "check": "mpi4 full-fixed canonical last state",
+      "passed": true
+    },
+    {
+      "check": "mpi4 full-fixed field/parameter block sizes",
+      "passed": true
+    },
+    {
+      "check": "mpi4 full-fixed parameter support",
+      "passed": true
+    },
+    {
+      "check": "mpi4 full-joint schema/finite draws",
+      "passed": true
+    },
+    {
+      "check": "mpi4 full-joint rank/backend/thread replay",
+      "passed": true
+    },
+    {
+      "check": "mpi4 full-joint acceptance/divergences",
+      "passed": true
+    },
+    {
+      "check": "mpi4 full-joint canonical last state",
+      "passed": true
+    },
+    {
+      "check": "mpi4 full-joint field/parameter block sizes",
+      "passed": true
+    },
+    {
+      "check": "mpi4 full-joint parameter support",
+      "passed": true
+    },
+    {
+      "check": "pencil4 conditional schema/finite draws",
+      "passed": true
+    },
+    {
+      "check": "pencil4 conditional rank/backend/thread replay",
+      "passed": true
+    },
+    {
+      "check": "pencil4 conditional acceptance/divergences",
+      "passed": true
+    },
+    {
+      "check": "pencil4 full-fixed schema/finite draws",
+      "passed": true
+    },
+    {
+      "check": "pencil4 full-fixed rank/backend/thread replay",
+      "passed": true
+    },
+    {
+      "check": "pencil4 full-fixed acceptance/divergences",
+      "passed": true
+    },
+    {
+      "check": "pencil4 full-fixed canonical last state",
+      "passed": true
+    },
+    {
+      "check": "pencil4 full-fixed field/parameter block sizes",
+      "passed": true
+    },
+    {
+      "check": "pencil4 full-fixed parameter support",
+      "passed": true
+    },
+    {
+      "check": "pencil4 full-joint schema/finite draws",
+      "passed": true
+    },
+    {
+      "check": "pencil4 full-joint rank/backend/thread replay",
+      "passed": true
+    },
+    {
+      "check": "pencil4 full-joint acceptance/divergences",
+      "passed": true
+    },
+    {
+      "check": "pencil4 full-joint canonical last state",
+      "passed": true
+    },
+    {
+      "check": "pencil4 full-joint field/parameter block sizes",
+      "passed": true
+    },
+    {
+      "check": "pencil4 full-joint parameter support",
+      "passed": true
+    },
+    {
+      "check": "pencil4-thread1 conditional schema/finite draws",
+      "passed": true
+    },
+    {
+      "check": "pencil4-thread1 conditional rank/backend/thread replay",
+      "passed": true
+    },
+    {
+      "check": "pencil4-thread1 conditional acceptance/divergences",
+      "passed": true
+    },
+    {
+      "check": "pencil4-thread1 full-fixed schema/finite draws",
+      "passed": true
+    },
+    {
+      "check": "pencil4-thread1 full-fixed rank/backend/thread replay",
+      "passed": true
+    },
+    {
+      "check": "pencil4-thread1 full-fixed acceptance/divergences",
+      "passed": true
+    },
+    {
+      "check": "pencil4-thread1 full-fixed canonical last state",
+      "passed": true
+    },
+    {
+      "check": "pencil4-thread1 full-fixed field/parameter block sizes",
+      "passed": true
+    },
+    {
+      "check": "pencil4-thread1 full-fixed parameter support",
+      "passed": true
+    },
+    {
+      "check": "pencil4-thread1 full-joint schema/finite draws",
+      "passed": true
+    },
+    {
+      "check": "pencil4-thread1 full-joint rank/backend/thread replay",
+      "passed": true
+    },
+    {
+      "check": "pencil4-thread1 full-joint acceptance/divergences",
+      "passed": true
+    },
+    {
+      "check": "pencil4-thread1 full-joint canonical last state",
+      "passed": true
+    },
+    {
+      "check": "pencil4-thread1 full-joint field/parameter block sizes",
+      "passed": true
+    },
+    {
+      "check": "pencil4-thread1 full-joint parameter support",
+      "passed": true
+    },
+    {
+      "check": "sanitizer conditional schema/finite draws",
+      "passed": true
+    },
+    {
+      "check": "sanitizer conditional rank/backend/thread replay",
+      "passed": true
+    },
+    {
+      "check": "sanitizer conditional acceptance/divergences",
+      "passed": true
+    },
+    {
+      "check": "sanitizer full-fixed schema/finite draws",
+      "passed": true
+    },
+    {
+      "check": "sanitizer full-fixed rank/backend/thread replay",
+      "passed": true
+    },
+    {
+      "check": "sanitizer full-fixed acceptance/divergences",
+      "passed": true
+    },
+    {
+      "check": "sanitizer full-fixed canonical last state",
+      "passed": true
+    },
+    {
+      "check": "sanitizer full-fixed field/parameter block sizes",
+      "passed": true
+    },
+    {
+      "check": "sanitizer full-fixed parameter support",
+      "passed": true
+    },
+    {
+      "check": "sanitizer full-joint schema/finite draws",
+      "passed": true
+    },
+    {
+      "check": "sanitizer full-joint rank/backend/thread replay",
+      "passed": true
+    },
+    {
+      "check": "sanitizer full-joint acceptance/divergences",
+      "passed": true
+    },
+    {
+      "check": "sanitizer full-joint canonical last state",
+      "passed": true
+    },
+    {
+      "check": "sanitizer full-joint field/parameter block sizes",
+      "passed": true
+    },
+    {
+      "check": "sanitizer full-joint parameter support",
+      "passed": true
+    }
+  ],
+  "passed": true,
+  "reference_means": [
+    1.3595425901154263,
+    -1.0468753709073413,
+    1.899996090303138,
+    1.14712939623953,
+    -1.45858317029264
+  ],
+  "reference_covariance": [
+    [
+      0.05164003596537592,
+      -0.03531151700122548
+    ],
+    [
+      -0.03531151700122548,
+      0.05118135402714663
+    ]
+  ],
+  "refinement_error": [
+    0.00019763645847548084,
+    0.00010196012801499954,
+    0.000686695941198856,
+    6.639767685889808e-05,
+    0.00015728657207669805
+  ],
+  "range_expansion_error": [
+    0.0,
+    0.0,
+    8.881784197001252e-16,
+    4.440892098500626e-16,
+    6.661338147750939e-16
+  ],
+  "boundary_mass": 1.9307781366013e-68,
+  "chains": {
+    "fixed": {
+      "draws": 1024,
+      "means": [
+        1.3603856339722296,
+        -1.0496753530113234,
+        1.904159109684888,
+        1.1546359926461154,
+        -1.4632953622960885
+      ],
+      "moment_errors": [
+        0.0008430438568032272,
+        0.002799982103982135,
+        0.0041630193817498995,
+        0.007506596406585464,
+        0.004712192003448523
+      ],
+      "conservative_mc_errors": [
+        0.007101388781248174,
+        0.007069780126859348,
+        0.019509816824287395,
+        0.015038973129964139,
+        0.015861869914923034
+      ],
+      "mean_acceptance": 0.9678360436523663,
+      "epsilon": [
+        0.1,
+        0.1,
+        0.1,
+        0.1
+      ],
+      "divergences": 0,
+      "max_rhat": 1.005606762164042,
+      "min_bulk_ess": 1729.187840805034,
+      "diagnostics": {
+        "z0": {
+          "feature": "z0",
+          "status": "ok",
+          "rhat": "1.0012638278090025",
+          "ess_bulk": "1912.3034258471141",
+          "ess_tail": "978.95840913275515",
+          "mean": "1.3603856339722296"
+        },
+        "z1": {
+          "feature": "z1",
+          "status": "ok",
+          "rhat": "1.0056067621640421",
+          "ess_bulk": "1729.1878408050341",
+          "ess_tail": "980.24173295787205",
+          "mean": "-1.0496753530113234"
+        },
+        "z0_squared": {
+          "feature": "z0_squared",
+          "status": "ok",
+          "rhat": "1.0014786293206885",
+          "ess_bulk": "1912.3034258471141",
+          "ess_tail": "978.95840913275515",
+          "mean": "1.904159109684888"
+        },
+        "z1_squared": {
+          "feature": "z1_squared",
+          "status": "ok",
+          "rhat": "1.0058403892323311",
+          "ess_bulk": "1729.1878408050336",
+          "ess_tail": "980.24173295787205",
+          "mean": "1.1546359926461154"
+        },
+        "cross": {
+          "feature": "cross",
+          "status": "ok",
+          "rhat": "1.0080449986131033",
+          "ess_bulk": "2325.3692212462256",
+          "ess_tail": "982.37586743851091",
+          "mean": "-1.4632953622960885"
+        },
+        "potential": {
+          "feature": "potential",
+          "status": "ok",
+          "rhat": "1.0149156718712782",
+          "ess_bulk": "376.38731412828548",
+          "ess_tail": "528.23649430418936",
+          "mean": "-165.38707429586452"
+        }
+      },
+      "repeated_draws": 33
+    },
+    "adapt": {
+      "draws": 512,
+      "means": [
+        1.3599189605467,
+        -1.0464165177268216,
+        1.9058022362420515,
+        1.1483687965918374,
+        -1.462738697401557
+      ],
+      "moment_errors": [
+        0.00037637043127358716,
+        0.0004588531805196361,
+        0.005806145938913376,
+        0.001239400352307518,
+        0.00415552710891709
+      ],
+      "conservative_mc_errors": [
+        0.010042880326125311,
+        0.011426291148808219,
+        0.027591047552322022,
+        0.02126831976455984,
+        0.022432071558281926
+      ],
+      "mean_acceptance": 0.9264770613265736,
+      "epsilon": [
+        0.13412411135483332,
+        0.12889106579414844
+      ],
+      "divergences": 0,
+      "max_rhat": 1.0169263580141714,
+      "min_bulk_ess": 1059.7187345783632,
+      "diagnostics": {
+        "z0": {
+          "feature": "z0",
+          "status": "ok",
+          "rhat": "1.0169263580141714",
+          "ess_bulk": "1258.5905528872747",
+          "ess_tail": "286.93522720807454",
+          "mean": "1.3599189605466999"
+        },
+        "z1": {
+          "feature": "z1",
+          "status": "ok",
+          "rhat": "1.014500954508373",
+          "ess_bulk": "1059.7187345783632",
+          "ess_tail": "294.14376422294873",
+          "mean": "-1.0464165177268216"
+        },
+        "z0_squared": {
+          "feature": "z0_squared",
+          "status": "ok",
+          "rhat": "1.0154046147322102",
+          "ess_bulk": "1258.5905528872747",
+          "ess_tail": "286.93522720807454",
+          "mean": "1.9058022362420515"
+        },
+        "z1_squared": {
+          "feature": "z1_squared",
+          "status": "ok",
+          "rhat": "1.0127376081632311",
+          "ess_bulk": "1059.7187345783661",
+          "ess_tail": "294.14376422294873",
+          "mean": "1.1483687965918374"
+        },
+        "cross": {
+          "feature": "cross",
+          "status": "ok",
+          "rhat": "1.0166818806818554",
+          "ess_bulk": "1387.1462200196254",
+          "ess_tail": "112.51096864480506",
+          "mean": "-1.462738697401557"
+        },
+        "potential": {
+          "feature": "potential",
+          "status": "ok",
+          "rhat": "1.0053442345180603",
+          "ess_bulk": "189.46346554024203",
+          "ess_tail": "297.30483655099619",
+          "mean": "-165.43555226414139"
+        }
+      },
+      "repeated_draws": 37
+    }
+  },
+  "energy": [
+    {
+      "epsilon": 0.4,
+      "max_abs_delta_h": 414.0773935897239,
+      "max_reversal_error": 2.220446049250313e-15
+    },
+    {
+      "epsilon": 0.2,
+      "max_abs_delta_h": 14.782101078968992,
+      "max_reversal_error": 4.884981308350689e-15
+    },
+    {
+      "epsilon": 0.1,
+      "max_abs_delta_h": 3.531812661649866,
+      "max_reversal_error": 5.551115123125783e-15
+    },
+    {
+      "epsilon": 0.05,
+      "max_abs_delta_h": 1.0113689463409514,
+      "max_reversal_error": 2.4424906541753444e-15
+    },
+    {
+      "epsilon": 0.025,
+      "max_abs_delta_h": 0.4420113999693456,
+      "max_reversal_error": 3.83026943495679e-15
+    }
+  ],
+  "replay_errors": {
+    "serial-conditional": 0.0,
+    "serial-full-fixed": 0.0,
+    "serial-full-fixed-last": 0.0,
+    "serial-full-joint": 0.0,
+    "serial-full-joint-last": 0.0,
+    "mpi1-conditional": 5.684341886080802e-14,
+    "mpi1-full-fixed": 5.684341886080802e-14,
+    "mpi1-full-fixed-last": 6.661338147750939e-16,
+    "mpi1-full-joint": 8.526512829121202e-14,
+    "mpi1-full-joint-last": 7.771561172376096e-16,
+    "mpi2-conditional": 8.810729923425242e-13,
+    "mpi2-full-fixed": 2.2737367544323206e-13,
+    "mpi2-full-fixed-last": 6.661338147750939e-16,
+    "mpi2-full-joint": 1.7053025658242404e-13,
+    "mpi2-full-joint-last": 1.2212453270876722e-15,
+    "mpi4-conditional": 7.958078640513122e-13,
+    "mpi4-full-fixed": 1.9895196601282805e-13,
+    "mpi4-full-fixed-last": 6.661338147750939e-16,
+    "mpi4-full-joint": 1.4210854715202004e-13,
+    "mpi4-full-joint-last": 1.2212453270876722e-15,
+    "pencil4-conditional": 7.958078640513122e-13,
+    "pencil4-full-fixed": 1.7053025658242404e-13,
+    "pencil4-full-fixed-last": 6.661338147750939e-16,
+    "pencil4-full-joint": 1.7053025658242404e-13,
+    "pencil4-full-joint-last": 8.881784197001252e-16,
+    "pencil4-thread1-conditional": 7.958078640513122e-13,
+    "pencil4-thread1-full-fixed": 1.7053025658242404e-13,
+    "pencil4-thread1-full-fixed-last": 6.661338147750939e-16,
+    "pencil4-thread1-full-joint": 1.7053025658242404e-13,
+    "pencil4-thread1-full-joint-last": 8.881784197001252e-16,
+    "sanitizer-conditional": 0.0,
+    "sanitizer-full-fixed": 0.0,
+    "sanitizer-full-fixed-last": 0.0,
+    "sanitizer-full-joint": 0.0,
+    "sanitizer-full-joint-last": 0.0
+  },
+  "replay_metadata": {
+    "serial-conditional": {
+      "acceptance": 0.9660752956273635,
+      "divergences": 0,
+      "epsilon": 0.1,
+      "draws": 24
+    },
+    "serial-full-fixed": {
+      "acceptance": 0.9499173591243217,
+      "divergences": 0,
+      "epsilon": 0.06,
+      "draws": 16
+    },
+    "serial-full-joint": {
+      "acceptance": 0.9032382718978794,
+      "divergences": 0,
+      "epsilon": 0.06,
+      "draws": 16
+    },
+    "mpi1-conditional": {
+      "acceptance": 0.9660752956273564,
+      "divergences": 0,
+      "epsilon": 0.1,
+      "draws": 24
+    },
+    "mpi1-full-fixed": {
+      "acceptance": 0.9499173591243202,
+      "divergences": 0,
+      "epsilon": 0.06,
+      "draws": 16
+    },
+    "mpi1-full-joint": {
+      "acceptance": 0.9032382718978721,
+      "divergences": 0,
+      "epsilon": 0.06,
+      "draws": 16
+    },
+    "mpi2-conditional": {
+      "acceptance": 0.9660752956273292,
+      "divergences": 0,
+      "epsilon": 0.1,
+      "draws": 24
+    },
+    "mpi2-full-fixed": {
+      "acceptance": 0.9499173591243084,
+      "divergences": 0,
+      "epsilon": 0.06,
+      "draws": 16
+    },
+    "mpi2-full-joint": {
+      "acceptance": 0.9032382718978923,
+      "divergences": 0,
+      "epsilon": 0.06,
+      "draws": 16
+    },
+    "mpi4-conditional": {
+      "acceptance": 0.966075295627309,
+      "divergences": 0,
+      "epsilon": 0.1,
+      "draws": 24
+    },
+    "mpi4-full-fixed": {
+      "acceptance": 0.9499173591243092,
+      "divergences": 0,
+      "epsilon": 0.06,
+      "draws": 16
+    },
+    "mpi4-full-joint": {
+      "acceptance": 0.9032382718978947,
+      "divergences": 0,
+      "epsilon": 0.06,
+      "draws": 16
+    },
+    "pencil4-conditional": {
+      "acceptance": 0.9660752956273284,
+      "divergences": 0,
+      "epsilon": 0.1,
+      "draws": 24
+    },
+    "pencil4-full-fixed": {
+      "acceptance": 0.949917359124309,
+      "divergences": 0,
+      "epsilon": 0.06,
+      "draws": 16
+    },
+    "pencil4-full-joint": {
+      "acceptance": 0.9032382718979037,
+      "divergences": 0,
+      "epsilon": 0.06,
+      "draws": 16
+    },
+    "pencil4-thread1-conditional": {
+      "acceptance": 0.9660752956273284,
+      "divergences": 0,
+      "epsilon": 0.1,
+      "draws": 24
+    },
+    "pencil4-thread1-full-fixed": {
+      "acceptance": 0.949917359124309,
+      "divergences": 0,
+      "epsilon": 0.06,
+      "draws": 16
+    },
+    "pencil4-thread1-full-joint": {
+      "acceptance": 0.9032382718979037,
+      "divergences": 0,
+      "epsilon": 0.06,
+      "draws": 16
+    },
+    "sanitizer-conditional": {
+      "acceptance": 0.9660752956273635,
+      "divergences": 0,
+      "epsilon": 0.1,
+      "draws": 24
+    },
+    "sanitizer-full-fixed": {
+      "acceptance": 0.9499173591243217,
+      "divergences": 0,
+      "epsilon": 0.06,
+      "draws": 16
+    },
+    "sanitizer-full-joint": {
+      "acceptance": 0.9032382718978794,
+      "divergences": 0,
+      "epsilon": 0.06,
+      "draws": 16
+    }
+  },
+  "limits": "Two-mode conditional finite-grid reference, fixed spectrum/noise/other white directions. Full-field/joint runs are short integration/replay checks. No general posterior coverage or production calibration."
+}
