@@ -2,7 +2,7 @@ USE_PENCIL_GRID ?= false
 USE_MPI ?= false
 USE_OMP ?= true
 USE_FFTW ?= true
-TARGETS := survey_checkpoint_mpi survey_mpi fieldlevel calibration framework framework_mpi checkpoint_mpi
+TARGETS := survey_checkpoint_mpi survey_mpi fieldlevel calibration framework framework_mpi checkpoint_mpi particle_mesh particle_mesh_adjoint particle_mesh_map
 ifeq ($(USE_PENCIL_GRID),true)
 ifneq ($(USE_MPI),true)
 $(error USE_PENCIL_GRID=true requires USE_MPI=true)
@@ -23,6 +23,13 @@ framework: Framework.o Global.o
 	$(LINK_EXE)
 
 framework_mpi: FrameworkMPI.o Global.o $(PENCIL_OBJECT)
+	$(LINK_EXE)
+
+particle_mesh: ParticleMesh.o Global.o $(PENCIL_OBJECT)
+	$(LINK_EXE)
+particle_mesh_adjoint: ParticleMeshAdjoint.o Global.o $(PENCIL_OBJECT)
+	$(LINK_EXE)
+particle_mesh_map: ParticleMeshMAP.o Global.o $(PENCIL_OBJECT)
 	$(LINK_EXE)
 
 checkpoint_mpi: CheckpointMPI.o Global.o $(PENCIL_OBJECT)

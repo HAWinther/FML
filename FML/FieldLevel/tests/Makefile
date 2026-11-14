@@ -1,13 +1,23 @@
 USE_MPI ?= false
 USE_OMP ?= false
 USE_FFTW ?= true
-TARGETS := test_survey_checkpoint_mpi test_survey_likelihood_mpi test_bao_gradients test_bao_validation test_field_level test_field_level_safety test_framework test_framework_resolution test_framework_mpi test_framework_lpt_mpi test_framework_reconstruction_mpi test_framework_checkpoint_mpi
+TARGETS := test_particle_mesh_adjoint test_particle_mesh_posterior
+TARGETS += test_survey_checkpoint_mpi test_survey_likelihood_mpi test_bao_gradients test_bao_validation test_field_level test_field_level_safety test_framework test_framework_resolution test_framework_mpi test_framework_lpt_mpi test_framework_reconstruction_mpi test_framework_checkpoint_mpi test_particle_mesh
 ifeq ($(USE_MPI),true)
 TARGETS += test_framework_linear_grid_mpi test_framework_lpt_grid_mpi test_survey_grid_mpi test_checkpoint_grid_mpi
 endif
 EXTRA_CLEAN += test_framework_linear_grid_mpi test_framework_lpt_grid_mpi test_survey_grid_mpi test_checkpoint_grid_mpi
 include ../../Makefile.config
 FML_MODULES := Global
+ifeq ($(USE_MPI),true)
+PM_GRID_OBJECT := PencilGrid.o
+endif
+test_particle_mesh: test_particle_mesh.o Global.o $(PM_GRID_OBJECT)
+	$(LINK_EXE)
+test_particle_mesh_adjoint: test_particle_mesh_adjoint.o Global.o $(PM_GRID_OBJECT)
+	$(LINK_EXE)
+test_particle_mesh_posterior: test_particle_mesh_posterior.o Global.o $(PM_GRID_OBJECT)
+	$(LINK_EXE)
 # Do not reuse a VPATH object compiled with another module's MPI/precision flags.
 Global.o: $(FML_ROOT)/Global/Global.cpp
 	$(CC) $(DEPFLAGS) -c -o $@ $< $(OPTIONS) $(INC)
@@ -86,6 +96,21 @@ framework-checkpoint-mpi: test_framework_checkpoint_mpi
 run: $(TARGETS) survey-checkpoint-mpi survey-mpi bao-gradients safety framework framework-mpi framework-lpt-mpi framework-reconstruction-mpi framework-checkpoint-mpi
 	$(SINGLE_RUN) ./test_field_level
 	$(SINGLE_RUN) ./test_bao_validation
+
+.PHONY: particle-mesh
+particle-mesh: test_particle_mesh
+	@set -e; for np in $(NP_LIST); do $(SAFETY_RUN) ./test_particle_mesh; done
+run: particle-mesh
+
+.PHONY: particle-mesh-adjoint
+particle-mesh-adjoint: test_particle_mesh_adjoint
+	@set -e; for np in $(NP_LIST); do $(SAFETY_RUN) ./test_particle_mesh_adjoint; done
+run: particle-mesh-adjoint
+
+.PHONY: particle-mesh-posterior
+particle-mesh-posterior: test_particle_mesh_posterior
+	@set -e; for np in $(NP_LIST); do $(SAFETY_RUN) ./test_particle_mesh_posterior; done
+run: particle-mesh-posterior
 
 # Generic distributed linear backend (the pencil grid requires MPI/FFTW).
 PencilGrid.o: $(FML_ROOT)/PencilDomain/PencilGrid.cpp

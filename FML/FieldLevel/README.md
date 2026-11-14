@@ -27,6 +27,13 @@ and [frontend verification](tests/FRONTEND_GRID_RESULTS.md). Library users selec
 the grid template explicitly; standalone distributed frontends use
 `USE_PENCIL_GRID=true USE_MPI=true`. This does not change the serial BAO prototype.
 
+A [periodic PM forward model](PARTICLE_MESH.md) now evolves whitened initial fields
+with fixed flat matter/Lambda dynamics on slabs or pencils. This forward-only
+milestone supplies final matter/particle fields. Its [discrete adjoint](PM_ADJOINT.md)
+now supplies white/spectrum gradients with bounded checkpoint/recomputation.
+The [periodic PM Gaussian posterior and MAP adapter](PM_POSTERIOR.md) connects it
+to the shared likelihood, priors and optimizer; bounded HMC validation is next.
+
 ## BAO application (prototype)
 
 `FieldLevelBAO.h` is a small, self-contained prototype of field-level inference of the BAO scale in the spirit of

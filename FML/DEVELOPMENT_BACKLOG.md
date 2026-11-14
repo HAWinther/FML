@@ -1,10 +1,10 @@
 # FML remaining-work backlog
 
-Updated 13 November 2026 (items 25–26, 28, 32, 34–35, 50–52 and 55), including completed Engineering items 1–7, 10, 14, 17 and 19–21, and tested initial implementations of items 25–32, 34–38, 49 and 54–55. This consolidates the original review and subsequent work in this chat. The user intends to work through the full backlog over time. These initial implementations and their remaining production-validation work are recorded below; KD-tree work remains deferred. Effort estimates are relative; performance gains need measurements. Remaining new science entries are proposals from the original review and need a focused capability check before implementation.
+Updated 14 November 2026 (items 25–26, 28, 32, 34–35, 50–52 and 55), including completed Engineering items 1–7, 10, 14, 17 and 19–21, and tested initial implementations of items 25–32, 34–38, 49 and 54–55. This consolidates the original review and subsequent work in this chat. The user intends to work through the full backlog over time. These initial implementations and their remaining production-validation work are recorded below; KD-tree work remains deferred. Effort estimates are relative; performance gains need measurements. Remaining new science entries are proposals from the original review and need a focused capability check before implementation.
 
 ## Completed in this sequence
 
-- Pencil decomposition throughout (item 43, the pencil part): the generic grid interface, `PencilGrid` and the complex grids `CFFTWGrid` / `CPencilGrid`, every module except FieldLevel, SimulationCode and SnapshotAnalyzer on pencils (`make USE_PENCIL_GRID=true`). See `PencilDomain/README.md`.
+- Pencil decomposition throughout (item 43, the pencil part): the generic grid interface, `PencilGrid` and the complex grids `CFFTWGrid` / `CPencilGrid`, the library, SimulationCode, SnapshotAnalyzer and the distributed FieldLevel models on pencils (`make USE_PENCIL_GRID=true`). See `PencilDomain/README.md`.
 - Domain-filtered binary Gadget reservation.
 - Streamed baryonification application.
 - Streamed PGD force interpolation/application.
@@ -120,7 +120,7 @@ The scientific implementations should be checked against independent analytic or
 | 40 | Multigrid coarse-level rank agglomeration (deferred) | Revisit when representative production profiles show coarse levels materially limit total solve time. The local experiment's ~12% full-solve gain did not justify its complexity; the slice-count heuristic was slower. |
 | 41 | Overlap multigrid interior work and halos | Profiles justify it; preserve color-sweep communication dependencies. |
 | 42 | Scoped mixed precision | Memory pressure justifies float field storage with double accumulation; validate forces, displacements, higher moments, thresholds and MG residuals. |
-| 43 | GPU FFT backend (the pencil decomposition is done) | Production runs are FFT limited on GPU nodes. Pencils (`PencilGrid`, `CPencilGrid`) with deposition, particles, ghosts and indexing are in place for the library, SimulationCode and SnapshotAnalyzer; FieldLevel is still slab-only. |
+| 43 | GPU FFT backend (the pencil decomposition is done) | Production runs are FFT limited on GPU nodes. Pencils (`PencilGrid`, `CPencilGrid`) with deposition, particles, ghosts and indexing are in place for the library, SimulationCode and SnapshotAnalyzer; distributed FieldLevel models now also support pencils (the original serial BAO prototype stays separate). |
 | 44 | DTFE output/boundary memory improvements | Profile requested-output allocation and boundary traffic; consider batched boundary fields. |
 | 45 | Broader distributed snapshot IO | Benchmark binary/HDF5/Ramses read patterns and peak memory first, then choose collective or chunked improvements. |
 
@@ -266,3 +266,36 @@ production cosmological/high-Mach calibration, hydrostatic/collapse and Sedov
 tests, general EOS, checkpoints and broader performance work remain. The measured
 coarse multidimensional refinement rates are below nominal second order and are
 reported explicitly; no universal convergence-order claim is made.
+
+### Item 52: PM forward milestone (14 November 2026)
+
+`FieldLevel/ParticleMesh.h` adds periodic fixed flat matter/Lambda PM forward
+evolution from whitened real-space initial fields, with ZA growing starts, CIC
+forces, KDK evolution, local matter/particle outputs and scalar conservation
+diagnostics. It supports slabs/pencils and unequal pencil boxes using sparse
+mesh routing without full particle replication. See
+[the PM guide](FieldLevel/PARTICLE_MESH.md). Reverse derivatives, memory-controlled
+trajectory checkpoint/recomputation, PM posterior/MAP/HMC integration and broader
+scientific calibration remain the next milestones; #52 remains open.
+
+### Item 52: PM discrete adjoint and bounded replay (14 November 2026)
+
+`FieldLevel/ParticleMeshAdjoint.h` adds white-field/spectrum pullbacks of the
+fixed-background PM map, including both CIC position-dependence branches,
+spectral forces, KDK and the ZA start. Temporary midpoint checkpoints plus
+prefix recomputation bound retained particle states and report payload bytes
+and replay counts. See [the adjoint guide](FieldLevel/PM_ADJOINT.md).
+This is not yet a PM posterior: periodic likelihood/MAP integration and then
+small HMC validation are the next #52 milestones. Existing forward milestone
+artifacts and the bounded scientific-validation limits remain in place.
+
+### Item 52: periodic PM posterior and MAP (14 November 2026)
+
+`FieldLevel/ParticleMeshPosterior.h` now connects PM dynamics and its discrete
+adjoint to the shared normalized Fourier-Gaussian likelihood, white/scalar priors
+and MAP optimizer. Distinct IC/force observation layouts, global parameter-gradient
+reduction, deterministic noise and physical volume scaling are checked in serial
+and MPI/pencil builds. A bounded fixed-parameter mock converges and a short joint
+fit exercises spectrum/noise updates; broader-band line-search limits are retained.
+See [the periodic PM inference guide](FieldLevel/PM_POSTERIOR.md). Next is bounded
+HMC scientific validation; #52 remains open beyond these milestones.

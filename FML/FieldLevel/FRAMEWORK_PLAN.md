@@ -195,3 +195,44 @@ blocks; their conventions and derivatives must be checked before integration.
 
 These are scientific reference directions, not claims of native compatibility or
 complete reimplementations of the named codes.
+
+## PM forward milestone (14 November 2026)
+
+[ParticleMesh.h](ParticleMesh.h) and [its guide](PARTICLE_MESH.md) implement the
+first periodic PM milestone: fixed flat matter/Lambda background, growing ZA
+initialization from the shared whitened spectrum map, CIC mesh forces and KDK
+evolution with explicit canonical time/velocity units. Slab/pencil sparse
+scatter/gather retains Lagrangian ownership and exposes final matter, displacement
+and momentum with separate particle/mesh layouts. Independent dense-DFT and native
+NBody comparisons, conservation, rank/backend replay and fixed-mesh timestep
+refinement are the bounded validation goals. This is a forward API, not a PM
+posterior. Next: reverse discrete map with checkpoint/recomputation, then MAP and
+small posterior experiments. Existing LPT/survey inference remains unchanged.
+
+## PM discrete adjoint milestone (14 November 2026)
+
+[ParticleMeshAdjoint.h](ParticleMeshAdjoint.h), documented in [PM_ADJOINT.md](PM_ADJOINT.md),
+now reverses CIC gather/deposition, the spectral force, KDK and the shared ZA
+initial spectrum/whitening map. Real-space output cotangents produce local white
+gradients and globally reduced spectrum gradients. Bounded binary midpoint
+checkpoints/prefix replay expose retained-state bytes and recomputation counters.
+The original public forward result is preserved and inputs are cached by value.
+Directional finite-difference/transpose, component, rank/thread/backend and sanitizer
+checks validate this increment. This does not add a PM likelihood or posterior.
+Next: connect the PM map/pullback to a periodic likelihood and MAP, then small
+HMC scientific experiments; cosmological derivatives and survey/tracer/RSD follow
+as distinct extensions.
+
+## Periodic PM likelihood and MAP milestone (14 November 2026)
+
+[ParticleMeshPosterior.h](ParticleMeshPosterior.h), documented in [PM_POSTERIOR.md](PM_POSTERIOR.md),
+adapts the PM map/pullback to the existing normalized Fourier-Gaussian likelihood,
+white/scalar priors and MAP optimizer. It separates IC/particle and force/observation
+meshes, supports observed nonlinear modes above the IC Nyquist, and correctly
+bridges global raw PM spectrum derivatives to the generic posterior reduction.
+Full posterior derivatives, independent DFT/noise normalization, volume scaling,
+serial/MPI/pencil replay and a conservative-band fixed-parameter MAP mock check
+validate the increment. A bounded joint fit exercises spectrum/noise updates.
+An exploratory broader-band line-search limit remains documented. Next: bounded
+HMC recovery, divergence/step-size and mixing tests; wider coverage and PM-specific
+restart/survey/tracer/cosmological derivatives remain separate.
