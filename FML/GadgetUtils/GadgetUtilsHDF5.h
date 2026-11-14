@@ -448,7 +448,7 @@ namespace FML {
                                                       "even after periodic wrap in " +
                                                       filename);
                                 if (only_keep_part_in_domain and
-                                    not(x[0] >= FML::xmin_domain and x[0] < FML::xmax_domain)) {
+                                    not in_local_domain(&x[0])) {
                                     is_in_domain[i] = 0;
                                     continue;
                                 }

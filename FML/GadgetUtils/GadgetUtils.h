@@ -77,6 +77,15 @@ namespace FML {
         /// Reading and writing GADGET files (DM only).
         namespace GADGET {
 
+            /// Is a position (in [0,1), wrapped) in the local part of the global domain FML::domain? Slabs: the x-range
+            /// [xmin_domain, xmax_domain) as before; other domains: the task that owns it
+            template <class Pos>
+            bool in_local_domain(const Pos * x) {
+                if (FML::domain.is_slab())
+                    return x[0] >= FML::xmin_domain and x[0] < FML::xmax_domain;
+                return FML::domain.owner(x) == FML::ThisTask;
+            }
+
             // This is Mpl^2/(H0 Msun/h) used to set the mass of particles
             extern const double MplMpl_over_H0Msunh;
             // This is 1/H0 in units of Mpc/h used to set the mass of particles
@@ -523,7 +532,7 @@ namespace FML {
                             }
 #endif
                             if (only_keep_part_in_domain and
-                                not(x[0] >= FML::xmin_domain and x[0] < FML::xmax_domain)) {
+                                not in_local_domain(&x[0])) {
                                 keep[i] = 0;
                                 continue;
                             }

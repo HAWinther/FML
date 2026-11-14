@@ -527,13 +527,24 @@ namespace FML {
                         std::vector<char> buffer(size_t(header.npart) * 8);
                         read_section(fp, buffer.data(), header.npart);
 
-                        // Count how many positions fall into the local domain
+                        // Count how many positions fall into the local domain (slabs: x; pencils: x and y, the next
+                        // section)
                         RamsesPosType * pos = (RamsesPosType *)buffer.data();
                         int nindomain = 0;
-                        for (int j = 0; j < header.npart; j++) {
-                            const RamsesPosType x = wrap_position(pos[j]);
-                            if (x >= FML::xmin_domain and x < FML::xmax_domain)
-                                nindomain++;
+                        if (FML::domain.holds<FML::PencilDomain>()) {
+                            std::vector<char> ybuffer(size_t(header.npart) * 8);
+                            read_section(fp, ybuffer.data(), header.npart);
+                            const RamsesPosType * ypos = (const RamsesPosType *)ybuffer.data();
+                            for (int j = 0; j < header.npart; j++) {
+                                const double xy[2] = {double(wrap_position(pos[j])), double(wrap_position(ypos[j]))};
+                                nindomain += FML::domain.owner(xy) == FML::ThisTask;
+                            }
+                        } else {
+                            for (int j = 0; j < header.npart; j++) {
+                                const RamsesPosType x = wrap_position(pos[j]);
+                                if (x >= FML::xmin_domain and x < FML::xmax_domain)
+                                    nindomain++;
+                            }
                         }
                         npart_in_domain_in_file[i] = nindomain;
                         npart_in_file[i] = header.npart;
@@ -729,6 +740,8 @@ namespace FML {
                                   << " InDomain = " << npart_in_domain_in_file[i] << std::endl;
 
                     // Methods for reading each of the types
+                    const bool pencils = FML::domain.holds<FML::PencilDomain>();
+                    std::vector<RamsesPosType> xbuffer;
                     auto read_pos = [&](bool store) {
                         if (verbose)
                             std::cout << "Read POS ";
@@ -743,6 +756,24 @@ namespace FML {
                             RamsesPosType * posbuf = (RamsesPosType *)buffer.data();
                             for (int i = 0; i < header.npart; i++)
                                 posbuf[i] = wrap_position(posbuf[i]);
+
+                            // Pencils: whether a particle is in the domain depends on x and y, so x is kept until we
+                            // have y
+                            if (pencils and keep_only_particles_in_domain and header.ndim >= 2) {
+                                if (j == 0) {
+                                    xbuffer.assign(posbuf, posbuf + header.npart);
+                                    continue;
+                                }
+                                if (j == 1) {
+                                    for (int i = 0; i < header.npart; i++) {
+                                        const double xy[2] = {double(xbuffer[i]), double(posbuf[i])};
+                                        is_in_domain[i] = FML::domain.owner(xy) == FML::ThisTask ? 1 : 0;
+                                    }
+                                    if (store)
+                                        store_positions(xbuffer.data(), is_in_domain.data(), &p[npart_read], 0,
+                                                        header.npart);
+                                }
+                            }
 
                             // Set the book-keeping array that tells us if a particle is in the domain or not
                             if (j == 0) {
