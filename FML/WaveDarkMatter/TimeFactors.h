@@ -1,6 +1,6 @@
 #ifndef FML_WAVE_TIME_FACTORS_H
 #define FML_WAVE_TIME_FACTORS_H
-#include <FML/WaveDarkMatter/ComplexGrid.h>
+#include <FML/WaveDarkMatter/WaveGrid.h>
 #include <FML/Units/Units.h>
 #include <array>
 #include <cmath>

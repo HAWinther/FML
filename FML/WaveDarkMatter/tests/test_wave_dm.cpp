@@ -1,4 +1,10 @@
 #include <FML/WaveDarkMatter/SchrodingerPoisson.h>
+#ifdef WAVE_PENCIL
+#include <FML/PencilDomain/CPencilGrid.h>
+using TestGrid = FML::GRID::CPencilGrid<3>;
+#else
+using TestGrid = FML::GRID::CFFTWGrid<3>;
+#endif
 #include <FML/WaveDarkMatter/Checkpoint.h>
 #include <FML/tests/TestHelpers.h>
 #include "EvolutionReference.h"
@@ -7,6 +13,7 @@
 #include <fstream>
 #include <cstdio>
 using namespace FML::WAVEDM;
+using TestSolver = SolverT<TestGrid>;
 using FML::TESTS::check;
 static constexpr double pi = 3.14159265358979323846;
 static double tolerance() { return sizeof(Real) == 4 ? 3e-5 : 3e-12; }
@@ -14,11 +21,11 @@ static Complex initial(std::array<double, 3> x) {
     const double amp = 1 + .1 * std::cos(x[0]) + .05 * std::cos(2 * x[1]), phase = .08 * std::sin(x[2]);
     return Complex(Real(amp * std::cos(phase)), Real(amp * std::sin(phase)));
 }
-static std::vector<Complex> values(const Solver & s) { return {s.wave().data(), s.wave().data() + s.wave().size()}; }
-static double difference(const Solver & s, const std::vector<Complex> & ref) {
+static std::vector<Complex> values(const TestSolver & s) { return {s.wave().get_real_grid(), s.wave().get_real_grid() + s.local_size()}; }
+static double difference(const TestSolver & s, const std::vector<Complex> & ref) {
     double error = 0, norm = 0;
     for (size_t i = 0; i < ref.size(); ++i) {
-        error += double(std::norm(s.wave().data()[i] - ref[i]));
+        error += double(std::norm(s.wave().get_real_grid()[i] - ref[i]));
         norm += double(std::norm(ref[i]));
     }
     FML::SumOverTasks(&error);
@@ -31,17 +38,18 @@ static void remove_checkpoint(const std::string & p) {
         std::remove((p + ".manifest").c_str());
 }
 static void fft_test(int mesh) {
-    ComplexGrid g(mesh);
-    std::vector<Complex> original(g.size());
+    auto g = detail::make_grid<TestGrid>(mesh);
+    const size_t nreal = size_t(g.get_ntot_real()), nfourier = size_t(g.get_ntot_fourier());
+    std::vector<Complex> original(nreal);
     auto sample = [](int x, int y, int z) { return Complex(Real(.13 + x + .07 * y * z), Real(.2 + y - .11 * x * z)); };
-    for (size_t i = 0; i < g.size(); ++i) {
-        auto x = g.coordinate(i);
-        original[i] = g.data()[i] = sample(x[0], x[1], x[2]);
+    for (size_t i = 0; i < nreal; ++i) {
+        auto x = detail::global_coordinate(g, i);
+        original[i] = g.get_real_grid()[i] = sample(x[0], x[1], x[2]);
     }
-    g.forward();
+    g.fftw_forward();
     double error = 0;
-    for (size_t i = 0; i < g.size(); ++i) {
-        const auto k = g.mode(i);
+    for (size_t i = 0; i < nfourier; ++i) {
+        const auto k = g.get_fourier_integer_wavevector_from_index(FML::IndexIntType(i));
         std::complex<double> expected{};
         for (int x = 0; x < mesh; ++x)
             for (int y = 0; y < mesh; ++y)
@@ -51,24 +59,24 @@ static void fft_test(int mesh) {
                     expected += std::complex<double>(v.real(), v.imag()) * std::polar(1., phase);
                 }
         expected /= double(mesh * mesh * mesh);
-        const auto actual = g.data()[i];
+        const auto actual = g.get_fourier_grid()[i];
         error = std::max(error, std::abs(std::complex<double>(actual.real(), actual.imag()) - expected));
     }
     FML::MaxOverTasks(&error);
     check(error < tolerance() * 100, "full complex FFT agrees with independent DFT, mesh " + std::to_string(mesh));
-    g.inverse();
+    g.fftw_backward();
     error = 0;
-    for (size_t i = 0; i < g.size(); ++i)
-        error = std::max(error, double(std::abs(g.data()[i] - original[i])));
+    for (size_t i = 0; i < nreal; ++i)
+        error = std::max(error, double(std::abs(g.get_real_grid()[i] - original[i])));
     FML::MaxOverTasks(&error);
     check(error < tolerance() * 100, "complex FFT round trip including empty slabs, mesh " + std::to_string(mesh));
 }
 int main(int argc, char ** argv) {
     std::cout << std::setprecision(17);
     if (argc == 3 && std::string(argv[1]) == "--write") {
-        Solver s(10, 2 * pi, {.7, .4}, 0, .7);
+        TestSolver s(10, 2 * pi, {.7, .4}, 0, .7);
         s.initialize(initial);
-        std::vector<Real> ext(s.wave().size());
+        std::vector<Real> ext(s.local_size());
         for (size_t i = 0; i < ext.size(); ++i)
             ext[i] = Real(.1 * (1 + std::cos(s.position(i)[0])));
         s.set_external_density(ext);
@@ -77,10 +85,10 @@ int main(int argc, char ** argv) {
         return 0;
     }
     if (argc == 3 && std::string(argv[1]) == "--read") {
-        auto s = load_checkpoint(argv[2]);
-        Solver expected(10, 2 * pi, {.7, .4}, 0, .7);
+        auto s = load_checkpoint<TestGrid>(argv[2]);
+        TestSolver expected(10, 2 * pi, {.7, .4}, 0, .7);
         expected.initialize(initial);
-        std::vector<Real> ext(expected.wave().size());
+        std::vector<Real> ext(expected.local_size());
         for (size_t i = 0; i < ext.size(); ++i)
             ext[i] = Real(.1 * (1 + std::cos(expected.position(i)[0])));
         expected.set_external_density(ext);
@@ -101,7 +109,7 @@ int main(int argc, char ** argv) {
     check(p.eta > 0 && p.G > 0 && p.eta == 2 * p2.eta && p.G == p2.G, "axion mass and SI/code-unit scaling");
     check(FML::TESTS::throws([] { Physics::from_si(1e-22, 1e120, 1, 1); }),
           "unit conversion rejects gravitational underflow instead of silently disabling gravity");
-    Solver plane(12, 2 * pi, {.7, 0});
+    TestSolver plane(12, 2 * pi, {.7, 0});
     auto plane_initial = [](auto x) {
         const double phase = x[0] - 2 * x[1] + 3 * x[2];
         return Complex(Real(std::cos(phase)), Real(std::sin(phase)));
@@ -114,7 +122,7 @@ int main(int argc, char ** argv) {
     for (size_t i = 0; i < original.size(); ++i) {
         auto z = original[i];
         error = std::max(error,
-                         std::abs(std::complex<double>(plane.wave().data()[i].real(), plane.wave().data()[i].imag()) -
+                         std::abs(std::complex<double>(plane.wave().get_real_grid()[i].real(), plane.wave().get_real_grid()[i].imag()) -
                                   std::complex<double>(z.real(), z.imag()) * factor));
     }
     FML::MaxOverTasks(&error);
@@ -126,20 +134,20 @@ int main(int argc, char ** argv) {
     check(d.spectral_tail_fraction < tolerance(), "resolved wave has negligible near-Nyquist mass");
     plane.step(-.2);
     check(difference(plane, original) < tolerance() * 10, "free time reversal");
-    Solver interference(12, 2 * pi, {1, 0});
+    TestSolver interference(12, 2 * pi, {1, 0});
     interference.initialize([](auto x) {
         return Complex(Real(std::cos(x[0]) + .4 * std::cos(2 * x[0])), Real(std::sin(x[0]) - .4 * std::sin(2 * x[0])));
     });
     interference.step(.17);
     error = 0;
-    for (size_t i = 0; i < interference.wave().size(); ++i) {
+    for (size_t i = 0; i < interference.local_size(); ++i) {
         const auto x = interference.position(i);
         const double exact = 1.16 + .8 * std::cos(3 * x[0] + 1.5 * .17);
-        error = std::max(error, std::abs(double(std::norm(interference.wave().data()[i])) - exact));
+        error = std::max(error, std::abs(double(std::norm(interference.wave().get_real_grid()[i])) - exact));
     }
     FML::MaxOverTasks(&error);
     check(error < tolerance() * 10, "two-wave interference has analytic beat phase/density");
-    Solver poisson(12, 2 * pi, {1, .2});
+    TestSolver poisson(12, 2 * pi, {1, .2});
     poisson.initialize_density_phase([](auto x) { return 1 + .1 * std::cos(x[0]); }, [](auto) { return 0.; });
     const auto & U = poisson.potential();
     error = 0;
@@ -152,7 +160,7 @@ int main(int argc, char ** argv) {
     FML::SumOverTasks(&mean);
     check(error < tolerance() * 10 && std::abs(mean) < tolerance() * 100,
           "periodic Poisson sign, source normalization and zero potential mean");
-    std::vector<Real> external(poisson.wave().size());
+    std::vector<Real> external(poisson.local_size());
     for (size_t i = 0; i < external.size(); ++i)
         external[i] = Real(.5 + .2 * std::cos(2 * poisson.position(i)[0]));
     poisson.set_external_density(external);
@@ -171,29 +179,29 @@ int main(int argc, char ** argv) {
     check(std::abs(pd.potential / (-pi * .2 * std::pow(2 * pi, 3) * (.01 + .04 / 4)) - 1) < tolerance() * 30,
           "total grid gravitational energy includes external/self/cross terms");
     poisson.initialize(initial);
-    check(!poisson.wave().spectral(), "reinitialization after force diagnostics preserves position-space state");
-    Solver exact(4, 2 * pi, {.7, .4});
+    check(poisson.wave().get_grid_status_real(), "reinitialization after force diagnostics preserves position-space state");
+    TestSolver exact(4, 2 * pi, {.7, .4});
     exact.initialize(initial);
     for (int j = 0; j < 7; ++j)
         exact.step(.01);
     error = 0;
-    for (size_t i = 0; i < exact.wave().size(); ++i) {
-        const auto ix = exact.wave().coordinate(i);
+    for (size_t i = 0; i < exact.local_size(); ++i) {
+        const auto ix = exact.coordinate(i);
         const auto ref = wave_reference::evolved[(ix[0] * 4 + ix[1]) * 4 + ix[2]];
         error = std::max(error,
-                         std::abs(std::complex<double>(exact.wave().data()[i].real(), exact.wave().data()[i].imag()) -
+                         std::abs(std::complex<double>(exact.wave().get_real_grid()[i].real(), exact.wave().get_real_grid()[i].imag()) -
                                   std::complex<double>(ref[0], ref[1])));
     }
     FML::MaxOverTasks(&error);
     check(error < 3e-5, "nonlinear evolution agrees with independent adaptive DOP853 reference");
-    Solver reference(12, 2 * pi, {.7, .4});
+    TestSolver reference(12, 2 * pi, {.7, .4});
     reference.initialize(initial);
     for (int j = 0; j < 160; ++j)
         reference.step(.0025);
     const auto truth = values(reference);
     double errors[3]{}, energy_errors[3]{};
     for (int resolution = 0; resolution < 3; ++resolution) {
-        Solver s(12, 2 * pi, {.7, .4});
+        TestSolver s(12, 2 * pi, {.7, .4});
         s.initialize(initial);
         const auto start = s.diagnostics();
         const int steps = 4 * (1 << resolution);
@@ -212,7 +220,7 @@ int main(int argc, char ** argv) {
     check(errors[1] < errors[0] / 2.5 && errors[2] < errors[1] / 2.5, "second-order nonlinear timestep convergence");
     check(energy_errors[1] < energy_errors[0] / 2 && energy_errors[2] < energy_errors[1] / 2,
           "static energy drift decreases under timestep refinement");
-    Solver reversible(12, 2 * pi, {.7, .4});
+    TestSolver reversible(12, 2 * pi, {.7, .4});
     reversible.initialize(initial);
     const auto reversible_start = values(reversible);
     for (int i = 0; i < 10; ++i)
@@ -237,7 +245,7 @@ int main(int argc, char ** argv) {
               std::abs(factors.kinetic - (1 / std::sqrt(a0) - 1 / std::sqrt(a1))) < 1e-14 &&
               std::abs(factors.potential - (std::sqrt(a1) - std::sqrt(a0))) < 1e-14,
           "EdS cosmic-time integrals match analytic results");
-    Solver expanding(12, 2 * pi, {.7, 0}, 0, a0);
+    TestSolver expanding(12, 2 * pi, {.7, 0}, 0, a0);
     expanding.initialize(plane_initial);
     const auto begin = values(expanding);
     expanding.step_scale_factor(a1, EdS);
@@ -246,7 +254,7 @@ int main(int argc, char ** argv) {
     for (size_t i = 0; i < begin.size(); ++i)
         error = std::max(
             error,
-            std::abs(std::complex<double>(expanding.wave().data()[i].real(), expanding.wave().data()[i].imag()) -
+            std::abs(std::complex<double>(expanding.wave().get_real_grid()[i].real(), expanding.wave().get_real_grid()[i].imag()) -
                      std::complex<double>(begin[i].real(), begin[i].imag()) * analytic_phase));
     FML::MaxOverTasks(&error);
     check(error < tolerance() * 20 && expanding.scale_factor() == a1, "expanding free wave uses integral dt/a^2");
@@ -254,7 +262,7 @@ int main(int argc, char ** argv) {
     check(difference(expanding, begin) < tolerance() * 30, "expanding time-factor reversal");
     double balances[2]{};
     for (int refinement = 0; refinement < 2; ++refinement) {
-        Solver s(8, 2 * pi, {.7, .4}, 0, .5);
+        TestSolver s(8, 2 * pi, {.7, .4}, 0, .5);
         s.initialize(initial);
         EnergyBalance balance;
         auto first = s.diagnostics();
@@ -275,7 +283,7 @@ int main(int argc, char ** argv) {
     const std::string prefix = "wave_test_" + std::to_string(FML::NTasks);
     remove_checkpoint(prefix);
     save_checkpoint(poisson, prefix);
-    auto restored = load_checkpoint(prefix);
+    auto restored = load_checkpoint<TestGrid>(prefix);
     check(difference(*restored, values(poisson)) == 0 && restored->external_density() == poisson.external_density() &&
               restored->has_external_density(),
           "checksummed checkpoint roundtrip retains complex field and external source");
@@ -291,10 +299,10 @@ int main(int argc, char ** argv) {
         bad.seekp(at);
         bad.put('X');
     }
-    check(FML::TESTS::throws([&] { load_checkpoint(prefix); }), "checkpoint payload corruption rejected collectively");
+    check(FML::TESTS::throws([&] { load_checkpoint<TestGrid>(prefix); }), "checkpoint payload corruption rejected collectively");
     remove_checkpoint(prefix);
     const auto memory = poisson.memory();
-    check(memory.complex_buffers >= 3 * poisson.wave().size() * sizeof(Complex) && memory.total() > 0 &&
+    check(memory.complex_buffers >= 3 * poisson.local_size() * sizeof(Complex) && memory.total() > 0 &&
               poisson.fft_count() > 0,
           "memory and FFT-work counters reported");
     check(poisson.suggested_timestep() > 0, "conservative phase-based timestep suggestion");

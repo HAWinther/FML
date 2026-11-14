@@ -54,23 +54,37 @@ labeled analytic toy rather than a calibrated cosmology.
 
 ## Complex grid, layout and normalization
 
-`ComplexGrid.h` provides a full N³ complex field. Forward transforms are normalized
-by N³ and inverse transforms are unnormalized, so stored coefficients are Fourier
-series amplitudes. All positive and negative modes are independent; this field
-cannot be placed in an r2c grid or reconstructed with Hermitian symmetry. Kinetic
-and Poisson operators use the full k², including even-mesh Nyquist modes. Signed
-mode indexing assigns +N/2 to an even-mesh Nyquist component; k² is unambiguous.
-The odd derivatives in `gravity_acceleration` zero that component, consistent with
-FML's real PM-force convention.
+The fields live on FML's complex-to-complex grids: `FML::GRID::CFFTWGrid<3>` (FFTW-MPI
+slabs, `FFTWGrid/CFFTWGrid.h`, the default) or `FML::GRID::CPencilGrid<3>` (pencils,
+`PencilDomain/CPencilGrid.h`). They have the interface and conventions of `FFTWGrid` /
+`PencilGrid` with complex values in position space and all N³ modes in Fourier space
+(`fftw_forward` / `fftw_backward`). `Solver` is `SolverT<CFFTWGrid<3>>`; for pencils use
 
-FFTW MPI returns both an owned slab and a possibly larger required allocation.
-The class honors the complete allocation, not just `local_nx*N*N`. It uses aligned
-storage with reusable forward/inverse plans, planned with FML's planner flag
-(`FML::GRID::set_fftw_planner_flag`, FFTW_ESTIMATE by default; wisdom is shared with
-FFTWGrid) and no transposed-output layout. Only owned elements enter field operations and sums.
-Empty slabs, uneven partitions and odd meshes are supported. No FML particle-domain
-or r2c-grid partition is assumed: use `wave().local_start()`, `local_nx()`,
-`coordinate(i)` and `position(i)` for the actual complex-grid layout.
+```cpp
+#include <FML/PencilDomain/CPencilGrid.h>
+FML::WAVEDM::SolverT<FML::GRID::CPencilGrid<3>> solver(64, 20.0, physics);
+```
+
+Forward transforms are normalized by N³ and inverse transforms are unnormalized, so
+stored coefficients are Fourier series amplitudes. All positive and negative modes
+are independent; this field cannot be placed in an r2c grid or reconstructed with
+Hermitian symmetry. Kinetic and Poisson operators use the full k², including
+even-mesh Nyquist modes. Signed mode indexing assigns +N/2 to an even-mesh Nyquist
+component; k² is unambiguous. The odd derivatives in `gravity_acceleration` zero
+that component, consistent with FML's real PM-force convention.
+
+FFTW MPI returns both an owned slab and a possibly larger required allocation;
+`CFFTWGrid` honors the complete allocation. Plans are cached and planned with FML's
+planner flag (`FML::GRID::set_fftw_planner_flag`, FFTW_ESTIMATE by default; wisdom is
+shared with FFTWGrid). Only owned elements enter field operations and sums. On slabs
+empty slabs, uneven partitions and odd meshes are supported. On pencils the solver
+uses `FML::domain` when its edges lie on cells and otherwise the process grid of
+`FML::pencil_domain()` with the edges on cells, so any mesh works there too. The
+grids have no extra cells: the local cells are `wave().get_real_grid()[i]` for
+`i < local_size()`, with global integer coordinates `coordinate(i)` and positions
+`position(i)`. On pencils the Fourier layout (rows along kx) differs from the
+position layout; the solver indexes the two separately. Slabs and pencils agree to
+round-off (about 1e-14 after several self-gravitating steps).
 
 Float/double/long-double FFT symbols follow FML's precision defines. Double and
 float MPI paths are tested; long-double evolution is not in the tested matrix and
@@ -80,7 +94,7 @@ Planning, collectives and method calls must run in the same order on all ranks a
 outside parallel regions. A solver owns mutable workspaces and is not safe for
 concurrent calls from multiple threads.
 
-`wave()` exposes owned complex samples for custom ICs or inspection. Operations
+`wave()` exposes the grid (owned complex samples) for custom ICs or inspection. Operations
 expect a position-space field; do not replace the grid with another layout.
 References/pointers to a wave buffer must be reacquired after a successful advance,
 because the candidate and live buffers swap. A solver is noncopyable. Grid objects
@@ -211,7 +225,7 @@ this residual once temporal errors become smaller than the precision floor.
 
 ## Memory and FFT work
 
-Three full complex slabs persist: live psi, candidate psi and a shared Poisson/
+Three full complex grids persist: live psi, candidate psi and a shared Poisson/
 diagnostic workspace. A successful step reuses plans and buffers; no complete
 field is all-gathered. Two double real arrays hold k² and U; an optional Real array
 stores external density. `memory()` reports their allocated capacities, including
@@ -229,38 +243,41 @@ perform additional transforms (`potential()` and `diagnostics()` reuse the kept
 potential), all counted by `fft_count()`. No per-step full-grid
 allocation is required, though FFTW itself may have internal workspace costs.
 Global reductions only transmit scalar diagnostics/settings. The example reports
-measured max-rank time, local accounted bytes and transform counts. No GPU, pencil
-layout, automatic memory budget or production scaling claim is made.
+measured max-rank time, local accounted bytes and transform counts. No GPU,
+automatic memory budget or production scaling claim is made.
 
 ## Versioned checkpoints
 
 ```cpp
 #include <FML/WaveDarkMatter/Checkpoint.h>
 save_checkpoint(solver, "new_prefix");
-auto resumed = load_checkpoint("new_prefix");
+auto resumed = load_checkpoint("new_prefix");                         // slabs
+auto on_pencils = load_checkpoint<FML::GRID::CPencilGrid<3>>("new_prefix");
 ```
 
-Version 1 writes `prefix.rankR.wave` slabs and publishes `prefix.manifest` last.
-The manifest stores N, box size, eta, G, time, a, completed steps, external-source
-presence and the original slab partition. Each shard starts with
-`FML_WAVE_SHARD 1 N start nx`, followed by position-order records of three
+Version 2 writes the local box of each rank, `prefix.rankR.wave` (x and y ranges: a
+slab or a pencil), and publishes `prefix.manifest` last. The manifest stores N, box
+size, eta, G, time, a, completed steps, external-source presence and the boxes of
+the writing ranks. Each shard starts with `FML_WAVE_SHARD 2 N x0 nx y0 ny`, followed
+by records in z-fastest position order of three
 little-endian IEEE binary64 numbers: Re(psi), Im(psi), rho_external. A trailing
 64-bit FNV-1a checksum covers payload bytes. Checksums detect accidental corruption;
 they are not cryptographic authentication. Both file length and metadata are checked.
 
 Each old shard is verified once by an assigned reader with a bounded byte buffer.
-Current ranks then seek/read only the slab intersections they need, so changing
-MPI task count neither replicates a global field nor requires a root-owned full
+Current ranks then seek/read only the row intersections of their box with each
+shard, so changing the MPI task count or between slabs and pencils neither replicates a global field nor requires a root-owned full
 snapshot. Float samples are represented exactly in binary64; loading a double
 checkpoint into float is a deliberate precision conversion, not an exact restart.
-Long-double checkpoints are rejected. Source values are retained; the background
+Long-double checkpoints are rejected. Version 1 checkpoints (slab shards
+`FML_WAVE_SHARD 1 N start nx`) are still read. Source values are retained; the background
 H(a), source evolution policy and energy-tracker history are caller configuration.
 
 Use a new prefix and a shared filesystem. Existing outputs are rejected, shards
 are written/renamed before the manifest, and a failed save can leave orphan files
 that must be cleaned before reusing that prefix. This is manifest-last publication,
 not a transactional multi-file storage engine. IO/prefixes and numerical calls
-are collective. Loading checks version, partition, checksum, sizes and finite,
+are collective. Loading checks version, that the boxes tile the mesh, checksum, sizes and finite,
 representable samples before returning a solver.
 
 ## Build, tests and limits
@@ -277,7 +294,8 @@ and radial BVP fixtures; Python/SciPy are not needed for normal builds or tests.
 Independent direct DFTs, analytic dispersion/interference/Poisson fields, nonlinear
 timestep/energy convergence, backward evolution, EdS time integrals, expanding
 energy balance, soliton resolution/volume checks and corrupt/repartitioned
-checkpoints are covered. See [measured results](tests/RESULTS.md).
+checkpoints are covered, on slabs and (with MPI) on pencils, including checkpoints
+written on slabs and read on pencils and back. See [measured results](tests/RESULTS.md).
 
 Self-interactions, isolated/absorbing boundaries, relativistic axion evolution,
 self-consistent live-CDM integration, direct axion transfer-function IC preparation

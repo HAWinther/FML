@@ -1,15 +1,22 @@
 #include <FML/WaveDarkMatter/SchrodingerPoisson.h>
+#ifdef WAVE_PENCIL
+#include <FML/PencilDomain/CPencilGrid.h>
+using TestGrid = FML::GRID::CPencilGrid<3>;
+#else
+using TestGrid = FML::GRID::CFFTWGrid<3>;
+#endif
 #include <FML/tests/TestHelpers.h>
 #include "SolitonReference.h"
 #include <iomanip>
 #include <iostream>
 using namespace FML::WAVEDM;
+using TestSolver = SolverT<TestGrid>;
 using FML::TESTS::check;
 struct Measured {
     double density_error{}, residual{}, tail{}, energy_error{}, mass{};
 };
 static Measured soliton(int n, double L = 12, int evolved_steps = 100) {
-    Solver s(n, L);
+    TestSolver s(n, L);
     s.initialize([L](auto x) {
         double r2 = 0;
         for (auto y : x)
@@ -17,22 +24,22 @@ static Measured soliton(int n, double L = 12, int evolved_steps = 100) {
         return Complex(Real(wave_reference::profile(std::sqrt(r2))), 0);
     });
     const auto initial = s.diagnostics();
-    std::vector<Complex> original(s.wave().data(), s.wave().data() + s.wave().size());
+    std::vector<Complex> original(s.wave().get_real_grid(), s.wave().get_real_grid() + s.local_size());
     const auto U = s.potential();
-    ComplexGrid lap(n);
-    lap.copy_values(s.wave());
-    lap.forward();
-    for (size_t i = 0; i < lap.size(); ++i) {
-        const auto mode = lap.mode(i);
+    auto lap = detail::make_grid<TestGrid>(n);
+    detail::copy_values(lap, s.wave());
+    lap.fftw_forward();
+    for (size_t i = 0; i < size_t(lap.get_ntot_fourier()); ++i) {
+        const auto mode = lap.get_fourier_integer_wavevector_from_index(FML::IndexIntType(i));
         double k2 = 0;
         for (auto k : mode)
             k2 += std::pow(2 * std::acos(-1.) * k / L, 2);
-        lap.data()[i] *= Real(-k2);
+        lap.get_fourier_grid()[i] *= Real(-k2);
     }
-    lap.inverse();
+    lap.fftw_backward();
     double norm = 0, mu = 0;
-    for (size_t i = 0; i < lap.size(); ++i) {
-        const auto H = Real(-.5) * lap.data()[i] + Real(U[i]) * original[i];
+    for (size_t i = 0; i < s.local_size(); ++i) {
+        const auto H = Real(-.5) * lap.get_real_grid()[i] + Real(U[i]) * original[i];
         norm += double(std::norm(original[i]));
         mu += double((std::conj(original[i]) * H).real());
     }
@@ -40,8 +47,8 @@ static Measured soliton(int n, double L = 12, int evolved_steps = 100) {
     FML::SumOverTasks(&mu);
     mu /= norm;
     double residual = 0;
-    for (size_t i = 0; i < lap.size(); ++i) {
-        const auto H = Real(-.5) * lap.data()[i] + Real(U[i]) * original[i];
+    for (size_t i = 0; i < s.local_size(); ++i) {
+        const auto H = Real(-.5) * lap.get_real_grid()[i] + Real(U[i]) * original[i];
         residual += double(std::norm(H - Real(mu) * original[i]));
     }
     FML::SumOverTasks(&residual);
@@ -50,7 +57,7 @@ static Measured soliton(int n, double L = 12, int evolved_steps = 100) {
     const auto final = s.diagnostics();
     double error = 0, densitynorm = 0;
     for (size_t i = 0; i < original.size(); ++i) {
-        const double rho = double(std::norm(original[i])), now = double(std::norm(s.wave().data()[i]));
+        const double rho = double(std::norm(original[i])), now = double(std::norm(s.wave().get_real_grid()[i]));
         error += (rho - now) * (rho - now);
         densitynorm += rho * rho;
     }
