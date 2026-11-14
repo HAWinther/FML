@@ -11,13 +11,21 @@ adjoints. [Distributed reconstruction outputs](FRAMEWORK.md#distributed-reconstr
 now include initial/matter density and Lagrangian displacement/velocity samples.
 [Same-rank checkpoint/restart](FRAMEWORK.md#checkpointrestart-stage-4e-13-november-2026)
 now preserves complete HMC/adaptation state. [Survey restart support](SURVEY.md#same-rank-survey-checkpointrestart)
-adds full likelihood input identities; schema-1 checkpoints require their original
-code/build after the prior-family identity fix. The original BAO/LPT backend stays
+adds full likelihood input identities. Current identity schema 3 fingerprints the
+backend and complete grid partition; older schema-1/2 checkpoints require their
+original code/build. The original BAO/LPT backend stays
 single-rank. An initial [Cartesian survey layer](SURVEY.md) now supplies masked
 Gaussian-field and positive-link Poisson-count likelihoods with MPI adjoints. A
 [bounded nonlinear validation pass](tests/SURVEY_RESULTS.md) is recorded; production
 nonlinear/survey calibration remains open. See [the saved plan](FRAMEWORK_PLAN.md)
 for the broader #52 scope.
+
+The distributed linear/LPT framework, survey observations, same-layout restart,
+distributed examples and survey validation driver now support **FFTWGrid slabs or
+PencilGrid pencils**. See [backend selection](FRAMEWORK.md#frontend-backend-selection-step-4-14-november-2026)
+and [frontend verification](tests/FRONTEND_GRID_RESULTS.md). Library users select
+the grid template explicitly; standalone distributed frontends use
+`USE_PENCIL_GRID=true USE_MPI=true`. This does not change the serial BAO prototype.
 
 ## BAO application (prototype)
 

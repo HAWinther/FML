@@ -1,11 +1,14 @@
 // End-to-end masked Cartesian survey inference with fixed physics/nuisance values.
 #include <FML/FieldLevel/SurveyLikelihood.h>
+#include <FML/FieldLevel/Frontend.h>
 #include <iostream>
 namespace FF = FML::FIELDLEVEL::FRAMEWORK;
 using FML::FIELDLEVEL::Field;
 template <class Likelihood>
-int reconstruct(const FF::DistributedLPTModel & model, Likelihood likelihood, const std::vector<double> & p) {
-    FF::BasicPosterior<FF::DistributedLPTModel, Likelihood> posterior(model, std::move(likelihood));
+int reconstruct(const FML::FIELDLEVEL::FRONTEND::LPTModel & model,
+                Likelihood likelihood,
+                const std::vector<double> & p) {
+    FF::BasicPosterior<FML::FIELDLEVEL::FRONTEND::LPTModel, Likelihood> posterior(model, std::move(likelihood));
     const auto initial = model.white_noise(82);
     auto w = model.workspace();
     Field gradient;
@@ -31,6 +34,13 @@ int reconstruct(const FF::DistributedLPTModel & model, Likelihood likelihood, co
 }
 int main(int argc, char ** argv) {
     FML::FMLSetup::init(&argc, &argv);
+    try {
+        FML::FIELDLEVEL::FRONTEND::initialize(8, 16);
+    } catch (const std::exception & error) {
+        if (FML::ThisTask == 0)
+            std::cerr << error.what() << '\n';
+        return 1;
+    }
     const std::string kind = argc > 1 ? argv[1] : "gaussian";
     if (argc > 2 || (kind != "gaussian" && kind != "poisson")) {
         if (FML::ThisTask == 0)
@@ -45,7 +55,7 @@ int main(int argc, char ** argv) {
     c.bias_cutoff = .08;
     c.likelihood_cutoff = .10;
     c.growth_rate = .6;
-    FF::DistributedLPTModel model(c, FF::Spectrum::fixed([](double) { return 200.; }));
+    FML::FIELDLEVEL::FRONTEND::LPTModel model(c, FF::Spectrum::fixed([](double) { return 200.; }));
     auto p = model.initial_parameters();
     p[0] = 1.4;
     p[1] = .2;
@@ -60,9 +70,8 @@ int main(int argc, char ** argv) {
     const auto delta = observation.synthesize(prediction);
     Field data(model.cells()), variance(model.cells(), 1), exposure(model.cells(), 3);
     std::vector<std::uint64_t> counts(model.cells());
-    const int N = c.mesh;
     for (size_t q = 0; q < model.cells(); ++q) {
-        FML::RANDOM::COUNTER_BASED::Stream rng(81, size_t(model.layout().local_start) * N * N + q, 0x53555256u);
+        FML::RANDOM::COUNTER_BASED::Stream rng(81, model.layout().global_cell_id(q), 0x53555256u);
         data[q] =
             window.selection[q] * delta[q] + std::sqrt(std::exp(p.back()) / observation.cell_volume()) * rng.normal();
         // Knuth's independent Poisson generator is adequate for this toy lambda~3.

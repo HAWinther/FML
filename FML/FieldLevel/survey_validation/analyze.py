@@ -56,31 +56,50 @@ def basis_matrix(keys, n, power=2000., length=100.):
 
 
 def snapshots(directory, n, thin, chains, draws):
+    """Read legacy slabs (schema 1) or cell boxes (schema 2), in global cell order."""
     rows = {}
     expected_keys = {(c, i) for c in range(chains) for i in range(0, draws, thin)}
-    for file in sorted(directory.glob('snapshots.rank*.bin')):
+    occupied = np.zeros(n**3, dtype=bool)
+    files = sorted(directory.glob('snapshots.rank*.bin'))
+    if not files: raise ValueError('Missing snapshot streams')
+    for file in files:
         raw = file.read_bytes(); offset = 0
         def integer():
             nonlocal offset
             value, = struct.unpack_from('<Q', raw, offset); offset += 8
             return value
-        size = integer(); tag = raw[offset:offset+size].decode(); offset += size
-        if tag != 'FML survey validation snapshots 1': raise ValueError('Unknown snapshot schema')
-        mesh, start, width, stride = (integer() for _ in range(4))
-        if mesh != n or stride != thin: raise ValueError('Snapshot layout mismatch')
+        size = integer()
+        if size > len(raw)-offset: raise ValueError('Truncated snapshot tag')
+        tag = raw[offset:offset+size].decode(); offset += size
+        mesh = integer()
+        if tag == 'FML survey validation snapshots 1':
+            start, width, stride = integer(), integer(), integer()
+            starts, counts = (start, 0, 0), (width, n, n)
+        elif tag == 'FML survey validation snapshots 2':
+            starts = tuple(integer() for _ in range(3))
+            counts = tuple(integer() for _ in range(3))
+            stride = integer()
+        else: raise ValueError('Unknown snapshot schema')
+        if mesh != n or stride != thin or any(c < 1 or s > n-c for s,c in zip(starts,counts)):
+            raise ValueError('Snapshot layout mismatch')
+        x,y,z = np.meshgrid(*(np.arange(s,s+c) for s,c in zip(starts,counts)), indexing='ij')
+        ids = ((x*n+y)*n+z).ravel()
+        if occupied[ids].any(): raise ValueError('Overlapping snapshot boxes')
+        occupied[ids] = True
         seen = set()
         while offset < len(raw):
             c, draw, count = integer(), integer(), integer()
-            if count != width*n*n: raise ValueError('Wrong local snapshot length')
+            if count != len(ids) or count > (len(raw)-offset)//8: raise ValueError('Wrong local snapshot length')
             values = np.frombuffer(raw, dtype='<f8', count=count, offset=offset); offset += 8*count
             key = (c, draw)
             if key in seen: raise ValueError('Duplicate snapshot')
             seen.add(key)
             if key not in rows: rows[key] = np.full(n**3, np.nan)
-            rows[key][start*n*n:(start+width)*n*n] = values
+            rows[key][ids] = values
         if seen != expected_keys: raise ValueError('Incomplete snapshot stream')
+    if not occupied.all(): raise ValueError('Missing snapshot cells')
     means = np.array([rows[key] for key in sorted(expected_keys)])
-    if not np.isfinite(means).all(): raise ValueError('Missing/nonfinite observation slabs')
+    if not np.isfinite(means).all(): raise ValueError('Missing/nonfinite observation cells')
     return means
 
 
@@ -95,7 +114,9 @@ def intervals(samples, truth, discrete=False):
 
 def read_case(path, full_field_rhat=True):
     if not (path/'complete.txt').exists(): raise ValueError(f'Incomplete case {path}')
-    meta = metadata(path/'meta.tsv'); n = int(meta['mesh']); c = int(meta['chains']); draws = int(meta['draws'])
+    meta = metadata(path/'meta.tsv')
+    if meta.get('smoke', 0): raise ValueError('Smoke output is not a calibrated posterior campaign')
+    n = int(meta['mesh']); c = int(meta['chains']); draws = int(meta['draws'])
     modes = np.loadtxt(path/'modes.tsv', ndmin=2); keys = modes[:, :3].astype(int); d = 2*len(keys)
     truth = modes[:, 3:5].ravel()
     trace = np.loadtxt(path/'trace.tsv', ndmin=2)
@@ -113,7 +134,7 @@ def read_case(path, full_field_rhat=True):
     chainstats = np.loadtxt(path/'chains.tsv', ndmin=2)
     cells = np.concatenate([np.loadtxt(f, ndmin=2) for f in sorted(path.glob('cells.rank*.tsv'))])
     cells = cells[np.argsort(cells[:, 0])]
-    if cells.shape != (n**3, 10) or not np.array_equal(cells[:, 0], np.arange(n**3)): raise ValueError('Invalid cell slabs')
+    if cells.shape != (n**3, 10) or not np.array_equal(cells[:, 0], np.arange(n**3)): raise ValueError('Invalid cell IDs')
     mask = cells[:, 1].astype(bool); matrix = basis_matrix(keys, n, meta['power'], meta['boxsize'])
     latent = pooled@matrix.T
     if np.max(np.abs(matrix@truth-cells[:, 7])) > 1e-10: raise ValueError('Independent physical-field normalization failed')

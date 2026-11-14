@@ -2,6 +2,10 @@ USE_MPI ?= false
 USE_OMP ?= false
 USE_FFTW ?= true
 TARGETS := test_survey_checkpoint_mpi test_survey_likelihood_mpi test_bao_gradients test_bao_validation test_field_level test_field_level_safety test_framework test_framework_resolution test_framework_mpi test_framework_lpt_mpi test_framework_reconstruction_mpi test_framework_checkpoint_mpi
+ifeq ($(USE_MPI),true)
+TARGETS += test_framework_linear_grid_mpi test_framework_lpt_grid_mpi test_survey_grid_mpi test_checkpoint_grid_mpi
+endif
+EXTRA_CLEAN += test_framework_linear_grid_mpi test_framework_lpt_grid_mpi test_survey_grid_mpi test_checkpoint_grid_mpi
 include ../../Makefile.config
 FML_MODULES := Global
 # Do not reuse a VPATH object compiled with another module's MPI/precision flags.
@@ -82,3 +86,41 @@ framework-checkpoint-mpi: test_framework_checkpoint_mpi
 run: $(TARGETS) survey-checkpoint-mpi survey-mpi bao-gradients safety framework framework-mpi framework-lpt-mpi framework-reconstruction-mpi framework-checkpoint-mpi
 	$(SINGLE_RUN) ./test_field_level
 	$(SINGLE_RUN) ./test_bao_validation
+
+# Generic distributed linear backend (the pencil grid requires MPI/FFTW).
+PencilGrid.o: $(FML_ROOT)/PencilDomain/PencilGrid.cpp
+	$(CC) $(DEPFLAGS) -c -o $@ $< $(OPTIONS) $(INC)
+test_framework_linear_grid_mpi: test_framework_linear_grid_mpi.o PencilGrid.o Global.o
+	$(LINK_EXE)
+.PHONY: framework-linear-grid-mpi
+framework-linear-grid-mpi: test_framework_linear_grid_mpi
+	@set -e; for np in $(NP_LIST); do $(SAFETY_RUN) ./test_framework_linear_grid_mpi; done
+ifeq ($(USE_MPI),true)
+run: framework-linear-grid-mpi
+endif
+
+.PHONY: framework-lpt-grid-mpi
+test_framework_lpt_grid_mpi: test_framework_lpt_grid_mpi.o PencilGrid.o Global.o
+	$(LINK_EXE)
+framework-lpt-grid-mpi: test_framework_lpt_grid_mpi
+	@set -e; for np in $(NP_LIST); do $(SAFETY_RUN) ./test_framework_lpt_grid_mpi; done
+ifeq ($(USE_MPI),true)
+run: framework-lpt-grid-mpi
+endif
+
+.PHONY: survey-grid-mpi checkpoint-grid-mpi
+test_survey_grid_mpi: test_survey_grid_mpi.o PencilGrid.o Global.o
+	$(LINK_EXE)
+test_checkpoint_grid_mpi: test_checkpoint_grid_mpi.o PencilGrid.o Global.o
+	$(LINK_EXE)
+survey-grid-mpi: test_survey_grid_mpi
+	@set -e; for np in $(NP_LIST); do $(SAFETY_RUN) ./test_survey_grid_mpi; done
+checkpoint-grid-mpi: test_checkpoint_grid_mpi
+	@set -e; grid_tmp=$$(mktemp -d "$${TMPDIR:-/tmp}/fml-grid-checkpoint.XXXXXX"); trap 'rm -rf "$$grid_tmp"' EXIT; \
+	for np in $(NP_LIST); do \
+	  $(SAFETY_RUN) ./test_checkpoint_grid_mpi "$$grid_tmp/np$$np" prepare; \
+	  $(SAFETY_RUN) ./test_checkpoint_grid_mpi "$$grid_tmp/np$$np" resume; \
+	done
+ifeq ($(USE_MPI),true)
+run: survey-grid-mpi checkpoint-grid-mpi
+endif

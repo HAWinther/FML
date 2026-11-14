@@ -258,7 +258,115 @@ additional likelihood nuisances remain explicit extensions.
 The initial stages 1–3 milestone is a reusable periodic implementation with exact
 linear verification, not a complete LEFTfield/BORG replacement.
 
+## Frontend backend selection (step 4, 14 November 2026)
+
+The four distributed examples (`framework_mpi`, `checkpoint_mpi`, `survey_mpi`,
+`survey_checkpoint_mpi`) and both survey-validation executables now select their
+backend at build time. Their existing CLI arguments and default slab choice remain.
+
+```sh
+make -C FML/FieldLevel/example clean
+make -C FML/FieldLevel/example USE_MPI=true USE_PENCIL_GRID=true \
+  framework_mpi checkpoint_mpi survey_mpi survey_checkpoint_mpi
+FML_PENCILS="2 2" mpirun -np 4 FML/FieldLevel/example/framework_mpi 2lpt
+FML_PENCILS="2 2" mpirun -np 4 FML/FieldLevel/example/survey_mpi poisson
+```
+
+Use matching local MPI/FFTW compiler/include/library settings. Clean when changing
+backend, MPI, compiler, OpenMP or precision flags. Pencil builds require MPI/FFTW
+and link `PencilGrid.cpp`; default builds retain FFTWGrid. The original serial
+`fieldlevel`, `calibration` and `framework` examples keep their single-rank APIs.
+
+`Frontend.h` defines frontend-only `LinearModel` / `LPTModel` / posterior aliases;
+explicit library `Distributed*Model` aliases still default to slabs. It sets the
+frontend domain once after FML setup. `FML_PENCILS="px py"` chooses a positive
+process grid with product NTasks; omitted values use MPI_Dims_create. Parsing and
+rank agreement are checked collectively. Boundaries are snapped to shared cells
+of both meshes (using their greatest common divisor), with positive widths and
+valid Fourier partitions. Unequal partitions are supported when tasks do not
+divide the initial mesh. The selected backend/process grid is printed at startup.
+Model-owned domains remain the source of later workspace/restart geometry.
+
+The survey driver now uses global cell IDs for its independent Fourier basis,
+mock/holdout/predictive RNGs and output labels. Validation snapshots use **schema 2**
+with per-axis start/count boxes. `analyze.py` reads those boxes and legacy schema-1
+slabs, rejects overlaps/gaps/truncated payloads, and assembles canonical cell order.
+This validation-output schema is independent of checkpoint identity schema 3.
+
+```sh
+make -C FML/FieldLevel/survey_validation clean
+make -C FML/FieldLevel/survey_validation USE_MPI=true USE_PENCIL_GRID=true
+mpirun -np 4 FML/FieldLevel/survey_validation/survey_reference --check-reference
+python3 FML/FieldLevel/survey_validation/run.py --smoke \
+  --bin-dir /path/to/serial-build --mpi-bin-dir /path/to/pencil-build \
+  --output /fresh/output --mpirun mpirun --mpi-ranks 1 2 4
+```
+
+The smoke runner uses two chains, 16 draws, four warmup steps and a fixed small
+step size for both Gaussian/Poisson and linear/2LPT cases, in full-grid and exact
+active-mode representations. It checks replay values and reader compatibility,
+then writes a standalone difference plot and JSON. It is **not** a calibrated
+posterior campaign: metadata retains convergence diagnostics, completion is marked
+SMOKE, and the calibration analyzer explicitly rejects smoke inputs. Normal runs
+keep their original sampling schedules and convergence gates. The full scientific
+campaign can use either backend, but its historical measured coverage/mixing
+results were not rerun as part of this port.
+
+See [tests/FRONTEND_GRID_RESULTS.md](tests/FRONTEND_GRID_RESULTS.md) for bounded
+cross-backend evidence. Remaining work includes cached pencil resampling,
+performance/scaling studies and broader scientific calibration; the distributed
+framework port itself now covers the four planned steps. Original serial BAO
+compatibility and checkpoint repartitioning remain separate extensions.
+
 ## Distributed linear inference (stage 4a, 12 November 2026)
+
+**Slab/pencil extension, step 1 (14 November 2026).** The distributed linear model
+is now `DistributedLinearModelT<GridType>`; `DistributedLinearModel` remains its
+`FFTWGrid<3>` alias. `DistributedLinearPosteriorT<GridType>` provides the generic
+posterior, with the original slab alias unchanged. The grid type must implement
+FML's common Fourier interface. PencilGrid needs MPI/FFTW and its implementation
+object (`PencilDomain/PencilGrid.cpp`) linked into the executable.
+
+```cpp
+#include <FML/PencilDomain/PencilGrid.h>
+#include <FML/FieldLevel/DistributedLinear.h>
+namespace FF = FML::FIELDLEVEL::FRAMEWORK;
+using Grid = FML::GRID::PencilGrid<3>;
+// After FML initialization, on 4 ranks with an even mesh compatible with these edges:
+auto domain = FML::Domain::uniform_pencil(2, 2);
+config.evolution = FF::Evolution::Linear;
+FF::DistributedLinearModelT<Grid> model(config, spectrum, {}, {}, domain);
+FF::DistributedLinearPosteriorT<Grid> posterior(model, local_data);
+auto workspace = model.workspace();
+```
+
+The optional final constructor argument is a replicated `FML::Domain`; its default
+is `FML::domain`. The model copies it and creates every workspace on that domain,
+independently of later global-domain changes. Domain kinds, edges and task counts
+are checked collectively before constructing FFT plans. Pencil edges must lie on
+mesh cells, with positive real x/y widths on every rank. Unequal partitions and
+meshes not divisible by the total task count are supported. Even meshes remain a
+FieldLevel restriction; this does not inherit PencilGrid's general odd-mesh support.
+Slabs retain the existing even/divisible/nonempty restriction. Pencil process grids
+also require `P0 <= N` and `P1 <= N/2+1`, so every task has Fourier storage.
+
+Global cell IDs are `(x*N+y)*N+z`. IC/mock white noise and HMC momenta retain the
+same counter RNG keys across backends, process grids and rank counts. Mode ownership
+is obtained from integer wavevectors, with backend-local storage indices and the
+shared Hermitian multiplicity. Scalar priors and global reductions are unchanged.
+Exact floating-point equality of FFT/posterior/HMC results is not promised.
+
+This step covers periodic **linear** inference, exact conditionals, metrics and
+linear reconstruction. Distributed LPT is now available in the step 2 extension
+below. Survey observations and same-layout checkpoint/restart are now available
+in step 3 below. Original serial BAO APIs remain separate. Backend selection for
+the distributed examples and calibration driver is available in step 4 below. No checkpoint
+migration across backends, layouts or rank counts is supported.
+
+Run `make -C FML/FieldLevel/tests USE_MPI=true framework-linear-grid-mpi` for the
+new cross-layout regression. [tests/LINEAR_GRID_RESULTS.md](tests/LINEAR_GRID_RESULTS.md)
+records the measured checks and limits.
+
 
 Include `<FML/FieldLevel/DistributedLinear.h>` and set
 `Configuration::evolution = Evolution::Linear` explicitly. Construct
@@ -270,17 +378,20 @@ The model implements the same normalized periodic linear prediction, generic
 spectrum derivatives, scalar priors, fixed Fourier response, Gaussian noise and
 plane-parallel RSD as `Model`. Its `workspace`, `white_noise`, `mock`, `predict`,
 `pullback`, `apply_field_metric` and `linear_conditional` operate collectively.
-`white_noise` generates the local slab without communication; use the same seed
+`white_noise` generates the local owned field without communication; use the same seed
 and stream on every rank.
 `linear_conditional` returns the local mean/covariance and global log marginal;
 the `linear_log_marginal` convenience remains serial-only. Distributed
 reconstruction outputs are available in stage 4d below.
 
 - `cells()` is the number of **owned** real cells, in x/y/z order, with no FFT
-  padding. `layout()` supplies global cells and local x start/width. The latent
-  dimension and whitening factor still use **global** N³. Fourier vectors contain
-  only locally owned retained modes, ordered by local x, y and nonnegative kz.
-  A supplied response vector uses that same local ordering. Zero and Nyquist
+  padding. `layout()` supplies global cells, per-axis `local_starts`/`local_counts`,
+  checked `global_coordinate(q)` / `global_cell_id(q)`, and the legacy x-only
+  `local_start`/`local_width` aliases. The latent dimension and whitening factor
+  still use **global** N³. Fourier vectors contain only locally owned retained
+  modes, in the backend's Fourier-range order (slabs: local x/y/kz; pencils:
+  local ky/kz rows with kx along each row). A supplied response vector uses that
+  same local ordering; it must be rebuilt from physical wavevectors for a new layout. Zero and Nyquist
   modes are excluded from the modeled band; unconstrained latent modes retain
   their unit Gaussian prior.
 - Posterior values and scalar gradients are reduced globally; the scalar priors
@@ -334,6 +445,62 @@ provided by this linear backend. The original single-rank safety checks remain.
 
 ## Distributed 1LPT (stage 4b, 12 November 2026)
 
+**Slab/pencil extension, step 2 (14 November 2026).** Use
+`DistributedLPTModelT<GridType>` / `DistributedLPTPosteriorT<GridType>` for either
+Zeldovich or 2LPT evolution. The existing `DistributedLPTModel` and
+`DistributedLPTPosterior` remain the `FFTWGrid<3>` aliases. Both the forward model
+and its field/parameter adjoints use the selected backend.
+
+```cpp
+#include <FML/PencilDomain/PencilGrid.h>
+#include <FML/FieldLevel/DistributedLPT.h>
+namespace FF = FML::FIELDLEVEL::FRAMEWORK;
+using Grid = FML::GRID::PencilGrid<3>;
+// After FML initialization on 4 ranks; domain edges must align with both meshes:
+auto domain = FML::Domain::uniform_pencil(2, 2);
+c.evolution = FF::Evolution::LPT2;
+c.mesh = 8; c.density_mesh = 16; c.boxsize = 100;
+c.initial_cutoff = .115; c.bias_cutoff = .08; c.likelihood_cutoff = .10;
+FF::DistributedLPTModelT<Grid> model(c, spectrum, {}, {}, domain);
+auto work = model.workspace();
+```
+
+The optional final domain argument has the same copied/default-domain semantics
+as the linear backend. The fine density grid is made with `make_grid_like` on the
+actual initial-grid domain; workspace creation does not infer it again from the
+current global default. The initial and density meshes must be even, with
+`density_mesh >= mesh`; pencils need not divide the **total** task count. Domain
+edges must fall on cells of **both** meshes. This permits, for example, an 8→12
+transfer on quarter-aligned domains, while incompatible fine-grid edges fail
+collectively before fine-grid workspace construction. Arbitrary independently
+chosen initial/density domains are not part of this interface.
+
+Particle locations use all three global Lagrangian coordinates. Fourier derivative
+kernels use backend wavevectors, removing zero and every Nyquist plane as before.
+The full quadratic 2LPT source, EdS 3/7 coefficient, plane-parallel RSD factors,
+smoothed bias centering, kernel deconvolution, normalization and real-space
+reconstruction conventions are unchanged. Sparse assignment/reverse routes nodes
+through `CellOwners`, including distant owners and both split real-space axes.
+
+Transfers copy normalized Fourier coefficients, excluding the Nyquist cube
+boundary of the smaller mesh, with no volume rescaling. The reverse path retains
+the existing density-volume and Hermitian-weight factors; it is tested as an
+adjoint, rather than inferred from a successful forward transform. FFTWGrid keeps
+its cached `FourierResamplingPlan`. Pencils use the shared `copy_fourier_modes`
+implementation, which currently rebuilds ownership/staging records on each call;
+a reusable pencil transfer plan remains a performance follow-up. No full mesh or
+mode gather is introduced into production evolution or inference.
+
+The new `framework-lpt-grid-mpi` Make target checks slab/pencil prediction,
+posterior, adjoint, physical reconstruction, metric and short joint-HMC agreement,
+plus independent transfer/deposition dot products and analytic 2LPT solutions.
+See [tests/LPT_GRID_RESULTS.md](tests/LPT_GRID_RESULTS.md). Survey observations and
+same-layout checkpoint/restart are now supported in step 3 below; original serial
+BAO APIs remain separate; frontend/calibration backend selection is available in
+step 4 below. This port does not add PM/COLA,
+non-EdS higher-order growth or new nonlinear posterior calibration.
+
+
 Include `<FML/FieldLevel/DistributedLPT.h>`, set `evolution=Evolution::Zeldovich`,
 and construct `DistributedLPTModel` / `DistributedLPTPosterior`. They use the same
 configuration, spectrum, prior specifications, smoothed Lagrangian bias conventions,
@@ -341,7 +508,8 @@ plane-parallel RSD and full-Hermitian mode inner product as the single-rank `Mod
 Supported scalar parameters are spectrum parameters followed by b1, b2, b_s2,
 b_laplacian and log noise power. The initial cutoff must remain strictly below
 half the initial-grid Nyquist; the density mesh must be even, at least the initial
-mesh, and divisible by the number of ranks. Kernel widths 4/6/8 are supported.
+mesh, and (for FFTWGrid) divisible by the number of ranks. Pencils require a domain
+whose edges align with both meshes instead. Kernel widths 4/6/8 are supported.
 The backend now accepts `Zeldovich` and `LPT2`; stage 4c below documents the
 second-order source and adjoint extension.
 
@@ -365,15 +533,15 @@ The field/parameter ownership and collective-call rules from stage 4a still appl
 Particles stay on their Lagrangian owners. Each forward pass computes distributed
 initial/bias fields, uses globally centered quadratic/tidal bias operators, and
 builds sparse contributions to density nodes on any rank. Node contributions are
-aggregated locally, routed to their FFT slab owners and summed there. The cached
+aggregated locally, routed to their mesh owners and summed there. The cached
 communication layout returns mesh cotangents to the same particle owners; interpolation
 and displacement/bias adjoints then reverse the forward map. Thus the method handles
 arbitrary periodic particle displacements without retaining a full density grid on
-every rank or assuming that particles stay within neighboring slabs.
+every rank or assuming that particles stay within neighboring domains.
 
-Initial and density meshes have different Fourier ownership. Reusable
-`FourierResamplingPlan` objects transfer normalized coefficients between their
-layouts; the reverse uses the corresponding upsampling map with the density FFT
+Initial and density meshes have different Fourier ownership. Slabs use reusable
+`FourierResamplingPlan` objects; pencils use the shared normalized-mode copy.
+The reverse uses the corresponding upsampling map with the density FFT
 adjoint's N_density³ normalization. Smooth assignment and its Fourier correction
 match the original serial model. Nonfinite particle proposals reject before
 floating-point coordinates are converted to node indices. Routed key/count errors
@@ -532,10 +700,46 @@ in [stage 5a](SURVEY.md).
 
 ## Checkpoint/restart (stage 4e, 13 November 2026)
 
+**Slab/pencil extension, step 3 (14 November 2026).** Cartesian Gaussian/Poisson
+survey observations now use the forward model's grid backend and copied domain.
+The initial observation mesh is checked against all local real-space ranges;
+packing/unpacking uses the backend's real-cell iterator, excluding FFT padding.
+Window callbacks use full global x/y/z coordinates. See [SURVEY.md](SURVEY.md).
+
+`sample_checkpointed` supports the generic linear and 1LPT/2LPT models on either
+backend, for periodic Gaussian, survey Gaussian and survey Poisson targets. Include
+`SurveyCheckpoint.h` for survey target fingerprints. Identity schema **3** records
+the explicit grid type, all three local starts/counts, full replicated slab/pencil
+partition (including process-grid shape and y edges), and Fourier storage indices,
+in addition to existing physics/data/build/sampler checks. Identity construction
+contains no MPI collectives: it remains safe inside the local exception-coordination
+phase used by checkpoint setup.
+
+Replica checks compare only shared scalar/control state; differing local field
+lengths and field values are excluded from that comparison. Each persisted shard
+still records and validates its actual local field dimension. This fixes the old
+implicit equal-slab-length assumption for unequal pencil partitions.
+
+Same-layout continuation rebuilds FFT workspaces from the model-owned domain.
+Different backends, rank counts, process grids or domain edges are rejected;
+checkpoint repartition/migration is not implemented. Earlier identity-schema-2
+checkpoints are deliberately incompatible with schema 3; retain the original code
+for those files. Shard framing and sampler-state encoding are otherwise unchanged.
+A versioned `problem_id` and the same executable/numerical environment remain
+required; the build tag is not a complete executable hash.
+
+[tests/SURVEY_GRID_RESULTS.md](tests/SURVEY_GRID_RESULTS.md) records survey parity,
+independent adjoints/gradients and separate-process checkpoint verification. The
+new test targets are `survey-grid-mpi` and `checkpoint-grid-mpi`; existing slab
+frontends retain their names and now select either backend as documented in step 4.
+The existing scientific campaign measurements remain their original slab evidence;
+the port is verified by bounded frontend replays.
+
+
 Include `<FML/FieldLevel/Checkpoint.h>` and use `sample_checkpointed` with a
 Gaussian-field posterior. The validated targets are the built-in serial model and
 distributed linear/1LPT/2LPT models. This first implementation resumes with the
-**same MPI rank count, slab layout, executable/numerical environment and thread
+**same MPI rank count, grid backend/layout, executable/numerical environment and thread
 configuration**, at complete trajectory boundaries. It does not repartition a
 checkpoint or resume midway through a leapfrog trajectory.
 
@@ -571,7 +775,7 @@ The retained force is checked against a fresh evaluation before it is reused.
 `problem_id` is mandatory and must version callback physics, custom numerical/code
 changes and external inputs that cannot be inspected through `std::function`.
 Automatic identity checks also cover model type/configuration, parameter priors,
-response, data/likelihood weights and normalization, rank/slab geometry, precision,
+response, data/likelihood weights and normalization, rank/full grid geometry, precision,
 compiler/standard-library tag and thread count. The force check is an additional
 consistency check at one point, not proof that arbitrary callbacks are identical.
 The build tag is not an executable hash: the caller's versioned ID and same-build
@@ -634,6 +838,9 @@ positive-link Poisson counts, normalization, MPI adjoints and MAP/HMC examples.
 
 
 ## Survey checkpoints and identity schema 2 (13 November 2026)
+
+Historical milestone: the current pencil-capable version uses schema 3, documented
+above; schema-2 files require their original code.
 
 `sample_checkpointed` now accepts explicitly fingerprinted likelihood types;
 include [SurveyCheckpoint.h](SurveyCheckpoint.h) for Cartesian Gaussian and

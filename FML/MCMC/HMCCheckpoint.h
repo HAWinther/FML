@@ -157,7 +157,9 @@ namespace FML::MCMC::CHECKPOINT {
     }
     inline void state(Encoder & e, const HMCState & s, bool fields = true) {
         e.integer(s.initialized);
-        e.integer(s.n_custom);
+        // Without local fields this is a replicated-state description, not a restorable shard.
+        // Different ranks may own different field lengths; scalar tails and control state must agree.
+        e.integer(fields ? s.n_custom : 0);
         options(e, s.options);
         if (fields) {
             e.vector(s.position);

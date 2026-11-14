@@ -235,8 +235,25 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         const auto & modes() const { return modes_; }
         const auto & response() const { return response_; }
         struct Layout {
-            int global_mesh, local_start, local_width;
+            int global_mesh, local_start, local_width; // x aliases retained for slab callers
             size_t global_cells, owned_cells;
+            std::array<int, 3> local_starts{}, local_counts{};
+            Layout(int mesh = 0, int start = 0, int width = 0, size_t total = 0, size_t owned = 0)
+                : global_mesh(mesh), local_start(start), local_width(width), global_cells(total), owned_cells(owned),
+                  local_starts{start, 0, 0}, local_counts{width, mesh, mesh} {}
+            // Compact owned fields follow real-range iteration: x, then y, then z (no FFT padding).
+            std::array<int, 3> global_coordinate(size_t q) const {
+                if (q >= owned_cells)
+                    throw std::out_of_range("[Field layout] Cell outside owned field");
+                const size_t row = size_t(local_counts[1]) * local_counts[2];
+                return {local_starts[0] + int(q / row),
+                        local_starts[1] + int(q / local_counts[2] % local_counts[1]),
+                        local_starts[2] + int(q % local_counts[2])};
+            }
+            size_t global_cell_id(size_t q) const {
+                const auto c = global_coordinate(q);
+                return (size_t(c[0]) * global_mesh + c[1]) * global_mesh + c[2];
+            }
         };
         Layout layout() const { return {config_.mesh, 0, config_.mesh, cells_, cells_}; }
         size_t cells() const { return cells_; }

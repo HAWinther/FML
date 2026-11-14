@@ -4,14 +4,26 @@
 field-level framework. It composes `DistributedLinearModel` or
 `DistributedLPTModel` with a masked Cartesian observation grid and either a
 normalized Gaussian field likelihood or a separate Poisson count model.
-Both work with the existing `BasicPosterior`, MAP and HMC interfaces. No
-periodic forward-model or sampler formulas were changed.
+Both work with the existing `BasicPosterior`, MAP and HMC interfaces. Generic
+`DistributedLinearModelT<Grid>` / `DistributedLPTModelT<Grid>` support FFTWGrid
+slabs and PencilGrid pencils (step 3, 14 November 2026). Periodic forward-model,
+likelihood and sampler formulas are unchanged.
+
+The observation grid is created from the forward model's backend and copied domain,
+so changing `FML::domain` after model construction does not change its observation
+layout. The existing library aliases remain slab based; use the
+`*ModelT<PencilGrid<3>>` APIs for pencil inference. Distributed examples and the
+calibration frontend now support `USE_PENCIL_GRID=true USE_MPI=true`; see
+[backend selection](FRAMEWORK.md#frontend-backend-selection-step-4-14-november-2026).
 
 ## Geometry, layout and selection
 
 `SurveyWindow` stores one `observed` byte (0/1) and fixed `selection` value in
 [0,1] per owned compact real cell. Both vectors have `model.cells()` entries,
-with local index `(local_x*N+y)*N+z`, without FFTW padding or ghost cells. The
+in x/y/z order with local index `(local_x*local_Ny+local_y)*N+z`, where
+`local_Ny=model.layout().local_counts[1]`, without FFT padding or ghost cells.
+Use `layout().global_coordinate(q)` / `global_cell_id(q)` for physical labels;
+x-slab offsets alone are insufficient for pencils. The
 observation mesh is the forward model's **initial FFT mesh**, not its deposition
 mesh. Data and exposure arrays use this same local ordering. Nothing is gathered
 into a global field for observations or likelihood evaluation.
@@ -90,7 +102,7 @@ auto result = FF::map(posterior, model.white_noise(12), parameters, false);
 
 The likelihood returns a **local** scalar likelihood and local noise derivative;
 `BasicPosterior` reduces these once and adds replicated scalar priors once.
-Its FFT adjoint already includes spatial coupling across all observation slabs.
+Its FFT adjoint already includes spatial coupling across all observation domains.
 
 ## Positive-intensity Poisson counts
 
@@ -145,7 +157,7 @@ One observation/likelihood owns mutable FFT scratch and real cotangent storage.
 It is move-only; forward models must outlive it and the posterior. Use separate
 instances for concurrent chains, construct FFT plans outside concurrent regions,
 and call all collective methods on every communicator rank. Real data and scratch
-remain local slabs. No timing, scaling or zero-allocation claim is made; existing
+remain local owned fields. No timing, scaling or zero-allocation claim is made; existing
 forward-model workspace profiling remains open.
 
 ```sh
@@ -227,13 +239,15 @@ must include a versioned probability-law tag and all fixed target inputs.
 Version callback physics, code and external inputs in `problem_id`; compiler
 metadata/type names are not an executable-code hash.
 
-**Target-identity compatibility:** identity schema 2 includes the prior family
-as well as prior values and the likelihood identity. The previous schema omitted
+**Target-identity compatibility:** current schema 3 extends schema 2's prior family,
+prior values and likelihood identity with explicit backend and complete layout
+metadata. The previous schema omitted
 the prior family; changing Gaussian to uniform at its center could preserve the
 cached potential and force while changing the posterior elsewhere. Schema-1
 checkpoints (including older periodic checkpoints) are therefore rejected by
 this API rather than silently resumed. Continue those chains with their original
-code/build. Use a new directory for a new schema-2 chain; no automatic migration
+code/build. Schema-2 checkpoints also require their original code. Use a new directory
+for a new schema-3 chain; no automatic migration
 preserving the exact old trajectory is provided. The shard/manifest/HMC codec
 framing itself is unchanged.
 
@@ -261,3 +275,26 @@ per likelihood, future-observation predictions and clustered coverage intervals.
 and separate physical-field/selection convergence results. All physics and
 nuisances are fixed, so this does not establish joint nuisance/cosmological
 calibration or eliminate the need for volume-integrated selection modeling.
+
+## Pencil survey checkpoint validation (step 3)
+
+Include `SurveyCheckpoint.h` and pass a Gaussian/Poisson survey posterior built
+from the generic linear or LPT model to `sample_checkpointed`. All ranks reconstruct
+the identical backend, domain, data and original sampling controls before resuming.
+Checkpoint identity schema 3 fingerprints all real-space axes, the backend, complete
+partition edges/process grid, Fourier storage and fixed survey inputs. Changed
+backend/layout/rank count is rejected; this is same-layout continuation, not migration.
+Schema-2 identities require the original code and cannot resume under schema 3.
+
+```sh
+make -C FML/FieldLevel/tests clean
+make -C FML/FieldLevel/tests USE_MPI=true USE_OMP=true survey-grid-mpi NP_LIST='1 2 4 6 8'
+make -C FML/FieldLevel/tests USE_MPI=true USE_OMP=true checkpoint-grid-mpi NP_LIST='1 2 4'
+```
+
+Use matching MPI/FFTW compiler, include/library paths and launcher. The checkpoint
+Make target uses separate prepare/resume processes and a temporary directory per
+rank count; on multiple nodes `TMPDIR` must be shared. See
+[tests/SURVEY_GRID_RESULTS.md](tests/SURVEY_GRID_RESULTS.md) for measured checks and
+limits. Frontend backend selection is now implemented in step 4; broader scientific
+calibration remains separate from bounded port verification.

@@ -1,5 +1,6 @@
 // Bounded conditional survey-inference validation. All physics/nuisances fixed.
 #include <FML/FieldLevel/SurveyCheckpoint.h>
+#include <FML/FieldLevel/Frontend.h>
 #include <FML/tests/TestHelpers.h>
 #include <fstream>
 #include <iomanip>
@@ -30,15 +31,15 @@ struct RNG {
 // Validation-only compact global coefficient table (13 independent complex modes
 // for this fixed band). No global real field is gathered by the experiment.
 struct Basis {
-    int N, start;
+    int N;
+    FF::Model::Layout layout;
     size_t cells;
     double L, P;
     std::vector<Key> keys;
     std::vector<Field> cosine, sine, probes;
     template <class Model>
     Basis(const Model & m, double power)
-        : N(m.configuration().mesh), start(m.layout().local_start), cells(m.cells()), L(m.configuration().boxsize),
-          P(power) {
+        : N(m.configuration().mesh), layout(m.layout()), cells(m.cells()), L(m.configuration().boxsize), P(power) {
         const double cut = std::max(m.configuration().initial_cutoff, m.configuration().likelihood_cutoff);
         for (int x = -N / 2 + 1; x < N / 2; ++x)
             for (int y = -N / 2 + 1; y < N / 2; ++y)
@@ -52,8 +53,8 @@ struct Basis {
         for (const auto & k : keys) {
             Field co(cells), si(cells);
             for (size_t q = 0; q < cells; ++q) {
-                const double angle =
-                    2 * M_PI * (k[0] * (start + int(q / (N * N))) + k[1] * int(q / N % N) + k[2] * int(q % N)) / N;
+                const auto position = layout.global_coordinate(q);
+                const double angle = 2 * M_PI * (k[0] * position[0] + k[1] * position[1] + k[2] * position[2]) / N;
                 co[q] = std::cos(angle);
                 si[q] = std::sin(angle);
             }
@@ -251,19 +252,25 @@ static void write_bytes(std::ofstream & stream, const C::Encoder & e) {
         throw std::runtime_error("Snapshot write failed");
 }
 template <bool Poisson, class Model>
-static bool
-inference(const Model & m, const FS::path & directory, int mock, int nchain, int minimum_samples, int warmup) {
+static bool inference(const Model & m,
+                      const FS::path & directory,
+                      int mock,
+                      int nchain,
+                      int minimum_samples,
+                      int warmup,
+                      bool smoke = false) {
     const int N = m.configuration().mesh;
     const double V = m.volume(), Vcell = V / m.layout().global_cells, power = 2000, noise_actual = 50, nbar = .015;
-    const int thin = 8, cap = 2400;
+    const int thin = 8, cap = smoke ? minimum_samples : 2400;
     Basis basis(m, power);
     basis.make_probes();
     auto window = FF::make_survey_window(m, {-50, -50, -50}, selection);
     Field variance(m.cells()), exposure(m.cells(), nbar * Vcell), radial(m.cells());
     double information = 0, radial_mean = 0, npixels = 0;
     for (size_t q = 0; q < m.cells(); ++q) {
-        const double x = -50 + 100. * (basis.start + q / (N * N)) / N, y = -50 + 100. * (q / N % N) / N,
-                     z = -50 + 100. * (q % N) / N;
+        const auto position = basis.layout.global_coordinate(q);
+        const double x = -50 + 100. * position[0] / N, y = -50 + 100. * position[1] / N,
+                     z = -50 + 100. * position[2] / N;
         const double hetero = 1 + .4 * x * x / (50 * 50);
         variance[q] = hetero;
         radial[q] = (x * x + y * y + z * z) / (38 * 38);
@@ -296,7 +303,7 @@ inference(const Model & m, const FS::path & directory, int mock, int nchain, int
     Field data(m.cells()), holdout(m.cells()), mean_truth(m.cells());
     std::vector<std::uint64_t> counts(m.cells());
     for (size_t q = 0; q < m.cells(); ++q) {
-        const size_t id = size_t(basis.start) * N * N + q;
+        const size_t id = basis.layout.global_cell_id(q);
         RNG rng(2000 + 101 * mock + (Poisson ? 100000 : 0), id, 0x44415441u);
         mean_truth[q] = Poisson ? exposure[q] * window.selection[q] * std::exp(tracer_truth[q]) :
                                   window.selection[q] * tracer_truth[q];
@@ -337,17 +344,19 @@ inference(const Model & m, const FS::path & directory, int mock, int nchain, int
     const std::string suffix = ".rank" + std::to_string(FML::ThisTask);
     std::ofstream snapshots((directory / ("snapshots" + suffix + ".bin")).string(), std::ios::binary);
     C::Encoder header;
-    header.text("FML survey validation snapshots 1");
+    header.text("FML survey validation snapshots 2");
     header.integer(N);
-    header.integer(basis.start);
-    header.integer(m.layout().local_width);
+    for (int d = 0; d < 3; ++d)
+        header.integer(basis.layout.local_starts[d]);
+    for (int d = 0; d < 3; ++d)
+        header.integer(basis.layout.local_counts[d]);
     header.integer(thin);
     write_bytes(snapshots, header);
     std::ofstream cells((directory / ("cells" + suffix + ".tsv")).string());
     cells << std::setprecision(17)
           << "# id mask selection variance exposure data holdout initial_truth tracer_truth mean_truth\n";
     for (size_t q = 0; q < m.cells(); ++q)
-        cells << size_t(basis.start) * N * N + q << ' ' << int(window.observed[q]) << ' ' << window.selection[q] << ' '
+        cells << basis.layout.global_cell_id(q) << ' ' << int(window.observed[q]) << ' ' << window.selection[q] << ' '
               << (Poisson ? 0 : std::exp(p.back()) / Vcell * variance[q]) << ' ' << exposure[q] << ' ' << data[q] << ' '
               << holdout[q] << ' ' << initial_truth[q] << ' ' << tracer_truth[q] << ' ' << mean_truth[q] << '\n';
     cells.close();
@@ -386,6 +395,12 @@ inference(const Model & m, const FS::path & directory, int mock, int nchain, int
     options.n_leapfrog = 24;
 #endif
     options.target_acceptance = .9;
+    if (smoke) {
+        options.n_leapfrog = 2;
+        options.step_size = .01;
+        options.adapt_step_size = false;
+        options.adapt_mass = false;
+    }
     bool converged = false, divergence_free = true;
     int round = 0;
     do {
@@ -419,7 +434,7 @@ inference(const Model & m, const FS::path & directory, int mock, int nchain, int
                     }
                     expected[q] = Poisson ? exposure[q] * window.selection[q] * std::exp(tracer[q]) :
                                             window.selection[q] * tracer[q];
-                    const size_t id = size_t(basis.start) * N * N + q;
+                    const size_t id = basis.layout.global_cell_id(q);
                     RNG rng(9000000 + (Poisson ? 1000000000ULL : 0ULL) + mock * 100000 + chain * 10000 + draw,
                             id,
                             0x50524544u);
@@ -590,7 +605,10 @@ inference(const Model & m, const FS::path & directory, int mock, int nchain, int
              << nchain << "\ndraws " << draws[0] << "\nwarmup " << warmup << "\nthin " << thin << "\npoisson "
              << Poisson << "\nnoise_reference " << noise_reference << "\nnoise_actual " << (Poisson ? 0 : noise_actual)
              << "\nnbar " << nbar << "\nobserved_voxels " << observed << "\nconverged " << converged
-             << "\ndivergence_free " << divergence_free << '\n';
+             << "\ndivergence_free " << divergence_free << "\nsmoke " << smoke << "\nbackend "
+             << FML::FIELDLEVEL::FRONTEND::pencil_backend << "\nranks " << FML::NTasks << "\nprocess_x "
+             << FML::FIELDLEVEL::FRONTEND::process_grid()[0] << "\nprocess_y "
+             << FML::FIELDLEVEL::FRONTEND::process_grid()[1] << '\n';
         std::ofstream modes(directory / "modes.tsv");
         modes << std::setprecision(17) << "# nx ny nz truth_phi_cos truth_phi_sin\n";
         for (size_t k = 0; k < basis.keys.size(); ++k)
@@ -615,9 +633,9 @@ inference(const Model & m, const FS::path & directory, int mock, int nchain, int
         if (!trace || !stats || !ppstats || !meta || !modes || !chainstats || !probes || !predictive || !snapshots)
             throw std::runtime_error("Incomplete experiment output");
         std::ofstream done(directory / "complete.txt");
-        done << (converged && divergence_free ? "PASS" : "FAIL") << '\n';
+        done << (smoke ? "SMOKE" : (converged && divergence_free ? "PASS" : "FAIL")) << '\n';
     }
-    return converged && divergence_free;
+    return divergence_free && (smoke || converged);
 }
 static int convergence(const FS::path & root) {
     if (FML::NTasks != 1)
@@ -628,15 +646,16 @@ static int convergence(const FS::path & root) {
     for (int N : {8, 12, 16, 24, 32, 48})
         for (int width : {4, 6, 8}) {
             auto c = configuration(N, width);
-            FF::DistributedLPTModel m(c, FF::Spectrum::fixed([](double) { return 2000.; }));
+            FML::FIELDLEVEL::FRONTEND::LPTModel m(c, FF::Spectrum::fixed([](double) { return 2000.; }));
             Basis basis(m, 2000);
             auto p = model_parameters(m, 500);
             auto w = m.workspace();
             Field white(m.cells());
             const double transfer = std::sqrt(2000. * m.layout().global_cells / m.volume());
             for (size_t q = 0; q < white.size(); ++q) {
-                const double x = 2 * M_PI * double(q / (N * N)) / N, y = 2 * M_PI * double(q / N % N) / N,
-                             z = 2 * M_PI * double(q % N) / N;
+                const auto position = m.layout().global_coordinate(q);
+                const double x = 2 * M_PI * position[0] / N, y = 2 * M_PI * position[1] / N,
+                             z = 2 * M_PI * position[2] / N;
                 white[q] = (.15 * std::cos(x) + .11 * std::cos(z) + .06 * std::sin(x + y)) / transfer;
             }
             const auto coeff = basis.coefficients(m, m.predict(white, p, w)), tracer = basis.synthesize(coeff);
@@ -649,7 +668,8 @@ static int convergence(const FS::path & root) {
                 double volume = 0, selected = 0, expected = 0;
                 const double dx = 100. / N, dV = dx * dx * dx;
                 for (size_t q = 0; q < white.size(); ++q) {
-                    const double x = -50 + dx * (q / (N * N)), y = -50 + dx * (q / N % N), z = -50 + dx * (q % N);
+                    const auto position = m.layout().global_coordinate(q);
+                    const double x = -50 + dx * position[0], y = -50 + dx * position[1], z = -50 + dx * position[2];
                     double fraction = 0, response = 0;
                     for (int i = 0; i < sub; ++i)
                         for (int j = 0; j < sub; ++j)
@@ -733,12 +753,12 @@ static void check_reference(const Model & m) {
 }
 static int reference_checks() {
     auto c = configuration();
-    auto spectrum = FF::Spectrum::fixed([](double) {  return 2000.; });
-    FF::DistributedLPTModel nonlinear(c, spectrum);
+    auto spectrum = FF::Spectrum::fixed([](double) { return 2000.; });
+    FML::FIELDLEVEL::FRONTEND::LPTModel nonlinear(c, spectrum);
     check_reference<false>(nonlinear);
     check_reference<true>(nonlinear);
     c.evolution = FF::Evolution::Linear;
-    FF::DistributedLinearModel linear(c, spectrum);
+    FML::FIELDLEVEL::FRONTEND::LinearModel linear(c, spectrum);
     check_reference<false>(linear);
     check_reference<true>(linear);
     return FML::TESTS::summary("survey active-mode reference");
@@ -747,19 +767,27 @@ int main(int argc, char ** argv) {
     FML::FMLSetup::init(&argc, &argv);
     std::cout << std::setprecision(10) << std::unitbuf;
     try {
+        FML::FIELDLEVEL::FRONTEND::initialize(8, 16);
+        const bool smoke = argc > 1 && std::string(argv[1]) == "--smoke";
+        if (smoke) {
+            --argc;
+            ++argv;
+        }
         if (argc == 2 && std::string(argv[1]) == "--check-reference")
             return reference_checks();
         if (argc == 3 && std::string(argv[1]) == "--convergence")
             return convergence(argv[2]);
         if (argc < 8 || argc > 9)
-            throw std::invalid_argument("Usage: survey_validate OUTPUT gaussian|poisson FIRST_MOCK NMOCKS NCHAINS "
-                                        "SAMPLES WARMUP [2lpt|linear]; or --convergence OUTPUT");
+            throw std::invalid_argument(
+                "Usage: survey_validate [--smoke] OUTPUT gaussian|poisson FIRST_MOCK NMOCKS NCHAINS "
+                "SAMPLES WARMUP [2lpt|linear]; or --convergence OUTPUT");
         const FS::path root = argv[1];
         const std::string kind = argv[2], evolution = argc == 9 ? argv[8] : "2lpt";
         int first = std::stoi(argv[3]), mocks = std::stoi(argv[4]), chains = std::stoi(argv[5]),
             samples = std::stoi(argv[6]), warmup = std::stoi(argv[7]);
         if ((kind != "gaussian" && kind != "poisson") || (evolution != "2lpt" && evolution != "linear") || first < 0 ||
-            mocks < 1 || mocks > 64 || chains < 2 || chains > 8 || samples < 100 || samples > 2400 || warmup < 20)
+            mocks < 1 || mocks > 64 || chains < 2 || chains > 8 || samples < (smoke ? 8 : 100) ||
+            samples > (smoke ? 64 : 2400) || warmup < (smoke ? 0 : 20))
             throw std::invalid_argument("Invalid experiment controls");
         auto c = configuration(8, 6, evolution == "linear" ? FF::Evolution::Linear : FF::Evolution::LPT2);
         auto spectrum = FF::Spectrum::fixed([](double) { return 2000.; });
@@ -767,16 +795,16 @@ int main(int argc, char ** argv) {
         auto execute = [&](const auto & model) {
             for (int i = first; i < first + mocks; ++i) {
                 const FS::path dir = root / (evolution + "_" + kind) / ("mock" + std::to_string(i));
-                const bool ok = kind == "gaussian" ? inference<false>(model, dir, i, chains, samples, warmup) :
-                                                     inference<true>(model, dir, i, chains, samples, warmup);
+                const bool ok = kind == "gaussian" ? inference<false>(model, dir, i, chains, samples, warmup, smoke) :
+                                                     inference<true>(model, dir, i, chains, samples, warmup, smoke);
                 good &= ok;
             }
         };
         if (evolution == "linear") {
-            FF::DistributedLinearModel model(c, spectrum);
+            FML::FIELDLEVEL::FRONTEND::LinearModel model(c, spectrum);
             execute(model);
         } else {
-            FF::DistributedLPTModel model(c, spectrum);
+            FML::FIELDLEVEL::FRONTEND::LPTModel model(c, spectrum);
             execute(model);
         }
         return good ? 0 : 1;

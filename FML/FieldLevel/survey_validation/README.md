@@ -29,7 +29,8 @@ For an MPI build, use the normal `USE_MPI=true` settings. Add, for example,
 `--mpi-bin-dir /path/to/mpi-build --mpirun 'mpirun --oversubscribe'` to run the
 2-rank reference bridges. Only use launcher flags supported by your MPI vendor.
 `--check-reference` and the existing `tests/test_survey_likelihood_mpi` regression
-also run at 1/2/4 ranks. Do not mix object files built with different MPI settings.
+also run on supported pencil process grids. Do not mix object files built with
+different backend/MPI/precision/compiler settings; clean before switching them.
 
 ## Fixed scientific problem
 
@@ -71,7 +72,7 @@ forward model. Writing the white grid s=Q phi+s_perp gives
 posterior and gradient** on s=Q phi. It uses a fixed dense 26x26 linear Fisher
 metric, M=I+B^T W B; its Cholesky momentum draw and inverse solve are checked
 against the same kinetic energy. Replicated active coordinates count kinetic
-energy once, while likelihood/gradient contributions reduce over MPI slabs.
+energy once, while likelihood/gradient contributions reduce over MPI domains.
 This dense reference is deliberately small and is not a proposed scalable solver.
 The full-grid production path remains unchanged.
 
@@ -100,7 +101,7 @@ summaries have separate Rhat<1.05 and ESS thresholds. Python independently check
 Rhat and also checks all 512 physical-field values. Convergence diagnostics are
 finite-sample evidence, not proof of convergence.
 
-Every eighth state emits slab-local observable snapshots and conditional
+Every eighth state emits rank-local observable snapshots and conditional
 predictive statistics. Python reconstructs physical initial fields exactly from
 the 26 modes and draws independent Gaussian/Poisson predictive replicas. Future
 voxel/total interval estimates use 128 independent conditional noise/count
@@ -134,7 +135,53 @@ quadrature resolution checking stability. This is a total-integral and smooth
 manufactured-field test, not voxelwise convergence or a volume-integrated
 production likelihood. Mesh dependence need not be monotonic at sharp boundaries.
 
-Raw trace, slab snapshots, predictive tables, complete HMC states and metadata are
+Raw trace, cell-box snapshots, predictive tables, complete HMC states and metadata are
 kept in the requested output directory. `complete.txt` distinguishes PASS/FAIL.
 The archived small figures and summary are review artifacts; raw chains are not
 source-controlled.
+
+## Slab/pencil frontend port (14 November 2026)
+
+Both executables now use `Frontend.h`: default FFTWGrid slabs, or PencilGrid with
+`make USE_MPI=true USE_PENCIL_GRID=true`. Optional `FML_PENCILS="px py"` selects the
+process grid; otherwise MPI_Dims_create is used with cell-aligned boundaries.
+The independent basis, mock/holdout/predictive RNGs and TSV labels use canonical
+global cell IDs, including the local y offset on pencils. Metadata records backend,
+rank count and process-grid shape. Snapshot schema 2 records all three start/count
+ranges; `analyze.py` also reads existing schema-1 slab files.
+
+For bounded engineering verification, build separate serial and pencil directories
+and run:
+
+```sh
+python3 run.py --smoke --bin-dir /path/to/serial-build \
+  --mpi-bin-dir /path/to/pencil-build --mpirun mpirun --mpi-ranks 1 2 4 \
+  --output /fresh/output
+```
+
+This runs fixed-step short chains, compares full-grid and active-reference results
+**within each representation** across backends/ranks, and checks data, binary
+snapshots, traces and predictive statistics. `analyze_portability.py` writes a JSON
+report and PNG/PDF replay plot. Its reader tests cover legacy/box streams,
+overlaps and truncation. Smoke completion is marked SMOKE, metadata keeps its
+actual diagnostics, and the scientific calibration analyzer rejects these runs.
+The native prefix is `survey_validate --smoke OUTPUT ...` (8–64 draws); the runner
+uses 16 draws, four warmup steps and two chains. No convergence threshold is relaxed
+for normal campaigns. A normal run without `--smoke` keeps the existing schedules.
+
+The archived [RESULTS.md](RESULTS.md) and scientific figures remain the original
+slab campaign evidence. This port is validated by bounded replays and independent
+reference checks, not a rerun of that full campaign on pencils. See
+[../tests/FRONTEND_GRID_RESULTS.md](../tests/FRONTEND_GRID_RESULTS.md).
+
+The normal runner retains the original one-process baseline campaign plus MPI
+active-reference bridges. For full-grid production sampling on multiple ranks,
+invoke the selected native frontend directly, for example:
+
+```sh
+FML_PENCILS="2 2" mpirun -np 4 ./survey_validate /fresh/production gaussian 0 1 2 800 400
+```
+
+All emitted cell-box snapshots can be read by the same analyzer. A standalone
+native case is not the complete repeated-mock calibration campaign expected by
+the full `analyze.py` CLI; retain that campaign layout when producing its figures.

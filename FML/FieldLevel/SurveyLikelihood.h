@@ -1,6 +1,7 @@
 #ifndef FML_FIELD_LEVEL_SURVEY_LIKELIHOOD_H
 #define FML_FIELD_LEVEL_SURVEY_LIKELIHOOD_H
 #include <FML/FieldLevel/DistributedLPT.h>
+#include <FML/FieldLevel/ForwardGrid.h>
 
 namespace FML::FIELDLEVEL::FRAMEWORK {
     // Cartesian cells on the forward model's FFT mesh. Origin labels FFT node
@@ -31,10 +32,10 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 const int N = model.configuration().mesh;
                 const double dx = model.configuration().boxsize / N;
                 for (size_t q = 0; q < model.cells(); ++q) {
-                    const std::array<double, 3> position{origin[0] +
-                                                             dx * (model.layout().local_start + q / (size_t(N) * N)),
-                                                         origin[1] + dx * ((q / N) % N),
-                                                         origin[2] + dx * (q % N)};
+                    const auto cell = model.layout().global_coordinate(q);
+                    std::array<double, 3> position;
+                    for (int d = 0; d < 3; ++d)
+                        position[d] = origin[d] + dx * cell[d];
                     const auto voxel = callback(position);
                     result.observed[q] = voxel.observed;
                     result.selection[q] = voxel.selection;
@@ -53,11 +54,21 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
     class CartesianSurveyObservation {
         const Forward * model_;
         SurveyWindow window_;
-        mutable FML::GRID::FFTWGrid<3> grid_;
+        using Backend = DETAIL::ForwardGrid<Forward>;
+        mutable typename Backend::Grid grid_;
 
       public:
         CartesianSurveyObservation(const Forward & model, SurveyWindow window)
-            : model_(&model), window_(std::move(window)), grid_(model.configuration().mesh) {
+            : model_(&model), window_(std::move(window)), grid_(Backend::make(model)) {
+            bool compatible = true;
+            size_t owned = 1;
+            const auto layout = model.layout();
+            for (int d = 0; d < 3; ++d) {
+                const auto range = grid_.get_local_range(d);
+                compatible &= range[0] == layout.local_starts[d] && range[1] == layout.local_counts[d];
+                owned *= size_t(range[1]);
+            }
+            require(compatible && owned == model.cells(), "[Survey observation] Incompatible real grid layout");
             bool finite_origin = true;
             for (double x : window_.origin)
                 finite_origin &= std::isfinite(x);
@@ -84,7 +95,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 throw UnrepresentableState("[Survey likelihood] Unrepresentable proposal");
         }
         Field synthesize(const Modes & prediction) const {
-            require(prediction.size() == model_->modes().size(), "[Survey observation] Invalid local prediction dimensions");
+            require(prediction.size() == model_->modes().size(),
+                    "[Survey observation] Invalid local prediction dimensions");
             bool valid = true;
             for (auto z : prediction)
                 valid &= std::isfinite(z.real()) && std::isfinite(z.imag());
@@ -125,10 +137,9 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             FML::COMMUNICATION::collective_try(
                 [&] {
                     result.resize(model_->cells());
-                    const int N = model_->configuration().mesh;
-                    for (size_t q = 0; q < result.size(); ++q)
-                        result[q] = grid_.get_real_from_index(
-                            grid_.get_index_real({int(q / (size_t(N) * N)), int(q / N % N), int(q % N)}));
+                    size_t q = 0;
+                    for (auto index : grid_.get_real_range())
+                        result[q++] = grid_.get_real_from_index(index);
                 },
                 "Survey synthesis buffer");
             bool ok = true;
@@ -143,10 +154,9 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             for (double x : cotangent)
                 ok &= std::isfinite(x);
             representable(ok);
-            const int N = model_->configuration().mesh;
-            for (size_t q = 0; q < cotangent.size(); ++q)
-                grid_.set_real_from_index(grid_.get_index_real({int(q / (size_t(N) * N)), int(q / N % N), int(q % N)}),
-                                          cotangent[q]);
+            size_t q = 0;
+            for (auto index : grid_.get_real_range())
+                grid_.set_real_from_index(index, cotangent[q++]);
             grid_.set_grid_status_real(true);
             grid_.fftw_r2c();
             Modes result;

@@ -1,15 +1,16 @@
 // Restart a fixed-parameter 2LPT survey chain using immutable analytic toy inputs.
 #include <FML/FieldLevel/SurveyCheckpoint.h>
+#include <FML/FieldLevel/Frontend.h>
 #include <iostream>
 namespace FF = FML::FIELDLEVEL::FRAMEWORK;
 template <class Likelihood>
-static int run(const FF::DistributedLPTModel & model,
+static int run(const FML::FIELDLEVEL::FRONTEND::LPTModel & model,
                Likelihood like,
                const std::vector<double> & p,
                const std::string & kind,
                int argc,
                char ** argv) {
-    FF::BasicPosterior<FF::DistributedLPTModel, Likelihood> posterior(model, std::move(like));
+    FF::BasicPosterior<FML::FIELDLEVEL::FRONTEND::LPTModel, Likelihood> posterior(model, std::move(like));
     FML::MCMC::HMCOptions options;
     options.warmup = 60;
     options.samples = 80;
@@ -32,6 +33,13 @@ static int run(const FF::DistributedLPTModel & model,
 }
 int main(int argc, char ** argv) {
     FML::FMLSetup::init(&argc, &argv);
+    try {
+        FML::FIELDLEVEL::FRONTEND::initialize(8, 16);
+    } catch (const std::exception & error) {
+        if (FML::ThisTask == 0)
+            std::cerr << error.what() << '\n';
+        return 1;
+    }
     if (argc < 4 || argc > 5 || (std::string(argv[2]) != "gaussian" && std::string(argv[2]) != "poisson") ||
         (std::string(argv[3]) != "start" && std::string(argv[3]) != "resume")) {
         if (FML::ThisTask == 0)
@@ -47,7 +55,7 @@ int main(int argc, char ** argv) {
         c.bias_cutoff = .08;
         c.likelihood_cutoff = .10;
         c.growth_rate = .6;
-        FF::DistributedLPTModel model(c, FF::Spectrum::fixed([](double) { return 200.; }));
+        FML::FIELDLEVEL::FRONTEND::LPTModel model(c, FF::Spectrum::fixed([](double) { return 200.; }));
         const auto p = model.initial_parameters();
         auto window = FF::make_survey_window(model, {-50, -50, -50}, [](auto x) {
             return FF::SurveyVoxel{x[0] + x[1] + x[2] < 20, .7 + .002 * x[2]};
@@ -58,7 +66,7 @@ int main(int argc, char ** argv) {
         // Recreate the same observations in every process; this is a restart demo,
         // not a scientific mock-recovery experiment. Real applications reload data.
         for (size_t q = 0; q < model.cells(); ++q) {
-            const size_t id = size_t(model.layout().local_start) * N * N + q;
+            const size_t id = model.layout().global_cell_id(q);
             data[q] =
                 .05 * std::cos(2 * M_PI * double(id / (N * N)) / N) + .02 * std::sin(2 * M_PI * double(id % N) / N);
             counts[q] = id % 3;

@@ -2,15 +2,29 @@
 #define FML_FIELD_LEVEL_DISTRIBUTED_LINEAR_H
 #include <FML/FieldLevel/Framework.h>
 #include <type_traits>
+#include <FML/FFTWGrid/GridInterface.h>
 
 namespace FML::FIELDLEVEL::FRAMEWORK {
-    // Collective, periodic linear-Gaussian model. Only local slabs/modes are stored.
+    template <class GridType>
+    class DistributedLPTModelT;
+    // Collective, periodic linear-Gaussian model. Only local cells/modes are stored.
     // All ranks of FML::communicator must call methods in the same order, with the
     // same configuration, scalar parameters and inference controls. Spectrum callbacks
     // must be deterministic and identical across ranks. No particle/LPT MPI claim.
-    class DistributedLinearModel {
-        friend class DistributedLPTModel;
+    template <class GridType = FML::GRID::FFTWGrid<3>>
+    class DistributedLinearModelT {
+      public:
+        using Grid = GridType;
+        static_assert(FML::GRID::has_fourier_grid_interface<Grid>::value,
+                      "[DistributedField] Fourier grid interface required");
+        static_assert(std::tuple_size<decltype(std::declval<const Grid &>().get_fourier_integer_wavevector_from_index(
+                              0))>::value == 3,
+                      "[DistributedField] A three-dimensional grid is required");
+
+      private:
+        friend class DistributedLPTModelT<Grid>;
         Configuration config_;
+        FML::Domain domain_;
         Spectrum spectrum_;
         std::vector<Parameter> parameters_;
         std::vector<FieldLevelBAO::Mode> modes_;
@@ -81,17 +95,18 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
 
       public:
         struct Workspace {
-            friend class DistributedLinearModel;
-            friend class DistributedLPTModel;
+            friend class DistributedLinearModelT;
+            friend class DistributedLPTModelT<Grid>;
 
           private:
-            const DistributedLinearModel * owner;
-            FML::GRID::FFTWGrid<3> grid;
+            const DistributedLinearModelT * owner;
+            Grid grid;
             Modes prediction, white_modes, cotangent;
             std::vector<Power> power;
             std::vector<double> parameters;
             bool valid{false};
-            explicit Workspace(const DistributedLinearModel * model) : owner(model), grid(model->config_.mesh) {}
+            explicit Workspace(const DistributedLinearModelT * model)
+                : owner(model), grid(FML::GRID::make_grid<Grid>(model->config_.mesh, 0, 0, model->domain_)) {}
 
           public:
             Workspace(Workspace &&) = default;
@@ -126,11 +141,12 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         }
 
       public:
-        DistributedLinearModel(Configuration config,
-                               Spectrum spectrum,
-                               FourierResponse response = {},
-                               std::vector<Parameter> priors = {})
-            : config_(config), spectrum_(std::move(spectrum)) {
+        DistributedLinearModelT(Configuration config,
+                                Spectrum spectrum,
+                                FourierResponse response = {},
+                                std::vector<Parameter> priors = {},
+                                const FML::Domain & domain = FML::domain)
+            : config_(config), domain_(domain), spectrum_(std::move(spectrum)) {
             int tasks = FML::NTasks;
 #ifdef USE_MPI
             int initialized = 0, finalized = 0;
@@ -148,13 +164,14 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                         config.likelihood_cutoff,
                         config.growth_rate,
                         double(config.evolution)});
-            require(tasks == FML::NTasks && config.mesh >= 4 && config.mesh % 2 == 0 && config.mesh % tasks == 0 &&
+            require(tasks == FML::NTasks && config.mesh >= 4 && config.mesh % 2 == 0 &&
+                        (!FML::GRID::is_fftwgrid_v<Grid> || config.mesh % tasks == 0) &&
                         config.evolution == Evolution::Linear && config.boxsize > 0 && std::isfinite(config.boxsize) &&
                         config.initial_cutoff > 0 && config.likelihood_cutoff > 0 && config.bias_cutoff > 0 &&
                         config.bias_cutoff <= config.initial_cutoff && std::isfinite(config.growth_rate) &&
                         config.initial_cutoff < M_PI * config.mesh / config.boxsize &&
                         config.likelihood_cutoff < M_PI * config.mesh / config.boxsize && bool(spectrum_.evaluate),
-                    "[DistributedField] Invalid configuration; linear evolution and nonempty divisible slabs required");
+                    "[DistributedField] Invalid configuration; linear evolution and supported grid geometry required");
             const size_t n = size_t(config.mesh);
             require(n <= Field().max_size() / n / n, "[DistributedField] Mesh storage overflow");
             volume_ = std::pow(config.boxsize, 3);
@@ -194,22 +211,76 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                               double(std::isfinite(p.upper))});
             }
             replicated(specs);
-            const auto slab = FML::GRID::FFTWGrid<3>::local_slab(config.mesh);
-            require(slab[0] > 0, "[DistributedField] Empty FFTW slabs unsupported");
-            layout_ = {config.mesh, int(slab[1]), int(slab[0]), n * n * n, size_t(slab[0]) * n * n};
+            // Validate replicated domain geometry before grid construction (which contains FFT collectives).
+            require(domain_.is_slab() || domain_.template holds<FML::PencilDomain>(),
+                    "[DistributedField] Slab or pencil domain required");
+            require(!FML::GRID::is_fftwgrid_v<Grid> || domain_.is_slab(),
+                    "[DistributedField] FFTWGrid requires a slab domain");
+            replicated({domain_.is_slab() ? 0. : 1.});
+            std::vector<double> geometry{domain_.is_slab() ? 0. : 1.};
+            if (domain_.is_slab()) {
+                const auto & d = domain_.template get<FML::SlabDomain>();
+                require(d.ntasks() == tasks && d.valid_partition(), "[DistributedField] Invalid slab domain");
+                for (int t = 0; t < tasks; ++t) {
+                    geometry.push_back(d.x_min(t));
+                    geometry.push_back(d.x_max(t));
+                }
+            } else {
+                const auto & d = domain_.template get<FML::PencilDomain>();
+                require(d.ntasks() == tasks, "[DistributedField] Invalid pencil task count");
+                geometry.push_back(double(d.process_grid()[0]));
+                geometry.insert(geometry.end(), d.x_edges().begin(), d.x_edges().end());
+                geometry.insert(geometry.end(), d.y_edges().begin(), d.y_edges().end());
+            }
+            replicated(geometry);
+            bool on_cells = true;
+            if constexpr (!FML::GRID::is_fftwgrid_v<Grid>) {
+                for (size_t i = domain_.is_slab() ? 1 : 2; i < geometry.size(); ++i)
+                    on_cells &= std::abs(geometry[i] * config.mesh - std::round(geometry[i] * config.mesh)) < 1e-6;
+                auto nonempty = [&](const auto & edges) {
+                    for (size_t i = 1; i < edges.size(); ++i)
+                        on_cells &= std::round(edges[i] * config.mesh) > std::round(edges[i - 1] * config.mesh);
+                };
+                if (domain_.is_slab()) {
+                    const auto & d = domain_.template get<FML::SlabDomain>();
+                    for (int t = 0; t < tasks; ++t)
+                        on_cells &= std::round(d.x_max(t) * config.mesh) > std::round(d.x_min(t) * config.mesh);
+                } else {
+                    const auto & d = domain_.template get<FML::PencilDomain>();
+                    nonempty(d.x_edges());
+                    nonempty(d.y_edges());
+                    on_cells &= d.process_grid()[0] <= config.mesh && d.process_grid()[1] <= config.mesh / 2 + 1;
+                }
+            }
+            require(on_cells, "[DistributedField] Pencil domain edges must lie on mesh cells and be nonempty");
+            auto grid = FML::GRID::make_grid<Grid>(config.mesh, 0, 0, domain_);
+            layout_ = {config.mesh, int(grid.get_local_range(0)[0]), int(grid.get_local_range(0)[1]), n * n * n, 0};
+            size_t count = 1;
+            for (int d = 0; d < 3; ++d) {
+                const auto range = grid.get_local_range(d);
+                layout_.local_starts[d] = int(range[0]);
+                layout_.local_counts[d] = int(range[1]);
+                count *= size_t(range[1]);
+            }
+            layout_.owned_cells = count;
+            require(count > 0, "[DistributedField] Empty real grid domains unsupported");
             const double kf = 2 * M_PI / config.boxsize;
-            for (int ix = 0; ix < layout_.local_width; ++ix)
-                for (int iy = 0; iy < config.mesh; ++iy)
-                    for (int iz = 0; iz <= config.mesh / 2; ++iz) {
-                        const int gx = ix + layout_.local_start;
-                        const int x = gx <= config.mesh / 2 ? gx : gx - config.mesh;
-                        const int y = iy <= config.mesh / 2 ? iy : iy - config.mesh;
-                        const double k = kf * std::sqrt(double(x) * x + double(y) * y + double(iz) * iz);
-                        if (k == 0 || k >= std::max(config.initial_cutoff, config.likelihood_cutoff))
-                            continue;
-                        modes_.push_back(
-                            {{x, y, iz}, k, iz == 0 ? 1. : 2., (size_t(ix) * n + iy) * (n / 2 + 1) + iz, 0, 0, 0});
-                    }
+            for (auto index : grid.get_fourier_range()) {
+                const auto wave = grid.get_fourier_integer_wavevector_from_index(index);
+                const double k =
+                    kf * std::sqrt(double(wave[0]) * wave[0] + double(wave[1]) * wave[1] + double(wave[2]) * wave[2]);
+                if (k == 0 || k >= std::max(config.initial_cutoff, config.likelihood_cutoff))
+                    continue;
+                modes_.push_back({{wave[0], wave[1], wave[2]},
+                                  k,
+                                  double(FML::GRID::fourier_mode_multiplicity(wave[2], config.mesh)),
+                                  size_t(index),
+                                  0,
+                                  0,
+                                  0});
+            }
+            // Metadata is retained in layout_/modes_; release this temporary before the validation FFT workspace.
+            grid.free();
             response_ = std::move(response.multiplier);
             if (response_.empty())
                 response_.assign(modes_.size(), 1.);
@@ -221,6 +292,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             validate_modes(response_modes); // Cross-rank Hermitian planes, without all-gathering modes.
         }
         const Configuration & configuration() const { return config_; }
+        const FML::Domain & domain() const { return domain_; }
         const auto & parameters() const { return parameters_; }
         const auto & modes() const { return modes_; }
         const auto & response() const { return response_; }
@@ -254,9 +326,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         void controls(const std::vector<double> & values) const { replicated(values); }
         Field white_noise(std::uint64_t seed, std::uint32_t stream = 0) const {
             Field s(cells());
-            const size_t offset = size_t(layout_.local_start) * config_.mesh * config_.mesh;
             for (size_t q = 0; q < s.size(); ++q) {
-                FML::RANDOM::COUNTER_BASED::Stream rng(seed, offset + q, 0x4649454cu, stream);
+                FML::RANDOM::COUNTER_BASED::Stream rng(seed, layout_.global_cell_id(q), 0x4649454cu, stream);
                 s[q] = rng.normal();
             }
             return s;
@@ -405,15 +476,17 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             return result;
         }
     };
-    template <>
-    struct Execution<DistributedLinearModel> {
-        static void validate(const DistributedLinearModel & m, const Field & s, const std::vector<double> & p) {
+    using DistributedLinearModel = DistributedLinearModelT<>;
+    template <class Grid>
+    struct Execution<DistributedLinearModelT<Grid>> {
+        using DistributedLinearModelT = FRAMEWORK::DistributedLinearModelT<Grid>;
+        static void validate(const DistributedLinearModelT & m, const Field & s, const std::vector<double> & p) {
             m.validate_state(s, p);
         }
-        static void map_controls(const DistributedLinearModel & m, bool vary, int iterations, double tolerance) {
+        static void map_controls(const DistributedLinearModelT & m, bool vary, int iterations, double tolerance) {
             m.controls({double(vary), double(iterations), tolerance});
         }
-        static void hmc_controls(const DistributedLinearModel & m, bool vary, const FML::MCMC::HMCOptions & o) {
+        static void hmc_controls(const DistributedLinearModelT & m, bool vary, const FML::MCMC::HMCOptions & o) {
             m.controls({double(vary),
                         double(o.warmup),
                         double(o.samples),
@@ -428,10 +501,10 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                         double(o.seed & 0xffffffffu),
                         double(o.verbose_every)});
         }
-        static double sum(const DistributedLinearModel & m, double x) { return m.sum(x); }
-        static double maximum(const DistributedLinearModel & m, double x) { return m.maximum(x); }
+        static double sum(const DistributedLinearModelT & m, double x) { return m.sum(x); }
+        static double maximum(const DistributedLinearModelT & m, double x) { return m.maximum(x); }
         template <class Likelihood>
-        static Likelihood likelihood(const DistributedLinearModel & m, Modes data) {
+        static Likelihood likelihood(const DistributedLinearModelT & m, Modes data) {
             if constexpr (std::is_same_v<Likelihood, GaussianFieldLikelihood>)
                 return {m.modes(),
                         m.configuration().likelihood_cutoff,
@@ -441,14 +514,12 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             else
                 return {m.modes(), m.configuration().likelihood_cutoff, m.volume(), std::move(data)};
         }
-        static FML::MCMC::HMCExecution hmc(const DistributedLinearModel & m) {
+        static FML::MCMC::HMCExecution hmc(const DistributedLinearModelT & m) {
             return {[&m](double x) { return m.sum(x); },
                     [&m](Field & x, std::uint64_t seed, std::uint64_t iteration) {
                         // Distinct purpose from IC/mock draws; global cell + iteration, independent of rank count.
-                        const size_t offset =
-                            size_t(m.layout().local_start) * m.configuration().mesh * m.configuration().mesh;
                         for (size_t q = 0; q < x.size(); ++q) {
-                            FML::RANDOM::COUNTER_BASED::Stream rng(seed, offset + q, 0x484d434du);
+                            FML::RANDOM::COUNTER_BASED::Stream rng(seed, m.layout().global_cell_id(q), 0x484d434du);
                             // Incorporate all 64 iteration bits in the key/object mapping.
                             FML::RANDOM::COUNTER_BASED::Stream step(rng.next64(), iteration, 0x53544550u);
                             x[q] = step.normal();
@@ -457,6 +528,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                     [&m](bool valid) { return m.maximum(valid ? 0 : 1) == 0; }};
         }
     };
-    using DistributedLinearPosterior = BasicPosterior<DistributedLinearModel>;
+    template <class Grid>
+    using DistributedLinearPosteriorT = BasicPosterior<DistributedLinearModelT<Grid>>;
+    using DistributedLinearPosterior = DistributedLinearPosteriorT<FML::GRID::FFTWGrid<3>>;
 } // namespace FML::FIELDLEVEL::FRAMEWORK
 #endif

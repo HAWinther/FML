@@ -3,13 +3,41 @@
 #include <FML/FieldLevel/DistributedLinear.h>
 #include <FML/FieldLevel/DistributedAssignment.h>
 #include <FML/FFTWGrid/FourierResampling.h>
+#include <FML/FFTWGrid/CopyFourierModes.h>
 
 namespace FML::FIELDLEVEL::FRAMEWORK {
+    namespace DETAIL {
+        // Preserve the cached slab plan. Other backends use the shared normalized-mode transfer;
+        // both discard every Nyquist plane of the smaller mesh and apply no volume factor.
+        template <class Grid>
+        struct LPTResampling {
+            LPTResampling(const Grid &, const Grid &) {}
+            void apply(const Grid & input, Grid & output) {
+                FML::GRID::copy_fourier_modes<3>(input, output, [](const std::array<int, 3> &) { return 1.; });
+            }
+        };
+        template <>
+        struct LPTResampling<FML::GRID::FFTWGrid<3>> {
+            FML::GRID::FourierResamplingPlan<3> plan;
+            LPTResampling(const FML::GRID::FFTWGrid<3> & input, const FML::GRID::FFTWGrid<3> & output)
+                : plan(input, output) {}
+            void apply(const FML::GRID::FFTWGrid<3> & input, FML::GRID::FFTWGrid<3> & output) {
+                plan.apply(input, output);
+            }
+        };
+    } // namespace DETAIL
+
     // Distributed 1LPT/2LPT evolution with the periodic framework's smoothed
     // Lagrangian bias, plane-parallel RSD and smooth/deconvolved mesh assignment.
-    class DistributedLPTModel {
+    template <class GridType = FML::GRID::FFTWGrid<3>>
+    class DistributedLPTModelT {
+      public:
+        using Grid = GridType;
+        using LinearModel = DistributedLinearModelT<Grid>;
+
+      private:
         Configuration config_;
-        DistributedLinearModel linear_;
+        LinearModel linear_;
         std::vector<Parameter> parameters_;
         std::vector<double> kernel_ft_;
         static constexpr int pair_[6][2] = {{0, 0}, {1, 1}, {2, 2}, {0, 1}, {0, 2}, {1, 2}};
@@ -75,14 +103,14 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
 
       public:
         struct Workspace {
-            friend class DistributedLPTModel;
+            friend class DistributedLPTModelT;
 
           private:
-            const DistributedLPTModel * owner;
-            DistributedLinearModel::Workspace base;
-            FML::GRID::FFTWGrid<3> density;
-            FML::GRID::FourierResamplingPlan<3> up, down;
-            DETAIL::DistributedAssignment assignment;
+            const DistributedLPTModelT * owner;
+            typename LinearModel::Workspace base;
+            Grid density;
+            DETAIL::LPTResampling<Grid> up, down;
+            DETAIL::DistributedAssignmentT<Grid> assignment;
             std::array<Field, 3> psi;
             std::array<Field, 6> tidal, matter_tidal;
             Field delta, lap, weight, matter_delta;
@@ -90,8 +118,9 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             Modes prediction, cotangent;
             std::vector<double> parameters;
             bool valid{false};
-            explicit Workspace(const DistributedLPTModel * m)
-                : owner(m), base(m->linear_.workspace()), density(m->config_.density_mesh), up(base.grid, density),
+            explicit Workspace(const DistributedLPTModelT * m)
+                : owner(m), base(m->linear_.workspace()),
+                  density(make_grid_like(base.grid, m->config_.density_mesh, 0, 0)), up(base.grid, density),
                   down(density, base.grid), assignment(density) {}
 
           public:
@@ -110,7 +139,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         }
         void particle_taps(size_t q, const Workspace & w, Taps (&t)[3]) const {
             const int n = config_.mesh;
-            const int pos[3] = {int(q / (size_t(n) * n)) + layout().local_start, int(q / n % n), int(q % n)};
+            const auto pos = layout().global_coordinate(q);
             for (int c = 0; c < 3; ++c) {
                 // Wrap displacement before scaling: even very large finite shifts cannot overflow grid coordinates.
                 const double shift = w.psi[c][q] - std::floor(w.psi[c][q]);
@@ -147,23 +176,16 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             auto & grid = w.base.grid;
             linear_.to_grid(values, w.base);
             grid.fftw_r2c();
-            const int n = config_.mesh, half = n / 2;
-            for (int ix = 0; ix < layout().local_width; ++ix)
-                for (int iy = 0; iy < n; ++iy)
-                    for (int iz = 0; iz <= half; ++iz) {
-                        const int gx = ix + layout().local_start;
-                        const int wave[3] = {gx <= half ? gx : gx - n, iy <= half ? iy : iy - n, iz};
-                        const double n2 =
-                            double(wave[0]) * wave[0] + double(wave[1]) * wave[1] + double(wave[2]) * wave[2];
-                        const auto index = grid.get_index_fourier({ix, iy, iz});
-                        const bool zero =
-                            n2 == 0 || std::abs(wave[0]) == half || std::abs(wave[1]) == half || iz == half;
-                        grid.set_fourier_from_index(
-                            index,
-                            zero ? FML::GRID::ComplexType(0) :
-                                   grid.get_fourier_from_index(index) *
-                                       FML::GRID::ComplexType(0, sign * wave[axis] / (2 * M_PI * n2)));
-                    }
+            const int half = config_.mesh / 2;
+            for (auto index : grid.get_fourier_range()) {
+                const auto wave = grid.get_fourier_integer_wavevector_from_index(index);
+                const double n2 = double(wave[0]) * wave[0] + double(wave[1]) * wave[1] + double(wave[2]) * wave[2];
+                const bool zero = n2 == 0 || std::abs(wave[0]) == half || std::abs(wave[1]) == half || wave[2] == half;
+                grid.set_fourier_from_index(index,
+                                            zero ? FML::GRID::ComplexType(0) :
+                                                   grid.get_fourier_from_index(index) *
+                                                       FML::GRID::ComplexType(0, sign * wave[axis] / (2 * M_PI * n2)));
+            }
             grid.fftw_c2r();
             Field result(cells());
             size_t q = 0;
@@ -205,20 +227,43 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         }
 
       public:
-        DistributedLPTModel(Configuration c,
-                            Spectrum spectrum,
-                            FourierResponse response = {},
-                            std::vector<Parameter> priors = {})
-            : config_(c), linear_(linear_config(c), std::move(spectrum), std::move(response), linear_priors(priors)) {
+        DistributedLPTModelT(Configuration c,
+                             Spectrum spectrum,
+                             FourierResponse response = {},
+                             std::vector<Parameter> priors = {},
+                             const FML::Domain & domain = FML::domain)
+            : config_(c),
+              linear_(linear_config(c), std::move(spectrum), std::move(response), linear_priors(priors), domain) {
             linear_.controls({double(c.evolution), double(c.density_mesh), double(c.kernel_width)});
             const size_t nd = c.density_mesh > 0 ? size_t(c.density_mesh) : 0;
-            require((c.evolution == Evolution::Zeldovich || c.evolution == Evolution::LPT2) &&
-                        c.density_mesh >= c.mesh && c.density_mesh % 2 == 0 && c.density_mesh % FML::NTasks == 0 &&
-                        (c.kernel_width == 4 || c.kernel_width == 6 || c.kernel_width == 8) &&
-                        c.initial_cutoff < .5 * M_PI * c.mesh / c.boxsize && nd > 0 &&
-                        nd <= Field().max_size() / nd / nd,
-                    "[Distributed LPT] Requires Zeldovich/2LPT, even divisible density mesh, width 4/6/8, and initial "
-                    "cutoff below half Nyquist");
+            require(
+                (c.evolution == Evolution::Zeldovich || c.evolution == Evolution::LPT2) && c.density_mesh >= c.mesh &&
+                    c.density_mesh % 2 == 0 && (!FML::GRID::is_fftwgrid_v<Grid> || c.density_mesh % FML::NTasks == 0) &&
+                    (c.kernel_width == 4 || c.kernel_width == 6 || c.kernel_width == 8) &&
+                    c.initial_cutoff < .5 * M_PI * c.mesh / c.boxsize && nd > 0 && nd <= Field().max_size() / nd / nd,
+                "[Distributed LPT] Requires Zeldovich/2LPT, supported even density mesh, width 4/6/8, and initial "
+                "cutoff below half Nyquist");
+            // Both meshes use the same physical domain. Reject incompatible fine-grid edges before FFT construction.
+            if constexpr (!FML::GRID::is_fftwgrid_v<Grid>) {
+                bool compatible = true;
+                auto check_edge = [&](double edge) {
+                    compatible &= std::abs(edge * c.density_mesh - std::round(edge * c.density_mesh)) < 1e-6;
+                };
+                if (domain.is_slab()) {
+                    const auto & slab = domain.template get<FML::SlabDomain>();
+                    for (int t = 0; t < FML::NTasks; ++t) {
+                        check_edge(slab.x_min(t));
+                        check_edge(slab.x_max(t));
+                    }
+                } else {
+                    const auto & pencil = domain.template get<FML::PencilDomain>();
+                    for (double edge : pencil.x_edges())
+                        check_edge(edge);
+                    for (double edge : pencil.y_edges())
+                        check_edge(edge);
+                }
+                require(compatible, "[Distributed LPT] Domain edges must lie on both initial and density mesh cells");
+            }
             parameters_ = linear_.parameters_;
             parameters_.insert(parameters_.end() - 1, {{"b2", 0, 0, 1}, {"b_s2", 0, 0, 1}, {"b_laplacian", 0, 0, 100}});
             bool valid = true;
@@ -267,6 +312,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             }
         }
         const Configuration & configuration() const { return config_; }
+        const FML::Domain & domain() const { return linear_.domain(); }
         const auto & parameters() const { return parameters_; }
         const std::vector<FieldLevelBAO::Mode> & modes() const { return linear_.modes(); }
         const auto & response() const { return linear_.response(); }
@@ -518,19 +564,21 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 result[i] += amplitude * Complex(w.base.grid.get_fourier_from_index(modes()[i].fourier_index));
             return result;
         }
-        FML::MCMC::HMCExecution hmc_execution() const { return Execution<DistributedLinearModel>::hmc(linear_); }
+        FML::MCMC::HMCExecution hmc_execution() const { return Execution<LinearModel>::hmc(linear_); }
     };
-    template <>
-    struct Execution<DistributedLPTModel> {
-        static void validate(const DistributedLPTModel & m, const Field & s, const std::vector<double> & p) {
+    using DistributedLPTModel = DistributedLPTModelT<>;
+    template <class Grid>
+    struct Execution<DistributedLPTModelT<Grid>> {
+        using DistributedLPTModelT = FRAMEWORK::DistributedLPTModelT<Grid>;
+        static void validate(const DistributedLPTModelT & m, const Field & s, const std::vector<double> & p) {
             m.validate_state(s, p);
         }
-        static double sum(const DistributedLPTModel & m, double x) { return m.sum(x); }
-        static double maximum(const DistributedLPTModel & m, double x) { return m.maximum(x); }
-        static void map_controls(const DistributedLPTModel & m, bool vary, int iterations, double tolerance) {
+        static double sum(const DistributedLPTModelT & m, double x) { return m.sum(x); }
+        static double maximum(const DistributedLPTModelT & m, double x) { return m.maximum(x); }
+        static void map_controls(const DistributedLPTModelT & m, bool vary, int iterations, double tolerance) {
             m.controls({double(vary), double(iterations), tolerance});
         }
-        static void hmc_controls(const DistributedLPTModel & m, bool vary, const FML::MCMC::HMCOptions & o) {
+        static void hmc_controls(const DistributedLPTModelT & m, bool vary, const FML::MCMC::HMCOptions & o) {
             m.controls({double(vary),
                         double(o.warmup),
                         double(o.samples),
@@ -546,7 +594,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                         double(o.verbose_every)});
         }
         template <class Likelihood>
-        static Likelihood likelihood(const DistributedLPTModel & m, Modes data) {
+        static Likelihood likelihood(const DistributedLPTModelT & m, Modes data) {
             if constexpr (std::is_same_v<Likelihood, GaussianFieldLikelihood>)
                 return {m.modes(),
                         m.configuration().likelihood_cutoff,
@@ -556,8 +604,10 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             else
                 return {m.modes(), m.configuration().likelihood_cutoff, m.volume(), std::move(data)};
         }
-        static FML::MCMC::HMCExecution hmc(const DistributedLPTModel & m) { return m.hmc_execution(); }
+        static FML::MCMC::HMCExecution hmc(const DistributedLPTModelT & m) { return m.hmc_execution(); }
     };
-    using DistributedLPTPosterior = BasicPosterior<DistributedLPTModel>;
+    template <class Grid>
+    using DistributedLPTPosteriorT = BasicPosterior<DistributedLPTModelT<Grid>>;
+    using DistributedLPTPosterior = DistributedLPTPosteriorT<FML::GRID::FFTWGrid<3>>;
 } // namespace FML::FIELDLEVEL::FRAMEWORK
 #endif

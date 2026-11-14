@@ -1,8 +1,16 @@
 #include <FML/FieldLevel/Checkpoint.h>
+#include <FML/FieldLevel/Frontend.h>
 #include <iostream>
 namespace FF = FML::FIELDLEVEL::FRAMEWORK;
 int main(int argc, char ** argv) {
     FML::FMLSetup::init(&argc, &argv);
+    try {
+        FML::FIELDLEVEL::FRONTEND::initialize(8, 16);
+    } catch (const std::exception & error) {
+        if (FML::ThisTask == 0)
+            std::cerr << error.what() << '\n';
+        return 1;
+    }
     if (argc < 2 || argc > 4 || (argc >= 3 && std::string(argv[2]) != "start" && std::string(argv[2]) != "resume")) {
         if (FML::ThisTask == 0)
             std::cerr << "Usage: checkpoint_mpi DIRECTORY [start|resume] [trajectory_budget]\n";
@@ -18,11 +26,11 @@ int main(int argc, char ** argv) {
         c.likelihood_cutoff = .10;
         c.growth_rate = .6;
         c.evolution = FF::Evolution::LPT2;
-        FF::DistributedLPTModel model(c, FF::Spectrum::fixed([](double) { return 200.; }));
+        FML::FIELDLEVEL::FRONTEND::LPTModel model(c, FF::Spectrum::fixed([](double) { return 200.; }));
         auto work = model.workspace();
         const auto p = model.initial_parameters();
         const auto data = model.mock(model.white_noise(10), p, 11, work);
-        FF::DistributedLPTPosterior posterior(model, data);
+        FML::FIELDLEVEL::FRONTEND::LPTPosterior posterior(model, data);
         FML::MCMC::HMCOptions hmc;
         hmc.warmup = 120;
         hmc.samples = 300;

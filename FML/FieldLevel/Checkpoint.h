@@ -1,6 +1,7 @@
 #ifndef FML_FIELD_LEVEL_CHECKPOINT_H
 #define FML_FIELD_LEVEL_CHECKPOINT_H
 #include <FML/FieldLevel/DistributedLPT.h>
+#include <FML/FieldLevel/ForwardGrid.h>
 #include <FML/MCMC/HMCCheckpoint.h>
 #include <filesystem>
 #include <chrono>
@@ -89,7 +90,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             const auto & m = posterior.model();
             const auto & c = m.configuration();
             const auto l = m.layout();
-            e.text("FML field target 2");
+            e.text("FML field target 3");
             e.text(typeid(Likelihood).name());
             e.text(Codec::build_tag());
             e.text(problem_id);
@@ -109,6 +110,11 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 e.real(x);
             e.integer(l.global_cells);
             e.integer(l.owned_cells);
+            for (int d = 0; d < 3; ++d) {
+                e.integer(l.local_starts[d]);
+                e.integer(l.local_counts[d]);
+            }
+            DETAIL::ForwardGrid<Forward>::describe(e, m);
             e.integer(m.parameters().size());
             for (const auto & p : m.parameters()) {
                 e.text(p.name);
@@ -122,6 +128,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                     e.integer(std::uint64_t(std::int64_t(x)));
                 e.real(mode.k);
                 e.real(mode.weight);
+                e.integer(mode.fourier_index);
             }
             e.vector(m.response());
             LikelihoodIdentity<Likelihood>::append(e, posterior.likelihood());

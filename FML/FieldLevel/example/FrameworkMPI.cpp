@@ -1,4 +1,5 @@
 #include <FML/FieldLevel/DistributedLPT.h>
+#include <FML/FieldLevel/Frontend.h>
 #include <iostream>
 namespace FF = FML::FIELDLEVEL::FRAMEWORK;
 template <class Forward>
@@ -8,7 +9,7 @@ int demonstrate(const Forward & model) {
     const auto data = model.mock(model.white_noise(10), parameters, 11, work); // LOCAL modes
     FF::BasicPosterior<Forward> posterior(model, data);
     const auto fit = FF::map(posterior, model.white_noise(12), parameters, false);
-    if constexpr (std::is_same_v<Forward, FF::DistributedLinearModel>) {
+    if constexpr (std::is_same_v<Forward, FML::FIELDLEVEL::FRONTEND::LinearModel>) {
         const auto exact = model.linear_conditional(data, parameters, work); // LOCAL mean field
         double error = 0;
         for (size_t q = 0; q < model.cells(); ++q)
@@ -61,6 +62,13 @@ int demonstrate(const Forward & model) {
 
 int main(int argc, char ** argv) {
     FML::FMLSetup::init(&argc, &argv);
+    try {
+        FML::FIELDLEVEL::FRONTEND::initialize(8, 16);
+    } catch (const std::exception & error) {
+        if (FML::ThisTask == 0)
+            std::cerr << error.what() << '\n';
+        return 1;
+    }
     const bool first = argc == 2 && std::string(argv[1]) == "1lpt";
     const bool second = argc == 2 && std::string(argv[1]) == "2lpt";
     const bool lpt = first || second;
@@ -80,10 +88,10 @@ int main(int argc, char ** argv) {
     auto spectrum = FF::Spectrum::fixed([](double) { return 200.; });
     if (lpt) {
         c.evolution = second ? FF::Evolution::LPT2 : FF::Evolution::Zeldovich;
-        FF::DistributedLPTModel model(c, spectrum);
+        FML::FIELDLEVEL::FRONTEND::LPTModel model(c, spectrum);
         return demonstrate(model);
     }
     c.evolution = FF::Evolution::Linear;
-    FF::DistributedLinearModel model(c, spectrum);
+    FML::FIELDLEVEL::FRONTEND::LinearModel model(c, spectrum);
     return demonstrate(model);
 }

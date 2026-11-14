@@ -100,7 +100,14 @@ FML::PARTICLE::MPIParticles<Particle> part;     // takes FML::domain when create
 | Wave dark matter | `FML::WAVEDM::SolverT<FML::GRID::CPencilGrid<3>>` |
 | Flat-sky lensing | `shear_from_convergence` on a `PencilGrid<2>` |
 
-Not yet: the FieldLevel inference code (only its distributed assignment).
+FieldLevel: periodic linear and 1LPT/2LPT inference support
+`DistributedLinearModelT<PencilGrid<3>>` / `DistributedLPTModelT<PencilGrid<3>>`,
+including adjoints and physical reconstruction; see [FieldLevel/FRAMEWORK.md](../FieldLevel/FRAMEWORK.md).
+Masked Gaussian/Poisson observations and same-layout checkpoint/restart are also
+supported. Distributed examples and the survey calibration driver select pencils
+with `USE_MPI=true USE_PENCIL_GRID=true` (`FML_PENCILS="px py"` optionally sets the
+process grid). Checkpoint migration and the original serial BAO backend remain
+separate extensions; full scientific/scaling calibration is not claimed by the port.
 
 ## Writing code for slabs and pencils
 
