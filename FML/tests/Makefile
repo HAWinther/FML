@@ -20,8 +20,8 @@ TARGETS += test_cosmicweb test_short_range test_yukawa test_phase_space_halos te
 include ../Makefile.config
 
 ifeq ($(USE_FFTW),true)
-TARGETS += test_spectra test_perturbation test_four_point_fourier
-all: test_spectra test_perturbation test_four_point_fourier
+TARGETS += test_spectra test_perturbation test_four_point_fourier test_distributed_deposit
+all: test_spectra test_perturbation test_four_point_fourier test_distributed_deposit
 endif
 
 ifeq ($(USE_LUA),true)
@@ -318,6 +318,8 @@ run: $(TARGETS)
 	  OMP_NUM_THREADS=2 $(RUN) ./test_short_range; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_four_point; \
 	  $(if $(filter true,$(USE_FFTW)),OMP_NUM_THREADS=2 $(RUN) ./test_four_point_fourier,:); \
+	  $(if $(filter true,$(USE_FFTW)),echo "== Running test_distributed_deposit with $$np task(s)",:); \
+	  $(if $(filter true,$(USE_FFTW)),OMP_NUM_THREADS=2 $(RUN) ./test_distributed_deposit,:); \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_control; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_morphology; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_environment; \
@@ -529,6 +531,10 @@ test_glass_pencil: test_glass_pencil.o PencilGrid.o Global.o
 
 # The FieldLevel distributed assignment on pencils
 test_assignment_pencil: test_assignment_pencil.o PencilGrid.o Global.o
+	$(LINK_EXE)
+
+# Density assignment from particles on any domain (Peano-Hilbert, ...) to slabs and pencils
+test_distributed_deposit: test_distributed_deposit.o PencilGrid.o Global.o
 	$(LINK_EXE)
 
 # The particle buffers (short-range ghosts, record ghosts, FoF, SO) on pencils

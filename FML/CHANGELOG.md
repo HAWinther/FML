@@ -5,6 +5,17 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Density assignment from particles on any domain (as GADGET's PM)
+- `Interpolation/DistributedDeposit.h`: `particles_to_grid_any_domain(part, NumPart, NumPartTot, grid, "CIC")` (and for
+  `MPIParticles`) gives the overdensity field of `particles_to_grid` (NGP-PQS, mass / delta-f weights, assignment
+  offsets for interlacing) on an `FFTWGrid` or `PencilGrid` for particles on any task, e.g. a `PeanoHilbertDomain`,
+  without moving them. Each task deposits into a dense patch over the periodic bounding box of its particles' cells
+  and sends the part in each task's box of the grid there (all-zero blocks skipped; Springel 2005). The patch is
+  bounded (`DepositOptions::max_patch_cells`): a larger bounding box is done in passes. Deterministic with OpenMP.
+  `deposit_to_partitioned_mesh` does the same for any box partition (`MeshPartition`) with a callback per cell.
+  Test: `tests/test_distributed_deposit` (equal to the slab deposit to 1e-15 relative, on slabs and every pencil
+  process grid, 1-4 tasks).
+
 ### Multigrid on adaptively refined grids
 - `MultigridSolver/AMRMultiGridSolver.h`: FAS multigrid for (non-linear) PDEs `L(f) = 0` on an `AdaptiveMPIGrid`
   (any dimension, MPI, periodic or Dirichlet). The levels are the grid truncated at every refinement level and

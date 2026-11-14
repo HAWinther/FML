@@ -95,7 +95,9 @@ namespace FML {
         /// the constructor, or else the global FML::domain (a Slab by default) when the particles are created. Every
         /// method supports every domain (create_particle_grid: Slab and Pencil). With Pencil the grid code needs
         /// PencilGrids (FML::GRID::make_grid, particle_domain_of); with PeanoHilbert the grid code (grids, density
-        /// assignment, ...) cannot be used on the particles directly (move them with set_domain first)
+        /// assignment, ...) cannot be used on the particles directly (move them with set_domain first), except the
+        /// density assignment of Interpolation/DistributedDeposit.h (particles_to_grid_any_domain: any domain to
+        /// slabs or pencils, as GADGET's PM)
         ///
         /// External variables/methods we rely on:
         ///
