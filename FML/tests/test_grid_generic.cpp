@@ -1,4 +1,4 @@
-// Experiment: the Fourier-space power-spectrum functions written against the grid interface
+// The Fourier-space power-spectrum functions written against the grid interface
 // (FFTWGrid/GridInterface.h) give the same results for FFTWGrid and PencilGrid (slabs and pencils, 2D and 3D).
 // With an argument (a file name) it writes FFTWGrid's results with all digits (to compare with the original code)
 #include <FML/ComputePowerSpectra/ComputePowerSpectrum.h>

@@ -28,6 +28,8 @@
 namespace FML {
     namespace GRID {
 
+        /// Per-cell data of type T on the local cells of a distributed grid with ghost layers on the split axes (see the top
+        /// of this file)
         template <class T, int N>
         class GhostedCells {
             static_assert(std::is_trivially_copyable_v<T>, "GhostedCells: T must be trivially copyable");
@@ -35,6 +37,7 @@ namespace FML {
           public:
             using IndexType = long long int;
 
+            /// An empty container
             GhostedCells() = default;
 
             /// The local cells of a grid (anything with get_nmesh() and get_local_range(axis)), ghost layers on the
@@ -58,6 +61,7 @@ namespace FML {
                 init(nmesh, ranges, n_left, n_right, value);
             }
 
+            /// The number of cells per dimension of the grid
             int get_nmesh() const { return nmesh; }
             /// The local cells along an axis: {first, count}
             std::array<long long, 2> get_local_range(int axis) const { return {start[axis], count[axis]}; }
@@ -113,8 +117,11 @@ namespace FML {
 
             T & operator[](IndexType i) { return data_[i]; }
             const T & operator[](IndexType i) const { return data_[i]; }
+            /// The value of a cell from its local coordinates (ghost cells: -n_left .. count + n_right - 1 along the split axes;
+            /// whole axes wrap)
             T & at(const std::array<int, N> & c) { return data_[index(c)]; }
             const T & at(const std::array<int, N> & c) const { return data_[index(c)]; }
+            /// All the values (local cells and ghost layers) in the internal order (index: see operator[])
             std::vector<T> & data() { return data_; }
             const std::vector<T> & data() const { return data_; }
 

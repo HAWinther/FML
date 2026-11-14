@@ -1,4 +1,4 @@
-// Experiment: the multigrid solver on a domain (MPIGrid / MPIMultiGrid / MultiGridSolver with a FML::Domain). On
+// The multigrid solver on a domain (MPIGrid / MPIMultiGrid / MultiGridSolver with a FML::Domain). On
 // Slab and on every Pencil layout of the tasks:
 //   - MPIGrid: the extra cells (x-slices, y-layers and the corners, 1-3 layers, also more than the local cells) are
 //     the cells of the neighbor tasks (periodic) or untouched outside a non-periodic box, and get_neighbor_gridindex

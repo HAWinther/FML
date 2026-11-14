@@ -1,4 +1,4 @@
-// Experiment: the voxel void finder (density field, smoothing and watershed) and the spherical void finder (candidate
+// The voxel void finder (density field, smoothing and watershed) and the spherical void finder (candidate
 // grid, particle buffers and cell lists) on pencils give the catalogues of the slabs (the zone IDs follow the task
 // order, so the catalogues are compared sorted)
 #include <FML/FFTWGrid/FFTWGrid.h>

@@ -5,7 +5,7 @@ USE_FFTW         ?= true
 USE_FFTW_THREADS ?= true
 USE_MEMORYLOG    ?= false
 USE_LUA          ?= true
-# Experiment: the grids are PencilGrids (pencils) instead of FFTWGrids (slabs); FML_PENCILS="px py" in the environment
+# The grids are PencilGrids (pencils) instead of FFTWGrids (slabs); FML_PENCILS="px py" in the environment
 # chooses the process grid
 USE_PENCIL_GRID  ?= false
 

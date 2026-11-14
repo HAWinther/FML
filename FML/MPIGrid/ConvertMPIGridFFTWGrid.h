@@ -70,6 +70,8 @@ std::optional<FML::Domain> multigrid_domain_of(const Grid & grid) {
         return std::nullopt;
 }
 
+/// Copy a grid in position space (any grid type) into an MPIGrid with the same local cells (made on
+/// multigrid_domain_of(grid))
 template <int N, class T, template <int> class Grid>
 void ConvertToMPIGrid(Grid<N> & from_grid, FML::GRID::MPIGrid<N, T> & to_grid) {
     if constexpr (std::is_same_v<Grid<N>, FML::GRID::FFTWGrid<N>>) {

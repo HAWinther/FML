@@ -1,4 +1,4 @@
-// Experiment: the arbitrary order (EdS) LPT computed natively on pencils (PencilGrid work grids, owner-routed mode
+// The arbitrary order (EdS) LPT computed natively on pencils (PencilGrid work grids, owner-routed mode
 // copies, Hermitian planes exchanged between the owners of mirrored modes) gives the orders of the slabs
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>

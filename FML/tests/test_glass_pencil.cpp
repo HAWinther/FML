@@ -1,4 +1,4 @@
-// Experiment: glass initial conditions on a pencil FML::domain (long-range force on PencilGrids, short-range ghosts
+// Glass initial conditions on a pencil FML::domain (long-range force on PencilGrids, short-range ghosts
 // from the domain, migration and ownership by the pencils): the relaxation, the displacement of the glass by IC
 // fields and save/load give what the slabs give
 #include <FML/FFTWGrid/FFTWGrid.h>

@@ -238,7 +238,7 @@ namespace FML {
             std::vector<size_t> send_left{};
             std::vector<size_t> send_right{};
 
-            // Experiment: the particles on a given domain (Slab or Pencil): the buffer of the box of the task
+            // The particles on a given domain (Slab or Pencil): the buffer of the box of the task
             bool on_domain{false};
             FML::Domain domain_given{};
             FML::DomainBuffer<CGAL_NDIM> dbuf{};
@@ -282,7 +282,7 @@ namespace FML {
             const std::vector<Vertex_handle> & get_vertex_handles_boundary() const { return vs_boundary; }
 
             MPIPeriodicDelaunay() = default;
-            /// Experiment: the particles are on this domain (Slab or Pencil; e.g. MPIParticles::get_domain()) instead
+            /// The particles are on this domain (Slab or Pencil; e.g. MPIParticles::get_domain()) instead
             /// of the global slabs. The buffer along a split axis is buffer_fraction times the task's part of it
             explicit MPIPeriodicDelaunay(const FML::Domain & domain) : on_domain(true), domain_given(domain) {}
 
@@ -477,7 +477,7 @@ namespace FML {
                 return result;
             }
 
-            /// Experiment: the buffer, the guard points (uniform in the part of the box not covered by the box of the
+            /// The buffer, the guard points (uniform in the part of the box not covered by the box of the
             /// task plus the buffer, and ~10% on its faces) and the copies of the neighbors' particles on a domain
             void setup_on_domain(T * p, size_t NumPart, double buffer_fraction, size_t nrandom,
                                  std::vector<double> & positions_random) {
@@ -636,7 +636,7 @@ namespace FML {
 
                 std::vector<double> positions_random;
                 if (on_domain) {
-                    // Experiment: the buffer of the box of the task on the domain
+                    // The buffer of the box of the task on the domain
                     setup_on_domain(p, NumPart, buffer_fraction, size_t(NumPart * random_fraction), positions_random);
                 } else {
                     // The buffersize we communicate particles from neighbor tasks
@@ -916,7 +916,7 @@ namespace FML {
                 return x - radius >= FML::xmin_domain - dx_buffer and x + radius <= xhigh;
             }
 
-            /// Experiment: the same on a domain: no guard points (outside the covered region, the faces included) and
+            /// The same on a domain: no guard points (outside the covered region, the faces included) and
             /// the circumsphere inside the covered region along the partly covered axes
             bool cell_is_reliable_on_domain(Cell_handle c) const {
                 bool any = false;

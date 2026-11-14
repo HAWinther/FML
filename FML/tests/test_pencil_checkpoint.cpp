@@ -1,4 +1,4 @@
-// Experiment: PencilGrid::dump_to_file / load_from_file (checkpoints) give back the same grid: size, extra cells,
+// PencilGrid::dump_to_file / load_from_file (checkpoints) give back the same grid: size, extra cells,
 // pencils, status and every value (real space with the extra cells, and Fourier space), 2D and 3D
 #include <FML/Global/Global.h>
 #include <FML/PencilDomain/PencilGrid.h>

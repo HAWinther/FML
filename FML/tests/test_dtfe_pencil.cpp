@@ -1,4 +1,4 @@
-// Experiment: the DTFE (Triangulation/DTFE.h) on a pencil domain interpolates the density, fields with their
+// The DTFE (Triangulation/DTFE.h) on a pencil domain interpolates the density, fields with their
 // gradients and the velocity (divergence, vorticity, shear) to a PencilGrid as on the slabs (USE_CGAL=true)
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>

@@ -1,4 +1,4 @@
-// Experiment: the sparse scatter of mesh-node contributions to their owners (FieldLevel DistributedAssignment) on a
+// The sparse scatter of mesh-node contributions to their owners (FieldLevel DistributedAssignment) on a
 // PencilGrid: the deposited field and the gathered values equal those on the slabs
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/FieldLevel/DistributedAssignment.h>

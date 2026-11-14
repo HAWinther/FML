@@ -1,4 +1,4 @@
-// Experiment: spectral sheet interpolation (the displacement field on the lattice from the owners of the lattice
+// Spectral sheet interpolation (the displacement field on the lattice from the owners of the lattice
 // nodes, the tracers on the task of their position) on pencils gives the density modes of the slabs
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>

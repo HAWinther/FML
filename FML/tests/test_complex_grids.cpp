@@ -1,4 +1,4 @@
-// Experiment: the complex-to-complex grids CFFTWGrid (FFTW-MPI slabs) and CPencilGrid (pencils): the transforms against
+// The complex-to-complex grids CFFTWGrid (FFTW-MPI slabs) and CPencilGrid (pencils): the transforms against
 // the exact coefficients of plane waves (both signs, the Nyquist modes), round trips, slabs = pencils, the extra cells,
 // checkpoints and the grid interface (2D and 3D)
 #include <FML/FFTWGrid/CFFTWGrid.h>

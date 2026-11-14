@@ -5,6 +5,40 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Pencils throughout FML: the generic grid interface, complex grids, the codes on pencils
+- `FFTWGrid/GridInterface.h`: the interface generic grid code is written against, so it runs on `FFTWGrid` (slabs) and
+  `PencilGrid` (pencils) alike: `make_grid<Grid>(Nmesh, left, right, domain)` / `make_grid_like`, `get_local_range`,
+  `has_dc_mode`, `particle_domain_of`, `CellOwners`. Generic functions take the grid as a template argument
+  (`template <int N, template <int> class Grid = FFTWGrid>`) with an FFTWGrid fast path; existing calls are unchanged.
+  `PencilDomain/README.md` describes the pencils, how to run the codes on them and how to write code for both.
+- `GhostedCells<T, N>`: per-cell data of any type with ghost layers from the neighbouring tasks (corners included);
+  `copy_fourier_modes`: owner-routed mode copies between grids of any size, decomposition and type;
+  `PencilGrid::dump_to_file` / `load_from_file` / `storage_bytes`.
+- Complex grids: `CFFTWGrid<N>` (complex-to-complex FFTW-MPI slabs) and `CPencilGrid<N>` (complex pencils), with the
+  interface of `FFTWGrid` / `PencilGrid` (`fftw_forward` normalized by 1/Nmesh^N, `fftw_backward`).
+- On any grid / domain: particle assignment and interpolation (a separable kernel stencil), power spectra,
+  polyspectra, multipoles, hybrid bias spectra and linear-field files, connected four-point, random fields, NUFFT,
+  PGD, smoothing, Hessian, LPT and the particles from it (IDs = lattice index, independent of the decomposition),
+  multigrid solvers, short-range gravity ghosts, voxel / spherical voids, voxel morphology, SPH, DTFE and periodic
+  Delaunay (`MPIPeriodicDelaunay(domain)`, `DTFE(domain)`), cosmic web, FoF (`FoFDomain.h`), spherical overdensity,
+  the phase-space halo finder, glass ICs, sheet interpolation, the FieldLevel distributed assignment, the Survey
+  meshes (`-DFML_SURVEY_PENCIL_MESH`) and the GADGET / HDF5 / RAMSES readers.
+- The EdS arbitrary-order LPT natively on pencils (uniform pencil work grids, owner-routed embedding and cropping, the
+  Hermitian planes exchanged between the owners of mirrored modes); slabs unchanged.
+- The Fourier RSD reconstruction on any grid (`RSDReconstructionFourierMethod<N, T, PencilGrid>`); the grid always
+  has the extra cells of the CIC interpolation (also for NGP assignment). Flat-sky shear maps on any 2D grid.
+- WaveDarkMatter on the complex grids: `SolverT<Grid>` (`Solver` = slabs, `SolverT<CPencilGrid<3>>`); `ComplexGrid`
+  removed. Checkpoints version 2 (x-y box shards, independent of the decomposition; version 1 is still read).
+- `SimulationCode` and `SnapshotAnalyzer`: `make USE_PENCIL_GRID=true` (pencils from `FML_PENCILS="px py"` or as
+  square as possible); every model, output and analysis works on both. The objects rebuild when the flag changes.
+- `MPIParticles` with a PeanoHilbert domain without a warning; `create_particle_grid` throws `std::invalid_argument`
+  for domains other than Slab and Pencil.
+- Faster: the 27-cell multigrid stencil from per-axis offsets (DGP on a non-power-of-two mesh: 20% faster than
+  before), and the generic assignment / interpolation (a 96^3 COLA run on pencils from 1.8 to 1.2 times the slab time).
+- Verified: slab results bit-identical to before (N-body regression, SnapshotAnalyzer, wave solver, EdS LPT,
+  reconstruction); pencils match slabs to round-off on every process grid (`tests/test_*_pencil`, `test_*_domain`,
+  `test_complex_grids`, the wave and weak-lensing tests built for both) on 1 - 6 tasks.
+
 ### PencilGrid: faster transposes, FML's planner flag, a benchmark
 - The transposes pack each task's block with cache-blocked copies and exchange contiguous buffers with
   `MPI_Alltoallv` (with one task in the row / column the block is copied directly), instead of `MPI_Alltoallw` with

@@ -1,6 +1,6 @@
 #ifndef FML_TESTS_GRID_TEST_HELPERS_H
 #define FML_TESTS_GRID_TEST_HELPERS_H
-// Experiment: helpers for comparing grids decomposed differently (FFTWGrid slabs, PencilGrid pencils): every task
+// Helpers for comparing grids decomposed differently (FFTWGrid slabs, PencilGrid pencils): every task
 // gets the whole field (real space by global cell, Fourier space by integer wave-vector)
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>

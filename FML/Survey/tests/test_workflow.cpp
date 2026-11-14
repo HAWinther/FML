@@ -827,7 +827,7 @@ void test_validation() {
 int main(int argc, char ** argv) {
     const std::string mode = argc > 1 ? argv[1] : "all";
 #ifdef FML_SURVEY_PENCIL_MESH
-    // Experiment: the meshes are PencilGrids on the pencils FML_PENCILS="px py" (default: as square as possible)
+    // The meshes are PencilGrids on the pencils FML_PENCILS="px py" (default: as square as possible)
     {
         int px = 1;
         for (int p = 1; p * p <= FML::NTasks; p++)

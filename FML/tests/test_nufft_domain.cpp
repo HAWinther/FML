@@ -1,4 +1,4 @@
-// Experiment: the NUFFT on pencils. With the particles in the domain of a PencilGrid (and the fine grids made on its
+// The NUFFT on pencils. With the particles in the domain of a PencilGrid (and the fine grids made on its
 // pencils) the NUFFT gives the same as with an FFTWGrid and the particles on the slabs:
 //   - particles_to_fourier_grid_nufft (type 1): the same Fourier modes
 //   - nufft_type2: the same values at the particles (PSWF and ES kernels)

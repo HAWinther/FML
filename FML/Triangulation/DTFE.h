@@ -103,7 +103,7 @@ namespace FML {
 
             Delaunay D;
             size_t NumPart{0};
-            // Experiment: the particles are on a given domain (Slab or Pencil) instead of the slabs of FML::domain
+            // The particles are on a given domain (Slab or Pencil) instead of the slabs of FML::domain
             bool on_domain{false};
             FML::Domain domain_given{};
 
@@ -153,7 +153,7 @@ namespace FML {
 
           public:
             DTFE() = default;
-            /// Experiment: the particles are on this domain (Slab or Pencil; e.g. MPIParticles::get_domain()) instead
+            /// The particles are on this domain (Slab or Pencil; e.g. MPIParticles::get_domain()) instead
             /// of the slabs of FML::domain. The grids are then made on this domain (PencilGrid for pencils)
             explicit DTFE(const FML::Domain & domain) : D(domain), on_domain(true), domain_given(domain) {}
 

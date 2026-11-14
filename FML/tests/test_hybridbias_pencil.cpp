@@ -1,4 +1,4 @@
-// Experiment: the hybrid bias spectra (Lagrangian operators on the lattice, the values at the particles from the
+// The hybrid bias spectra (Lagrangian operators on the lattice, the values at the particles from the
 // owner of their lattice point, the advected fields) and the Zel'dovich field on pencils give the spectra of the
 // slabs; a linear field file written on pencils is read on slabs (and the reverse)
 #include <FML/ComputePowerSpectra/HybridBiasLinearFieldIO.h>

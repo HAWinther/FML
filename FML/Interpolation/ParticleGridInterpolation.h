@@ -1779,7 +1779,7 @@ namespace FML {
 
     } // namespace INTERPOLATION
 } // namespace FML
-// Experiment: the same for any grid with the interface of FFTWGrid/GridInterface.h (e.g. PencilGrid)
+// The same for any grid with the interface of FFTWGrid/GridInterface.h (e.g. PencilGrid)
 #include <FML/Interpolation/ParticleGridInterpolationGeneric.h>
 
 #endif

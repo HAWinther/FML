@@ -157,6 +157,9 @@ namespace FML {
             }
         } // namespace detail
 
+        /// Copy the Fourier modes of src into dst (any sizes, decompositions and grid types), each times factor(integer
+        /// wave-vector). Only the modes strictly inside the Nyquist cube of the smaller mesh are kept (|m| < min(Nsrc, Ndst) / 2
+        /// along every axis); the others are zero in dst. Collective: each mode is sent to its owner in dst
         template <int N, template <int> class GridSrc, template <int> class GridDst>
         void copy_fourier_modes(const GridSrc<N> & src,
                                 GridDst<N> & dst,

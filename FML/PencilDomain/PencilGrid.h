@@ -1,6 +1,20 @@
 #ifndef FML_PENCIL_GRID_H
 #define FML_PENCIL_GRID_H
 
+// =====================================================================================================================
+// PencilGrid<N>: a real field distributed in pencils (2D: slabs) with real-to-complex FFTs by MPI transposes, with the
+// interface of FFTWGrid. The library's grid code is written against this common interface (FFTWGrid/GridInterface.h),
+// so it runs on slabs or on pencils:
+//
+//   FML::set_domain(FML::pencil_domain());                         // the particles and grids on the pencils
+//   auto grid = FML::GRID::make_grid<FML::GRID::PencilGrid<3>>(Nmesh, n_extra_left, n_extra_right);
+//   grid.fill_real_grid(f); grid.fftw_r2c(); ...; grid.fftw_c2r(); grid.communicate_boundaries();
+//
+// Pencils allow up to Nmesh^2 tasks and any Nmesh (slabs: at most Nmesh tasks dividing Nmesh). The complex counterpart
+// is CPencilGrid (CPencilGrid.h). README.md in this folder: the layout, the interface, how to run the codes of FML on
+// pencils (SimulationCode / SnapshotAnalyzer: make USE_PENCIL_GRID=true) and how to write code for both.
+// =====================================================================================================================
+
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/FFTWGrid/GridInterface.h>
 #include <FML/Global/Global.h>
@@ -152,6 +166,7 @@ namespace FML {
                 return FML::INTERPOLATION::SPLINE::Spline(k_vec, func_vec, label);
             }
 #else
+            /// Without GSL: the function itself (as FFTWGrid)
             std::function<double(double)> make_fourier_spline(std::function<double(double)> function_of_kBox,
                                                               [[maybe_unused]] std::string label,
                                                               [[maybe_unused]] int sampling_factor = 4) const {

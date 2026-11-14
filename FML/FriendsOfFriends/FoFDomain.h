@@ -2,7 +2,7 @@
 #define FML_FOF_DOMAIN_H
 
 // =====================================================================================================================
-// Experiment: friends-of-friends for particles on any box domain (Slab or Pencil; FoF.h is for the global slabs).
+// Friends-of-friends for particles on any box domain (Slab or Pencil; FoF.h is for the global slabs).
 //
 // The algorithm of FoF.h generalized from x-slabs to boxes: a task owns the box [lo, hi) (along the axes the domain
 // splits over the tasks; all of the other axes). It gets a copy of the particles of the neighbor tasks within the

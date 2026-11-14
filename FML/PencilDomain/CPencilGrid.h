@@ -39,11 +39,13 @@ namespace FML {
             static_assert(N == 2 or N == 3, "CPencilGrid: only N = 2 and N = 3 are supported");
             using IndexIntType = FML::IndexIntType;
 
+            /// An empty grid (not allocated)
             CPencilGrid() = default;
             /// The pencils of FML::pencil_domain() (3D) / slabs (2D) with the edges on cells
             CPencilGrid(int Nmesh, int n_extra_left = 0, int n_extra_right = 0);
             /// The pencils of a domain (the edges must lie on cells)
             CPencilGrid(int Nmesh, int n_extra_left, int n_extra_right, const PencilDomain & domain);
+            /// Copies (own memory, the shared transforms) and moves
             CPencilGrid(const CPencilGrid & rhs);
             CPencilGrid & operator=(const CPencilGrid & rhs);
             CPencilGrid(CPencilGrid && rhs) noexcept;
@@ -59,15 +61,18 @@ namespace FML {
                 result.add_memory_label(name);
                 return result;
             }
+            /// Reallocate as a new grid on the same pencils (the values are zero)
             void reallocate(int Nmesh_, int nleft, int nright) { *this = CPencilGrid(Nmesh_, nleft, nright, domain); }
             /// Free the memory (an empty grid)
             void free();
 
             /// The main grid in position space (the cell with local coordinates 0)
             ComplexType * get_real_grid() { return data + real_offset; }
+            /// The main grid in position space (the cell with local coordinates 0)
             const ComplexType * get_real_grid() const { return data + real_offset; }
             /// The Fourier grid
             ComplexType * get_fourier_grid() { return data; }
+            /// The Fourier grid
             const ComplexType * get_fourier_grid() const { return data; }
 
             /// Forward transform (position -> Fourier space), normalized by 1/Nmesh^N
@@ -77,9 +82,11 @@ namespace FML {
 
             /// Fill all the allocated memory with a value (and set the status)
             void fill_real_grid(const ComplexType val);
+            /// Fill all the allocated memory with a value and set the status to Fourier space
             void fill_fourier_grid(const ComplexType val);
             /// Fill the main grid from a function of the position / the wave-vector
             void fill_real_grid(const std::function<ComplexType(std::array<double, N> &)> & func);
+            /// Fill the Fourier grid from a function of the wave-vector 2 pi n
             void fill_fourier_grid(const std::function<ComplexType(std::array<double, N> &)> & func);
 
             /// Local coordinates from a local index and the reverse (position space: x and in 3D y local, z global)
@@ -96,6 +103,7 @@ namespace FML {
                 }
                 return coord;
             }
+            /// The local index of a cell in position space from its local coordinates (extra cells: negative / beyond the local range)
             IndexIntType get_index_real(const std::array<int, N> & coord) const {
                 if constexpr (N == 3)
                     return coord[0] * slice_stride + coord[1] * row_stride + coord[2];
@@ -114,6 +122,7 @@ namespace FML {
                 }
                 return coord;
             }
+            /// The local Fourier index from Fourier coordinates (kx global, iky and ikz local)
             IndexIntType get_index_fourier(const std::array<int, N> & coord) const {
                 if constexpr (N == 3)
                     return (IndexIntType(coord[1]) * Local_nkz + coord[2]) * Nmesh + coord[0];
@@ -127,20 +136,29 @@ namespace FML {
                 return get_index_fourier(coord);
             }
 
+            /// The value of a cell in position space from its local coordinates
             ComplexType get_real(const std::array<int, N> & coord) const { return get_real_grid()[get_index_real(coord)]; }
+            /// The value of a cell in position space from its local index
             ComplexType get_real_from_index(const IndexIntType index) const { return get_real_grid()[index]; }
+            /// The value of a Fourier cell from its Fourier coordinates
             ComplexType get_fourier(const std::array<int, N> & coord) const { return data[get_index_fourier(coord)]; }
+            /// The value of a Fourier cell from its local index
             ComplexType get_fourier_from_index(const IndexIntType index) const { return data[index]; }
+            /// Set the value of a cell in position space (local coordinates)
             void set_real(const std::array<int, N> & coord, const ComplexType value) {
                 get_real_grid()[get_index_real(coord)] = value;
             }
+            /// Set the value of a cell in position space (local index)
             void set_real_from_index(const IndexIntType index, const ComplexType value) { get_real_grid()[index] = value; }
+            /// Add to the value of a cell in position space (local coordinates)
             void add_real(const std::array<int, N> & coord, const ComplexType value) {
                 get_real_grid()[get_index_real(coord)] += value;
             }
+            /// Set the value of a Fourier cell (Fourier coordinates)
             void set_fourier(const std::array<int, N> & coord, const ComplexType value) {
                 data[get_index_fourier(coord)] = value;
             }
+            /// Set the value of a Fourier cell (local index)
             void set_fourier_from_index(const IndexIntType index, const ComplexType value) { data[index] = value; }
 
             /// The (global) position of a cell in [0,1)^N
@@ -168,6 +186,7 @@ namespace FML {
                         ki -= Nmesh;
                 return k;
             }
+            /// The wave-vector 2 pi n of a Fourier cell (local index; for physical k divide by the box size)
             std::array<double, N> get_fourier_wavevector_from_index(const IndexIntType index) const {
                 const auto k = get_fourier_integer_wavevector_from_index(index);
                 std::array<double, N> kvec;
@@ -175,9 +194,11 @@ namespace FML {
                     kvec[idim] = 2.0 * M_PI * k[idim];
                 return kvec;
             }
+            /// The wave-vector 2 pi n of a Fourier cell (Fourier coordinates)
             std::array<double, N> get_fourier_wavevector(const std::array<int, N> & coord) const {
                 return get_fourier_wavevector_from_index(get_index_fourier(coord));
             }
+            /// The wave-vector 2 pi n and its squared norm k^2 of a Fourier cell (local index)
             void get_fourier_wavevector_and_norm2_by_index(const IndexIntType index,
                                                            std::array<double, N> & kvec,
                                                            double & kmag2) const {
@@ -186,6 +207,7 @@ namespace FML {
                 for (int idim = 0; idim < N; idim++)
                     kmag2 += kvec[idim] * kvec[idim];
             }
+            /// The wave-vector 2 pi n and its norm |k| of a Fourier cell (local index)
             void get_fourier_wavevector_and_norm_by_index(const IndexIntType index,
                                                           std::array<double, N> & kvec,
                                                           double & kmag) const {
@@ -193,18 +215,31 @@ namespace FML {
                 kmag = std::sqrt(kmag);
             }
 
+            /// The number of extra cells to the left in x (and in 3D in y)
             int get_n_extra_slices_left() const { return n_extra_left; }
+            /// The number of extra cells to the right in x (and in 3D in y)
             int get_n_extra_slices_right() const { return n_extra_right; }
+            /// The number of cells per dimension
             int get_nmesh() const { return Nmesh; }
+            /// The number of dimensions N
             int get_ndim() const { return N; }
+            /// The pencils of the grid
             const PencilDomain & get_domain() const { return domain; }
+            /// The number of local cells in x
             ptrdiff_t get_local_nx() const { return Local_nx; }
+            /// The global x-index of the first local cell
             ptrdiff_t get_local_x_start() const { return Local_x_start; }
+            /// The number of local cells in y (2D: Nmesh)
             ptrdiff_t get_local_ny() const { return Local_ny; }
+            /// The global y-index of the first local cell (2D: 0)
             ptrdiff_t get_local_y_start() const { return Local_y_start; }
+            /// The number of local ky in Fourier space
             ptrdiff_t get_local_nky() const { return Local_nky; }
+            /// The first local ky (in [0, Nmesh))
             ptrdiff_t get_local_ky_start() const { return Local_ky_start; }
+            /// The number of local kz in Fourier space (2D: 1)
             ptrdiff_t get_local_nkz() const { return Local_nkz; }
+            /// The first local kz (in [0, Nmesh); 2D: 0)
             ptrdiff_t get_local_kz_start() const { return Local_kz_start; }
             /// The local cells along an axis: {first, count} (x and in 3D y: the pencil, the other axes: all)
             std::array<ptrdiff_t, 2> get_local_range(int axis) const {
@@ -225,19 +260,26 @@ namespace FML {
 
             /// The number of local cells in position and in Fourier space
             ptrdiff_t get_ntot_real() const { return get_local_nrows() * Nmesh; }
+            /// The number of local Fourier cells
             ptrdiff_t get_ntot_fourier() const { return Local_nky * Local_nkz * Nmesh; }
+            /// The number of complex numbers allocated
             ptrdiff_t get_ntot_fourier_alloc() const { return NComplexAlloc; }
+            /// The memory allocated for the grid in bytes
             size_t allocated_storage_bytes() const { return size_t(NComplexAlloc) * sizeof(ComplexType); }
 
             /// The cells in position space (skips the extra cells in y) and in Fourier space
             PencilRealRange get_real_range() const { return get_real_range_of_rows(0, get_local_nrows()); }
+            /// The local Fourier cells (index range)
             FourierRange get_fourier_range() const { return FourierRange(0, get_ntot_fourier()); }
             /// Rows: lines of cells along the last dimension (position space) and along kx (Fourier space)
             IndexIntType get_local_nrows() const { return IndexIntType(Local_nx) * (N == 3 ? Local_ny : 1); }
+            /// The cells of the rows [row_begin, row_end) in position space (skips the extra cells)
             PencilRealRange get_real_range_of_rows(IndexIntType row_begin, IndexIntType row_end) const {
                 return PencilRealRange(row_begin, row_end, Nmesh, N == 3 ? int(Local_ny) : 1, row_stride, slice_stride);
             }
+            /// The number of local Fourier rows (lines along kx)
             IndexIntType get_local_nrows_fourier() const { return IndexIntType(Local_nky) * Local_nkz; }
+            /// The cells of the Fourier rows [row_begin, row_end)
             FourierRange get_fourier_range_of_rows(IndexIntType row_begin, IndexIntType row_end) const {
                 return FourierRange(row_begin * Nmesh, row_end * Nmesh);
             }
@@ -250,13 +292,18 @@ namespace FML {
             void communicate_boundaries();
             /// Add the extra cells to the cells of the neighboring tasks they belong to and set them to zero
             void add_contribution_from_extra_cells();
+            /// Print the size, the process grid, the local cells and the status of the grid (task 0)
             void info() const;
             /// Raw copy for checkpointing (fileprefix.X, X = ThisTask); read back with the same number of tasks
             void dump_to_file(std::string fileprefix) const;
+            /// Load a grid written by dump_to_file (the same number of tasks)
             void load_from_file(std::string fileprefix);
 
+            /// Is the grid in position space (true) or in Fourier space (false)?
             bool get_grid_status_real() const { return grid_is_in_real_space; }
+            /// Set the status of the grid: position space (true) or Fourier space (false)
             void set_grid_status_real(bool grid_is_a_real_grid) { grid_is_in_real_space = grid_is_a_real_grid; }
+            /// A label for the grid (shown by info)
             void add_memory_label(std::string label) { name = std::move(label); }
 
           private:
@@ -282,6 +329,7 @@ namespace FML {
             void exchange_y(bool add);
         };
 
+        /// A grid of another size on the same pencils (the edges must lie on cells of the new size)
         template <int N>
         CPencilGrid<N> make_grid_like(const CPencilGrid<N> & grid, int Nmesh, int n_extra_left, int n_extra_right) {
             return CPencilGrid<N>(Nmesh, n_extra_left, n_extra_right, grid.get_domain());

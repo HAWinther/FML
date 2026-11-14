@@ -1,4 +1,4 @@
-// Experiment: the particle buffers on pencils. With FML::domain the pencils (every layout of the tasks):
+// The particle buffers on pencils. With FML::domain the pencils (every layout of the tasks):
 //   - ShortRangeGravity::exchange_domain_ghosts: the short-range force of the particles with the ghosts is the force
 //     from all the particles (also with a cutoff wider than a pencil), no ghost twice
 //   - COMMUNICATION::append_periodic_domain_ghosts: the ghosts are exactly the records within the buffer of the

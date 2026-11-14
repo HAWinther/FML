@@ -1,4 +1,4 @@
-// Experiment: the periodic Delaunay tessellation on a domain (MPIPeriodicDelaunay(domain), Global/DomainBuffer.h) gives
+// The periodic Delaunay tessellation on a domain (MPIPeriodicDelaunay(domain), Global/DomainBuffer.h) gives
 // the same tessellation as on the global slabs, for particles on slabs and on every pencil layout: the same Voronoi
 // volume of every particle, no unreliable cells, the boundary values, and the same watershed basins
 #include <FML/Global/Global.h>

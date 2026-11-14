@@ -258,6 +258,8 @@ namespace FML {
         }
 
 
+        /// Multiply a grid in Fourier space by the smoothing filter W(k^2) (smoothing_filter_of_k2: sharpk, gaussian or
+        /// tophat) of scale R = smoothing_scale (in units of the box). Any grid type
         template <int N, template <int> class Grid = FFTWGrid>
         void smoothing_filter_fourier_space(Grid<N> & fourier_grid,
                                             double smoothing_scale,

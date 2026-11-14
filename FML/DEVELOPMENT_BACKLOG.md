@@ -4,6 +4,7 @@ Updated 13 November 2026 (items 25–26, 28, 32, 34–35, 50–52 and 55), inclu
 
 ## Completed in this sequence
 
+- Pencil decomposition throughout (item 43, the pencil part): the generic grid interface, `PencilGrid` and the complex grids `CFFTWGrid` / `CPencilGrid`, every module except FieldLevel, SimulationCode and SnapshotAnalyzer on pencils (`make USE_PENCIL_GRID=true`). See `PencilDomain/README.md`.
 - Domain-filtered binary Gadget reservation.
 - Streamed baryonification application.
 - Streamed PGD force interpolation/application.
@@ -119,7 +120,7 @@ The scientific implementations should be checked against independent analytic or
 | 40 | Multigrid coarse-level rank agglomeration (deferred) | Revisit when representative production profiles show coarse levels materially limit total solve time. The local experiment's ~12% full-solve gain did not justify its complexity; the slice-count heuristic was slower. |
 | 41 | Overlap multigrid interior work and halos | Profiles justify it; preserve color-sweep communication dependencies. |
 | 42 | Scoped mixed precision | Memory pressure justifies float field storage with double accumulation; validate forces, displacements, higher moments, thresholds and MG residuals. |
-| 43 | Pencil-decomposed or GPU FFT backend | Production runs are slab/FFT limited; plan for deposition, particles, ghosts and indexing changes too. |
+| 43 | GPU FFT backend (the pencil decomposition is done) | Production runs are FFT limited on GPU nodes. Pencils (`PencilGrid`, `CPencilGrid`) with deposition, particles, ghosts and indexing are in place for the library, SimulationCode and SnapshotAnalyzer; FieldLevel is still slab-only. |
 | 44 | DTFE output/boundary memory improvements | Profile requested-output allocation and boundary traffic; consider batched boundary fields. |
 | 45 | Broader distributed snapshot IO | Benchmark binary/HDF5/Ramses read patterns and peak memory first, then choose collective or chunked improvements. |
 

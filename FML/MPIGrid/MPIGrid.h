@@ -193,6 +193,7 @@ namespace FML {
             int get_xStartLocal() const;
             int get_n_extra_slices_left() const;
             int get_n_extra_slices_right() const;
+            /// Is the box periodic?
             bool get_periodic() const { return _periodic; }
             /// The index step between neighbouring cells along an axis (in the main grid and the extra x-slices)
             IndexInt get_stride(int axis) const { return _stride[axis]; }

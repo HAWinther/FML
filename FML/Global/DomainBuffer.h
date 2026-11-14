@@ -2,7 +2,7 @@
 #define FML_GLOBAL_DOMAIN_BUFFER_H
 
 // =====================================================================================================================
-// Experiment: the buffer exchange of the particle methods (FoF, Delaunay tessellation, ...) for any box domain (Slab or
+// The buffer exchange of the particle methods (FoF, Delaunay tessellation, ...) for any box domain (Slab or
 // Pencil). A task owns the box [lo, hi) along the axes the domain splits over the tasks (all of the other axes) and gets
 // copies of the particles of the neighbor tasks within `buffer` of its box: Slab: the 2 neighbors in x; Pencil: up to
 // 8 in the x-y process grid (the corners included). An axis with one task along it is not split (no buffer).
@@ -30,9 +30,12 @@
 
 namespace FML {
 
+    /// The buffer exchange of particles (copies within a buffer of the box of each task) on a Slab or Pencil domain; see
+    /// the top of this file
     template <int NDIM>
     class DomainBuffer {
       public:
+        /// An empty exchange
         DomainBuffer() = default;
 
         /// buffer: the width of the buffer along each axis (used along the split axes)
@@ -99,10 +102,15 @@ namespace FML {
 
         /// Along an axis: is it split over the tasks, the box of this task and the buffer
         bool split(int d) const { return nparts[d] > 1; }
+        /// The number of tasks along an axis
         int get_nparts(int d) const { return nparts[d]; }
+        /// The lower edge of the box of this task along an axis (in [0,1))
         double lo(int d) const { return edges[d][coord[d]]; }
+        /// The upper edge of the box of this task along an axis
         double hi(int d) const { return edges[d][coord[d] + 1]; }
+        /// The width of the buffer along an axis (0 along an axis that is not split)
         double get_buffer(int d) const { return split(d) ? buffer[d] : 0.0; }
+        /// The domain the exchange is made for
         const FML::Domain & get_domain() const { return domain; }
 
         /// The coordinate unwrapped to the periodic image closest to the box of this task
@@ -227,6 +235,7 @@ namespace FML {
 #endif
         }
 
+        /// The number of messages (neighbour offsets) of an exchange
         size_t num_messages() const { return offsets.size(); }
 
       private:

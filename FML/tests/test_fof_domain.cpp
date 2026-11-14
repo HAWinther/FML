@@ -1,4 +1,4 @@
-// Experiment: friends-of-friends on a domain (FriendsOfFriends/FoFDomain.h) finds the same groups as FoF.h, for
+// Friends-of-friends on a domain (FriendsOfFriends/FoFDomain.h) finds the same groups as FoF.h, for
 // particles on slabs and on every pencil layout: the same members (independent of the labels) and the same catalogue
 #include <FML/FriendsOfFriends/FoF.h>
 #include <FML/FriendsOfFriends/FoFDomain.h>

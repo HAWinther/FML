@@ -1,4 +1,4 @@
-// Experiment: Gaussian random fields on pencils equal those on the slabs: the mode-keyed (Philox) backend generated
+// Gaussian random fields on pencils equal those on the slabs: the mode-keyed (Philox) backend generated
 // directly on the PencilGrid, and the NGenIC backend (generated on slabs and redistributed); 2D and 3D
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>

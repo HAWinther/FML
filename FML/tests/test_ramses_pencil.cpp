@@ -1,4 +1,4 @@
-// Experiment: the RAMSES particle reader with a pencil FML::domain keeps the particles of the pencil of the task (it
+// The RAMSES particle reader with a pencil FML::domain keeps the particles of the pencil of the task (it
 // needs x and y): a small synthetic snapshot read on slabs and on pencils gives the same particles
 #include <FML/Global/MPICounts.h>
 #include <FML/Global/Global.h>

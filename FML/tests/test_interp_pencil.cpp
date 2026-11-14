@@ -1,4 +1,4 @@
-// Experiment: density assignment with interlacing (the half-cell shift and the higher orders), offset deposition
+// Density assignment with interlacing (the half-cell shift and the higher orders), offset deposition
 // and the deconvolution of the window function on pencils give the same density modes as on the FFTWGrid slabs
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>

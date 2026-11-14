@@ -2,7 +2,7 @@
 #define FML_ANALYSIS_ANALYSISGRID_H
 
 // =====================================================================================================================
-// The grids of the analyses (SnapshotAnalyzer): FFTWGrid slabs, or (experiment, -DFML_ANALYSIS_PENCIL_GRID, e.g.
+// The grids of the analyses (SnapshotAnalyzer): FFTWGrid slabs, or (-DFML_ANALYSIS_PENCIL_GRID, e.g.
 // make USE_PENCIL_GRID=true in SnapshotAnalyzer) PencilGrid pencils. The grids are decomposed as the particles, the
 // fiducial domain FML::domain (FML::set_domain(FML::Domain::uniform_pencil(px, py)) for pencils)
 // =====================================================================================================================

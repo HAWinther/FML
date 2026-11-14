@@ -1,4 +1,4 @@
-// Experiment: SPH (routing of the particles to their task and the ghosts within the kernel support) on a pencil
+// SPH (routing of the particles to their task and the ghosts within the kernel support) on a pencil
 // FML::domain evolves the gas as on the slabs (2D and 3D)
 #include <FML/Global/Global.h>
 #include <FML/SPH/SPH.h>

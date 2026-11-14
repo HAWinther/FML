@@ -6,7 +6,7 @@ include ../../Makefile.config
 FML_MODULES := Global PencilDomain
 test_workflow: test_workflow.o Global.o
 	$(LINK_EXE)
-# Experiment: the survey meshes as PencilGrids
+# The survey meshes as PencilGrids
 test_workflow_pencil.o: test_workflow.cpp
 	$(CC) $(DEPFLAGS) -c -o $@ $< $(OPTIONS) $(INC) -DFML_SURVEY_PENCIL_MESH
 test_workflow_pencil: test_workflow_pencil.o Global.o PencilGrid.o

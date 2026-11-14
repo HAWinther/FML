@@ -1,4 +1,4 @@
-// Experiment: LPT, the Hessian / tidal tensor and the Fourier-space smoothing on pencils. With a PencilGrid the
+// LPT, the Hessian / tidal tensor and the Fourier-space smoothing on pencils. With a PencilGrid the
 // results are those of an FFTWGrid (the same field in a different decomposition) on every pencil layout:
 //   - LPT: the 1LPT, 2LPT (also with padding), 3LPT (with the curl term, also with padding), spherical collapse and
 //     ALPT potentials, the displacement fields (also scale dependent) and compute_3LPT_displacement_field

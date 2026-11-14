@@ -49,6 +49,7 @@
 namespace FML {
     namespace GRID {
 
+        /// A complex field on an N-dimensional grid in FFTW-MPI x-slabs with complex-to-complex FFTs (see the top of this file)
         template <int N>
         class CFFTWGrid {
             static_assert(N >= 2, "CFFTWGrid: only N >= 2 dimensions are supported");
@@ -139,6 +140,7 @@ namespace FML {
 #endif
 
           public:
+            /// An empty grid (not allocated)
             CFFTWGrid() = default;
             /// Has the grid been allocated
             explicit operator bool() const { return raw.size() > 0; }
@@ -162,6 +164,7 @@ namespace FML {
                 raw.assign(size_t(std::max<ptrdiff_t>(total, 1)), ComplexType(0));
             }
 
+            /// Copies and moves (a copy has its own memory)
             CFFTWGrid(const CFFTWGrid &) = default;
             CFFTWGrid & operator=(const CFFTWGrid &) = default;
             CFFTWGrid(CFFTWGrid && rhs) noexcept { *this = std::move(rhs); }
@@ -190,6 +193,7 @@ namespace FML {
                 result.name = name;
                 return result;
             }
+            /// Reallocate as a new grid of Nmesh cells per dimension with extra slices (the values are zero)
             void reallocate(int Nmesh_, int nleft, int nright) { *this = CFFTWGrid(Nmesh_, nleft, nright); }
             /// Free all the memory (an empty grid; the label is kept)
             void free() {
@@ -200,13 +204,20 @@ namespace FML {
 
             // Pointers to the parts of the grid
             ComplexType * get_real_grid_left() { return raw.data(); }
+            /// The first cell of the main grid in position space (after the left extra slices)
             ComplexType * get_real_grid() { return raw.data() + main_offset(); }
+            /// The first cell of the main grid in position space
             const ComplexType * get_real_grid() const { return raw.data() + main_offset(); }
+            /// The first cell of the right extra slices
             ComplexType * get_real_grid_right() { return get_real_grid() + Local_nx * NmeshTotSlice; }
+            /// The first cell of a local x-slice (negative or >= Local_nx: the extra slices)
             ComplexType * get_real_grid_by_slice(int slice) { return get_real_grid() + slice * NmeshTotSlice; }
+            /// The Fourier grid (the same memory as the main grid in position space)
             ComplexType * get_fourier_grid() { return get_real_grid(); }
+            /// The Fourier grid
             const ComplexType * get_fourier_grid() const { return get_real_grid(); }
 #ifdef USE_FFTW
+            /// The Fourier grid as an FFTW array
             my_fftw_complex * get_fftw_grid() { return reinterpret_cast<my_fftw_complex *>(get_fourier_grid()); }
 #endif
 
@@ -244,6 +255,7 @@ namespace FML {
                 std::fill(raw.begin(), raw.end(), val);
                 grid_is_in_real_space = true;
             }
+            /// Fill the whole grid (the extra slices too) with a constant value and set the status to Fourier space
             void fill_fourier_grid(const ComplexType val) {
                 std::fill(raw.begin(), raw.end(), val);
                 grid_is_in_real_space = false;
@@ -276,6 +288,7 @@ namespace FML {
                 coord[0] = int(rest);
                 return coord;
             }
+            /// The (local) Fourier coordinates from a local Fourier index (the same layout as in position space)
             std::array<int, N> get_fourier_coord_from_index(const IndexIntType index) const {
                 return get_coord_from_index(index);
             }
@@ -286,6 +299,7 @@ namespace FML {
                     index = index * Nmesh + coord[idim];
                 return index;
             }
+            /// The local Fourier index from (local) Fourier coordinates
             IndexIntType get_index_fourier(const std::array<int, N> & coord) const { return get_index_real(coord); }
             /// The index of a Fourier cell from its global Fourier coordinates (must be local)
             IndexIntType get_index_fourier_global(std::array<int, N> coord) const {
@@ -293,22 +307,31 @@ namespace FML {
                 return get_index_fourier(coord);
             }
 
+            /// The value of a cell in position space from its local coordinates
             ComplexType get_real(const std::array<int, N> & coord) const { return get_real_grid()[get_index_real(coord)]; }
+            /// The value of a cell in position space from its local index
             ComplexType get_real_from_index(const IndexIntType index) const { return get_real_grid()[index]; }
+            /// The value of a Fourier cell from its local coordinates
             ComplexType get_fourier(const std::array<int, N> & coord) const {
                 return get_fourier_grid()[get_index_fourier(coord)];
             }
+            /// The value of a Fourier cell from its local index
             ComplexType get_fourier_from_index(const IndexIntType index) const { return get_fourier_grid()[index]; }
+            /// Set the value of a cell in position space (local coordinates)
             void set_real(const std::array<int, N> & coord, const ComplexType value) {
                 get_real_grid()[get_index_real(coord)] = value;
             }
+            /// Set the value of a cell in position space (local index)
             void set_real_from_index(const IndexIntType index, const ComplexType value) { get_real_grid()[index] = value; }
+            /// Add to the value of a cell in position space (local coordinates)
             void add_real(const std::array<int, N> & coord, const ComplexType value) {
                 get_real_grid()[get_index_real(coord)] += value;
             }
+            /// Set the value of a Fourier cell (local coordinates)
             void set_fourier(const std::array<int, N> & coord, const ComplexType value) {
                 get_fourier_grid()[get_index_fourier(coord)] = value;
             }
+            /// Set the value of a Fourier cell (local index)
             void set_fourier_from_index(const IndexIntType index, const ComplexType value) {
                 get_fourier_grid()[index] = value;
             }
@@ -339,6 +362,7 @@ namespace FML {
             std::array<double, N> get_fourier_wavevector(const std::array<int, N> & coord) const {
                 return get_fourier_wavevector_from_index(get_index_fourier(coord));
             }
+            /// The wave-vector 2 pi n of a Fourier cell (local index; for physical k divide by the box size)
             std::array<double, N> get_fourier_wavevector_from_index(const IndexIntType index) const {
                 const auto k = get_fourier_integer_wavevector_from_index(index);
                 std::array<double, N> kvec;
@@ -346,12 +370,14 @@ namespace FML {
                     kvec[idim] = 2.0 * M_PI * k[idim];
                 return kvec;
             }
+            /// The wave-vector 2 pi n and its norm |k| of a Fourier cell (local index)
             void get_fourier_wavevector_and_norm_by_index(const IndexIntType index,
                                                           std::array<double, N> & kvec,
                                                           double & kmag) const {
                 get_fourier_wavevector_and_norm2_by_index(index, kvec, kmag);
                 kmag = std::sqrt(kmag);
             }
+            /// The wave-vector 2 pi n and its squared norm k^2 of a Fourier cell (local index)
             void get_fourier_wavevector_and_norm2_by_index(const IndexIntType index,
                                                            std::array<double, N> & kvec,
                                                            double & kmag2) const {
@@ -361,11 +387,17 @@ namespace FML {
                     kmag2 += kvec[idim] * kvec[idim];
             }
 
+            /// The number of extra x-slices to the left
             int get_n_extra_slices_left() const { return n_extra_x_slices_left; }
+            /// The number of extra x-slices to the right
             int get_n_extra_slices_right() const { return n_extra_x_slices_right; }
+            /// The number of cells per dimension
             int get_nmesh() const { return Nmesh; }
+            /// The number of dimensions N
             int get_ndim() const { return N; }
+            /// The number of local x-slices (can be 0)
             ptrdiff_t get_local_nx() const { return Local_nx; }
+            /// The global x-index of the first local x-slice
             ptrdiff_t get_local_x_start() const { return Local_x_start; }
             /// The local cells along an axis: {first, count} (x: the slab, the other axes: all)
             std::array<ptrdiff_t, 2> get_local_range(int axis) const {
@@ -376,22 +408,30 @@ namespace FML {
             std::array<ptrdiff_t, 2> get_local_fourier_range(int axis) const { return get_local_range(axis); }
             /// Number of local cells (position space; the same in Fourier space)
             ptrdiff_t get_ntot_real() const { return Local_nx * NmeshTotSlice; }
+            /// The number of local Fourier cells
             ptrdiff_t get_ntot_fourier() const { return Local_nx * NmeshTotSlice; }
+            /// The number of complex numbers allocated (main grid, the FFTW padding and the extra slices)
             ptrdiff_t get_ntot_fourier_alloc() const { return ptrdiff_t(raw.size()); }
+            /// The number of cells in an x-slice (Nmesh^(N-1))
             ptrdiff_t get_ntot_real_slice_alloc() const { return NmeshTotSlice; }
+            /// The memory allocated for the grid in bytes
             size_t allocated_storage_bytes() const { return raw.capacity() * sizeof(ComplexType); }
 
             /// The local cells (index ranges; there is no padding)
             FourierRange get_real_range() const { return FourierRange(0, get_ntot_real()); }
+            /// The local Fourier cells (index range)
             FourierRange get_fourier_range() const { return FourierRange(0, get_ntot_fourier()); }
             /// The number of local rows (lines along the last dimension) and the cells of a range of rows
             IndexIntType get_local_nrows() const { return IndexIntType(Local_nx * (NmeshTotSlice / Nmesh)); }
+            /// The number of local Fourier rows (the same as in position space)
             IndexIntType get_local_nrows_fourier() const { return get_local_nrows(); }
             /// The axis the Fourier rows run along (the last one, as in position space)
             static constexpr int fourier_row_axis = N - 1;
+            /// The cells of the rows [row_begin, row_end) in position space (for OpenMP loops over rows)
             FourierRange get_real_range_of_rows(IndexIntType row_begin, IndexIntType row_end) const {
                 return FourierRange(row_begin * Nmesh, row_end * Nmesh);
             }
+            /// The cells of the Fourier rows [row_begin, row_end)
             FourierRange get_fourier_range_of_rows(IndexIntType row_begin, IndexIntType row_end) const {
                 return FourierRange(row_begin * Nmesh, row_end * Nmesh);
             }
@@ -428,9 +468,13 @@ namespace FML {
                         return true;
                 return false;
             }
+            /// Is the grid in position space (true) or in Fourier space (false)?
             bool get_grid_status_real() const { return grid_is_in_real_space; }
+            /// Set the status of the grid: position space (true) or Fourier space (false)
             void set_grid_status_real(bool grid_is_a_real_grid) { grid_is_in_real_space = grid_is_a_real_grid; }
+            /// A label for the grid (shown by info)
             void add_memory_label(std::string label) { name = label; }
+            /// Print the size, the extra slices and the status of the grid (task 0)
             void info() const {
                 if (FML::ThisTask == 0)
                     std::cout << "CFFTWGrid<" << N << "> " << name << ": Nmesh = " << Nmesh
@@ -486,6 +530,7 @@ namespace FML {
         CFFTWGrid<N> make_grid_like(const CFFTWGrid<N> &, int Nmesh, int n_extra_left, int n_extra_right) {
             return CFFTWGrid<N>(Nmesh, n_extra_left, n_extra_right);
         }
+        /// A CFFTWGrid made by make_grid: the FFTW slabs (the domain must be a SlabDomain)
         template <int N>
         CFFTWGrid<N> make_grid_on_domain(grid_type_tag<CFFTWGrid<N>>, int Nmesh, int n_extra_left, int n_extra_right,
                                          const FML::Domain & domain) {

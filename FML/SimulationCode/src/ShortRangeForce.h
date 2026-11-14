@@ -77,6 +77,8 @@ namespace SIMCODE {
                 v[d] += dt * force.acceleration[i][d];
         }
     }
+    /// Apply the long-range filter of the short-range force split to a density in Fourier space (nothing if the
+    /// short-range force is off)
     template <int D>
     void filter_short_range_long_force(SimulationGrid<D> & density,
                                        const ShortRangeSettings & settings,

@@ -1,4 +1,4 @@
-// Experiment: the Fourier RSD reconstruction (LPT/Reconstruction.h) on PencilGrid: the same particles (Zeldovich
+// The Fourier RSD reconstruction (LPT/Reconstruction.h) on PencilGrid: the same particles (Zeldovich
 // displaced lattice in redshift space) reconstructed on slabs and on every pencil decomposition end at the same
 // positions (every particle), along every line of sight
 #include <FML/FFTWGrid/FFTWGrid.h>

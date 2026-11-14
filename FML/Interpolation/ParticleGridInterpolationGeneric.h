@@ -2,7 +2,7 @@
 #define FML_PARTICLE_GRID_INTERPOLATION_GENERIC_H
 
 // =====================================================================================================================
-// Experiment: density assignment and interpolation for any grid with the interface of FFTWGrid/GridInterface.h
+// Density assignment and interpolation for any grid with the interface of FFTWGrid/GridInterface.h
 // (e.g. PencilGrid<N>). FFTWGrid keeps its own (optimized) implementation in ParticleGridInterpolation.h: these
 // overloads are chosen for the other grid types (an FFTWGrid<N>& parameter is more specialized than Grid<N>&).
 //
@@ -296,6 +296,7 @@ namespace FML {
             density.set_grid_status_real(true);
         }
 
+        /// Density assignment of order ORDER (1 = NGP, ..., 5 = PQS) to a grid of any type without an offset (see above)
         template <int N, int ORDER, class T, template <int> class Grid>
         void particles_to_grid(const T * part, size_t NumPart, size_t NumPartTot, Grid<N> & density) {
             particles_to_grid<N, ORDER, T>(part, NumPart, NumPartTot, density, std::array<double, N>{}, false);

@@ -83,6 +83,7 @@ namespace FML {
                 double lo[2]{0.0, 0.0}, hi[2]{1.0, 1.0};
                 bool y_split{false};
             };
+            /// The box of a task in FML::domain
             inline Box box_of(int task) {
                 Box b;
                 if (FML::domain.holds<FML::PencilDomain>()) {
@@ -100,6 +101,7 @@ namespace FML {
                 }
                 return b;
             }
+            /// The periodic distance of a point to a box (0 inside)
             template <class Pos>
             double distance_to_box(const Pos & x, const Box & b) {
                 const double dx = distance_to_slab(x[0], b.lo[0], b.hi[0]);
@@ -107,6 +109,7 @@ namespace FML {
                     return dx;
                 return std::hypot(dx, distance_to_slab(x[1], b.lo[1], b.hi[1]));
             }
+            /// Is a point in a box?
             template <class Pos>
             bool in_box(const Pos & x, const Box & b) {
                 return x[0] >= b.lo[0] && x[0] < b.hi[0] && (not b.y_split or (x[1] >= b.lo[1] && x[1] < b.hi[1]));

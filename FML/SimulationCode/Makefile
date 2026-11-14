@@ -24,7 +24,7 @@ USE_CHUNKPIX        ?= false
 # particle, 7 times the compile time). Otherwise one particle type with all the fields (see src/Particles.h)
 # (make clean when changing it)
 USE_MINIMAL_PARTICLES ?= false
-# Experiment: the grids are PencilGrids (pencils) instead of FFTWGrids (slabs) (the objects are rebuilt when it changes)
+# The grids are PencilGrids (pencils) instead of FFTWGrids (slabs) (the objects are rebuilt when it changes)
 USE_PENCIL_GRID ?= false
 
 TARGETS := nbody

@@ -1,4 +1,4 @@
-// Experiment: the polyspectra (mono-, bi- and trispectrum, with and without the padding that removes aliasing) on
+// The polyspectra (mono-, bi- and trispectrum, with and without the padding that removes aliasing) on
 // pencils give the same as on the FFTWGrid slabs (the same density field) on every pencil layout
 #include <FML/ComputePowerSpectra/ComputePowerSpectrum.h>
 #include <FML/ConnectedFourPoint/Fourier.h>

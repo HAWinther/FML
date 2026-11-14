@@ -1,4 +1,4 @@
-// Experiment: GhostedCells (per-cell data with ghost layers from the neighbouring tasks) on slabs and pencils: after
+// GhostedCells (per-cell data with ghost layers from the neighbouring tasks) on slabs and pencils: after
 // communicate() every cell, ghosts and corners included, holds the value of the cell it wraps to
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/FFTWGrid/GhostedCells.h>

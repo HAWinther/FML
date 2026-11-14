@@ -1,4 +1,4 @@
-// Experiment: the screened modified gravity solvers on pencils. FofrSolverCosmology (sqrt and log), Symmetron-,
+// The screened modified gravity solvers on pencils. FofrSolverCosmology (sqrt and log), Symmetron-,
 // Dilaton- and DGPSolverCosmology solved with a PencilGrid (the multigrid solver on its pencils) give the same
 // fifth-force potential as with an FFTWGrid (the slabs) with the same number of levels, also from a previous solution
 // (warm start); with the levels the pencils allow, the same to the accuracy of the solution

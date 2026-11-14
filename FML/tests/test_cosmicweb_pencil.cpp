@@ -1,4 +1,4 @@
-// Experiment: the cosmic web (T-web from particles, V-web from shear grids; FFTWGrid or byte storage) on pencils
+// The cosmic web (T-web from particles, V-web from shear grids; FFTWGrid or byte storage) on pencils
 // gives the classification, the eigenvalues and the volume and mass fractions of the slabs
 #include <FML/CosmicWeb/CosmicWeb.h>
 #include <FML/FFTWGrid/FFTWGrid.h>

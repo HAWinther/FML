@@ -12,7 +12,21 @@
 //     get_fourier_integer_wavevector_from_index or get_fourier_wavevector(_and_norm)_by_index
 //   - The last component of the integer wave-vector is in [0, Nmesh/2] (r2c): the weight of a mode is
 //     fourier_mode_multiplicity(k[N-1], Nmesh)
-//   - k = 0 is the mode whose integer wave-vector is zero (not "index 0 on the task with x-start 0")
+//   - k = 0 is the mode whose integer wave-vector is zero (not "index 0 on the task with x-start 0"): has_dc_mode
+//
+// And in position space:
+//
+//   - Make grids with make_grid<Grid>(Nmesh, left, right, domain) or make_grid_like(grid, ...) on the domain of the
+//     particles (the particles are on the task of their cells), not with a constructor
+//   - The local cells along an axis are get_local_range(axis) = {first, count} (global cells; an axis that is not split
+//     is whole). CellOwners gives the task of any cell
+//   - Never use a real-space index of one grid in another grid with different extra cells: a PencilGrid index depends
+//     on them (the y-extras are inside each x-slice), an FFTWGrid index does not. Go through the coordinates. Fourier
+//     indices do not depend on the extra cells
+//   - Data per cell with ghost layers from the neighbours (any type, slabs and pencils): GhostedCells.h
+//
+// Typical generic code: template <int N, template <int> class Grid = FFTWGrid> with an FFTWGrid fast path behind
+// if constexpr (is_fftwgrid_v<Grid<N>>). PencilDomain/README.md describes the pencils and their use in FML.
 //
 // has_fourier_grid_interface<Grid> checks the methods at compile time.
 // =====================================================================================================================
@@ -197,7 +211,9 @@ namespace FML {
             }
 
           public:
+            /// An empty table
             CellOwners() = default;
+            /// The table of the local boxes of all tasks of a grid (collective: an Allgather of the local ranges)
             template <class Grid>
             explicit CellOwners(const Grid & grid) {
                 long long mine[4] = {(long long)(grid.get_local_range(0)[0]), (long long)(grid.get_local_range(0)[1]), 0, 1};

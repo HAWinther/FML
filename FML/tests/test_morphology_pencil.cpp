@@ -1,4 +1,4 @@
-// Experiment: the voxel morphology (cubical counts, Minkowski functionals) of a field split in x and y (BinaryBox,
+// The voxel morphology (cubical counts, Minkowski functionals) of a field split in x and y (BinaryBox,
 // pencils) equals that of the slabs, periodic and open; excursions of a PencilGrid equal those of an FFTWGrid
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
