@@ -226,6 +226,22 @@ namespace FML {
                                bool wrap_x = false);
 
         namespace detail {
+            /// A particle can be in the cell just outside the local domain of the grid from round-off (its position is
+            /// then within round-off of the edge, e.g. x = 63/90 has int(x * 90) = 62 on the task starting at cell 63)
+            /// and is moved into it. A particle further out was not sent to the task of its cell (e.g. no
+            /// communicate_particles after moving the particles): its kernel would be cut off at the edge, losing
+            /// mass (or force) without notice. Stop with a clear message instead (in all builds: the check is only
+            /// made for the rare particles outside, so it costs nothing otherwise)
+            constexpr double max_cells_outside_local_domain = 1e-3;
+            inline void check_cells_outside_local_domain(double cells_outside, const char * caller) {
+                if (cells_outside > max_cells_outside_local_domain) {
+                    const std::string msg = std::string(caller) + " A particle is " + std::to_string(cells_outside) +
+                                            " cells outside the local domain of the grid: the particles must be on the "
+                                            "task of their cell (call communicate_particles after moving them)";
+                    assert_mpi(false, msg.c_str());
+                }
+            }
+
             template <int N, int ORDER, class T, bool SHIFTED>
             void particles_to_grid_impl(const T * part,
                                         size_t NumPart,
@@ -295,8 +311,11 @@ namespace FML {
         /// @tparam ORDER The width of the kernel in units of the cell-size. We consider the \f$ {\rm ORDER}^{\rm N} \f$
         /// closest grid-cells, so ORDER/2 cells to the left and right in each dimension.
         ///
-        /// @param[in] grid_in The grid we want to convolve.
-        /// @param[out] grid_out The in grid convolved with the kernel.
+        /// grid_out at cell x is the sum over the ORDER^N cells x + d of convolution_kernel(d) grid_in(x + d).
+        ///
+        /// @param[in] grid_in The grid we want to convolve (in real space). For ORDER > 1 its extra slices must hold the
+        /// neighbor slices: call communicate_boundaries() first.
+        /// @param[out] grid_out The in grid convolved with the kernel (made with the extra slices of grid_in).
         /// @param[in] convolution_kernel A function taking in the distance to a given cell (in units of the cell size)
         /// and returns the kernel. For example the NGP kernel would be the function Prod_i ( |dx[i]| < 0.5 ), i.e. 1 if
         /// all positions are within half a grid cell of the cell center.
@@ -713,6 +732,7 @@ namespace FML {
             density.fill_real_grid(has_deltaf_weight ? 0.0 : -1.0);
 
             // Factor to normalize density to the mean density
+            assert_mpi(NumPartTot > 0, "[particles_to_grid] No particles (NumPartTot = 0): the density is undefined");
             double norm_fac = std::pow((double)Nmesh, N) / double(NumPartTot);
 
             // Check if particles has a get_mass method and if so
@@ -748,7 +768,6 @@ namespace FML {
 
                 std::array<double, N> x;
                 std::array<int, N> ix;
-                [[maybe_unused]] std::array<int, N> ix_nbor;
                 for (int idim = 0; idim < N; idim++) {
                     // Scale positions to be in [0, Nmesh]
                     if constexpr (SHIFTED)
@@ -775,9 +794,11 @@ namespace FML {
                     if (ix[0] < 0) {
                         x[0] += ix[0];
                         ix[0] = 0;
+                        check_cells_outside_local_domain(-x[0], "[particles_to_grid]");
                     } else if (ix[0] > int(Local_nx) - 1 + spare_right) {
                         x[0] += ix[0] - (int(Local_nx) - 1 + spare_right);
                         ix[0] = int(Local_nx) - 1 + spare_right;
+                        check_cells_outside_local_domain(x[0] - 1.0, "[particles_to_grid]");
                     }
                 }
                 for (int idim = 1; idim < N; idim++) {
@@ -889,9 +910,11 @@ namespace FML {
             // in parallel, then those of the odd chunks, each chunk in the order of the particles. Every cell then gets
             // its contributions in the same order for any number of threads > 1 (deterministic; differs from the
             // one-thread result only by round-off from the order of the sums). The particles are not moved, only
-            // their indices are grouped by chunk (4 bytes per particle). With too few chunks (thin slabs with many
-            // tasks: fewer than 4 (2 ORDER + 2) slices per task, e.g. Nmesh 512 on 32 tasks) we fall back to atomic
-            // adds, and the result then depends on the order of the additions (not bit-identical between runs).
+            // their indices are grouped by chunk (4 bytes per particle). With too few chunks along x (thin slabs with
+            // many tasks: fewer than 4 (2 ORDER + 2) slices per task, e.g. Nmesh 512 on 32 tasks) the chunks are made
+            // along y instead, which every task has all of (periodic, so nchunks is even). Only for a grid too small
+            // for 4 chunks along y too (or N = 1) do we fall back to atomic adds; the result then depends on the order
+            // of the additions (not bit-identical between runs).
             //==========================================================
 #ifdef USE_OMP
             const int nthreads = omp_get_max_threads();
@@ -903,9 +926,17 @@ namespace FML {
                     add_particle(i, std::false_type{});
             } else {
                 const int Local_nx = density.get_local_nx();
+                // The axis of the chunks: x (the local slices) if there are enough of them, else y (all Nmesh cells)
+                int axis = 0;
                 int nchunks = Local_nx / (2 * ORDER + 2);
                 if (FML::NTasks == 1 and nchunks % 2 == 1)
                     nchunks--;
+                if (nchunks < 4 and N > 1) {
+                    axis = 1;
+                    nchunks = Nmesh / (2 * ORDER + 2);
+                    if (nchunks % 2 == 1)
+                        nchunks--;
+                }
                 const bool chunked = nchunks >= 4 and NumPart < size_t(std::numeric_limits<uint32_t>::max());
                 if (not chunked) {
 #ifdef USE_OMP
@@ -914,15 +945,22 @@ namespace FML {
                     for (size_t i = 0; i < NumPart; i++)
                         add_particle(i, std::true_type{});
                 } else {
-                    // The chunk of each particle (from the x-slice it is in, clamped to the local range)
+                    // The chunk of each particle: from the x-slice it is in (clamped to the local range), or from its
+                    // y-cell (periodic)
                     auto chunk_of = [&](size_t i) {
                         const auto * pos = FML::PARTICLE::GetPos(const_cast<T *>(part)[i]);
-                        auto coordinate = pos[0];
+                        auto coordinate = pos[axis];
                         if constexpr (SHIFTED)
-                            coordinate = assignment_coordinate(coordinate, assignment_offset[0], 0, wrap_x);
-                        int ix0 = int(coordinate * Nmesh) - int(Local_x_start);
-                        ix0 = std::max(0, std::min(ix0, Local_nx - 1));
-                        return int((long long)(ix0)*nchunks / Local_nx);
+                            coordinate = assignment_coordinate(coordinate, assignment_offset[axis], axis, wrap_x);
+                        if (axis == 0) {
+                            int ix0 = int(coordinate * Nmesh) - int(Local_x_start);
+                            ix0 = std::max(0, std::min(ix0, Local_nx - 1));
+                            return int((long long)(ix0)*nchunks / Local_nx);
+                        }
+                        int iy = int(coordinate * Nmesh) % Nmesh;
+                        if (iy < 0)
+                            iy += Nmesh;
+                        return int((long long)(iy)*nchunks / Nmesh);
                     };
                     // Counting sort of the particle indices by chunk (stable: each chunk in particle order)
                     std::vector<size_t> start(nchunks + 1, 0);
@@ -1031,10 +1069,18 @@ namespace FML {
                     if (idim == 0) {
                         // Particles may be up to spare_right cells outside the local domain if the grid has
                         // more extra slices than the kernel needs (e.g. when the particles have been shifted)
-                        if (ix[0] >= (Local_x_start + Local_nx + spare_right))
+                        if (ix[0] >= (Local_x_start + Local_nx + spare_right)) {
                             ix[0] = int(Local_x_start + Local_nx + spare_right) - 1;
-                        if (ix[0] < Local_x_start)
+                            if (FML::NTasks > 1)
+                                detail::check_cells_outside_local_domain(x[0] - (ix[0] + 1),
+                                                                         "[interpolate_grid_to_particle_positions]");
+                        }
+                        if (ix[0] < Local_x_start) {
                             ix[0] = int(Local_x_start);
+                            if (FML::NTasks > 1)
+                                detail::check_cells_outside_local_domain(ix[0] - x[0],
+                                                                         "[interpolate_grid_to_particle_positions]");
+                        }
                     } else {
                         if (ix[idim] == Nmesh)
                             ix[idim] = Nmesh - 1;
@@ -1222,16 +1268,23 @@ namespace FML {
                 // Nearest grid-node in grid
                 // Also do some sanity checks. Probably better to throw here if these tests kick in
                 std::array<int, N> ix;
-                [[maybe_unused]] std::array<int, N> ix_nbor;
                 for (int idim = 0; idim < N; idim++) {
                     ix[idim] = int(x[idim]);
                     if (idim == 0) {
                         // Particles may be up to spare_right cells outside the local domain if the grid has
                         // more extra slices than the kernel needs (e.g. when the particles have been shifted)
-                        if (ix[0] >= (Local_x_start + Local_nx + spare_right))
+                        if (ix[0] >= (Local_x_start + Local_nx + spare_right)) {
                             ix[0] = int(Local_x_start + Local_nx + spare_right) - 1;
-                        if (ix[0] < Local_x_start)
+                            if (FML::NTasks > 1)
+                                detail::check_cells_outside_local_domain(x[0] - (ix[0] + 1),
+                                                                         "[interpolate_grid_to_particle_positions]");
+                        }
+                        if (ix[0] < Local_x_start) {
                             ix[0] = int(Local_x_start);
+                            if (FML::NTasks > 1)
+                                detail::check_cells_outside_local_domain(ix[0] - x[0],
+                                                                         "[interpolate_grid_to_particle_positions]");
+                        }
                     } else {
                         if (ix[idim] == Nmesh)
                             ix[idim] = Nmesh - 1;
@@ -1272,6 +1325,33 @@ namespace FML {
 #endif
                 }
 
+                // The kernel weights and cell indices along each dimension (periodic in all but x), computed once
+                // (ORDER per dimension instead of for each of the ORDER^N cells). The weight of a cell is their
+                // product, multiplied in the order idim = 0, 1, ... as before (identical results)
+                [[maybe_unused]] std::array<std::array<double, ORDER>, N> w1d;
+                [[maybe_unused]] std::array<std::array<int, ORDER>, N> i1d;
+                if constexpr (ORDER > 1) {
+                    for (int idim = 0; idim < N; idim++) {
+                        for (int j = 0; j < ORDER; j++) {
+                            const int go_left_right_or_stay = xstart[idim] + j;
+#ifdef CELLCENTERSHIFTED
+                            const double dx = std::fabs(-x[idim] + go_left_right_or_stay + 0.5);
+#else
+                            const double dx = std::fabs(-x[idim] + go_left_right_or_stay);
+#endif
+                            w1d[idim][j] = kernel<ORDER>(dx);
+                            int icoord = ix[idim] + go_left_right_or_stay;
+                            if (idim > 0) {
+                                if (icoord >= Nmesh)
+                                    icoord -= Nmesh;
+                                if (icoord < 0)
+                                    icoord += Nmesh;
+                            }
+                            i1d[idim][j] = icoord;
+                        }
+                    }
+                }
+
                 // Interpolation
                 FloatType value = 0;
                 [[maybe_unused]] double sumweight = 0;
@@ -1282,24 +1362,9 @@ namespace FML {
                         icoord = ix;
                     } else {
                         for (int idim = 0, n = 1; idim < N; idim++, n *= ORDER) {
-                            int go_left_right_or_stay = xstart[idim] + (i / n % ORDER);
-                            ix_nbor[idim] = ix[idim] + go_left_right_or_stay;
-#ifdef CELLCENTERSHIFTED
-                            double dx = std::fabs(-x[idim] + go_left_right_or_stay + 0.5);
-#else
-                            double dx = std::fabs(-x[idim] + go_left_right_or_stay);
-#endif
-                            w *= kernel<ORDER>(dx);
-                        }
-
-                        // Periodic BC
-                        icoord[0] = ix_nbor[0];
-                        for (int idim = 1; idim < N; idim++) {
-                            icoord[idim] = ix_nbor[idim];
-                            if (icoord[idim] >= Nmesh)
-                                icoord[idim] -= Nmesh;
-                            if (icoord[idim] < 0)
-                                icoord[idim] += Nmesh;
+                            const int j = i / n % ORDER;
+                            w *= w1d[idim][j];
+                            icoord[idim] = i1d[idim][j];
                         }
                     }
 
@@ -1335,7 +1400,8 @@ namespace FML {
             ;
 
 #ifdef USE_MPI
-            const int slice_bytes = int(FML::COMMUNICATION::checked_bytes(num_cells_slice, sizeof(FloatType), INT_MAX));
+            // (sent in chunks: a slice can be more than 2 GB)
+            const size_t slice_bytes = FML::COMMUNICATION::checked_bytes(num_cells_slice, sizeof(FloatType));
 #endif
             std::vector<FloatType> buffer(num_cells_slice);
 
@@ -1346,29 +1412,15 @@ namespace FML {
                 FloatType * temp = buffer.data();
 
 #ifdef USE_MPI
-                MPI_Status status;
-
-                int send_to = (ThisTask + 1) % NTasks;
-                int recv_from = (ThisTask - 1 + NTasks) % NTasks;
-
-                MPI_Sendrecv(&(extra_slice_right[0]),
-                             slice_bytes,
-                             MPI_CHAR,
-                             send_to,
-                             0,
-                             &(temp[0]),
-                             slice_bytes,
-                             MPI_CHAR,
-                             int(recv_from),
-                             0,
-                             FML::communicator,
-                             &status);
+                const int send_to = (ThisTask + 1) % NTasks;
+                const int recv_from = (ThisTask - 1 + NTasks) % NTasks;
+                FML::COMMUNICATION::sendrecv_bytes_chunked(extra_slice_right, temp, slice_bytes, send_to, recv_from);
 #else
                 temp = extra_slice_right;
 #endif
 
                 // Copy over data from temp
-                for (int j = 0; j < num_cells_slice; j++) {
+                for (ptrdiff_t j = 0; j < num_cells_slice; j++) {
                     slice_left[j] += (temp[j] - background);
                 }
             }
@@ -1380,29 +1432,15 @@ namespace FML {
                 FloatType * temp = buffer.data();
 
 #ifdef USE_MPI
-                MPI_Status status;
-
-                int send_to = (ThisTask - 1 + NTasks) % NTasks;
-                int recv_from = (ThisTask + 1) % NTasks;
-
-                MPI_Sendrecv(&(extra_slice_left[0]),
-                             slice_bytes,
-                             MPI_CHAR,
-                             send_to,
-                             0,
-                             &(temp[0]),
-                             slice_bytes,
-                             MPI_CHAR,
-                             recv_from,
-                             0,
-                             FML::communicator,
-                             &status);
+                const int send_to = (ThisTask - 1 + NTasks) % NTasks;
+                const int recv_from = (ThisTask + 1) % NTasks;
+                FML::COMMUNICATION::sendrecv_bytes_chunked(extra_slice_left, temp, slice_bytes, send_to, recv_from);
 #else
                 temp = extra_slice_left;
 #endif
 
                 // Copy over data from temp
-                for (int j = 0; j < num_cells_slice; j++) {
+                for (ptrdiff_t j = 0; j < num_cells_slice; j++) {
                     slice_right[j] += (temp[j] - background);
                 }
             }
@@ -1418,8 +1456,8 @@ namespace FML {
         // If the kernel returns 1.0/ORDER^N then this is just a convolution with a tophat of size
         // R = ORDER / Nmesh
         //
-        // Don't know if this will be useful for anything, but its just a copy of the same kind of
-        // work done in the methods above so it comes for free. Not tested!
+        // The extra slices of grid_in must hold the neighbor slices (communicate_boundaries) when ORDER > 1.
+        // Tested in tests/test_interpolation.cpp
         //=========================================================================================
 
         template <int N, int ORDER>
@@ -1443,8 +1481,6 @@ namespace FML {
 
             // Fetch grid information
             const int Nmesh = grid_in.get_nmesh();
-            const auto Local_nx = grid_in.get_local_nx();
-            const auto Local_x_start = grid_in.get_local_x_start();
 
             // Make outputgrid (this initializes it to zero)
             grid_out = FFTWGrid<N>(Nmesh, grid_in.get_n_extra_slices_left(), grid_in.get_n_extra_slices_right());
@@ -1458,7 +1494,7 @@ namespace FML {
                 for (auto && real_index : grid_in.get_real_range_of_rows(irow, irow + 1)) {
 
                     // Coordinate of cell
-                    auto ix = grid_in.coord_from_index(real_index);
+                    auto ix = grid_in.get_coord_from_index(real_index);
 
                     // Neighbor coord
                     [[maybe_unused]] std::array<int, N> ix_nbor;
@@ -1476,6 +1512,8 @@ namespace FML {
                         double w = 1.0;
                         if constexpr (ORDER == 1) {
                             icoord = ix;
+                            dx.fill(0.0);
+                            w = convolution_kernel(dx);
                         } else {
                             for (int idim = 0, n = 1; idim < N; idim++, n *= ORDER) {
                                 int go_left_right_or_stay = xstart[idim] + (i / n % ORDER);

@@ -1,6 +1,7 @@
 #ifndef FML_MPI_COUNTS_HEADER
 #define FML_MPI_COUNTS_HEADER
 #include <FML/Global/Global.h>
+#include <algorithm>
 #include <climits>
 #include <cstdio>
 #include <exception>
@@ -40,6 +41,33 @@ namespace FML::COMMUNICATION {
 #endif
         throw std::runtime_error(message);
     }
+
+#ifdef USE_MPI
+    /// MPI_Sendrecv of a byte buffer of any size: sent in chunks of at most 1 GB, as MPI counts are int (a slice of a
+    /// grid can be more than 2 GB). Both tasks must call it with the same number of bytes
+    inline void sendrecv_bytes_chunked(const void * sendbuf, void * recvbuf, size_t bytes, int dest, int source) {
+        const size_t maxchunk = size_t(1) << 30;
+        const char * send = static_cast<const char *>(sendbuf);
+        char * recv = static_cast<char *>(recvbuf);
+        size_t offset = 0;
+        do {
+            const int nbytes = int(std::min(maxchunk, bytes - offset));
+            MPI_Sendrecv(send + offset,
+                         nbytes,
+                         MPI_CHAR,
+                         dest,
+                         0,
+                         recv + offset,
+                         nbytes,
+                         MPI_CHAR,
+                         source,
+                         0,
+                         FML::communicator,
+                         MPI_STATUS_IGNORE);
+            offset += size_t(nbytes);
+        } while (offset < bytes);
+    }
+#endif
 
     using Count = unsigned long long;
     static_assert(sizeof(size_t) <= sizeof(Count));

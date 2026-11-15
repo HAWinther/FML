@@ -5,6 +5,24 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Interpolation review (part 3a): fixes and speedups
+- A particle more than round-off (1e-3 cells) outside the local domain of the grid (e.g. no `communicate_particles`
+  after moving the particles) now stops `particles_to_grid` and the interpolation with a clear message, on slabs and
+  pencils and in all builds. Before, it was moved to the edge of the domain and its kernel cut off: lost mass or force
+  without notice. The check costs nothing for the particles inside.
+- `particles_to_grid` with no particles (`NumPartTot = 0`) stops with a message (filled the grid with inf).
+- The exchange of the extra slices after the assignment (and in the NUFFT spreading) is sent in chunks: it failed for
+  slices of more than 2 GB (Nmesh >= 16384 in double). Shared helper `FML::COMMUNICATION::sendrecv_bytes_chunked`.
+- `convolve_grid_with_kernel` did not compile (`coord_from_index`), and ORDER 1 ignored the kernel; fixed and tested
+  (`tests/test_interpolation`).
+- Threaded assignment without atomics in more cases: on thin slabs (fewer than 4 (2 ORDER + 2) slices per task, e.g.
+  Nmesh 512 on 32 tasks) the chunks are made along y instead of falling back to atomic adds (2-3 times faster for
+  TSC-PQS). On pencils (always atomic before, also with one thread) the chunks are made along an axis the task has all
+  of: one thread 2-4 times faster for CIC-PQS, deterministic with threads. Unchanged where the chunks along x worked.
+- The scalar interpolation computes the kernel weights once per axis (as the vector one): faster for
+  CIC-PQS (1.6-2.5 times). Identical results (up to the compiler's fused multiply-adds).
+- `convolution_fourier_space` documents that it is not de-aliased (and how to de-alias).
+
 ### Density assignment from particles on any domain (as GADGET's PM)
 - `Interpolation/DistributedDeposit.h`: `particles_to_grid_any_domain(part, NumPart, NumPartTot, grid, "CIC")` (and for
   `MPIParticles`) gives the overdensity field of `particles_to_grid` (NGP-PQS, mass / delta-f weights, assignment

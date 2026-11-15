@@ -414,8 +414,12 @@ endif
 	  ! $(RUN1) ./test_nbody $${m%%:*} > nbody.log 2>&1 && grep -qF "$${m#*:}" nbody.log && echo "[PASS] test_nbody $${m%%:*} gives an error" || exit 1; \
 	done; rm -f nbody.log
 	@! $(RUN1) ./test_interpolation unknown > interp.log 2>&1 && grep -qF "Unknown density assignment method" interp.log && echo "[PASS] test_interpolation unknown method gives an error"
+	@! $(RUN1) ./test_interpolation zero > interp.log 2>&1 && grep -qF "No particles" interp.log && echo "[PASS] test_interpolation no particles gives an error"
 ifeq ($(USE_MPI),true)
 	@! $(MPIRUN) -np 4 ./test_interpolation thin > interp.log 2>&1 && grep -qF "Fewer slices on a task" interp.log && echo "[PASS] test_interpolation too thin slabs give an error"
+	@for m in outside outside_interp; do \
+	  ! $(MPIRUN) -np 2 ./test_interpolation $$m > interp.log 2>&1 && grep -qF "cells outside the local domain" interp.log && echo "[PASS] test_interpolation $$m: a particle outside its slab gives an error" || exit 1; \
+	done
 endif
 	@rm -f interp.log
 	@! $(RUN1) ./test_interlacing_offset negative > offset.log 2>&1 && grep -qF "Assignment offsets must be" offset.log && echo "[PASS] negative assignment offset gives an error"

@@ -287,6 +287,12 @@ namespace FML {
         /// \f$ f(k) * g(k) = \int d^{\rm N}q f(q) g(k-q) \f$ This is done via multiplication in reals-space. We
         /// allocate one temporary grid and perform 3 fourier transforms.
         ///
+        /// The convolution is the periodic (circular) one on the grid and is not de-aliased: modes with k - q beyond
+        /// the Nyquist frequency are folded back into the grid (no zero-padding or 2/3 rule). This is accurate when f
+        /// and g have little power at high k (smooth fields). Otherwise zero the modes above 2/3 of the Nyquist
+        /// frequency in f and g first (the 2/3 rule: the result below 2/3 of the Nyquist frequency is then exact), or
+        /// use a grid 3/2 times larger.
+        ///
         /// @tparam N dimension of the grid
         ///
         /// @param[in] fourier_grid_f The fourier grid f

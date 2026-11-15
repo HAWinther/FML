@@ -17,6 +17,8 @@
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 
 #include <array>
+#include <cstdint>
+#include <limits>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -52,6 +54,10 @@ namespace FML {
                         const int clamped = std::max(0, std::min(local, int(range[1]) - 1 + beyond_right));
                         x[idim] -= ix[idim] + (clamped - local);
                         ix[idim] = clamped;
+                        // (only round-off may put a particle outside: see check_cells_outside_local_domain)
+                        if (clamped != local)
+                            check_cells_outside_local_domain(x[idim] < 0.0 ? -x[idim] : x[idim] - 1.0,
+                                                             "[particles_to_grid / interpolation]");
                     } else {
                         if (ix[idim] >= Nmesh)
                             ix[idim] -= Nmesh;
@@ -238,6 +244,7 @@ namespace FML {
             constexpr bool has_deltaf_weight = FML::PARTICLE::has_get_deltaf_weight<T>();
             constexpr bool has_mass = FML::PARTICLE::has_get_mass<T>() and not has_deltaf_weight;
             const int Nmesh = density.get_nmesh();
+            assert_mpi(NumPartTot > 0, "[particles_to_grid] No particles (NumPartTot = 0): the density is undefined");
             double norm_fac = std::pow(double(Nmesh), N) / double(NumPartTot);
             if constexpr (has_mass) {
                 double mean_mass = 0.0;
@@ -251,13 +258,12 @@ namespace FML {
             const int beyond_right = detail::spare_right_cell<ORDER>(density);
             density.fill_real_grid(0.0);
             auto * grid = density.get_real_grid();
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-            for (size_t ind = 0; ind < NumPart; ind++) {
+
+            // The (virtual) position of a particle: shifted by the offset, rounded to the position type as an actual
+            // shift
+            using Position = std::decay_t<decltype(FML::PARTICLE::GetPos(const_cast<T *>(part)[0])[0])>;
+            auto position = [&](size_t ind) {
                 const auto * pos0 = FML::PARTICLE::GetPos(const_cast<T *>(part)[ind]);
-                // The (virtual) position: shifted by the offset, rounded to the position type as an actual shift
-                using Position = std::decay_t<decltype(pos0[0])>;
                 std::array<Position, N> pos;
                 for (int idim = 0; idim < N; idim++) {
                     pos[idim] = pos0[idim];
@@ -267,6 +273,13 @@ namespace FML {
                             pos[idim] = FML::PARTICLE::wrap_coordinate_periodic(pos[idim]);
                     }
                 }
+                return pos;
+            };
+
+            // Add one particle to the grid (ATOMIC: when several threads can write to the same cell)
+            auto add_particle = [&](size_t ind, auto atomic_tag) {
+                constexpr bool ATOMIC = decltype(atomic_tag)::value;
+                const auto pos = position(ind);
                 double mass = 1.0;
                 if constexpr (has_mass)
                     mass = FML::PARTICLE::GetMass(part[ind]);
@@ -278,11 +291,77 @@ namespace FML {
                 (void)icoord;
                 const detail::KernelStencil<N, ORDER> stencil(density, x, ix, xstart);
                 stencil.for_each([&](IndexIntType index, double w) {
+                    if constexpr (ATOMIC) {
 #ifdef USE_OMP
 #pragma omp atomic
 #endif
-                    grid[index] += FloatType(w * norm_fac * mass);
+                        grid[index] += FloatType(w * norm_fac * mass);
+                    } else {
+                        grid[index] += FloatType(w * norm_fac * mass);
+                    }
                 });
+            };
+
+            // One thread: the particles in order. Several threads, without atomics: an axis the task has all of
+            // (periodic; the last one for a PencilGrid) is split into an even number nchunks >= 4 of chunks of at
+            // least 2 ORDER + 2 cells, so the cells written by the particles in chunks c and c + 2 never overlap. The
+            // particles of the even chunks are added in parallel, then those of the odd chunks, each chunk in the
+            // order of the particles: every cell gets its contributions in the same order for any number of threads
+            // > 1 (deterministic; differs from one thread only by round-off from the order of the sums). Atomic adds
+            // only if there is no such axis or it is too short for 4 chunks
+#ifdef USE_OMP
+            const int nthreads = omp_get_max_threads();
+#else
+            const int nthreads = 1;
+#endif
+            int axis = -1;
+            for (int idim = 0; idim < N; idim++)
+                if (not detail::has_part_of_axis(density, idim))
+                    axis = idim;
+            int nchunks = axis < 0 ? 0 : Nmesh / (2 * ORDER + 2);
+            if (nchunks % 2 == 1)
+                nchunks--;
+            if (nthreads == 1) {
+                for (size_t ind = 0; ind < NumPart; ind++)
+                    add_particle(ind, std::false_type{});
+            } else if (nchunks < 4 or NumPart >= size_t(std::numeric_limits<uint32_t>::max())) {
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                for (size_t ind = 0; ind < NumPart; ind++)
+                    add_particle(ind, std::true_type{});
+            } else {
+                // Counting sort of the particle indices by the chunk of their cell along the axis (stable)
+                std::vector<uint32_t> chunk(NumPart);
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                for (size_t ind = 0; ind < NumPart; ind++) {
+                    int icell = int(double(position(ind)[axis]) * Nmesh) % Nmesh;
+                    if (icell < 0)
+                        icell += Nmesh;
+                    chunk[ind] = uint32_t((long long)(icell)*nchunks / Nmesh);
+                }
+                std::vector<size_t> start(nchunks + 1, 0);
+                for (size_t ind = 0; ind < NumPart; ind++)
+                    start[chunk[ind] + 1]++;
+                for (int c = 0; c < nchunks; c++)
+                    start[c + 1] += start[c];
+                std::vector<uint32_t> order(NumPart);
+                {
+                    std::vector<size_t> next(start.begin(), start.end() - 1);
+                    for (size_t ind = 0; ind < NumPart; ind++)
+                        order[next[chunk[ind]]++] = uint32_t(ind);
+                }
+                std::vector<uint32_t>().swap(chunk);
+                for (int phase = 0; phase < 2; phase++) {
+#ifdef USE_OMP
+#pragma omp parallel for schedule(dynamic, 1)
+#endif
+                    for (int c = phase; c < nchunks; c += 2)
+                        for (size_t k = start[c]; k < start[c + 1]; k++)
+                            add_particle(order[k], std::false_type{});
+                }
             }
             density.add_contribution_from_extra_cells();
             if constexpr (not has_deltaf_weight) {

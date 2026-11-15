@@ -6,9 +6,13 @@
 //     the grid: sum(delta) = 0 for NGP, ..., PQS. Tested with particles 1 ulp from the slab boundaries; with a
 //     lattice it only happens for some task counts, e.g. 10: mpirun -np 10 ./test_interpolation slab
 //   - interpolation of a linear field with CIC, ..., PQS (scalar and vector) is exact
+//   - convolve_grid_with_kernel with a top-hat of 3 cells (ORDER 3) and a constant kernel (ORDER 1) on a cosine
 // Bad input that must stop with a clear message (run by make run):
 //   ./test_interpolation unknown : unknown method name (was silently ignored)
 //   ./test_interpolation thin    : fewer slices on a task than the kernel needs (with 4 tasks; lost mass before)
+//   ./test_interpolation outside : a particle far outside the slab of its task (2 tasks; was moved to the edge and
+//                                  lost mass without notice), outside_interp the same for the interpolation
+//   ./test_interpolation zero    : no particles (NumPartTot = 0 filled the grid with inf)
 // Run with: make run (in this folder) or make test (from the top folder)
 //==========================================================
 #include <FML/FFTWGrid/FFTWGrid.h>
@@ -194,6 +198,42 @@ void test_slab_boundary() {
     }
 }
 
+// grid_out(x) = sum_d K(d) grid_in(x + d): for f = cos(2 pi m x_c / Nmesh) along x (across the tasks) and y and a
+// top-hat of 3 cells, every cosine is multiplied by (1 + 2 cos(2 pi m / Nmesh)) / 3; ORDER 1 multiplies by K(0)
+void test_convolve() {
+    const int Nm = 24, mx = 2, my = 3;
+    const auto nlr = INTERPOLATION::get_extra_slices_needed_by_order<3>();
+    FFTWGrid g(Nm, nlr.first, nlr.second);
+    for (auto && real_index : g.get_real_range()) {
+        auto coord = g.get_coord_from_index(real_index);
+        const double xc = coord[0] + double(g.get_local_x_start());
+        g.set_real_from_index(real_index,
+                              std::cos(2 * M_PI * mx * xc / Nm) + std::cos(2 * M_PI * my * coord[1] / Nm));
+    }
+    g.communicate_boundaries();
+    const double fx = (1 + 2 * std::cos(2 * M_PI * mx / Nm)) / 3.0, fy = (1 + 2 * std::cos(2 * M_PI * my / Nm)) / 3.0;
+
+    FFTWGrid out3, out1;
+    INTERPOLATION::convolve_grid_with_kernel<3, 3>(
+        g, out3, [](std::array<double, 3> &) { return FloatType(1.0 / 27.0); });
+    INTERPOLATION::convolve_grid_with_kernel<3, 1>(g, out1, [](std::array<double, 3> & dx) {
+        return FloatType(dx[0] == 0 and dx[1] == 0 and dx[2] == 0 ? 2.0 : 0.0);
+    });
+    double err3 = 0.0, err1 = 0.0;
+    for (auto && real_index : g.get_real_range()) {
+        auto coord = g.get_coord_from_index(real_index);
+        const double xc = coord[0] + double(g.get_local_x_start());
+        const double cx = std::cos(2 * M_PI * mx * xc / Nm), cy = std::cos(2 * M_PI * my * coord[1] / Nm);
+        err3 = std::max(err3, std::fabs(out3.get_real_from_index(real_index) - (fx * cx + fy * cy)));
+        err1 = std::max(err1, std::fabs(out1.get_real_from_index(real_index) - 2 * (cx + cy)));
+    }
+    MaxOverTasks(&err3);
+    MaxOverTasks(&err1);
+    check_local(err3 < 1e-12, "convolve_grid_with_kernel, 3-cell top-hat on a cosine: max error " + num(err3, 3));
+    check_local(err1 < 1e-12, "convolve_grid_with_kernel, ORDER 1 multiplies by K(0): max error " + num(err1, 3) +
+                                  " (ignored the kernel; did not compile before)");
+}
+
 int main(int argc, char ** argv) {
     const std::string mode = argc > 1 ? argv[1] : "";
     if (mode == "unknown") {
@@ -211,6 +251,27 @@ int main(int argc, char ** argv) {
         return 0;
     }
 
+    if (mode == "outside" or mode == "outside_interp") {
+        // 2 tasks, Nmesh 16: the particle of task 0 is 0.1 * 16 = 1.6 cells into the slab of task 1
+        FFTWGrid g(16, 1, 2);
+        std::vector<Particle> part(1, Particle{{xmin_domain + (ThisTask == 0 ? 0.6 : 0.1), 0.5, 0.5}});
+        if (mode == "outside") {
+            INTERPOLATION::particles_to_grid<3, Particle>(part.data(), 1, NTasks, g, "CIC");
+        } else {
+            g.fill_real_grid(1.0);
+            g.communicate_boundaries();
+            std::vector<FloatType> values;
+            INTERPOLATION::interpolate_grid_to_particle_positions<3, Particle>(g, part.data(), 1, values, "CIC");
+        }
+        return 0;
+    }
+    if (mode == "zero") {
+        FFTWGrid g(8, 1, 2);
+        std::vector<Particle> part;
+        INTERPOLATION::particles_to_grid<3, Particle>(part.data(), 0, 0, g, "CIC");
+        return 0;
+    }
+
     if (mode == "slab") {
         // Only this test (with e.g. 10 tasks, which do not divide the grid sizes of the other tests)
         test_slab_boundary();
@@ -218,6 +279,7 @@ int main(int argc, char ** argv) {
         test_vector_ngp();
         test_interpolation_exact();
         test_slab_boundary_ulp();
+        test_convolve();
     }
 
     return FML::TESTS::summary("interpolation");

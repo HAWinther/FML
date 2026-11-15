@@ -1,5 +1,8 @@
 // Density assignment with interlacing (the half-cell shift and the higher orders), offset deposition
-// and the deconvolution of the window function on pencils give the same density modes as on the FFTWGrid slabs
+// and the deconvolution of the window function on pencils give the same density modes as on the FFTWGrid slabs.
+// Bad input that must stop with a clear message:
+//   mpirun -np 2 ./test_interp_pencil outside : a particle far outside the pencil of its task along y (1 x 2 pencils)
+//   mpirun -np 2 ./test_interp_pencil zero    : no particles (NumPartTot = 0)
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
@@ -70,7 +73,18 @@ namespace {
     }
 } // namespace
 
-int main() {
+int main(int argc, char ** argv) {
+    const std::string mode = argc > 1 ? argv[1] : "";
+    if (mode == "outside" or mode == "zero") {
+        const auto layout = FML::PencilDomain::uniform(1, FML::NTasks);
+        FML::GRID::PencilGrid<3> g(16, 1, 2, layout);
+        // (the pencils split y: the particle of task 0 is 0.1 * 16 = 1.6 cells into the pencil of task 1)
+        std::vector<Part> part(1, Part{{0.5, FML::ThisTask == 0 ? 0.5 + 0.1 : 0.6, 0.5}});
+        if (mode == "zero")
+            part.clear();
+        I::particles_to_grid<3>(part.data(), part.size(), mode == "zero" ? 0 : FML::NTasks, g, "CIC");
+        return 0;
+    }
     const int nmesh = FML::NTasks % 3 == 0 ? 24 : 32, npart = 20000;
     auto v = mine(npart);
     FML::PARTICLE::MPIParticles<Part> pslab;

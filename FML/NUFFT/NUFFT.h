@@ -633,7 +633,8 @@ namespace FML {
             assert_mpi(Local_nx >= std::max(nleft, nright),
                        "[NUFFT] Too few slices per task for the kernel width. Use fewer tasks or a larger grid\n");
 #ifdef USE_MPI
-            const int slice_bytes = int(FML::COMMUNICATION::checked_bytes(nslice, sizeof(FloatType), INT_MAX));
+            // (sent in chunks: a slice can be more than 2 GB)
+            const size_t slice_bytes = FML::COMMUNICATION::checked_bytes(nslice, sizeof(FloatType));
 #endif
             std::vector<FloatType> buffer(nslice);
 
@@ -642,18 +643,11 @@ namespace FML {
                 FloatType * extra = grid.get_real_grid_right() + nslice * i;
                 FloatType * target = grid.get_real_grid() + nslice * i;
 #ifdef USE_MPI
-                MPI_Sendrecv(extra,
-                             slice_bytes,
-                             MPI_CHAR,
-                             (FML::ThisTask + 1) % FML::NTasks,
-                             0,
-                             buffer.data(),
-                             slice_bytes,
-                             MPI_CHAR,
-                             (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks,
-                             0,
-                             FML::communicator,
-                             MPI_STATUS_IGNORE);
+                FML::COMMUNICATION::sendrecv_bytes_chunked(extra,
+                                                           buffer.data(),
+                                                           slice_bytes,
+                                                           (FML::ThisTask + 1) % FML::NTasks,
+                                                           (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks);
 #else
                 std::copy(extra, extra + nslice, buffer.begin());
 #endif
@@ -667,18 +661,11 @@ namespace FML {
                 FloatType * extra = grid.get_real_grid() - nslice * i;
                 FloatType * target = grid.get_real_grid() + nslice * (Local_nx - i);
 #ifdef USE_MPI
-                MPI_Sendrecv(extra,
-                             slice_bytes,
-                             MPI_CHAR,
-                             (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks,
-                             0,
-                             buffer.data(),
-                             slice_bytes,
-                             MPI_CHAR,
-                             (FML::ThisTask + 1) % FML::NTasks,
-                             0,
-                             FML::communicator,
-                             MPI_STATUS_IGNORE);
+                FML::COMMUNICATION::sendrecv_bytes_chunked(extra,
+                                                           buffer.data(),
+                                                           slice_bytes,
+                                                           (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks,
+                                                           (FML::ThisTask + 1) % FML::NTasks);
 #else
                 std::copy(extra, extra + nslice, buffer.begin());
 #endif
