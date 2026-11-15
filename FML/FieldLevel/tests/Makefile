@@ -1,7 +1,7 @@
 USE_MPI ?= false
 USE_OMP ?= false
 USE_FFTW ?= true
-TARGETS := test_particle_mesh_adjoint test_particle_mesh_posterior
+TARGETS := test_particle_mesh_checkpoint test_particle_mesh_adjoint test_particle_mesh_posterior
 TARGETS += test_survey_checkpoint_mpi test_survey_likelihood_mpi test_bao_gradients test_bao_validation test_field_level test_field_level_safety test_framework test_framework_resolution test_framework_mpi test_framework_lpt_mpi test_framework_reconstruction_mpi test_framework_checkpoint_mpi test_particle_mesh
 ifeq ($(USE_MPI),true)
 TARGETS += test_framework_linear_grid_mpi test_framework_lpt_grid_mpi test_survey_grid_mpi test_checkpoint_grid_mpi
@@ -155,3 +155,18 @@ pm-hmc-smoke:
 	$(MAKE) -C ../pm_hmc_validation pm_hmc
 	python3 ../pm_hmc_validation/smoke.py --exe ../pm_hmc_validation/pm_hmc --mpi $(USE_MPI) --mpirun "$(MPIRUN)" --np-list "$(NP_LIST)"
 run: pm-hmc-smoke
+
+PM_CHECKPOINT_BACKENDS := slab
+ifeq ($(USE_MPI),true)
+PM_CHECKPOINT_BACKENDS += pencil
+endif
+.PHONY: particle-mesh-checkpoint
+test_particle_mesh_checkpoint: test_particle_mesh_checkpoint.o Global.o $(PM_GRID_OBJECT)
+	$(LINK_EXE)
+particle-mesh-checkpoint: test_particle_mesh_checkpoint
+	@set -e; pm_tmp=$$(mktemp -d "$${TMPDIR:-/tmp}/fml-pm-checkpoint.XXXXXX"); trap 'rm -rf "$$pm_tmp"' EXIT; \
+	for backend in $(PM_CHECKPOINT_BACKENDS); do for np in $(NP_LIST); do \
+	  $(SAFETY_RUN) ./test_particle_mesh_checkpoint "$$pm_tmp/$$backend-np$$np" prepare $$backend; \
+	  $(SAFETY_RUN) ./test_particle_mesh_checkpoint "$$pm_tmp/$$backend-np$$np" resume $$backend; \
+	done; done
+run: particle-mesh-checkpoint

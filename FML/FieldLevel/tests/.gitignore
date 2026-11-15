@@ -5,3 +5,4 @@
 /test_particle_mesh
 /test_particle_mesh_adjoint
 /test_particle_mesh_posterior
+/test_particle_mesh_checkpoint

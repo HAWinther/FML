@@ -808,7 +808,9 @@ Fields and gradients remain local and are never gathered by checkpoint I/O. The
 state contains no full sample history. Serialization temporarily buffers local
 state, with additional per-call state/result storage; no peak-memory or I/O-scaling
 improvement is claimed. A trajectory budget also bounds returned per-call scalar
-history. Survey likelihood identities are registered in `SurveyCheckpoint.h`;
+history. PM inference uses the explicit [ParticleMeshCheckpoint.h](ParticleMeshCheckpoint.h)
+adapter; see [same-layout PM restart](PM_CHECKPOINT.md). Survey likelihood identities
+are registered in `SurveyCheckpoint.h`;
 other custom likelihoods require explicit identity registration. Rank-changing restore, sample-
 schedule extension and automatic checkpoint pruning are future extensions.
 

@@ -6,6 +6,27 @@
 #include <utility>
 
 namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL {
+    // Local metadata only: safe inside checkpoint identity's collective_try phase.
+    template <class Grid, class Encoder>
+    void describe_grid_domain(Encoder & e, const FML::Domain & domain) {
+        e.text(typeid(Grid).name());
+        if (domain.is_slab()) {
+            e.text("FML slab domain 1");
+            const auto & slab = domain.template get<FML::SlabDomain>();
+            e.integer(slab.ntasks());
+            for (int t = 0; t < slab.ntasks(); ++t) {
+                e.real(slab.x_min(t));
+                e.real(slab.x_max(t));
+            }
+        } else {
+            e.text("FML pencil domain 1");
+            const auto & pencil = domain.template get<FML::PencilDomain>();
+            for (int parts : pencil.process_grid())
+                e.integer(parts);
+            e.vector(pencil.x_edges());
+            e.vector(pencil.y_edges());
+        }
+    }
     // Compatibility for the serial/reference forward and existing slab-only custom forwards.
     // Distributed forwards expose their backend and a copied, replicated model domain.
     template <class Forward, class = void>
@@ -28,24 +49,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL {
         // No collectives: checkpoint identity is constructed inside a collective_try local phase.
         template <class Encoder>
         static void describe(Encoder & e, const Forward & model) {
-            e.text(typeid(Grid).name());
-            const auto & domain = model.domain();
-            if (domain.is_slab()) {
-                e.text("FML slab domain 1");
-                const auto & slab = domain.template get<FML::SlabDomain>();
-                e.integer(slab.ntasks());
-                for (int t = 0; t < slab.ntasks(); ++t) {
-                    e.real(slab.x_min(t));
-                    e.real(slab.x_max(t));
-                }
-            } else {
-                e.text("FML pencil domain 1");
-                const auto & pencil = domain.template get<FML::PencilDomain>();
-                for (int parts : pencil.process_grid())
-                    e.integer(parts);
-                e.vector(pencil.x_edges());
-                e.vector(pencil.y_edges());
-            }
+            describe_grid_domain<Grid>(e, model.domain());
         }
     };
 } // namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL

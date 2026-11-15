@@ -325,3 +325,34 @@ uncertainty from noisy predictions. This is bounded single-mock evidence;
 larger fields/mode support, repeated-mock coverage and numerical convergence remain
 open, along with PM checkpoint/restart, tracer/RSD/survey and cosmological derivatives.
 Item 52 remains open.
+
+### Item 52: same-layout PM inference checkpoint/restart (15 November 2026)
+
+[ParticleMeshCheckpoint.h](FieldLevel/ParticleMeshCheckpoint.h) registers explicit PM target
+identity with the existing trajectory-boundary HMC checkpoint API. It includes both
+IC/observation layouts, copied grid/domain geometry, background/time nodes, versioned
+force/ZA/CIC/KDK/adjoint/metric conventions and replay budget. Complete sampler,
+RNG/adaptation and frozen-metric state is reused. Fixed and joint fresh-process
+continuation is bitwise exact on serial, 1/2/4-rank slabs and pencils (including
+unequal boxes), with sanitizer and incompatible-configuration/failure checks.
+Existing non-PM fingerprints/file schemas are preserved and old-serializer linear/
+LPT checkpoints resume under the new adapter. [The guide](FieldLevel/PM_CHECKPOINT.md) and
+[results](FieldLevel/tests/PM_CHECKPOINT_RESULTS.md) state the callback-versioning and same-build
+contract. Changed-layout restart, larger/multi-mock calibration and PM survey/tracer/
+RSD/cosmological extensions remain open; item 52 is not complete.
+
+### Item 52: PM convergence and more active modes (15 November 2026)
+
+[The bounded resolution campaign](FieldLevel/pm_resolution_validation/README.md) matches one
+physical 18-mode Fourier field across particle/force grids and time schedules.
+Time refinement and four directional derivative sweeps pass. Four joint chains
+on N=6/M=12 sample all 216 white coordinates and spectrum/noise; all 653 monitored
+features pass the declared mixing checks with no post-warmup divergences.
+
+**Spatial accuracy remains unresolved:** four force/particle criteria fail, with
+last-refinement field/gradient differences of 21.9%/68.5% (force mesh) and
+16.8%/50.9% (particle lattice). Independent NumPy and native tiny-kick probes reproduce
+strong sparse-load/force-grid dependence. [PM-S1](FieldLevel/KNOWN_ISSUES.md) prioritizes dense
+particle support and controlled force/assignment investigation before accuracy or
+coverage claims. The numerical force law is unchanged. [Results and plots](FieldLevel/pm_resolution_validation/RESULTS.md)
+retain the failed criteria. Item 52 remains open.

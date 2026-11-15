@@ -82,6 +82,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         }
         const Configuration & configuration() const { return config_; }
         const Dynamics & dynamics() const { return dynamics_; }
+        const PMAdjointOptions & adjoint_options() const { return reverse_; }
         const auto & domain() const { return dynamics_.domain(); }
         const auto & modes() const { return observation_.modes(); }
         const auto & parameters() const { return parameters_; }
@@ -176,8 +177,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             require(w.owner == this && w.valid, "[Periodic PM] Reconstruction needs successful forward");
             return w.pm.result();
         }
-        // No response() accessor: generic checkpoint identity lacks PM physics.
-        // PM restart requires its own explicit fingerprint before it is supported.
+        // Checkpoint support is explicit in ParticleMeshCheckpoint.h. A generic
+        // response() would omit PM physics and is deliberately not exposed.
     };
     template <class Grid>
     struct Execution<PeriodicPMModelT<Grid>> {
@@ -210,8 +211,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                     }, [&m](bool valid) { return m.maximum(valid ? 0 : 1) == 0; }};
         }
     };
-    // The existing Cartesian survey/checkpoint adapters assume one mesh for both
-    // input cells and observed modes. Reject that path rather than misindexing M as N.
+    // Cartesian survey adapters assume one mesh for both input cells and observed
+    // modes. Keep that factory disabled; PM checkpoints describe the two layouts separately.
     namespace DETAIL {
         template <class GridType>
         struct ForwardGrid<PeriodicPMModelT<GridType>> {

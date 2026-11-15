@@ -121,5 +121,6 @@ not added to routine CI.
 One same-model mock with six active IC directions cannot establish repeated-mock
 coverage, larger-field mixing, high-cutoff/nonlinear accuracy, or mesh/particle/time
 convergence. Fixed flat-background dynamics, CIC assignment and identity field
-metric retain their existing limitations. PM checkpoint/restart, tracer/RSD/survey
-likelihoods, cosmological derivatives and production performance remain extensions.
+metric retain their existing limitations. [Same-layout PM restart](../PM_CHECKPOINT.md)
+is now available. Changed-layout restart, tracer/RSD/survey likelihoods, cosmological
+derivatives and production performance remain extensions.

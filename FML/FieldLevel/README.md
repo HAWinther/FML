@@ -37,6 +37,11 @@ compares a two-mode conditional posterior with quadrature and checks short full-
 and joint-parameter runs. [Full-field PM validation](pm_full_validation/README.md)
 now checks dispersed fixed/joint chains, exact-prior null directions and posterior
 predictions for one small mock; broader calibration remains open.
+[PM checkpoint/restart](PM_CHECKPOINT.md) now supports the same layout/build/thread
+configuration, with explicit PM physics identity and complete HMC/adaptation state.
+The [resolution study](pm_resolution_validation/RESULTS.md) adds 18-mode inference
+and time/gradient checks, but finds unresolved spatial force/particle accuracy;
+see [PM-S1](KNOWN_ISSUES.md) before making a continuum-accuracy claim.
 
 ## BAO application (prototype)
 

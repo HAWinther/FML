@@ -9,6 +9,10 @@ or survey observation operator. [Bounded HMC validation](pm_hmc_validation/READM
 now compares a two-mode conditional posterior with quadrature and exercises the
 public full-field and joint-parameter sampler.
 
+The [resolution campaign](pm_resolution_validation/RESULTS.md) records a spatial
+force/particle accuracy limitation ([PM-S1](KNOWN_ISSUES.md)). Same-model inference
+checks validate the discrete target; broader physical accuracy remains unresolved.
+
 ## Use
 
 ```cpp
@@ -110,8 +114,10 @@ artifacts. See [the numerical results](tests/PM_POSTERIOR_RESULTS.md).
 The generic Cartesian survey adapters assume one mesh for initial and observed
 fields. This model explicitly disables that factory so N/M cannot be misindexed.
 PM survey likelihoods need their own observation adapter and validation. Generic
-restart identity also lacks the PM background/time settings; no PM `response()`
-identity accessor is exposed, so PM checkpoint integration is not silently enabled.
+restart support is explicit in [ParticleMeshCheckpoint.h](ParticleMeshCheckpoint.h),
+which fingerprints both layouts and the PM background/time/numerical settings.
+See [same-layout PM checkpoint/restart](PM_CHECKPOINT.md); no generic `response()`
+accessor or Cartesian survey factory is enabled.
 
 [Conditional HMC results](pm_hmc_validation/RESULTS.md) include moment comparisons,
 step-size/reversibility probes and dispersed-chain diagnostics. Short full-field
@@ -119,5 +125,5 @@ and joint-parameter traces establish integration and replay. The subsequent
 [full-field campaign](pm_full_validation/RESULTS.md) checks dispersed fixed/joint
 chains, exact-prior null moments and posterior predictions for one small mock.
 Broader scientific calibration, smooth assignment alternatives,
-preconditioning, PM-specific restart identities, tracer/RSD/survey models,
+preconditioning, changed-layout PM restart, tracer/RSD/survey models,
 cosmological derivatives, 2LPT/COLA starts and production performance remain open.

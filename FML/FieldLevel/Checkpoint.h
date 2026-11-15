@@ -84,6 +84,19 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 }
             }
         };
+        // Forward-specific metadata must be local-only: identity is encoded in a
+        // collective_try local phase. Defaults preserve existing fingerprint bytes.
+        // Explicit adapters can describe multiple grids and their numerical physics
+        // without exposing a fake response() or enabling unsupported survey factories.
+        template <class Forward>
+        struct ForwardIdentity {
+            static void describe_grid(Codec::Encoder & e, const Forward & model) {
+                DETAIL::ForwardGrid<Forward>::describe(e, model);
+            }
+            static void append(Codec::Encoder & e, const Forward & model) {
+                e.vector(model.response());
+            }
+        };
         template <class Forward, class Likelihood>
         std::string identity(const BasicPosterior<Forward, Likelihood> & posterior, const std::string & problem_id) {
             Codec::Encoder e;
@@ -114,7 +127,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 e.integer(l.local_starts[d]);
                 e.integer(l.local_counts[d]);
             }
-            DETAIL::ForwardGrid<Forward>::describe(e, m);
+            ForwardIdentity<Forward>::describe_grid(e, m);
             e.integer(m.parameters().size());
             for (const auto & p : m.parameters()) {
                 e.text(p.name);
@@ -130,7 +143,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 e.real(mode.weight);
                 e.integer(mode.fourier_index);
             }
-            e.vector(m.response());
+            ForwardIdentity<Forward>::append(e, m);
             LikelihoodIdentity<Likelihood>::append(e, posterior.likelihood());
             return std::to_string(Codec::checksum(e.bytes));
         }

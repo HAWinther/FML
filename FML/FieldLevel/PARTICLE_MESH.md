@@ -6,8 +6,10 @@ initial cells and spectrum parameters into evolved matter and particle fields.
 It supports `FFTWGrid<3>` and `PencilGrid<3>` with a copied model domain.
 The companion [discrete adjoint](PM_ADJOINT.md) now differentiates this map with
 bounded in-memory checkpoints/replay. A [periodic Gaussian posterior/MAP adapter](PM_POSTERIOR.md) now supplies the first
-inference application. Tracer/bias/RSD models, an analytic tangent API and HMC
-scientific validation require subsequent milestones. The existing LPT inference API
+inference application. [Bounded HMC checks](pm_full_validation/RESULTS.md) cover
+small mocks. [Spatial convergence remains unresolved](pm_resolution_validation/RESULTS.md):
+see the open [PM-S1 issue](KNOWN_ISSUES.md). Tracer/bias/RSD models and an analytic
+tangent API remain subsequent milestones. The existing LPT inference API
 and its evolution enum are unchanged.
 
 ## Example
