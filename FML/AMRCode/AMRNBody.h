@@ -23,12 +23,17 @@
 // v = a^2 dx/dt / (H0 B) (FML's N-body convention). The equations of motion are
 //   dx/dtau = v / (a^2 E(a)),   dv/dtau = -(3/2) OmegaM / (a E(a)) * D phi,   D^2 phi = delta
 //
+// Symmetron gravity (gravity_model = Symmetron): the scalar field chi = phi / phi_* is solved on the same leaves
+// with the same multigrid (AMRSymmetronSolver.h, the quasi-static equation with screening), full and partial solves
+// as the potential, and the fifth force -D(PhiF) / (a^2 E) (PhiF = forcenorm chi^N) is added to the acceleration
+//
 //==========================================================================================
 
 #include <FML/AdaptiveMPIGrid/AdaptiveMPIGrid.h>
 #include <FML/Global/Global.h>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/MultigridSolver/AMRMultiGridSolver.h>
+#include <FML/MultigridSolver/AMRSymmetronSolver.h>
 
 #include <algorithm>
 #include <array>
@@ -630,6 +635,17 @@ namespace FML {
                 double mg_epsilon{1e-6};  // Multigrid: residual < mg_epsilon * rms(delta) on the unknown leaves
                 int mg_maxsteps{50};      // Maximum number of V-cycles
                 bool verbose{true};
+                // Symmetron (gravity_model = "Symmetron"): the symmetry breaking scale factor, the coupling, the range
+                // in vacuum (Mpc/h) and the powers (N, M) of the potential; the box (Mpc/h) for the units
+                std::string gravity_model{"LCDM"};
+                double symmetron_assb{0.5};
+                double symmetron_beta{1.0};
+                double symmetron_L_mpch{1.0};
+                double symmetron_N{2.0};
+                double symmetron_M{4.0};
+                double symmetron_epsilon{1e-6}; // Residual < this * rms(linear source) on the unknown leaves
+                double boxsize{100.0};
+                bool symmetron() const { return gravity_model == "Symmetron"; }
             };
 
             //======================================================================================
@@ -647,6 +663,11 @@ namespace FML {
                 long long vcycles_full{0};
                 int nsolve_fallback{0};                      // Partial solves redone as full solves
                 int refine_passes{0};
+                // Symmetron
+                int nsym_full{0}, nsym_partial{0}, nsym_fallback{0}, nsym_notconverged{0};
+                long long sym_vcycles{0};
+                double time_symmetron{0};
+                double chi_min{0}, chi_mean{0}, chi_max{0}, chi_background{0};
             };
 
             //======================================================================================
@@ -662,6 +683,7 @@ namespace FML {
                 struct CellData {
                     double phi;
                     double count;
+                    double chi; // The symmetron field (gravity_model = Symmetron)
                 };
                 using Grid = FML::GRID::AdaptiveMPIGrid<NDIM, CellData>;
                 using Solver = FML::SOLVERS::AMRMULTIGRIDSOLVER::AMRMultiGridSolver<NDIM>;
@@ -679,6 +701,17 @@ namespace FML {
                 AMRNBodySimulation(const AMRNBodyParameters & params, Particles & particles, double aini)
                     : p(params), cosmo(params.OmegaM, params.OmegaR),
                       grid(params.levelmin, params.levelmax, {true, true, true}), part(particles), a(aini) {
+                    if (p.symmetron())
+                        symmetron = std::make_unique<Symmetron>(p.OmegaM,
+                                                                p.symmetron_assb,
+                                                                p.symmetron_beta,
+                                                                p.symmetron_L_mpch,
+                                                                p.boxsize / FML::UTILS::SI::c_over_H0_mpch,
+                                                                false,
+                                                                p.symmetron_N,
+                                                                p.symmetron_M);
+                    else
+                        assert_mpi(p.gravity_model == "LCDM", "AMRNBody: gravity_model must be LCDM or Symmetron");
                     npart_total = (long long)part.get_npart_total();
                     mpart = 1.0 / double(npart_total);
                     // Wrap and move the particles to the grid's decomposition, refine, and compute the forces
@@ -687,7 +720,7 @@ namespace FML {
                             part[i].Pos[d] = wrap(part[i].Pos[d]);
                     part.set_domain(grid.get_domain());
                     regrid();
-                    compute_forces(0, params.levelmin, true);
+                    compute_forces(0, params.levelmin, true, aini);
                 }
 
                 /// Take one coarse step from the current a to anew
@@ -699,8 +732,14 @@ namespace FML {
                 void print_status(std::ostream & os);
 
               private:
+                using Symmetron = AMRSymmetronSolverCosmology<NDIM>;
                 std::unique_ptr<Solver> solver;
                 int ext_id{-1};
+                // Symmetron: the parameters and units (AMRSymmetronSolverCosmology), the solver of chi on the grid
+                std::unique_ptr<Symmetron> symmetron;
+                std::unique_ptr<Solver> solver_chi;
+                int ext_id_chi{-1};
+                bool chi_started{false}; // chi has been solved for (after symmetry breaking)
                 std::vector<char> touches_finer;              // Per local leaf (see leaves_touching_finer)
                 std::vector<double> mass_from_regrid;         // CIC mass per leaf from the refinement (if usable)
                 std::map<int, double> fixed_volume;           // Volume of the leaves below a level (per regrid)
@@ -738,7 +777,10 @@ namespace FML {
                     for (size_t i = 0; i < n; i++)
                         part[i] = tmp[i];
                 }
-                void compute_forces(int min_bin, int min_level, bool full);
+                void compute_forces(int min_bin, int min_level, bool full, double a_now);
+                // The symmetron: solve for chi (full or partial) and add the fifth force on the leaves at levels >=
+                // min_level to force. Returns false if a partial solve did not converge (then do a full one)
+                bool add_symmetron_force(const std::vector<double> & delta, int min_level, bool full, double a_now);
                 int wanted_bin(AMRParticle & pt, double a_now, double dtau_coarse) const;
             };
 
@@ -752,14 +794,21 @@ namespace FML {
                     for (IndexInt i = 0; i < grid.get_n_local(); i++)
                         grid.get_data(i).phi = phi[i];
                 }
+                if (solver_chi) {
+                    const auto & chi = solver_chi->get_solution();
+                    for (IndexInt i = 0; i < grid.get_n_local(); i++)
+                        grid.get_data(i).chi = chi[i];
+                }
                 typename Grid::ProlongFunction prolong = [](const CellData & parent, const auto &, const auto &) {
-                    return CellData{parent.phi, 0.0};
+                    return CellData{parent.phi, 0.0, parent.chi};
                 };
                 typename Grid::RestrictFunction restrict_func = [](const std::vector<CellData> & kids, const auto &, const auto &) {
-                    double phi = 0.0;
-                    for (auto & k : kids)
+                    double phi = 0.0, chi = 0.0;
+                    for (auto & k : kids) {
                         phi += k.phi / double(kids.size());
-                    return CellData{phi, 0.0};
+                        chi += k.chi / double(kids.size());
+                    }
+                    return CellData{phi, 0.0, chi};
                 };
                 std::vector<double> counts;
                 const int nadapt =
@@ -800,6 +849,10 @@ namespace FML {
                 FML::MaxOverTasks(&lmax);
                 FML::MinOverTasks(&coarsest_leaf);
                 nbins = lmax - grid.get_levelmin() + 1;
+                // Free the old solvers before making the new ones (their memory is most of the total; their solutions
+                // were saved in the cell data above)
+                solver.reset();
+                solver_chi.reset();
                 solver = std::make_unique<Solver>(grid, -1, false);
                 solver->set_convergence_criterion_residual(true);
                 solver->set_maxsteps(p.mg_maxsteps);
@@ -810,6 +863,20 @@ namespace FML {
                         guess[i] = grid.get_data(i).phi;
                     solver->set_initial_guess(guess);
                 }
+                if (symmetron) {
+                    // The same multigrid on the same leaves for chi, started from the last field (carried with the
+                    // leaves like phi) once the field exists
+                    solver_chi = std::make_unique<Solver>(grid, -1, false);
+                    solver_chi->set_convergence_criterion_residual(true);
+                    solver_chi->set_maxsteps(p.mg_maxsteps);
+                    ext_id_chi = solver_chi->add_external_field(std::vector<double>(grid.get_n_local(), 0.0));
+                    if (chi_started) {
+                        std::vector<double> guess(grid.get_n_local());
+                        for (IndexInt i = 0; i < grid.get_n_local(); i++)
+                            guess[i] = grid.get_data(i).chi;
+                        solver_chi->set_initial_guess(guess);
+                    }
+                }
                 touches_finer = leaves_touching_finer(grid);
                 fixed_volume.clear();
                 last.time_solver_setup += now() - t1;
@@ -818,7 +885,7 @@ namespace FML {
 
             // Density on the leaves, Poisson solve (full, or partial on the leaves at levels >= min_level) and the force
             // on the particles in bins >= min_bin
-            inline void AMRNBodySimulation::compute_forces(int min_bin, int min_level, bool full) {
+            inline void AMRNBodySimulation::compute_forces(int min_bin, int min_level, bool full, double a_now) {
                 double t0 = now();
                 // A partial solve needs a good part of the box fixed: with the fixed leaves only a small part of the
                 // volume the (periodic) problem is nearly singular and the masked multigrid converges slowly, and the
@@ -837,6 +904,7 @@ namespace FML {
                         full = true;
                 }
                 // A partial solve that does not converge (see AMRMultiGridSolver::solve) is redone as a full solve
+                std::vector<double> delta;
                 for (int attempt = 0; attempt < 2; attempt++) {
                     if (full)
                         min_level = grid.get_levelmin();
@@ -849,7 +917,7 @@ namespace FML {
                     const auto mass = (full and not mass_from_regrid.empty()) ? mass_from_regrid
                                                                                : assign_mass_to_leaves(grid, part, mpart, p.cic, use);
                     mass_from_regrid.clear();
-                    std::vector<double> delta(grid.get_n_local());
+                    delta.assign(grid.get_n_local(), 0.0);
                     double norm2 = 0.0, mean = 0.0;
                     for (IndexInt i = 0; i < grid.get_n_local(); i++) {
                         const auto & c = grid.get_cell(i);
@@ -906,6 +974,30 @@ namespace FML {
 
                 // The force on the leaves the active particles use (levels >= min_level), then on the particles
                 compute_force_field(*solver, min_level, p.gradient_order, force);
+                // (chi = 0 at symmetry breaking, and chi = 0 solves the equation: start after it)
+                if (symmetron and a_now > p.symmetron_assb * (1.0 + 1e-8)) {
+                    const double ts = now();
+                    if (not add_symmetron_force(delta, min_level, full, a_now)) {
+                        // The partial solve of chi did not converge: a full solve, which needs the full density and
+                        // the force of every leaf
+                        last.nsym_fallback++;
+                        const auto mass = assign_mass_to_leaves(grid, part, mpart, p.cic);
+                        double mean = 0.0;
+                        for (IndexInt i = 0; i < grid.get_n_local(); i++) {
+                            const double vol = std::ldexp(1.0, -NDIM * grid.get_cell(i).level);
+                            delta[i] = mass[i] / vol - 1.0;
+                            mean += delta[i] * vol;
+                        }
+                        FML::SumOverTasks(&mean);
+                        for (auto & d : delta)
+                            d -= mean;
+                        min_level = grid.get_levelmin();
+                        compute_force_field(*solver, min_level, p.gradient_order, force);
+                        add_symmetron_force(delta, min_level, true, a_now);
+                    }
+                    last.time_symmetron += now() - ts;
+                    t0 = now();
+                }
                 std::vector<std::array<double, NDIM>> force_ghost;
                 grid.communicate_ghosts(force, force_ghost);
                 for (size_t ip = 0; ip < part.get_npart(); ip++) {
@@ -917,6 +1009,100 @@ namespace FML {
                         pt.Acc[d] = f[d];
                 }
                 last.time_force += now() - t0;
+            }
+
+            inline bool AMRNBodySimulation::add_symmetron_force(const std::vector<double> & delta,
+                                                                int min_level,
+                                                                bool full,
+                                                                double a_now) {
+                const auto & S = *symmetron;
+                const double f0 = S.get_phi_background(a_now);
+                const double norm = S.get_norm(a_now);
+                const double fac = std::pow(p.symmetron_assb / a_now, 3);
+                const int iN = int(std::lround(p.symmetron_N)), iM = int(std::lround(p.symmetron_M));
+                auto ipow = [](double x, int k) {
+                    double r = 1.0;
+                    for (int j = 0; j < k; j++)
+                        r *= x;
+                    return r;
+                };
+                // Just after symmetry breaking start from the background value everywhere. chi = 0 is an (unstable)
+                // solution of the equation, so a field that is zero everywhere is started again from the background
+                bool restart = not chi_started;
+                if (chi_started and full) {
+                    double cmax = 0.0;
+                    for (auto x : solver_chi->get_solution())
+                        cmax = std::max(cmax, std::fabs(x));
+                    FML::MaxOverTasks(&cmax);
+                    restart = cmax < 1e-3 * f0;
+                }
+                if (restart) {
+                    solver_chi->set_initial_guess(f0);
+                    chi_started = true;
+                    full = true;
+                    min_level = grid.get_levelmin();
+                }
+                solver_chi->set_external_field(ext_id_chi, delta);
+                // Converged when the residual < symmetron_epsilon * rms of the linear source norm fac f0^(N-1) delta
+                // (on the unknown leaves)
+                double rms = 0.0;
+                for (IndexInt i = 0; i < grid.get_n_local(); i++)
+                    if (grid.get_cell(i).level >= min_level)
+                        rms += delta[i] * delta[i] * std::ldexp(1.0, -NDIM * grid.get_cell(i).level);
+                FML::SumOverTasks(&rms);
+                rms = norm * fac * ipow(f0, iN - 1) * std::sqrt(rms);
+                solver_chi->set_epsilon(p.symmetron_epsilon * std::max(rms, 1e-10));
+                solver_chi->set_subtract_mean_residual(false);
+                const int id = ext_id_chi;
+                // D^2 chi - norm [chi^(N-1) (fac (1 + delta) - 1) + chi^(M-1)] = 0 (AMRSymmetronSolver.h)
+                FML::SOLVERS::AMRMULTIGRIDSOLVER::AMREquation<NDIM> eq = [=](const Solver & s, int level, IndexInt i) {
+                    auto [lap, dlap] = s.get_laplacian(level, i);
+                    const double f = s.get_field(level, i);
+                    const double d = s.get_external_field(id, level, i);
+                    const double fN2 = ipow(f, iN - 2), fM2 = ipow(f, iM - 2);
+                    const double source = norm * (fN2 * f * (fac * (1.0 + d) - 1.0) + fM2 * f);
+                    const double dsource = norm * ((iN - 1.0) * fN2 * (fac * (1.0 + d) - 1.0) + (iM - 1.0) * fM2);
+                    // Newton-Gauss-Seidel with the derivative of the source only where it is positive: where it is
+                    // negative (chi below the minimum of the potential, e.g. just after symmetry breaking) the full
+                    // derivative can vanish on the coarse levels (cells larger than the range) and the update blow up.
+                    // The solution is the same
+                    return std::pair<double, double>{lap - source, dlap - std::max(dsource, 0.0)};
+                };
+                const auto res = full ? solver_chi->solve(eq) : solver_chi->solve(eq, min_level);
+                last.sym_vcycles += res.iterations;
+                (full ? last.nsym_full : last.nsym_partial)++;
+                if (not res.converged()) {
+                    if (not full)
+                        return false;
+                    last.nsym_notconverged++;
+                }
+
+                // The fifth force -D(PhiF) = -forcenorm N chi^(N-1) D(chi) in the units of the force field (-D phi with
+                // D^2 phi = delta): dv/dtau = -D(PhiF) / (a^2 E) = -(3/2) OmegaM / (a E) D(PhiF) / ((3/2) OmegaM a)
+                std::vector<std::array<double, NDIM>> fchi;
+                compute_force_field(*solver_chi, min_level, p.gradient_order, fchi);
+                const auto & chi = solver_chi->get_solution();
+                const double unit = S.get_forcenorm(a_now) * p.symmetron_N / (1.5 * p.OmegaM * a_now);
+                double cmin = 1e100, cmax = -1e100, cmean = 0.0;
+                for (IndexInt i = 0; i < grid.get_n_local(); i++) {
+                    const auto & c = grid.get_cell(i);
+                    cmin = std::min(cmin, chi[i]);
+                    cmax = std::max(cmax, chi[i]);
+                    cmean += chi[i] * std::ldexp(1.0, -NDIM * c.level);
+                    if (c.level < min_level)
+                        continue;
+                    const double w = unit * ipow(chi[i], iN - 1);
+                    for (int d = 0; d < NDIM; d++)
+                        force[i][d] += w * fchi[i][d];
+                }
+                FML::MinOverTasks(&cmin);
+                FML::MaxOverTasks(&cmax);
+                FML::SumOverTasks(&cmean);
+                last.chi_min = cmin;
+                last.chi_max = cmax;
+                last.chi_mean = cmean;
+                last.chi_background = f0;
+                return true;
             }
 
             // The bin a particle wants: the level of its leaf, or finer if needed for |v dt_drift| < cfl * cellsize
@@ -1000,7 +1186,7 @@ namespace FML {
                     FML::SumOverTasks(&nactive);
                     if (nactive == 0)
                         continue;
-                    compute_forces(min_bin, min_level, full);
+                    compute_forces(min_bin, min_level, full, a_now);
 
                     // Closing half kick of the active particles, new bin, opening half kick (not at the end)
                     t0 = now();
@@ -1066,8 +1252,15 @@ namespace FML {
                    << " per particle)\n"
                    << "  time [s]: grid " << last.time_grid << " (refine " << last.time_refine << " in " << last.refine_passes
                    << " passes, solver setup " << last.time_solver_setup << ")  density " << last.time_density << "  solve "
-                   << last.time_solve << " (full " << last.time_solve_full << ")  force " << last.time_force << "  move " << last.time_move << "\n"
-                   << std::defaultfloat;
+                   << last.time_solve << " (full " << last.time_solve_full << ")  force " << last.time_force << "  move " << last.time_move;
+                if (symmetron)
+                    os << "  symmetron " << last.time_symmetron;
+                os << "\n" << std::defaultfloat;
+                if (symmetron and (last.nsym_full + last.nsym_partial) > 0)
+                    os << "  symmetron: " << last.nsym_full << " full + " << last.nsym_partial << " partial solves ("
+                       << last.nsym_fallback << " redone as full, " << last.nsym_notconverged << " not converged; "
+                       << last.sym_vcycles << " V-cycles), chi/chi_* min " << last.chi_min << " mean " << last.chi_mean
+                       << " max " << last.chi_max << " (background " << last.chi_background << ")\n";
             }
 
         } // namespace AMR

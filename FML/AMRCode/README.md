@@ -40,8 +40,24 @@ set in `../Makefile.config` / `Makefile.local` as for the rest of FML.
 Units: positions in [0,1), velocities `v = a^2 dx/dt / (H0 B)` (FML's convention), and
 `dx/dtau = v / (a^2 E)`, `dv/dtau = -(3/2) OmegaM / (a E) D phi`, `D^2 phi = delta`.
 
+5. **Symmetron gravity** (`gravity_model = Symmetron`, parameters `symmetron_assb`, `symmetron_beta`,
+   `symmetron_L_mpch`, `symmetron_N`, `symmetron_M`): the scalar field chi = phi / phi_* of the quasi-static
+   symmetron equation (with screening; `MultigridSolver/AMRSymmetronSolver.h`) is solved on the same leaves with
+   the same multigrid, with full and partial solves exactly as the potential (so at every sub-step), started from
+   the last field (carried through refinement like phi). The fifth force -D(PhiF) / (a^2 E), PhiF = forcenorm
+   chi^N, is added to the force on the leaves. Before symmetry breaking (a < a_ssb) the run is LCDM. The Newton
+   update uses the derivative of the source only where it is positive (where chi is below the minimum of the
+   potential, just after symmetry breaking, the full derivative vanishes on cells larger than the range and the
+   update blew up). Check (64^3 in 128 Mpc/h, a_ssb = 0.5, beta = 1, L = 1 Mpc/h): P_Symmetron / P_LCDM at z = 0 is
+   1.023 / 1.031 at k = 0.3 / 0.5 h/Mpc, against 1.019 / 1.027 from SimulationCode (PM with the exact symmetron
+   solver, the same initial amplitude); at k > 1 h/Mpc it stays near 1.03 while PM goes up to 1.09 at k = 2: the
+   AMR resolves the halos, where the field is screened. The symmetron costs about 20% more time and 70% more memory
+   (a second solver).
+
 Outputs: `pofk_<label>_z<z>.txt` (k, P(k) without shot-noise subtraction, linear P(k)) and optionally GADGET
-snapshots, at `output_redshifts`. Every coarse step prints the leaves and particles per level and a timing
+snapshots and a PNG of the particles in a slab through the middle of the box (`output_images`, `images_npix`,
+`images_slab_thickness`), at `output_redshifts`. The parameter file can `include = file` another (shared
+settings), and keys that are not parameters give a warning. Every coarse step prints the leaves and particles per level and a timing
 breakdown.
 
 ## Files
@@ -112,4 +128,9 @@ first version). At z = 0 a coarse step costs: refinement 0.8 s, solver setup 1.1
   step and now dominate.
 - The coarse step is fixed (`nsteps` in log a); there is no adaptive global step.
 - With the base level equal to the particle grid, intermediate scales lose a few % of growth (see Tests).
-- No OpenMP. Only flat LCDM (no massive neutrinos or modified gravity, though the solver has DGP).
+- No OpenMP. Flat LCDM and the symmetron (no massive neutrinos; the solver also has DGP).
+- **Memory**: about 2.7 kB per particle for LCDM (64^3: 0.7 GB) and 4.8 kB with the symmetron, mostly the
+  multigrid solver, whose levels between the base level and the finest each hold a copy of the base leaves (so it
+  grows with levelmax - levelmin). Freeing the old solver before building the new one at a regrid (it was 1.5 GB
+  for 64^3) and 32 bit face indices brought it down from 5.8 kB. Storing only the refined region on the coarse
+  multigrid levels would remove most of the rest.

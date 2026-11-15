@@ -20,9 +20,11 @@
 #include <FML/NBody/NBody.h>
 #include <FML/ParticleTypes/SimpleParticle.h>
 #include <FML/RandomGenerator/RandomGenerator.h>
+#include <FML/Visualization/Visualization.h>
 
 #include <fstream>
 #include <map>
+#include <set>
 #include <sstream>
 
 using namespace FML::NBODY::AMR;
@@ -32,11 +34,18 @@ using namespace FML::NBODY::AMR;
 //==========================================================================================
 class ParameterFile {
     std::map<std::string, std::string> values;
+    mutable std::set<std::string> used;
 
   public:
-    explicit ParameterFile(const std::string & filename) {
+    /// "include = file" reads the keys of another file there (relative to this file's folder); a key set later
+    /// (after the include, or in the including file) replaces an earlier value
+    explicit ParameterFile(const std::string & filename, int depth = 0) { read(filename, depth); }
+    void read(const std::string & filename, int depth) {
+        assert_mpi(depth < 10, "ParameterFile: too many nested includes");
         std::ifstream fp(filename);
         assert_mpi(fp.good(), ("Cannot open parameter file " + filename).c_str());
+        const auto slash = filename.find_last_of('/');
+        const std::string folder = slash == std::string::npos ? "" : filename.substr(0, slash + 1);
         std::string line;
         while (std::getline(fp, line)) {
             line = line.substr(0, line.find('#'));
@@ -48,19 +57,33 @@ class ParameterFile {
                 s.erase(s.find_last_not_of(" \t\r") + 1);
                 return s;
             };
-            values[trim(line.substr(0, eq))] = trim(line.substr(eq + 1));
+            const auto key = trim(line.substr(0, eq)), value = trim(line.substr(eq + 1));
+            if (key == "include") {
+                read(value.size() and value[0] == '/' ? value : folder + value, depth + 1);
+                continue;
+            }
+            values[key] = value;
         }
     }
+    /// Keys in the file that were never read (typos): a warning on task 0
+    void warn_unused() const {
+        for (auto & kv : values)
+            if (not used.count(kv.first) and FML::ThisTask == 0)
+                std::cout << "Warning: [" << kv.first << "] in the parameter file is not a parameter (typo?)\n";
+    }
     std::string get(const std::string & key, const std::string & def) const {
+        used.insert(key);
         auto it = values.find(key);
         return it == values.end() ? def : it->second;
     }
     double get(const std::string & key, double def) const {
+        used.insert(key);
         auto it = values.find(key);
         return it == values.end() ? def : std::stod(it->second);
     }
     int get(const std::string & key, int def) const { return int(get(key, double(def))); }
     bool get(const std::string & key, bool def) const {
+        used.insert(key);
         auto it = values.find(key);
         return it == values.end() ? def : (it->second == "true" or it->second == "1" or it->second == "yes");
     }
@@ -245,6 +268,14 @@ int main(int argc, char ** argv) {
     par.cfl = pf.get("cfl", 0.5);
     par.mg_epsilon = pf.get("mg_epsilon", 1e-6);
     par.mg_maxsteps = pf.get("mg_maxsteps", 50);
+    par.boxsize = box;
+    par.gravity_model = pf.get("gravity_model", std::string("LCDM"));
+    par.symmetron_assb = pf.get("symmetron_assb", 0.5);
+    par.symmetron_beta = pf.get("symmetron_beta", 1.0);
+    par.symmetron_L_mpch = pf.get("symmetron_L_mpch", 1.0);
+    par.symmetron_N = pf.get("symmetron_N", 2.0);
+    par.symmetron_M = pf.get("symmetron_M", 4.0);
+    par.symmetron_epsilon = pf.get("symmetron_epsilon", 1e-6);
     const int Npart_1D = pf.get("Npart_1D", 64);
     const int Nmesh_ic = pf.get("Nmesh_ic", Npart_1D);
     const int LPT_order = pf.get("LPT_order", 2);
@@ -257,9 +288,15 @@ int main(int argc, char ** argv) {
     const std::string label = pf.get("label", std::string("amrnbody"));
     const int pofk_ngrid = pf.get("pofk_ngrid", 2 * Npart_1D);
     const bool gadget = pf.get("output_gadget", false);
+    // A PNG of the particles in a slab through the middle of the box at every output
+    const bool images = pf.get("output_images", false);
+    const int images_npix = pf.get("images_npix", 1024);
+    const double images_thickness = pf.get("images_slab_thickness", 0.1);
 
     LCDM cosmo(OmegaM);
-    LinearPower pk(pk_file, OmegaM, OmegaB, h, ns, pk_file.empty() ? sigma8 : pf.get("sigma8_rescale", -1.0));
+    const double sigma8_rescale = pf.get("sigma8_rescale", -1.0);
+    LinearPower pk(pk_file, OmegaM, OmegaB, h, ns, pk_file.empty() ? sigma8 : sigma8_rescale);
+    pf.warn_unused();
 
     //======================================================================================
     // Initial conditions (made on the FFTW slab domain, then moved to the grid's domain)
@@ -296,7 +333,7 @@ int main(int argc, char ** argv) {
                 part[i].Acc[d] = 0.0;
     }
     if (FML::ThisTask == 0)
-        std::cout << "\nAMRNBody: " << Npart_1D << "^3 particles, box " << box << " Mpc/h, levels " << par.levelmin
+        std::cout << "\nAMRNBody (" << par.gravity_model << "): " << Npart_1D << "^3 particles, box " << box << " Mpc/h, levels " << par.levelmin
                   << "-" << par.levelmax << ", refine above " << par.n_refine << " particles, z = " << zini
                   << " -> " << (zout.empty() ? 0.0 : *std::min_element(zout.begin(), zout.end())) << "\n";
 
@@ -335,6 +372,15 @@ int main(int argc, char ** argv) {
             output_power_spectrum(outdir + "/pofk_" + label + "_z" + zs + ".txt", part, pofk_ngrid, box, sim.a, pk, cosmo);
             if (gadget)
                 output_gadget(outdir + "/gadget_" + label + "_z" + zs, part, sim.a, box, OmegaM, h);
+            if (images) {
+                const auto image = FML::VISUALIZATION::project_particles(
+                    part.get_particles_ptr(), part.get_npart(), images_npix, 2, 0.5 - 0.5 * images_thickness, images_thickness);
+                if (FML::ThisTask == 0)
+                    FML::VISUALIZATION::write_png(outdir + "/image_density_" + label + "_z" + zs + ".png",
+                                                  image,
+                                                  "magma",
+                                                  FML::VISUALIZATION::ColorScale::automatic_log(1.0, 99.9));
+            }
             if (FML::ThisTask == 0)
                 std::cout << "  output at z = " << zs << "\n";
             iout++;

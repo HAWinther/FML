@@ -35,3 +35,12 @@ output_folder    = .
 label            = test
 pofk_ngrid       = 64
 output_gadget    = false
+output_images    = false # A PNG of the particles in a slab through the middle of the box at the outputs
+
+# Gravity: LCDM or Symmetron (the fifth force of the symmetron, solved on the AMR grid)
+gravity_model    = LCDM
+# symmetron_assb   = 0.5 # Symmetry breaking scale factor
+# symmetron_beta   = 1.0 # Coupling
+# symmetron_L_mpch = 1.0 # Range in vacuum (Mpc/h)
+# symmetron_N      = 2   # Powers of the potential (2, 4: the original symmetron)
+# symmetron_M      = 4

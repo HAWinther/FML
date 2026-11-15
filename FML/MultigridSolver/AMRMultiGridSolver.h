@@ -91,11 +91,12 @@ namespace FML {
 
               private:
                 // A face of a local cell: the neighbours across it (index >= 0 is local, < 0 is ghost -1-index)
+                // (32 bit indices: the faces are most of the solver's memory, 20 instead of 40 bytes per face)
                 struct Face {
                     int8_t rel{FaceNeighbors::BOUNDARY};
                     int8_t n{0};
                     uint8_t tbits{0}; // COARSER: bit t set if the cell is in the upper half of the coarse cell along t
-                    std::array<IndexInt, NSUB> nb{};
+                    std::array<int32_t, NSUB> nb{};
                 };
 
                 struct Level {
@@ -376,6 +377,8 @@ namespace FML {
             void AMRMultiGridSolver<NDIM>::build_level(Level & L, bool coarsest) {
                 const auto & g = L.grid;
                 const IndexInt n = g.get_n_local();
+                assert_mpi(n + g.get_n_ghost() < IndexInt(std::numeric_limits<int32_t>::max()),
+                           "AMRMultiGridSolver: too many cells on one task for 32 bit face indices");
                 L.faces.assign(n * NFACE, Face{});
                 L.coarse_side.clear();
                 for (int c = 0; c < 2; c++)
@@ -397,7 +400,7 @@ namespace FML {
                             F.n = int8_t(nb.n);
                             for (int j = 0; j < nb.n; j++) {
                                 assert_mpi(bool(nb.cells[j]), "AMRMultiGridSolver: missing face neighbour");
-                                F.nb[j] = nb.cells[j].is_local() ? nb.cells[j].index : -1 - nb.cells[j].index;
+                                F.nb[j] = int32_t(nb.cells[j].is_local() ? nb.cells[j].index : -1 - nb.cells[j].index);
                             }
                             if (nb.relation == FaceNeighbors::FINER)
                                 has_finer = true;

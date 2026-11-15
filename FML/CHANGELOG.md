@@ -5,6 +5,15 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### AMRCode: symmetron gravity and less memory
+- `gravity_model = Symmetron`: the symmetron field is solved on the AMR leaves with the same multigrid as the
+  potential (full and partial solves, so at every sub-step) and its fifth force added. P_Symmetron / P_LCDM agrees
+  with SimulationCode's exact solver on large scales (1.023 against 1.019 at k = 0.3 h/Mpc, 64^3 in 128 Mpc/h) and is
+  lower where AMR resolves screened halos.
+- Memory: the old multigrid solver is freed before the new one is built at a regrid, and the solver's face table
+  uses 32 bit indices (`AMRMultiGridSolver`): 2.7 instead of 5.8 kB per particle (LCDM).
+- Parameter files can `include =` another, unknown keys give a warning; `output_images` writes a PNG of the particles.
+
 ### Images of fields at the outputs (SimulationCode and SnapshotAnalyzer)
 - `images = true` writes PNG pictures (and with `images_npy` the values as .npy) of a slab of fields projected along an
   axis, `image_<field>_z<z>.png` in the snapshot folder, with FML/Visualization (no dependencies). Fields: `density`,
