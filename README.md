@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/HAWinther/FML/actions/workflows/ci.yml/badge.svg)](https://github.com/HAWinther/FML/actions/workflows/ci.yml)
 
-**This is FML 2.0.** The changes since 1.0 are in the [changelog](FML/CHANGELOG.md); for the old version see
+The library is constantly under construction. **This is FML 2.0.** The changes since 1.0 are in the [changelog](FML/CHANGELOG.md); for the old version see
 [Version 1.0](#version-10).
 
 **FML is a C++17 library for large-scale-structure cosmology.** It has the pieces you need to set up, run and analyse
