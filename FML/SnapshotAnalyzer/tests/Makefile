@@ -6,6 +6,8 @@ USE_MPI ?= true
 MPIRUN ?= mpirun
 NP_LIST ?= 1 2 4
 PYTHON ?= python3
+# Idle OpenMP threads sleep (more tasks x threads than cores; as in Makefile.config)
+export OMP_WAIT_POLICY ?= passive
 
 ifeq ($(USE_MPI),true)
 RUNNER = --mpirun "$(MPIRUN)" --np "$(NP_LIST)"

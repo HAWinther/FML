@@ -1,4 +1,6 @@
-# Build the library examples, run the library and module tests and build SimulationCode on every push and pull request
+# Build the library examples, run the library and module tests and build SimulationCode on every push and pull
+# request. Four jobs run in parallel (each with its own compiler cache); the tests run on 1 and 4 MPI tasks. The
+# nightly workflow (nightly.yml) adds 2 tasks, the Einstein-Boltzmann solver's tests and the long SimulationCode checks
 name: CI
 
 on:
@@ -6,70 +8,99 @@ on:
   pull_request:
   workflow_dispatch:
 
+# A new push to a branch cancels the CI still running for an older commit of it
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Idle OpenMP threads sleep: the tests run more tasks x threads than the runner has cores (also set by the Makefiles)
+  OMP_WAIT_POLICY: passive
+  MPIRUN: mpirun --oversubscribe
+
 jobs:
-  build-and-test:
+  examples:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends g++ make openmpi-bin libopenmpi-dev \
-            libfftw3-dev libfftw3-mpi-dev libgsl-dev liblua5.4-dev libhdf5-dev python3-numpy python3-venv \
-            libcgal-dev python3-h5py
-
-      - name: Machine settings (Makefile.local)
-        run: cp .github/ci/Makefile.local FML/Makefile.local
-
+      - uses: ./.github/actions/setup
+        with:
+          cache-key: examples
       - name: Build the examples
         run: make -C FML examples -j4
 
-      - name: Library tests (1, 2 and 4 MPI tasks)
-        run: make -C FML test MPIRUN="mpirun --oversubscribe" NP_LIST="1 2 4"
+  library-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+        with:
+          cache-key: library-tests
+      - name: Library tests (1 and 4 MPI tasks)
+        run: make -C FML test -j4 MPIRUN="$MPIRUN" NP_LIST="1 4"
 
-      # Every FML/*/tests directory (the Einstein-Boltzmann solver's tests take ~15 min: nightly only)
-      - name: Module tests (1, 2 and 4 MPI tasks)
-        run: .github/ci/run_module_tests.sh Cosmology/EinsteinBoltzmannSolver/tests
+  module-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+        with:
+          cache-key: module-tests
+      # Every FML/*/tests directory except the Einstein-Boltzmann solver's (~15 min: nightly) and Analysis and
+      # SnapshotAnalyzer (run with CGAL and HDF5 in the analysis-and-simulation job)
+      - name: Module tests (1 and 4 MPI tasks)
+        run: |
+          NP_LIST="1 4" .github/ci/run_module_tests.sh Cosmology/EinsteinBoltzmannSolver/tests Analysis/tests \
+            SnapshotAnalyzer/tests
 
       - name: Single-precision arbitrary-order LPT references
         run: |
           make -C FML/LPT/tests clean
           make -C FML/LPT/tests -j4 run USE_MPI=false USE_OMP=true LPT_PRECISION=float FFTW_LINK=-lfftw3f
 
-      # The module tests above build without CGAL and HDF5: the shared analysis code and the snapshot analyzer again
-      # with ZOBOV and DTFE (CGAL) and Gadget HDF5 input
-      - name: Analysis and SnapshotAnalyzer with CGAL and HDF5 (1, 2 and 4 MPI tasks)
+  analysis-and-simulation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+        with:
+          cache-key: analysis-and-simulation
+          extra-packages: libcgal-dev python3-h5py
+
+      # The shared analysis code and the snapshot analyzer with ZOBOV and DTFE (CGAL) and Gadget HDF5 input
+      - name: Analysis and SnapshotAnalyzer with CGAL and HDF5 (1 and 4 MPI tasks)
         run: |
           CGAL="USE_CGAL=true CGAL_INCLUDE=/usr/include CGAL_LIB=/usr/lib/x86_64-linux-gnu"
-          make -C FML/Analysis/tests -B -j4 run $CGAL MPIRUN="mpirun --oversubscribe" NP_LIST="1 2 4"
-          make -C FML/SnapshotAnalyzer/tests run $CGAL USE_HDF5=true MPIRUN="mpirun --oversubscribe" NP_LIST="1 2 4"
+          make -C FML/Analysis/tests -B -j4 run $CGAL MPIRUN="$MPIRUN" NP_LIST="1 4"
+          make -C FML/SnapshotAnalyzer/tests run $CGAL USE_HDF5=true MPIRUN="$MPIRUN" NP_LIST="1 4"
 
-      # make examples already built SimulationCode without HDF5 and make does not track the flags: rebuild (-B)
       - name: Build SimulationCode (with HDF5)
         run: make -C FML/SimulationCode -B -j4 USE_HDF5=true && ldd FML/SimulationCode/nbody | grep -q hdf5
 
       - name: SimulationCode baryonification parameter and snapshot-copy tests
-        run: make -C FML/SimulationCode/tests run USE_MPI=false USE_OMP=false
+        run: make -C FML/SimulationCode/tests run -j4 USE_MPI=false USE_OMP=false
       - name: Every parameter read by SimulationCode is in the parameter schema
         run: python3 FML/SimulationCode/tests/check_parameter_names.py
 
       - name: PARAMETERS.md is up to date with the parameter schema
         run: |
           cd FML/SimulationCode
-          mpirun --oversubscribe -np 1 ./nbody --parameters /tmp/PARAMETERS.md
+          $MPIRUN -np 1 ./nbody --parameters /tmp/PARAMETERS.md
           diff -u PARAMETERS.md /tmp/PARAMETERS.md
 
       - name: internal_solver_default.ini is up to date with the solver's parameters
         run: |
           cd FML/SimulationCode
-          mpirun --oversubscribe -np 1 ./nbody --write-solver-defaults /tmp/internal_solver_default.ini
+          $MPIRUN -np 1 ./nbody --write-solver-defaults /tmp/internal_solver_default.ini
           diff -u internal_solver_default.ini /tmp/internal_solver_default.ini
 
       - name: SimulationCode stops with a clear message on invalid parameters
         run: |
-          MPIRUN="mpirun --oversubscribe -np 2" python3 FML/SimulationCode/tests/check_validation.py \
+          MPIRUN="$MPIRUN -np 2" python3 FML/SimulationCode/tests/check_validation.py \
             FML/SimulationCode/nbody "$RUNNER_TEMP/validation"
 
       - name: Python analysis installed-wheel regressions
@@ -82,6 +113,6 @@ jobs:
       - name: Performance counter and report checks (no timing thresholds)
         run: |
           make -C FML/Performance -j4 USE_GSL=false USE_LUA=false
-          OMP_NUM_THREADS=2 mpirun --oversubscribe -np 2 FML/Performance/test_counters
-          OMP_NUM_THREADS=2 mpirun --oversubscribe -np 2 FML/Performance/test_counters_disabled
+          OMP_NUM_THREADS=2 $MPIRUN -np 2 FML/Performance/test_counters
+          OMP_NUM_THREADS=2 $MPIRUN -np 2 FML/Performance/test_counters_disabled
           python3 FML/Performance/test_reports.py --exe FML/Performance/fml_benchmark -v

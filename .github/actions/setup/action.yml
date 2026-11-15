@@ -1,0 +1,34 @@
+# Shared setup of the CI jobs: the Ubuntu packages, the CI Makefile.local and a compiler cache (ccache, kept between
+# runs with actions/cache: a push that changes a few files recompiles only what includes them)
+name: Set up the FML build
+description: Install the dependencies, Makefile.local and ccache
+inputs:
+  cache-key:
+    description: Name of the ccache cache (one per job)
+    required: true
+  extra-packages:
+    description: More Ubuntu packages
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - name: Install dependencies
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends g++ make ccache openmpi-bin libopenmpi-dev \
+          libfftw3-dev libfftw3-mpi-dev libgsl-dev liblua5.4-dev libhdf5-dev python3-numpy python3-venv \
+          ${{ inputs.extra-packages }}
+        cp .github/ci/Makefile.local FML/Makefile.local
+        # mpicxx calls g++ from the PATH: the ccache wrappers come first
+        echo "/usr/lib/ccache" >> "$GITHUB_PATH"
+        echo "CCACHE_DIR=$HOME/.ccache" >> "$GITHUB_ENV"
+        echo "CCACHE_MAXSIZE=1500M" >> "$GITHUB_ENV"
+
+    - name: Compiler cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.ccache
+        key: ccache-${{ inputs.cache-key }}-${{ github.sha }}
+        restore-keys: ccache-${{ inputs.cache-key }}-

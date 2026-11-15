@@ -17,7 +17,7 @@
 # Examples that only need MPI/OpenMP/FFTW/GSL
 EXAMPLE_DIRS := $(sort $(dir $(wildcard */example/Makefile */examples/Makefile */*/example/Makefile */*/*/example/Makefile))) \
                 Cosmology/EinsteinBoltzmannSolver/ CosmologyFitting/ \
-                RamsesUtils/ramses2pk/ SimulationCode/
+                RamsesUtils/ramses2pk/ SimulationCode/ AMRCode/
 
 # Examples that need extra libraries (built with make examples-extra)
 #   LuaFileParser: LUA   Triangulation: CGAL   VoidFinders: CGAL + FFTW   Plotting: python + matplotlib
@@ -30,7 +30,7 @@ EXAMPLE_DIRS := $(filter-out $(EXTRA_DIRS),$(EXAMPLE_DIRS))
 # The unit tests of the modules (cleaned with make clean; tests/ is the main test suite)
 MODULE_TEST_DIRS := $(sort $(dir $(wildcard */tests/Makefile */*/tests/Makefile)))
 
-.PHONY: help examples examples-extra python python-analysis test-python-analysis benchmark benchmark-check test clean
+.PHONY: FORCE help examples examples-extra python python-analysis test-python-analysis benchmark benchmark-check test clean
 
 help:
 	@sed -n '2,12p' Makefile
@@ -42,8 +42,18 @@ define build_dirs
 	if [ -n "$$failed" ]; then echo "== FAILED:$$failed"; exit 1; else echo "== All built"; fi
 endef
 
+# The example directories are built in parallel with make -j (each one with the shared job slots); a failed directory
+# does not stop the others and is listed at the end
 examples:
-	$(call build_dirs,$(EXAMPLE_DIRS))
+	@rm -f .examples_failed
+	@$(MAKE) --no-print-directory -k $(addprefix example-dir/,$(EXAMPLE_DIRS)); \
+	if [ -s .examples_failed ]; then echo "== FAILED:$$(tr '\n' ' ' < .examples_failed)"; rm -f .examples_failed; exit 1; \
+	else rm -f .examples_failed; echo "== All built"; fi
+
+example-dir/%: FORCE
+	@echo "== $*"; $(MAKE) --no-print-directory -C $* || { echo "$*" >> .examples_failed; echo "== FAILED: $*"; }
+
+FORCE:
 
 examples-extra:
 	$(call build_dirs,$(EXTRA_DIRS))

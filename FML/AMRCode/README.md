@@ -5,36 +5,12 @@ A simple adaptive mesh refinement (AMR) N-body code for LCDM, in the spirit of R
 
 ```
 make && mpirun -np 4 ./amrnbody parameterfile.txt
-cd tests && make && mpirun -np 4 ./testamrnbody && mpirun -np 4 ./testpartial
+cd tests && make run && make run-zeldovich
 ```
 
-The Makefiles are not in the repository yet. `Makefile`:
-
-```make
-USE_MPI       ?= true
-USE_OMP       ?= false
-USE_FFTW      ?= true
-USE_MEMORYLOG ?= false
-USE_GSL       ?= true
-TARGETS := amrnbody
-include ../Makefile.config
-FML_MODULES := Global FileUtils GadgetUtils Spline ODESolver
-amrnbody: Main.o Global.o FileUtils.o GadgetUtils.o Spline.o ODESolver.o
-	$(LINK_EXE)
-```
-
-`tests/Makefile`:
-
-```make
-USE_MPI ?= true
-TARGETS := testamrnbody testpartial
-include ../../Makefile.config
-FML_MODULES := Global
-testamrnbody: TestAMRNBody.o Global.o
-	$(LINK_EXE)
-testpartial: TestPartialSolve.o Global.o
-	$(LINK_EXE)
-```
+`make run` in `tests` runs the deposit, blob and partial-solve tests on 1, 2 and 4 tasks (seconds); the
+Zel'dovich test takes a few minutes and runs with `make run-zeldovich` (4 tasks; nightly CI). The code is built in
+CI with the examples (`make examples` in `FML`).
 
 Needs MPI, FFTW (initial conditions and P(k) output) and GSL (FML's spline/ODE code used by the IC routines),
 set in `../Makefile.config` / `Makefile.local` as for the rest of FML.

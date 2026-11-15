@@ -1,4 +1,5 @@
-# Longer accuracy checks of SimulationCode, every night and on demand
+# Longer accuracy checks of SimulationCode, every night and on demand. Also what CI (ci.yml) leaves out to stay fast:
+# the library and module tests on 2 MPI tasks too and the Einstein-Boltzmann solver's tests
 name: Nightly accuracy checks
 
 on:
@@ -13,30 +14,35 @@ jobs:
     env:
       MPIRUN: mpirun --oversubscribe -np 2
       OUT: ${{ github.workspace }}/nightly
+      # Idle OpenMP threads sleep (more tasks x threads than cores)
+      OMP_WAIT_POLICY: passive
     steps:
       - uses: actions/checkout@v5
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends g++ make openmpi-bin libopenmpi-dev \
-            libfftw3-dev libfftw3-mpi-dev libgsl-dev liblua5.4-dev libhdf5-dev python3-numpy python3-scipy \
-            python3-pip cython3
-          # CLASS (python wrapper) for the N-body gauge check
-          pip3 install --break-system-packages classy
+      - uses: ./.github/actions/setup
+        with:
+          cache-key: nightly
+          extra-packages: python3-scipy python3-pip cython3
+
+      # CLASS (python wrapper) for the N-body gauge check
+      - name: Install CLASS
+        run: pip3 install --break-system-packages classy
 
       - name: Build SimulationCode
-        run: |
-          cp .github/ci/Makefile.local FML/Makefile.local
-          make -C FML/SimulationCode -j4 USE_HDF5=true
+        run: make -C FML/SimulationCode -j4 USE_HDF5=true
 
       - name: Library tests
         if: always()
-        run: make -C FML test MPIRUN="mpirun --oversubscribe" NP_LIST="1 2 4"
+        run: make -C FML test -j4 MPIRUN="mpirun --oversubscribe" NP_LIST="1 2 4"
 
       - name: Module tests, including the Einstein-Boltzmann solver (1, 2 and 4 MPI tasks)
         if: always()
-        run: .github/ci/run_module_tests.sh
+        # (MPIRUN without the -np 2 of the job: the Makefiles add -np)
+        run: MPIRUN="mpirun --oversubscribe" .github/ci/run_module_tests.sh
+
+      - name: AMRCode Zel'dovich test (4 MPI tasks)
+        if: always()
+        run: make -C FML/AMRCode/tests run-zeldovich MPIRUN="mpirun --oversubscribe"
 
       - name: Regression cases run and are reproducible (two identical runs)
         if: always()

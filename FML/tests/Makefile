@@ -349,12 +349,6 @@ run: $(TARGETS)
 	  OMP_NUM_THREADS=2 $(RUN) ./test_reconstruction; \
 	  echo "== Running test_multigrid with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_multigrid; \
-	  echo "== Running test_sphericalcollapse with $$np task(s)"; \
-	  OMP_NUM_THREADS=2 $(RUN) ./test_sphericalcollapse; \
-	  echo "== Running test_screened_collapse with $$np task(s)"; \
-	  OMP_NUM_THREADS=2 $(RUN) ./test_screened_collapse; \
-	  echo "== Running test_halomodel_reaction with $$np task(s)"; \
-	  OMP_NUM_THREADS=2 $(RUN) ./test_halomodel_reaction; \
 	  echo "== Running test_halomodel with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_halomodel; \
 	  echo "== Running test_gadget with $$np task(s)"; \
@@ -401,6 +395,10 @@ run: $(TARGETS)
 	done
 	@echo "== Running test_hybridbias"
 	@OMP_NUM_THREADS=2 $(RUN1) ./test_hybridbias
+	@# Serial code (no MPI): the same on any number of tasks, so run once
+	@for t in test_sphericalcollapse test_screened_collapse test_halomodel_reaction; do \
+	  echo "== Running $$t (serial code: one task)"; OMP_NUM_THREADS=2 $(RUN1) ./$$t || exit 1; \
+	done
 	@echo "== Checking that bad input aborts with a clear message"
 	@! $(RUN1) ./test_core alloc > alloc.log 2>&1 && grep -q "Reached allocation limit" alloc.log && echo "[PASS] allocation limit aborts"
 ifeq ($(USE_MPI),true)

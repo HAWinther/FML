@@ -204,6 +204,15 @@ def same(a, b, rtol=1e-6):
     return a.shape == b.shape and np.all(np.abs(a - b) <= rtol * (np.abs(a) + np.abs(b)) + 1e-30)
 
 
+def same_voids(a, b):
+    """The same voids. The barycenters (sums over the particles in a different order with a different number of tasks,
+    threads or the per-particle masses of HDF5 input) only to 0.01 Mpc/h, and not the density ratio column 8
+    (min/max density: ill conditioned when the minimum is ~0)"""
+    exact = [0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 15, 16, 17]
+    return a.shape == b.shape and same(a[:, exact], b[:, exact], 1e-6) and \
+        np.all(np.abs(a[:, 12:15] - b[:, 12:15]) < 0.01)
+
+
 class Runner:
     def __init__(self, exe, mpirun, workdir):
         self.exe, self.mpirun, self.workdir = exe, mpirun, workdir
@@ -306,14 +315,9 @@ def main():
         for f in ['pofk_z0.000.txt', 'pofk_multipole_z0.000.txt', 'bispectrum_z0.000.txt', 'cosmicweb_z0.000.txt',
                   'minkowski_z0.000.txt', 'pofk_baryonified_z0.000.txt', 'baryonification_z0.000.txt']:
             check(same(sorted_rows(ref / f), sorted_rows(d / f), 1e-6), f'{name}: {f} as {ref_name}')
-        # Voids: the same voids; the barycenters (sums in a different order) to 0.01 Mpc/h, not the density ratio
-        # (min/max density, ill conditioned when the minimum is ~0)
+        # Voids: the same voids (see same_voids)
         for f in ['voids_z0.000.txt', 'voids_spherical_z0.000.txt']:
-            a, b = table(ref / f), table(d / f)
-            exact = [0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 15, 16, 17]
-            ok = a.shape == b.shape and same(a[:, exact], b[:, exact], 1e-6) and \
-                np.all(np.abs(a[:, 12:15] - b[:, 12:15]) < 0.01)
-            check(ok, f'{name}: {f} as {ref_name}')
+            check(same_voids(table(ref / f), table(d / f)), f'{name}: {f} as {ref_name}')
         halos_a, halos_b = sorted_rows(ref / 'halos_z0.000.txt'), sorted_rows(d / 'halos_z0.000.txt')
         big_a, big_b = halos_a[halos_a[:, 0] > 1000], halos_b[halos_b[:, 0] > 1000]
         check(same(big_a, big_b, 1e-6), f'{name}: the large halos as {ref_name}')
@@ -400,8 +404,11 @@ def main():
                                        'output_folder': 'hdf5'}, n)
             if check(code == 0, f'HDF5 input runs ({code})'):
                 ref_n = results.get(f'np{n}_files_per_task', ref)
-                for f in ['pofk_z0.000.txt', 'baryonification_z0.000.txt', 'voids_z0.000.txt']:
+                for f in ['pofk_z0.000.txt', 'baryonification_z0.000.txt']:
                     check(same(table(ref_n / f), table(workdir / 'hdf5' / f), 1e-6), f'HDF5 input: {f} as binary')
+                # (the voids as in the comparison between task counts: compared exactly they failed now and then)
+                check(same_voids(table(ref_n / 'voids_z0.000.txt'), table(workdir / 'hdf5' / 'voids_z0.000.txt')),
+                      'HDF5 input: voids_z0.000.txt as binary')
                 check(len(list((workdir / 'hdf5').glob('gadget_baryonified_z0.000.*.hdf5'))) == n,
                       'HDF5 input: the baryonified snapshot is HDF5')
             else:

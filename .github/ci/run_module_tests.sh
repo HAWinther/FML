@@ -12,6 +12,8 @@ if [ -z "${MPIRUN:-}" ]; then
     *"Open MPI"*|*"OpenRTE"*) MPIRUN="mpirun --oversubscribe" ;;
   esac
 fi
+# Idle OpenMP threads sleep instead of spinning (more tasks x threads than cores; also set by the Makefiles)
+export OMP_WAIT_POLICY="${OMP_WAIT_POLICY:-passive}"
 failed=""
 for d in */tests */*/tests; do
   [ -f "$d/Makefile" ] || continue
