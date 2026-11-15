@@ -19,6 +19,15 @@ env:
   MPIRUN: mpirun --oversubscribe
 
 jobs:
+  # No big files in the repository (they stay in the history for good): seconds, no dependencies
+  large-files:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: No tracked file over 1 MB outside the allow-list
+        run: .github/ci/check_large_files.sh
+
   examples:
     runs-on: ubuntu-24.04
     timeout-minutes: 45

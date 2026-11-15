@@ -1,0 +1,22 @@
+# Tracked files allowed to be larger than 1 MB (checked by check_large_files.sh in CI). Add a file here only if
+# it has to be in the repository (data the code or the tests need)
+FML/Cosmology/EinsteinBoltzmannSolver/report/data/background.txt
+FML/Cosmology/EinsteinBoltzmannSolver/report/data/recombination_Honly.txt
+FML/Cosmology/EinsteinBoltzmannSolver/report/data/recombination_fiducial.txt
+FML/Cosmology/EinsteinBoltzmannSolver/report/data/recombination_noreion.txt
+FML/Cosmology/EinsteinBoltzmannSolver/report/data/recombination_saha.txt
+FML/Cosmology/EinsteinBoltzmannSolver/report/paper.pdf
+FML/CosmologyFitting/external/planck2018_lite/c_matrix_plik_v22.dat
+FML/Emulator/EuclidEmulator2.dat
+FML/FriendsOfFriends/tests/data/rfof_particles.txt
+FML/SimulationCode/input/transfer_tables/coupled_quintessence.txt
+FML/SimulationCode/input/transfer_tables/covariant_dark_scattering.txt
+FML/SimulationCode/input/transfer_tables/dark_scattering.txt
+FML/SimulationCode/input/transfer_tables/horndeski_cubic_galileon.txt
+FML/SimulationCode/input/transfer_tables/horndeski_kmouflage.txt
+FML/SimulationCode/input/transfer_tables/ide.txt
+FML/SimulationCode/input/transfer_tables/lcdm_nbody_gauge.txt
+FML/SimulationCode/input/transfer_tables/lcdm_nu0.0.txt
+FML/SimulationCode/input/transfer_tables/lcdm_nu0.1.txt
+FML/SimulationCode/input/transfer_tables/lcdm_nu0.2.txt
+FML/SimulationCode/input/transfer_tables/lcdm_nu0.4.txt
