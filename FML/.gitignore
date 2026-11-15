@@ -202,3 +202,7 @@ Survey/tests/test_workflow
 VoidFinders/tests/test_spherical
 # The grid type of the last build (SimulationCode, SnapshotAnalyzer: USE_PENCIL_GRID)
 .grid_flavour
+
+# Snapshots written by the GadgetUtils and RamsesUtils examples (synthetic data to read)
+GadgetUtils/example/example_gadget.*
+RamsesUtils/example/example_ramses/

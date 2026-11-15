@@ -60,27 +60,15 @@ Tests use the shared helpers in [`tests/TestHelpers.h`](tests/TestHelpers.h) (`F
 
 `examples-extra` selects dependency-heavy examples such as CGAL/Python-related workflows. The python wrappers (SWIG for MakePythonWrapper, pybind11 for HaloModel) are built by `make -C FML python`; import with the interpreter matching their build headers and NumPy installation. The new [analysis package](PythonAnalysis/README.md) instead uses `python -m pip install ./FML/PythonAnalysis` from the repository root, or `make -C FML python-analysis PYTHON=/path/to/venv/bin/python`. `make -C FML test-python-analysis PYTHON=...` tests an already installed package.
 
-The [CI workflow](../.github/workflows/ci.yml) records the Linux regression configuration. Linked tests describe coverage; listing a target here does not assert every example was rerun during the current documentation change. External test data and optional libraries are required only by the targets that use them. Production convergence/accuracy checks remain separate from build/unit tests.
+The [CI workflow](../.github/workflows/ci.yml) records the Linux regression configuration. Linked tests describe coverage; listing a target here does not assert every example was rerun during the current documentation change. Optional libraries are required only by the targets that use them. Production convergence/accuracy checks remain separate from build/unit tests.
 
-### Example data (`TestData` submodule)
+### Example data
 
-Some examples read input files from the `TestData` git submodule ([HAWinther/TestData](https://github.com/HAWinther/TestData)),
-by the relative path `../../../TestData/...` from their example directory. The library, the module tests, `FML/tests` and
-CI do not use it, so a plain clone leaves it empty. Fetch it before running these examples:
-
-```bash
-git submodule update --init TestData   # from the repository root
-```
-
-| Example | Files used |
-| --- | --- |
-| ComputePowerSpectra, FriendsOfFriends, TidalTensor, Triangulation, GadgetUtils (`Test.cpp`) | `particles_B1024.txt` |
-| GadgetUtils (`Main.cpp`) | `ExampleGadgetSnapshot/` |
-| RamsesUtils | `ExampleRamsesSnapshot/` |
-| PairCounting, Survey | `ExampleSurveyData/` (galaxies and randoms) |
-| PairCounting, KDTree, MultigridSolver (`Reconstruction.cpp`) | `galaxies_redshiftspace.txt`, `voids_realspace.txt` |
-
-New examples should generate their own input (e.g. a mock or a Gaussian random field) instead of adding to this list.
+The examples need no data files: those that read particles, halos, voids, a survey or a snapshot make a small
+synthetic data set with [`ExampleData/ExampleData.h`](ExampleData/ExampleData.h) (a toy clustered box with halos and
+voids, galaxies in redshift space, a survey patch with randoms; the GadgetUtils and RamsesUtils examples first write a
+snapshot of it and then read it). To use your own data, read it instead, e.g. with `FML::FILEUTILS::loadtxt`. New
+examples should also make their own input.
 
 ## Include paths and linked sources
 

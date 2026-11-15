@@ -1,5 +1,5 @@
 #include <FML/ComputePowerSpectra/ComputePowerSpectrum.h>
-#include <FML/FileUtils/FileUtils.h>
+#include <FML/ExampleData/ExampleData.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <cstring>
@@ -44,21 +44,22 @@ void ExamplesPower() {
     const double box = 1024.0;
 
     //======================================================================================
-    // Read particles from file
+    // Make particles: a toy clustered box (halos and voids) with velocities (km/s); every task makes the same ones.
+    // To use your own, read them e.g. with FML::FILEUTILS::loadtxt (ascii [x, y, z, vx, vy, vz])
     //======================================================================================
     if (FML::ThisTask == 0)
-        std::cout << "Reading particles from file\n";
+        std::cout << "Making particles\n";
+    const auto data = FML::EXAMPLEDATA::clustered_box(100000, box);
 
-    // Read ascii file with [x,y,z]
-    const std::string filename = "../../../TestData/particles_B1024.txt";
-    auto data = FML::FILEUTILS::loadtxt(filename);
-
-    // Create particles and scale to [0,1)
+    // Create particles with positions scaled to [0,1)
     std::vector<Particle> part;
-    for (auto & pos : data) {
-        for (auto & x : pos)
-            x /= box;
-        part.push_back(Particle(pos.data()));
+    for (auto & p : data.particles) {
+        double x[NDIM], v[NDIM];
+        for (int idim = 0; idim < NDIM; idim++) {
+            x[idim] = p.pos[idim] / box;
+            v[idim] = p.vel[idim];
+        }
+        part.push_back(Particle(x, v));
     }
 
     // Create MPI particles by letting each task keep only the particles that falls in its domain

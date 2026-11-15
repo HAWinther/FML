@@ -5,6 +5,14 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### The examples run without the TestData submodule
+- `ExampleData/ExampleData.h`: synthetic input for the examples (a toy clustered box with halos, voids and
+  velocities; galaxies in redshift space; a survey patch with randoms; a RAMSES snapshot writer). The examples of
+  ComputePowerSpectra, FriendsOfFriends, TidalTensor, Triangulation, GadgetUtils, KDTree, PairCounting, RamsesUtils,
+  Survey and the reconstruction example use it instead of files from `TestData`, which is removed (it was a git
+  submodule; the GadgetUtils and RamsesUtils examples write a snapshot and read it back). The power spectrum example
+  had no velocities before (uninitialized for the multipoles).
+
 ### Interpolation review (part 3a): fixes and speedups
 - A particle more than round-off (1e-3 cells) outside the local domain of the grid (e.g. no `communicate_particles`
   after moving the particles) now stops `particles_to_grid` and the interpolation with a clear message, on slabs and

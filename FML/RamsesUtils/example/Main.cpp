@@ -1,3 +1,4 @@
+#include <FML/ExampleData/ExampleData.h>
 #include <FML/RamsesUtils/RamsesUtils.h>
 
 //====================================================
@@ -53,7 +54,17 @@ int main() {
     // so after we are done the particles are distributed among tasks
     // buffer_factor (1.0): If keep_only_particles_in_domain then we allocate this number times the
     // particles we need (only needed if we want extra capacity in the vector we store the particles in)
-    std::string snapdir = "../../../TestData/ExampleRamsesSnapshot/output_00008";
+    // First make a snapshot to read: a toy clustered box written as a RAMSES snapshot (4 files) by task 0
+    std::string snapdir = "example_ramses/output_00008";
+    if (FML::ThisTask == 0) {
+        const double box = 256.0;
+        const auto data = FML::EXAMPLEDATA::clustered_box(20000, box);
+        FML::EXAMPLEDATA::write_ramses_snapshot("example_ramses", 8, data.particles, box);
+    }
+#ifdef USE_MPI
+    MPI_Barrier(FML::communicator);
+#endif
+
     const bool keep_only_particles_in_domain = true;
     const double buffer_factor = 1.0;
     const bool verbose = true;

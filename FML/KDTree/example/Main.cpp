@@ -1,4 +1,4 @@
-#include <FML/FileUtils/FileUtils.h>
+#include <FML/ExampleData/ExampleData.h>
 #include <FML/KDTree/KDTree.h>
 #include <functional>
 #include <iostream>
@@ -7,7 +7,7 @@
 //================================================================
 //
 // Examples of how to use the generic binner that uses the kdtree
-// We have voids and galaxies from a simulation (periodic box)
+// We have voids and galaxies in a periodic box (a synthetic toy box)
 // We compute the average profile of the galaxies around the voids
 //
 // For examples of using the kdtree directly see Test.cpp
@@ -38,30 +38,25 @@ int main() {
     const double rmax = 100.0 / boxsize;
     const int nbins = 25;
     const bool periodic_box = true;
-    const std::string filename1 = "../../../TestData/voids_realspace.txt";
-    const std::string filename2 = "../../../TestData/galaxies_redshiftspace.txt";
+    // The data: a toy clustered box with voids; the galaxies are its particles in redshift space (to use your own
+    // data, read it e.g. with FML::FILEUTILS::loadtxt)
+    const auto data = FML::EXAMPLEDATA::clustered_box(100000, boxsize, 100);
 
-    // Read the data
-    auto data1 = FML::FILEUTILS::loadtxt(filename1);
-    auto data2 = FML::FILEUTILS::loadtxt(filename2);
-
-    // Assign the voids (position in [0,1])
+    // Assign the voids (position in [0,1])
     std::vector<Void> tracer1;
-    tracer1.reserve(data1.size());
-    for (auto line : data1) {
+    for (auto & v : data.voids) {
         Void p;
         for (int idim = 0; idim < 3; idim++)
-            p.pos[idim] = line[idim] / boxsize;
+            p.pos[idim] = v.pos[idim] / boxsize;
         tracer1.push_back(p);
     }
 
-    // Assign the galaxies (position in [0,1])
+    // Assign the galaxies (position in [0,1])
     std::vector<Galaxy> tracer2;
-    tracer2.reserve(data2.size());
-    for (auto line : data2) {
+    for (auto & g : FML::EXAMPLEDATA::redshift_space(data)) {
         Galaxy p;
         for (int idim = 0; idim < 3; idim++)
-            p.pos[idim] = line[idim] / boxsize;
+            p.pos[idim] = g.pos[idim] / boxsize;
         tracer2.push_back(p);
     }
 

@@ -1,3 +1,4 @@
+#include <FML/ExampleData/ExampleData.h>
 #include <FML/GadgetUtils/GadgetUtils.h>
 
 //=========================================================
@@ -26,8 +27,43 @@ using GadgetWriter = FML::FILEUTILS::GADGET::GadgetWriter;
 int main() {
 
     //=========================================================
+    // First make a snapshot to read: a toy clustered box written as
+    // one gadget file per task (example_gadget.0, .1, ...)
+    //=========================================================
+    {
+        const double box = 1024.0, aexp = 1.0;
+        const auto data = FML::EXAMPLEDATA::clustered_box(100000, box);
+        std::vector<Particle> mine;
+        for (size_t i = FML::ThisTask; i < data.particles.size(); i += FML::NTasks) {
+            Particle p;
+            for (int idim = 0; idim < 3; idim++) {
+                p.pos[idim] = data.particles[i].pos[idim] / box;
+                p.vel[idim] = data.particles[i].vel[idim];
+            }
+            p.id = int(i);
+            mine.push_back(p);
+        }
+        GadgetWriter writer;
+        writer.write_gadget_single("example_gadget." + std::to_string(FML::ThisTask),
+                                   mine.data(),
+                                   mine.size(),
+                                   data.particles.size(),
+                                   FML::NTasks,
+                                   aexp,
+                                   box,
+                                   0.3,
+                                   0.7,
+                                   0.7,
+                                   box,
+                                   std::sqrt(aexp));
+#ifdef USE_MPI
+        MPI_Barrier(FML::communicator);
+#endif
+    }
+
+    //=========================================================
     // Set up reader (if ndim!=3 then we need to provide this)
-    //=Y========================================================
+    //=========================================================
     GadgetReader g;
 
     // If we have elements stored in a different order or some fields missing set it here
@@ -47,7 +83,7 @@ int main() {
     // to allocate compared to the average among tasks
     // NB: if we go over we will reallocate automatically!
     //=========================================================
-    const std::string fileprefix = "../../../TestData/ExampleGadgetSnapshot/gadget";
+    const std::string fileprefix = "example_gadget";
     const bool only_keep_part_in_domain = true;
     const double buffer_factor = 1.0;
     const bool verbose = false;

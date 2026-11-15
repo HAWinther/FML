@@ -1,11 +1,11 @@
-#include <FML/FileUtils/FileUtils.h>
+#include <FML/ExampleData/ExampleData.h>
 #include <FML/GadgetUtils/GadgetUtils.h>
 #include <FML/Global/Global.h>
 
 //=========================================================
-// Read an ascii file with particles. Write it as a gadget file
-// and then read the file back in and check that we get the same
-// result
+// Make particles (a toy clustered box). Write them as a gadget
+// file and then read the file back in and check that we get the
+// same result
 //=========================================================
 
 struct Particle {
@@ -37,23 +37,25 @@ using GadgetWriter = FML::FILEUTILS::GADGET::GadgetWriter;
 int main() {
 
     if (FML::ThisTask == 0)
-        std::cout << "Reading particles from file\n";
+        std::cout << "Making particles\n";
 
     //=========================================================
-    // Read ascii file with [x,y,z]
+    // A toy clustered box with velocities (km/s)
     //=========================================================
     const double box = 1024.0;
-    const std::string filename = "../../../TestData/particles_B1024.txt";
-    auto data = FML::FILEUTILS::loadtxt(filename);
+    const auto data = FML::EXAMPLEDATA::clustered_box(100000, box);
 
     //=========================================================
-    // Create particles and scale to [0,1)
+    // Create particles with positions scaled to [0,1)
     //=========================================================
     std::vector<Particle> part;
-    for (auto & pos : data) {
-        for (auto & x : pos)
-            x /= box;
-        part.push_back(Particle(pos.data(), nullptr));
+    for (auto & p : data.particles) {
+        double x[3], v[3];
+        for (int idim = 0; idim < 3; idim++) {
+            x[idim] = p.pos[idim] / box;
+            v[idim] = p.vel[idim];
+        }
+        part.push_back(Particle(x, v));
     }
     for (size_t i = 0; i < part.size(); i++)
         part[i].set_id(i);

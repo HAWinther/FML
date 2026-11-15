@@ -1,6 +1,6 @@
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/Triangulation/PeriodicDelaunay.h>
-#include <FML/FileUtils/FileUtils.h>
+#include <FML/ExampleData/ExampleData.h>
 
 //=======================================================================================
 // The simple particle in 3D with pos, mass and volume
@@ -19,24 +19,20 @@ struct Particle {
 int main() {
 
     //=======================================================================================
-    // Read particles from file
+    // Make particles: a toy clustered box with voids to find (every task makes the same particles). To use your
+    // own, read them e.g. with FML::FILEUTILS::loadtxt (ascii [x, y, z])
     //=======================================================================================
     FML::PARTICLE::MPIParticles<Particle> part;
 
     const double boxsize = 1024.0;
-    std::string filename = "../../../TestData/particles_B1024.txt";
-    auto data = FML::FILEUTILS::loadtxt(filename);
+    const auto data = FML::EXAMPLEDATA::clustered_box(50000, boxsize);
     std::vector<Particle> partvec;
-    partvec.reserve(data.size());
-    for (auto & row : data) {
+    partvec.reserve(data.particles.size());
+    for (auto & q : data.particles) {
         Particle p;
         auto * pos = p.get_pos();
-        pos[0] = row[0] / boxsize;
-        pos[1] = row[1] / boxsize;
-        pos[2] = row[2] / boxsize;
-        assert(pos[0] < 1.0 and pos[0] >= 0.0);
-        assert(pos[1] < 1.0 and pos[1] >= 0.0);
-        assert(pos[2] < 1.0 and pos[2] >= 0.0);
+        for (int idim = 0; idim < 3; idim++)
+            pos[idim] = q.pos[idim] / boxsize;
         partvec.push_back(p);
     }
 

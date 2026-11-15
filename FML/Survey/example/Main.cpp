@@ -1,4 +1,4 @@
-#include <FML/FileUtils/FileUtils.h>
+#include <FML/ExampleData/ExampleData.h>
 #include <FML/Survey/GalaxiesToBox.h>
 #include <FML/Units/Units.h>
 #include <fstream>
@@ -28,22 +28,17 @@ using namespace FML;
 
 int main() {
 
-    // Read ascii file with [DEC, RA, z, w]
-    const std::string filename = "../../../TestData/ExampleSurveyData/Randoms_DEC_RA_z.txt";
-
-    // Make galaxies
+    // Galaxies [DEC, RA, z] in a patch of the sky (synthetic; to use your own, read them e.g. with
+    // FML::FILEUTILS::loadtxt)
     std::vector<Galaxy> galaxies;
-    auto data = FML::FILEUTILS::loadtxt(filename);
-    for (auto & row : data) {
+    for (auto & o : FML::EXAMPLEDATA::survey_catalogue().galaxies) {
         Galaxy g;
-        g.DEC = row[0];
-        g.RA = row[1];
-        g.z = row[2];
-        if (row.size() > 3)
-            g.weight = row[3];
+        g.DEC = o.DEC;
+        g.RA = o.RA;
+        g.z = o.z;
         galaxies.push_back(g);
     }
-    std::cout << "Read: " << galaxies.size() << " galaxies\n";
+    std::cout << "Made: " << galaxies.size() << " galaxies\n";
 
     // The Hubble function H/c needed to compute the comoving distance
     std::function<double(double)> hubble_over_c_of_z = [&](double z) -> double {

@@ -1,7 +1,7 @@
 #include <FML/PairCounting/PairCount.h>
 #include <FML/Spline/Spline.h>
 #include <FML/Survey/GalaxiesToBox.h>
-#include <FML/FileUtils/FileUtils.h>
+#include <FML/ExampleData/ExampleData.h>
 #include <FML/Units/Units.h>
 #include <fstream>
 
@@ -40,34 +40,23 @@ struct Galaxy {
 void ExampleRadialCorrelationFunctionSurvey() {
 
     //===============================================
-    // Helper to read file with [DEC, RA, z, (w) ]
+    // Galaxies (clustered) and randoms [DEC, RA, z] in a patch of the sky (synthetic; to use your own, read them
+    // e.g. with FML::FILEUTILS::loadtxt)
     //===============================================
-    auto readData = [](std::string filename, std::vector<Galaxy> & galaxies) {
-        auto data = FML::FILEUTILS::loadtxt(filename);
-        for (auto & row : data) {
+    const auto catalogue = FML::EXAMPLEDATA::survey_catalogue();
+    auto to_galaxies = [](const std::vector<FML::EXAMPLEDATA::SurveyObject> & objects) {
+        std::vector<Galaxy> result;
+        for (auto & o : objects) {
             Galaxy g;
-            g.DEC = row[0];
-            g.RA = row[1];
-            g.z = row[2];
-            if (row.size() > 3)
-                g.weight = row[3];
-            galaxies.push_back(g);
+            g.DEC = o.DEC;
+            g.RA = o.RA;
+            g.z = o.z;
+            result.push_back(g);
         }
+        return result;
     };
-
-    //===============================================
-    // Read galaxies. File have [DEC, RA, z]
-    //===============================================
-    std::string filename_galaxies = "../../../TestData/ExampleSurveyData/Galaxies_DEC_RA_z.txt";
-    std::vector<Galaxy> galaxies;
-    readData(filename_galaxies, galaxies);
-
-    //===============================================
-    // Read randoms. File have [DEC, RA, z]
-    //===============================================
-    std::string filename_randoms = "../../../TestData/ExampleSurveyData/Randoms_DEC_RA_z.txt";
-    std::vector<Galaxy> randoms;
-    readData(filename_randoms, randoms);
+    std::vector<Galaxy> galaxies = to_galaxies(catalogue.galaxies);
+    std::vector<Galaxy> randoms = to_galaxies(catalogue.randoms);
 
     //===============================================
     // The Hubble function H/c needed to compute the comoving distance
@@ -306,25 +295,11 @@ void ExamplePeriodicBox() {
 void ExampleCorrelationFunctionMultipoles() {
 
     //===============================================
-    // Helper for reading files [x,y,z]
+    // Catalogues: a toy clustered box; the galaxies are its particles in redshift space (along z) and the voids
+    // the centers of its voids (synthetic; to use your own, read them e.g. with FML::FILEUTILS::loadtxt)
     //===============================================
-    auto read = [](std::string filename, std::vector<Particle> & part, double box) {
-        auto data = FML::FILEUTILS::loadtxt(filename);
-        for (auto & row : data) {
-            Particle p;
-            p.Pos[0] = row[0] / box;
-            p.Pos[1] = row[1] / box;
-            p.Pos[2] = row[2] / box;
-            part.push_back(p);
-        }
-    };
-
-    //===============================================
-    // Catalogues
-    //===============================================
-    std::string filename_galaxies = "../../../TestData/galaxies_redshiftspace.txt";
-    std::string filename_voids = "../../../TestData/voids_realspace.txt";
     const double box = 1000.0;
+    const auto data = FML::EXAMPLEDATA::clustered_box(100000, box, 100);
     const bool periodic = true;
     const bool verbose = true;
 
@@ -351,12 +326,22 @@ void ExampleCorrelationFunctionMultipoles() {
     std::vector<double> r_array, mu_array;
 
     //===============================================
-    // Read data from file
+    // The galaxies and voids with positions in [0,1)
     //===============================================
     std::vector<Particle> particles1;
-    read(filename_galaxies, particles1, box);
+    for (auto & g : FML::EXAMPLEDATA::redshift_space(data)) {
+        Particle p;
+        for (int idim = 0; idim < 3; idim++)
+            p.Pos[idim] = g.pos[idim] / box;
+        particles1.push_back(p);
+    }
     std::vector<Particle> particles2;
-    read(filename_voids, particles2, box);
+    for (auto & v : data.voids) {
+        Particle p;
+        for (int idim = 0; idim < 3; idim++)
+            p.Pos[idim] = v.pos[idim] / box;
+        particles2.push_back(p);
+    }
 
     //===============================================
     // Compute paircounts

@@ -1,5 +1,5 @@
 #include <FML/FFTWGrid/FFTWGrid.h>
-#include <FML/FileUtils/FileUtils.h>
+#include <FML/ExampleData/ExampleData.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/LPT/Reconstruction.h>
 #include <FML/MPIGrid/ConvertMPIGridFFTWGrid.h>
@@ -47,12 +47,11 @@ void ReconSolver() {
     const int ngs_first = 10;
 
     //=================================================================================
-    // Read ascii file that has the format [x,y,z] and fetch the position
-    // (This file has positions in real-space so no recon is needed, but fuck it its just to test it)
+    // Galaxies in redshift space (along z): the particles of a toy clustered box (synthetic; to use your own,
+    // read them e.g. with FML::FILEUTILS::loadtxt, ascii [x, y, z])
     //=================================================================================
-    const std::string filename = "../../../TestData/galaxies_redshiftspace.txt";
     const double box = 1024.0;
-    auto data = FML::FILEUTILS::loadtxt(filename);
+    const auto data = FML::EXAMPLEDATA::redshift_space(FML::EXAMPLEDATA::clustered_box(100000, box));
 
     //======================================================================
     // Recon option
@@ -72,10 +71,11 @@ void ReconSolver() {
     // Create particles and scale them to lie in [0,1)
     //=================================================================================
     std::vector<Particle> part;
-    for (auto & pos : data) {
-        for (auto & x : pos)
-            x /= box;
-        part.push_back(Particle(pos.data()));
+    for (auto & g : data) {
+        double pos[3];
+        for (int idim = 0; idim < 3; idim++)
+            pos[idim] = g.pos[idim] / box;
+        part.push_back(Particle(pos));
     }
 
     //=================================================================================
