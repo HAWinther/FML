@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <utility>
 #include <vector>
 
@@ -111,6 +112,13 @@ namespace FML {
                     double meanL{0.0};                    // Mean of L - S (when _subtract_mean)
                     std::vector<std::vector<double>> ext; // External fields
                     Transfer to_coarse;                   // This level -> the next coarser level
+                    // A cell that is also a cell of the next coarser level, with the same face neighbours (and the
+                    // same neighbours of a coarser face neighbour, whose gradient it uses) has the same equation
+                    // there, so its FAS source there is its source here: S_c = L(f) + (S - L(f)) = S. Its residual is
+                    // not needed for the coarse level. res_cells: the cells whose residual is needed; same_as_fine
+                    // (on the coarse level): the cells whose source is copied
+                    std::vector<IndexInt> res_cells;
+                    std::vector<char> same_as_fine;
                 };
 
                 std::vector<Level> _levels;
@@ -132,6 +140,31 @@ namespace FML {
 
                 AMREquation<NDIM> _equation;
                 AMRBoundaryFunction<NDIM> _boundary;
+
+                // Partial solve (solve(eq, min_active_level)): the unknowns are the leaves at refinement level >=
+                // min_active_level and the cells of the coarser levels made only of them. All other cells are fixed
+                // (Dirichlet values for the unknowns). Everything a V-cycle needs is listed per level so that the
+                // work is proportional to the number of unknowns (cached per min_active_level until the solver is
+                // rebuilt). _as is the set in use (nullptr: a full solve)
+                struct ActiveSet {
+                    std::vector<std::vector<char>> act;          // Unknown (per level, local cells)
+                    std::vector<std::vector<char>> sel;          // Contains an unknown leaf (restricted into)
+                    std::vector<std::vector<IndexInt>> act_list; // The unknowns
+                    std::vector<std::vector<IndexInt>> sel_list; // The cells containing an unknown leaf
+                    std::vector<std::array<std::array<std::vector<IndexInt>, 2>, 2>> relax; // relax lists, unknowns only
+                    std::vector<std::vector<IndexInt>> grad_list; // coarse_side cells with an unknown finer neighbour
+                    std::vector<std::vector<IndexInt>> rpairs;    // Level l -> l+1 local pairs into sel cells
+                    std::vector<std::vector<IndexInt>> gpairs;    // Level l -> l+1 local pairs from unknowns (at l)
+                    int top{0};                                   // Coarsest level with unknowns (global)
+                };
+                std::map<int, ActiveSet> _active_sets;
+                const ActiveSet * _as{nullptr};
+                bool _coarse_consistent{false}; // f on the coarse levels is the restriction of f on level 0
+                bool is_active(int level, IndexInt i) const { return _as == nullptr or _as->act[level][i]; }
+                bool partial() const { return _as != nullptr; }
+                const ActiveSet & active_set(int min_active_level);
+                void refresh_coarse_levels(bool all);
+                static double cell_volume(int level) { return std::ldexp(1.0, -NDIM * level); }
                 SolveResult _last_result{};
 
                 //======================================================================
@@ -149,6 +182,8 @@ namespace FML {
                 }
 
                 void build_level(Level & L, bool coarsest);
+                void find_unchanged_cells(int level);
+                double residual_for_coarse(int level, std::vector<double> & res);
                 void compute_boundary_values();
                 Vec cell_gradient(const Level & L,
                                   IndexInt i,
@@ -160,9 +195,10 @@ namespace FML {
                 void gauss_seidel(int level, int nsweeps);
                 double compute_residual(int level, std::vector<double> & res);
                 double norm(int level, const std::vector<double> & res) const;
-                void solve_coarsest();
+                void solve_coarsest(int level);
                 void prolong_correction(int coarse_level);
                 void vcycle(int level);
+                SolveResult solve_impl(const AMREquation<NDIM> & equation);
 
               public:
                 AMRMultiGridSolver() = default;
@@ -180,6 +216,8 @@ namespace FML {
                 /// An external field (per local leaf of the grid, e.g. the density). It is restricted (volume average)
                 /// to all levels. Returns the id to use in get_external_field
                 int add_external_field(const std::vector<double> & values);
+                /// Replace the values of an external field (per local leaf of the grid) and restrict them to all levels
+                void set_external_field(int id, const std::vector<double> & values);
                 /// Dirichlet value on the non-periodic faces of the box (default 0)
                 void set_boundary_value(const AMRBoundaryFunction<NDIM> & bc) {
                     _boundary = bc;
@@ -217,6 +255,20 @@ namespace FML {
                 // Solve
                 //======================================================================
                 SolveResult solve(const AMREquation<NDIM> & equation);
+                /// Partial solve (e.g. for subcycling): only the leaves at refinement level >= min_active_level are
+                /// unknowns. The coarser leaves keep their current values (from the initial guess or the last solve)
+                /// and act as Dirichlet boundary values through the coarse/fine interface. The V-cycle still goes
+                /// down to the coarsest level, relaxing only the coarse cells made entirely of unknown leaves (cells
+                /// that also contain fixed leaves are boundary values), so the work in the sweeps scales with the
+                /// number of unknown leaves (restriction and prolongation still pass over all leaves).
+                /// min_active_level <= the base level is a full solve.
+                /// set_subtract_mean_residual is ignored in a partial solve (the fixed cells fix the constant).
+                /// Limitation: the coarse levels hold fixed every cell that mixes fixed and unknown leaves, so the
+                /// boundary of the unknown region is moved by up to a coarse cell there. When a large unknown region
+                /// lies next to the fixed cells this can make the V-cycle stagnate: the solve then stops early (3
+                /// V-cycles reducing the residual by less than 0.8) without converging; do a full solve in that case.
+                /// (A coarse operator that knows where the boundary is, Guillet & Teyssier 2011, would fix this)
+                SolveResult solve(const AMREquation<NDIM> & equation, int min_active_level);
                 SolveResult get_solve_result() const { return _last_result; }
 
                 /// The solution on the grid (per local leaf, same indices as the grid given to the constructor)
@@ -258,6 +310,14 @@ namespace FML {
                 Vec get_gradient(int level, IndexInt i) const {
                     const auto & L = _levels[level];
                     return cell_gradient(L, i, L.f, L.fghost, false);
+                }
+
+                /// The face neighbour of cell i of a level across the face (dim, sign = -1 or +1) if it is a leaf at the
+                /// same level: its index (>= 0 a local cell, < 0 the ghost -1 - index), otherwise
+                /// std::numeric_limits<IndexInt>::min() (coarser, finer or the boundary of the box)
+                IndexInt get_same_level_neighbor(int level, IndexInt i, int dim, int sign) const {
+                    const Face & F = _levels[level].faces[i * NFACE + 2 * dim + (sign < 0 ? 0 : 1)];
+                    return F.rel == FaceNeighbors::SAME ? F.nb[0] : std::numeric_limits<IndexInt>::min();
                 }
 
                 /// Print the levels (collective, prints on task 0)
@@ -305,6 +365,8 @@ namespace FML {
                     if (l + 1 < nlevels)
                         _levels[l].to_coarse = Transfer(_levels[l].grid, _levels[l + 1].grid);
                 }
+                for (int l = 0; l + 1 < nlevels; l++)
+                    find_unchanged_cells(l);
                 compute_boundary_values();
                 if (verbose)
                     info(); // collective
@@ -363,6 +425,59 @@ namespace FML {
             }
 
             template <int NDIM>
+            void AMRMultiGridSolver<NDIM>::find_unchanged_cells(int level) {
+                auto & L = _levels[level];
+                auto & C = _levels[level + 1];
+                const auto & g = L.grid;
+                const IndexInt n = g.get_n_local();
+                const int lf = L.lfine; // Cells at lf are merged on the coarse level
+                auto level_of = [&](IndexInt r) { return r >= 0 ? int(g.get_cell(r).level) : int(g.get_ghost_cell(-1 - r).level); };
+                std::vector<double> ind(n, 0.0);
+                L.res_cells.clear();
+                for (IndexInt i = 0; i < n; i++) {
+                    bool same = g.get_cell(i).level < lf;
+                    for (int f = 0; f < NFACE and same; f++) {
+                        const Face & F = L.faces[i * NFACE + f];
+                        for (int j = 0; j < F.n and same; j++)
+                            same = level_of(F.nb[j]) < lf;
+                        if (same and F.rel == FaceNeighbors::COARSER) {
+                            // The gradient of the coarser neighbour (for our ghost value) uses its face neighbours
+                            const IndexInt c = F.nb[0];
+                            if (c < 0) {
+                                same = false; // A ghost: not checked, so treated as changed
+                            } else {
+                                for (int f2 = 0; f2 < NFACE and same; f2++) {
+                                    const Face & F2 = L.faces[c * NFACE + f2];
+                                    for (int j = 0; j < F2.n and same; j++)
+                                        same = level_of(F2.nb[j]) < lf;
+                                }
+                            }
+                        }
+                    }
+                    if (same)
+                        ind[i] = 1.0;
+                    else
+                        L.res_cells.push_back(i);
+                }
+                std::vector<double> indc;
+                L.to_coarse.restrict_average(ind, indc);
+                C.same_as_fine.resize(indc.size());
+                for (size_t j = 0; j < indc.size(); j++)
+                    C.same_as_fine[j] = indc[j] > 1.0 - 1e-12 ? 1 : 0;
+            }
+
+            // The residual where the coarse level needs it (0 elsewhere)
+            template <int NDIM>
+            double AMRMultiGridSolver<NDIM>::residual_for_coarse(int level, std::vector<double> & res) {
+                auto & L = _levels[level];
+                update_gradients(level);
+                res.assign(L.grid.get_n_local(), 0.0);
+                for (auto i : L.res_cells)
+                    res[i] = L.S[i] - _equation(*this, level, i).first;
+                return 0.0;
+            }
+
+            template <int NDIM>
             void AMRMultiGridSolver<NDIM>::compute_boundary_values() {
                 if (not _any_nonperiodic)
                     return;
@@ -399,10 +514,113 @@ namespace FML {
             }
 
             template <int NDIM>
+            void AMRMultiGridSolver<NDIM>::set_external_field(int id, const std::vector<double> & values) {
+                assert_mpi(id >= 0 and id < int(_levels[0].ext.size()), "AMRMultiGridSolver::set_external_field: bad id");
+                assert_mpi(IndexInt(values.size()) == _levels[0].grid.get_n_local(),
+                           "AMRMultiGridSolver::set_external_field: wrong size");
+                _levels[0].ext[id] = values;
+                for (size_t l = 1; l < _levels.size(); l++)
+                    _levels[l - 1].to_coarse.restrict_average(_levels[l - 1].ext[id], _levels[l].ext[id]);
+            }
+
+            template <int NDIM>
+            const typename AMRMultiGridSolver<NDIM>::ActiveSet & AMRMultiGridSolver<NDIM>::active_set(int min_active_level) {
+                auto it = _active_sets.find(min_active_level);
+                if (it != _active_sets.end())
+                    return it->second;
+                // Level 0: the leaves at or above min_active_level. Coarser levels: the cells made only of them (the
+                // volume average of the indicator is 1). A coarse cell that also contains fixed leaves is fixed too:
+                // relaxing it would treat the whole cell as free with its boundary a coarse cell away, while the
+                // fixed values are inside it, which over-corrects thin unknown regions (and can diverge)
+                ActiveSet A;
+                const size_t nl = _levels.size();
+                A.act.resize(nl);
+                A.sel.resize(nl);
+                A.act_list.resize(nl);
+                A.sel_list.resize(nl);
+                A.relax.resize(nl);
+                A.grad_list.resize(nl);
+                A.rpairs.resize(nl);
+                A.gpairs.resize(nl);
+                std::vector<double> ind(_levels[0].grid.get_n_local()), indc;
+                for (IndexInt i = 0; i < IndexInt(ind.size()); i++)
+                    ind[i] = _levels[0].grid.get_cell(i).level >= min_active_level ? 1.0 : 0.0;
+                std::vector<long long> nact(nl, 0);
+                for (size_t l = 0; l < nl; l++) {
+                    if (l > 0) {
+                        _levels[l - 1].to_coarse.restrict_average(ind, indc);
+                        ind.swap(indc);
+                    }
+                    const IndexInt n = IndexInt(ind.size());
+                    A.act[l].assign(n, 0);
+                    A.sel[l].assign(n, 0);
+                    for (IndexInt i = 0; i < n; i++) {
+                        A.act[l][i] = ind[i] > 1.0 - 1e-12 ? 1 : 0;
+                        A.sel[l][i] = ind[i] > 0.0 ? 1 : 0;
+                        if (A.act[l][i])
+                            A.act_list[l].push_back(i);
+                        if (A.sel[l][i])
+                            A.sel_list[l].push_back(i);
+                    }
+                    nact[l] = (long long)A.act_list[l].size();
+                    const auto & L = _levels[l];
+                    for (int c = 0; c < 2; c++)
+                        for (int b = 0; b < 2; b++)
+                            for (auto i : L.relax[c][b])
+                                if (A.act[l][i])
+                                    A.relax[l][c][b].push_back(i);
+                    // The coarse cells whose gradient an unknown fine neighbour uses for its ghost value
+                    std::vector<char> actghost;
+                    L.grid.communicate_ghosts(A.act[l], actghost);
+                    for (auto i : L.coarse_side) {
+                        bool need = false;
+                        for (int f = 0; f < NFACE and not need; f++) {
+                            const Face & F = L.faces[i * NFACE + f];
+                            if (F.rel != FaceNeighbors::FINER)
+                                continue;
+                            for (int j = 0; j < F.n; j++)
+                                need = need or (F.nb[j] >= 0 ? A.act[l][F.nb[j]] : actghost[-1 - F.nb[j]]);
+                        }
+                        if (need)
+                            A.grad_list[l].push_back(i);
+                    }
+                }
+#ifdef USE_MPI
+                MPI_Allreduce(MPI_IN_PLACE, nact.data(), int(nl), MPI_LONG_LONG, MPI_SUM, FML::communicator);
+#endif
+                for (size_t l = 0; l + 1 < nl; l++) {
+                    A.rpairs[l] = _levels[l].to_coarse.local_pairs_with_coarse(A.sel[l + 1]);
+                    A.gpairs[l] = _levels[l].to_coarse.local_pairs_with_fine(A.act[l]);
+                }
+                A.top = 0;
+                for (size_t l = 0; l < nl; l++)
+                    if (nact[l] > 0)
+                        A.top = int(l);
+                return _active_sets.emplace(min_active_level, std::move(A)).first->second;
+            }
+
+            // Make f on the coarse levels the restriction of f on level 0 (all cells, or only those containing an
+            // unknown of the current partial solve, the only ones that can have changed)
+            template <int NDIM>
+            void AMRMultiGridSolver<NDIM>::refresh_coarse_levels(bool all) {
+                for (size_t l = 0; l + 1 < _levels.size(); l++) {
+                    auto & F = _levels[l];
+                    auto & C = _levels[l + 1];
+                    if (all or not _as)
+                        F.to_coarse.restrict_average(F.f, C.f);
+                    else
+                        F.to_coarse.restrict_average_selected(F.f, C.f, _as->sel[l + 1], _as->rpairs[l]);
+                    C.grid.communicate_ghosts(C.f, C.fghost);
+                }
+                _coarse_consistent = true;
+            }
+
+            template <int NDIM>
             void AMRMultiGridSolver<NDIM>::set_initial_guess(double guess) {
                 auto & L = _levels[0];
                 L.f.assign(L.grid.get_n_local(), guess);
                 L.grid.communicate_ghosts(L.f, L.fghost);
+                _coarse_consistent = false;
             }
 
             template <int NDIM>
@@ -411,6 +629,7 @@ namespace FML {
                 assert_mpi(IndexInt(guess.size()) == L.grid.get_n_local(), "AMRMultiGridSolver::set_initial_guess: wrong size");
                 L.f = guess;
                 L.grid.communicate_ghosts(L.f, L.fghost);
+                _coarse_consistent = false;
             }
 
             //==========================================================================================
@@ -520,7 +739,7 @@ namespace FML {
                     for (IndexInt i = 0; i < L.grid.get_n_local(); i++)
                         L.grad[i] = cell_gradient(L, i, L.f, L.fghost, false);
                 } else {
-                    for (auto i : L.coarse_side)
+                    for (auto i : (_as ? _as->grad_list[level] : L.coarse_side))
                         L.grad[i] = cell_gradient(L, i, L.f, L.fghost, false);
                 }
                 L.grid.communicate_ghosts(L.grad, L.gradghost);
@@ -612,10 +831,12 @@ namespace FML {
                 for (int sweep = 0; sweep < nsweeps; sweep++) {
                     update_gradients(level);
                     for (int color = 0; color < 2; color++) {
-                        for (auto i : L.relax[color][0])
+                        const std::vector<IndexInt> & boundary = _as ? _as->relax[level][color][0] : L.relax[color][0];
+                        const std::vector<IndexInt> & interior = _as ? _as->relax[level][color][1] : L.relax[color][1];
+                        for (auto i : boundary)
                             newton_update(level, i);
                         auto h = L.grid.begin_communicate_ghosts(L.f, L.fghost);
-                        for (auto i : L.relax[color][1])
+                        for (auto i : interior)
                             newton_update(level, i);
                         h.wait();
                     }
@@ -626,8 +847,13 @@ namespace FML {
             double AMRMultiGridSolver<NDIM>::norm(int level, const std::vector<double> & res) const {
                 const auto & g = _levels[level].grid;
                 double sum = 0.0;
-                for (IndexInt i = 0; i < g.get_n_local(); i++)
-                    sum += res[i] * res[i] * std::ldexp(1.0, -NDIM * g.get_cell(i).level);
+                if (_as) {
+                    for (auto i : _as->act_list[level])
+                        sum += res[i] * res[i] * cell_volume(g.get_cell(i).level);
+                } else {
+                    for (IndexInt i = 0; i < g.get_n_local(); i++)
+                        sum += res[i] * res[i] * cell_volume(g.get_cell(i).level);
+                }
 #ifdef USE_MPI
                 MPI_Allreduce(MPI_IN_PLACE, &sum, 1, MPI_DOUBLE, MPI_SUM, FML::communicator);
 #endif
@@ -639,10 +865,16 @@ namespace FML {
                 auto & L = _levels[level];
                 update_gradients(level);
                 const IndexInt n = L.grid.get_n_local();
+                if (_as) {
+                    res.assign(n, 0.0);
+                    for (auto i : _as->act_list[level])
+                        res[i] = L.S[i] - _equation(*this, level, i).first;
+                    return norm(level, res);
+                }
                 res.resize(n);
                 for (IndexInt i = 0; i < n; i++)
                     res[i] = L.S[i] - _equation(*this, level, i).first;
-                if (_subtract_mean) {
+                if (_subtract_mean and not partial()) {
                     // Every level covers the unit box, so the volume weighted mean is the volume integral
                     double mean = 0.0;
                     for (IndexInt i = 0; i < n; i++)
@@ -664,8 +896,7 @@ namespace FML {
             }
 
             template <int NDIM>
-            void AMRMultiGridSolver<NDIM>::solve_coarsest() {
-                const int level = int(_levels.size()) - 1;
+            void AMRMultiGridSolver<NDIM>::solve_coarsest(int level) {
                 std::vector<double> res;
                 const double r0 = compute_residual(level, res);
                 if (r0 == 0.0)
@@ -686,21 +917,35 @@ namespace FML {
                 auto & C = _levels[coarse_level];
                 auto & F = _levels[coarse_level - 1];
                 const IndexInt nc = C.grid.get_n_local();
-                std::vector<double> e(nc), eghost;
-                for (IndexInt j = 0; j < nc; j++)
-                    e[j] = C.f[j] - C.f0[j];
-                C.grid.communicate_ghosts(e, eghost);
-
                 struct Correction {
                     double e;
                     Vec g;
                 };
-                std::vector<Correction> ce(nc), fe;
-                for (IndexInt j = 0; j < nc; j++)
-                    ce[j] = {e[j], cell_gradient(C, j, e, eghost, true)};
-                F.to_coarse.gather_from_coarse(ce, fe);
+                std::vector<double> e, eghost;
+                std::vector<Correction> ce, fe;
+                if (_as) {
+                    // Only the cells containing unknowns can have a correction (e = 0 elsewhere); the gradient is only
+                    // needed in the coarse cells that have children (cells at the finest level of C)
+                    e.assign(nc, 0.0);
+                    for (auto j : _as->sel_list[coarse_level])
+                        e[j] = C.f[j] - C.f0[j];
+                    C.grid.communicate_ghosts(e, eghost);
+                    ce.resize(nc);
+                    for (auto j : _as->sel_list[coarse_level])
+                        ce[j] = {e[j], C.grid.get_cell(j).level == C.lfine ? cell_gradient(C, j, e, eghost, true) : Vec{}};
+                    F.to_coarse.gather_from_coarse_selected(ce, fe, _as->act[coarse_level - 1], _as->gpairs[coarse_level - 1]);
+                } else {
+                    e.resize(nc);
+                    for (IndexInt j = 0; j < nc; j++)
+                        e[j] = C.f[j] - C.f0[j];
+                    C.grid.communicate_ghosts(e, eghost);
+                    ce.resize(nc);
+                    for (IndexInt j = 0; j < nc; j++)
+                        ce[j] = {e[j], C.grid.get_cell(j).level == C.lfine ? cell_gradient(C, j, e, eghost, true) : Vec{}};
+                    F.to_coarse.gather_from_coarse(ce, fe);
+                }
 
-                for (IndexInt i = 0; i < F.grid.get_n_local(); i++) {
+                auto correct = [&](IndexInt i) {
                     const Cell & c = F.grid.get_cell(i);
                     double corr = fe[i].e;
                     if (c.level > C.lfine) {
@@ -709,14 +954,21 @@ namespace FML {
                             corr += fe[i].g[d] * (((c.anchor[d] >> (Grid::LMAX - c.level)) & 1) ? 0.5 : -0.5) * h;
                     }
                     F.f[i] += corr;
+                };
+                if (_as) {
+                    for (auto i : _as->act_list[coarse_level - 1])
+                        correct(i);
+                } else {
+                    for (IndexInt i = 0; i < F.grid.get_n_local(); i++)
+                        correct(i);
                 }
                 F.grid.communicate_ghosts(F.f, F.fghost);
             }
 
             template <int NDIM>
             void AMRMultiGridSolver<NDIM>::vcycle(int level) {
-                if (level == int(_levels.size()) - 1) {
-                    solve_coarsest();
+                if (level == (_as ? _as->top : int(_levels.size()) - 1)) {
+                    solve_coarsest(level);
                     return;
                 }
                 auto & L = _levels[level];
@@ -726,14 +978,40 @@ namespace FML {
 
                 // FAS: coarse source S_c = L_c(R f) + R(S - L(f))
                 std::vector<double> res, rescoarse;
-                compute_residual(level, res);
-                L.to_coarse.restrict_average(L.f, C.f);
-                L.to_coarse.restrict_average(res, rescoarse);
-                C.grid.communicate_ghosts(C.f, C.fghost);
-                C.f0 = C.f;
-                update_gradients(level + 1);
-                for (IndexInt j = 0; j < C.grid.get_n_local(); j++)
-                    C.S[j] = _equation(*this, level + 1, j).first + rescoarse[j];
+                if (_as or _subtract_mean or _gradient_all)
+                    compute_residual(level, res);
+                else
+                    residual_for_coarse(level, res);
+                if (_as) {
+                    rescoarse.assign(C.grid.get_n_local(), 0.0);
+                    L.to_coarse.restrict_average_selected(L.f, C.f, _as->sel[level + 1], _as->rpairs[level]);
+                    L.to_coarse.restrict_average_selected(res, rescoarse, _as->sel[level + 1], _as->rpairs[level]);
+                    C.grid.communicate_ghosts(C.f, C.fghost);
+                    for (auto j : _as->sel_list[level + 1])
+                        C.f0[j] = C.f[j];
+                    update_gradients(level + 1);
+                    for (auto j : _as->act_list[level + 1])
+                        C.S[j] = _equation(*this, level + 1, j).first + rescoarse[j];
+                } else if (not _subtract_mean and not _gradient_all) {
+                    // Cells with the same equation on both levels get their source copied
+                    std::vector<double> Scopy;
+                    L.to_coarse.restrict_average(L.f, C.f);
+                    L.to_coarse.restrict_average(res, rescoarse);
+                    L.to_coarse.restrict_average(L.S, Scopy);
+                    C.grid.communicate_ghosts(C.f, C.fghost);
+                    C.f0 = C.f;
+                    update_gradients(level + 1);
+                    for (IndexInt j = 0; j < C.grid.get_n_local(); j++)
+                        C.S[j] = C.same_as_fine[j] ? Scopy[j] : _equation(*this, level + 1, j).first + rescoarse[j];
+                } else {
+                    L.to_coarse.restrict_average(L.f, C.f);
+                    L.to_coarse.restrict_average(res, rescoarse);
+                    C.grid.communicate_ghosts(C.f, C.fghost);
+                    C.f0 = C.f;
+                    update_gradients(level + 1);
+                    for (IndexInt j = 0; j < C.grid.get_n_local(); j++)
+                        C.S[j] = _equation(*this, level + 1, j).first + rescoarse[j];
+                }
                 C.meanL = 0.0; // The restricted residual has zero mean
 
                 vcycle(level + 1);
@@ -743,7 +1021,34 @@ namespace FML {
             }
 
             template <int NDIM>
+            SolveResult AMRMultiGridSolver<NDIM>::solve(const AMREquation<NDIM> & equation, int min_active_level) {
+                // A full solve if every leaf is an unknown
+                int lmin = _levels[0].grid.get_levelmin();
+                if (min_active_level <= lmin)
+                    return solve(equation);
+                const auto & A = active_set(min_active_level);
+                // The fixed cells are read on the coarse levels: they must be the restriction of level 0
+                if (not _coarse_consistent) {
+                    _as = nullptr;
+                    _levels[0].grid.communicate_ghosts(_levels[0].f, _levels[0].fghost);
+                    refresh_coarse_levels(true);
+                }
+                _as = &A;
+                auto result = solve_impl(equation);
+                refresh_coarse_levels(false);
+                return result;
+            }
+
+            template <int NDIM>
             SolveResult AMRMultiGridSolver<NDIM>::solve(const AMREquation<NDIM> & equation) {
+                _as = nullptr;
+                auto result = solve_impl(equation);
+                refresh_coarse_levels(true);
+                return result;
+            }
+
+            template <int NDIM>
+            SolveResult AMRMultiGridSolver<NDIM>::solve_impl(const AMREquation<NDIM> & equation) {
                 _equation = equation;
                 auto & L = _levels[0];
                 L.S.assign(L.grid.get_n_local(), 0.0);
@@ -768,6 +1073,7 @@ namespace FML {
                 };
 
                 result.status = converged(result.residual) ? SolveStatus::Converged : SolveStatus::MaxIterations;
+                int nslow = 0;
                 while (result.status != SolveStatus::Converged and result.iterations < _maxsteps) {
                     const double rold = result.residual;
                     vcycle(0);
@@ -783,6 +1089,13 @@ namespace FML {
                     }
                     if (converged(result.residual))
                         result.status = SolveStatus::Converged;
+                    // A partial solve can stagnate when large unknown regions lie next to fixed cells: the coarse
+                    // levels hold the cells that mix fixed and unknown leaves fixed, which puts the boundary up to a
+                    // coarse cell away from where it is. Give up early (status MaxIterations) so the caller can do a
+                    // full solve instead
+                    nslow = (_as and result.residual > 0.8 * rold) ? nslow + 1 : 0;
+                    if (nslow >= 3 and result.status != SolveStatus::Converged)
+                        break;
                 }
                 if (_verbose)
                     std::cout << std::defaultfloat;

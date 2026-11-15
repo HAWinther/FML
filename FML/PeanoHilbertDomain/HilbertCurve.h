@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <vector>
 #include <cmath>
 #include <cstdint>
 #include <stdexcept>
@@ -39,18 +40,129 @@ namespace FML {
 
             /// Integer coordinates (bits bits per axis) -> Hilbert key
             static key_type key_from_coord(Coord X, int bits = LMAX) {
+                if (bits == LMAX) {
+                    // Table driven (same keys, about 4x faster in 3D)
+                    const Tables & T = tables();
+                    int s = 0;
+                    key_type key = 0;
+                    for (int l = LMAX - 1; l >= 0; l--) {
+                        int o = 0;
+                        for (int i = 0; i < NDIM; i++)
+                            o |= int((X[i] >> l) & 1u) << i;
+                        key = (key << NDIM) | T.digit[s * NCH + o];
+                        s = T.next[s * NCH + o];
+                    }
+                    return key;
+                }
                 axes_to_transpose(X, bits);
                 return interleave(X, bits);
             }
 
+            /// The key of the cell at refinement level `level` (0..LMAX) containing X: the key of its first point,
+            /// i.e. key_from_coord(X) with the bits below the level cleared. Only the top `level` levels are
+            /// computed, so it is cheaper than the full key for coarse cells
+            static key_type cell_key(const Coord & X, int level) {
+                const Tables & T = tables();
+                int s = 0;
+                key_type key = 0;
+                for (int l = LMAX - 1; l >= LMAX - level; l--) {
+                    int o = 0;
+                    for (int i = 0; i < NDIM; i++)
+                        o |= int((X[i] >> l) & 1u) << i;
+                    key = (key << NDIM) | T.digit[s * NCH + o];
+                    s = T.next[s * NCH + o];
+                }
+                return level >= LMAX ? key : key << (NDIM * (LMAX - level));
+            }
+
             /// Hilbert key -> integer coordinates (bits bits per axis)
             static Coord coord_from_key(key_type key, int bits = LMAX) {
+                if (bits == LMAX) {
+                    const Tables & T = tables();
+                    int s = 0;
+                    Coord X{};
+                    for (int l = LMAX - 1; l >= 0; l--) {
+                        const int dig = int((key >> (NDIM * l)) & key_type(NCH - 1));
+                        const int o = T.octant[s * NCH + dig];
+                        for (int i = 0; i < NDIM; i++)
+                            X[i] |= coord_type((o >> i) & 1) << l;
+                        s = T.next[s * NCH + o];
+                    }
+                    return X;
+                }
                 Coord X = deinterleave(key, bits);
                 transpose_to_axes(X, bits);
                 return X;
             }
 
           private:
+            static constexpr int NCH = 1 << NDIM;
+
+            // The curve (at LMAX bits) as a finite state machine: a sub-cube in state s maps the child in octant o
+            // (bit i of o = the bit of axis i) to the key digit digit[s][o] and the child is in state next[s][o];
+            // octant[s][digit] is the inverse. Derived once from the bitwise (Skilling) transform below, so the keys
+            // are the same by construction: the state of a sub-cube is the order in which it visits its children,
+            // which determines its orientation and hence the states of its children
+            struct Tables {
+                std::vector<uint16_t> digit, next, octant;
+            };
+            static const Tables & tables() {
+                static const Tables T = make_tables();
+                return T;
+            }
+            static Tables make_tables() {
+                const int b = LMAX;
+                auto order = [&](const Coord & anchor, int d) {
+                    std::vector<uint16_t> m(NCH);
+                    for (int o = 0; o < NCH; o++) {
+                        Coord x = anchor;
+                        for (int i = 0; i < NDIM; i++)
+                            if ((o >> i) & 1)
+                                x[i] |= coord_type(1) << (b - 1 - d);
+                        Coord y = x;
+                        axes_to_transpose(y, b);
+                        m[o] = uint16_t((interleave(y, b) >> (NDIM * (b - 1 - d))) & key_type(NCH - 1));
+                    }
+                    return m;
+                };
+                std::vector<std::vector<uint16_t>> orders;
+                std::vector<std::pair<Coord, int>> rep;
+                auto state_of = [&](const Coord & anchor, int d) {
+                    auto m = order(anchor, d);
+                    for (size_t s = 0; s < orders.size(); s++)
+                        if (orders[s] == m)
+                            return int(s);
+                    orders.push_back(m);
+                    rep.push_back({anchor, d});
+                    return int(orders.size()) - 1;
+                };
+                state_of(Coord{}, 0);
+                std::vector<std::vector<uint16_t>> nxt;
+                for (size_t s = 0; s < orders.size(); s++) {
+                    const auto [a, d] = rep[s];
+                    nxt.emplace_back(NCH);
+                    for (int o = 0; o < NCH; o++) {
+                        Coord c = a;
+                        for (int i = 0; i < NDIM; i++)
+                            if ((o >> i) & 1)
+                                c[i] |= coord_type(1) << (b - 1 - d);
+                        nxt[s][o] = uint16_t(state_of(c, d + 1));
+                    }
+                }
+                Tables T;
+                const size_t ns = orders.size();
+                T.digit.resize(ns * NCH);
+                T.next.resize(ns * NCH);
+                T.octant.resize(ns * NCH);
+                for (size_t s = 0; s < ns; s++)
+                    for (int o = 0; o < NCH; o++) {
+                        T.digit[s * NCH + o] = orders[s][o];
+                        T.next[s * NCH + o] = nxt[s][o];
+                        T.octant[s * NCH + orders[s][o]] = uint16_t(o);
+                    }
+                return T;
+            }
+
             static void axes_to_transpose(Coord & X, int b) {
                 const coord_type M = coord_type(1) << (b - 1);
                 coord_type P, Q, t;

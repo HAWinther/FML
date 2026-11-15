@@ -292,6 +292,11 @@ namespace FML {
             CellRef find_leaf_by_key(key_type key) const;
             /// Find the local or ghost leaf containing a point in [0,1)^NDIM
             CellRef find_leaf(const std::array<double, NDIM> & x) const;
+            /// find_leaf for a point near local leaf `hint` (e.g. in a neighbour of it): the leaves within a few
+            /// places of the hint along the curve are searched first, which is faster (same result). With level < LMAX
+            /// the point stands for the whole cell at that level containing it: the result is the leaf containing
+            /// that cell if the cell is not refined, else one of the leaves inside it (cheaper key)
+            CellRef find_leaf_near(const Coord & x, IndexInt hint, int level = LMAX) const;
 
             /// The neighbours across the face in direction dim, side sign = +-1
             FaceNeighbors get_face_neighbors(IndexInt i, int dim, int sign) const;
@@ -577,6 +582,25 @@ namespace FML {
         }
 
         template <int NDIM, class T>
+        AMRCellRef AdaptiveMPIGrid<NDIM, T>::find_leaf_near(const Coord & x, IndexInt hint, int level) const {
+            const key_type k = HC::cell_key(x, level);
+            if (k >= _domain_start[FML::ThisTask] and k < _domain_start[FML::ThisTask + 1]) {
+                const IndexInt n = IndexInt(_cells.size());
+                if (hint >= 0 and hint < n) {
+                    // The local leaves tile the local key range in order, so a key inside the window is in one of them
+                    const IndexInt lo = std::max(IndexInt(0), hint - 16), hi = std::min(n - 1, hint + 16);
+                    if (k >= _cells[lo].key and (k < _cells[hi].key or k - _cells[hi].key < key_range(_cells[hi].level))) {
+                        auto it = std::upper_bound(_cells.begin() + lo, _cells.begin() + hi + 1, k,
+                                                   [](key_type a, const Cell & c) { return a < c.key; });
+                        return CellRef{CellRef::LOCAL, IndexInt(it - _cells.begin()) - 1};
+                    }
+                }
+                return search(_cells, k, CellRef::LOCAL);
+            }
+            return search(_ghost_cells, k, CellRef::GHOST);
+        }
+
+        template <int NDIM, class T>
         AMRCellRef AdaptiveMPIGrid<NDIM, T>::find_leaf_by_key(key_type k) const {
             if (k >= _domain_start[FML::ThisTask] and k < _domain_start[FML::ThisTask + 1])
                 return search(_cells, k, CellRef::LOCAL);
@@ -663,7 +687,8 @@ namespace FML {
             Coord xc;
             for (int d = 0; d < NDIM; d++)
                 xc[d] = coord_type(x[d]);
-            CellRef r = find_leaf(xc);
+            // The leaf containing the point next to our anchor (it touches the cell, so it is local or a ghost)
+            CellRef r = find_leaf_near(xc, i);
             assert_mpi(bool(r), "get_face_neighbors: neighbour not found (ghosts not built?)");
             const int nlevel = get_cell(r).level;
             if (nlevel <= c.level) {
@@ -689,7 +714,8 @@ namespace FML {
                 wrap(x);
                 for (int d = 0; d < NDIM; d++)
                     xc[d] = coord_type(x[d]);
-                res.cells[res.n++] = find_leaf(xc);
+                // The finer neighbours are leaves at our level + 1 touching us (2:1 balance): a cell key will do
+                res.cells[res.n++] = find_leaf_near(xc, i, c.level + 1);
             }
             return res;
         }
@@ -959,11 +985,34 @@ namespace FML {
 
             // 2. Parallel 2:1 balance (faces, edges, corners): refine until no target exceeds a
             // neighbour's target by more than one. Iterate until no task changes anything.
-            bool changed = true;
-            while (changed) {
-                communicate_ghosts(target, ghost_target);
-                changed = false;
+            // Work list: the grid is balanced before adapt, so a leaf can only need refining if it touches a
+            // leaf whose target went up. Only those are checked (first the neighbours of the leaves flagged
+            // for refinement, then the neighbours of the leaves raised in the last round, local or ghost).
+            // The result is the same least fixed point as checking every leaf in every round, at a cost
+            // proportional to the number of refined leaves instead of all leaves
+            std::vector<char> check(n, 0);
+            auto mark_neighbours = [&](const Cell & c) {
+                for_each_touching_box(c, [&](const Coord & x, int) {
+                    CellRef r = find_leaf(x);
+                    if (r.is_local())
+                        check[r.index] = 1;
+                });
+            };
+            communicate_ghosts(target, ghost_target);
+            for (IndexInt i = 0; i < n; i++)
+                if (target[i] > _cells[i].level)
+                    mark_neighbours(_cells[i]);
+            for (IndexInt g = 0; g < get_n_ghost(); g++)
+                if (ghost_target[g] > _ghost_cells[g].level)
+                    mark_neighbours(_ghost_cells[g]);
+            std::vector<IndexInt> raised;
+            std::vector<int8_t> ghost_target_old;
+            while (true) {
+                raised.clear();
                 for (IndexInt i = 0; i < n; i++) {
+                    if (not check[i])
+                        continue;
+                    check[i] = 0;
                     if (target[i] > _cells[i].level)
                         continue;
                     int maxnb = 0;
@@ -974,10 +1023,18 @@ namespace FML {
                     });
                     if (maxnb > target[i] + 1) {
                         target[i] = int8_t(_cells[i].level + 1);
-                        changed = true;
+                        raised.push_back(i);
                     }
                 }
-                changed = AMRDETAIL::allreduce_or(changed);
+                if (not AMRDETAIL::allreduce_or(not raised.empty()))
+                    break;
+                ghost_target_old = ghost_target;
+                communicate_ghosts(target, ghost_target);
+                for (auto i : raised)
+                    mark_neighbours(_cells[i]);
+                for (IndexInt g = 0; g < get_n_ghost(); g++)
+                    if (ghost_target[g] != ghost_target_old[g])
+                        mark_neighbours(_ghost_cells[g]);
             }
             // ghost_target is now up to date (last round made no changes)
 
@@ -1411,6 +1468,28 @@ namespace FML {
             /// fine[i] = value of the coarse leaf containing fine leaf i (U trivially copyable)
             template <class U>
             void gather_from_coarse(const std::vector<U> & coarse, std::vector<U> & fine) const;
+
+            //======================================================================
+            // Transfers to a subset of the leaves (e.g. the unknowns of a partial multigrid solve). The local
+            // loops only visit the given pairs; the exchange with other tasks is the full one (it only involves
+            // leaves at the boundaries of the partitions). Collective like the full transfers
+            //======================================================================
+            /// The local pairs (indices into the list of fine/coarse pairs on this task) whose coarse leaf is
+            /// selected, and those whose fine leaf is selected
+            std::vector<IndexInt> local_pairs_with_coarse(const std::vector<char> & coarse_selected) const;
+            std::vector<IndexInt> local_pairs_with_fine(const std::vector<char> & fine_selected) const;
+            /// restrict_average into the selected coarse leaves only (pairs = local_pairs_with_coarse(selected));
+            /// the other coarse values are left as they are (coarse must have the size of the coarse grid)
+            void restrict_average_selected(const std::vector<double> & fine,
+                                           std::vector<double> & coarse,
+                                           const std::vector<char> & coarse_selected,
+                                           const std::vector<IndexInt> & pairs) const;
+            /// gather_from_coarse into the selected fine leaves only (pairs = local_pairs_with_fine(selected))
+            template <class U>
+            void gather_from_coarse_selected(const std::vector<U> & coarse,
+                                             std::vector<U> & fine,
+                                             const std::vector<char> & fine_selected,
+                                             const std::vector<IndexInt> & pairs) const;
         };
 
         template <int NDIM>
@@ -1535,6 +1614,75 @@ namespace FML {
             for (size_t j = 0; j < _send_ranks.size(); j++)
                 for (size_t k = 0; k < _send_fine[j].size(); k++)
                     fine[_send_fine[j][k]] = recvbufs[j][k];
+        }
+
+        template <int NDIM>
+        std::vector<IndexInt> AdaptiveMPIGridTransfer<NDIM>::local_pairs_with_coarse(const std::vector<char> & sel) const {
+            std::vector<IndexInt> pairs;
+            for (size_t k = 0; k < _local_fine.size(); k++)
+                if (sel[_local_coarse[k]])
+                    pairs.push_back(IndexInt(k));
+            return pairs;
+        }
+
+        template <int NDIM>
+        std::vector<IndexInt> AdaptiveMPIGridTransfer<NDIM>::local_pairs_with_fine(const std::vector<char> & sel) const {
+            std::vector<IndexInt> pairs;
+            for (size_t k = 0; k < _local_fine.size(); k++)
+                if (sel[_local_fine[k]])
+                    pairs.push_back(IndexInt(k));
+            return pairs;
+        }
+
+        template <int NDIM>
+        void AdaptiveMPIGridTransfer<NDIM>::restrict_average_selected(const std::vector<double> & fine,
+                                                                      std::vector<double> & coarse,
+                                                                      const std::vector<char> & sel,
+                                                                      const std::vector<IndexInt> & pairs) const {
+            assert_mpi(IndexInt(fine.size()) == _nfine and IndexInt(coarse.size()) == _ncoarse,
+                       "restrict_average_selected: vectors have the wrong size");
+            std::vector<std::vector<double>> sendbufs(_send_ranks.size()), recvbufs;
+            for (size_t j = 0; j < _send_ranks.size(); j++) {
+                sendbufs[j].reserve(_send_fine[j].size());
+                for (auto i : _send_fine[j])
+                    sendbufs[j].push_back(fine[i]);
+            }
+            exchange(true, sendbufs, recvbufs);
+            for (auto k : pairs)
+                coarse[_local_coarse[k]] = 0.0;
+            for (size_t j = 0; j < _recv_ranks.size(); j++)
+                for (auto c : _recv_coarse[j])
+                    if (sel[c])
+                        coarse[c] = 0.0;
+            for (auto k : pairs)
+                coarse[_local_coarse[k]] += _local_weight[k] * fine[_local_fine[k]];
+            for (size_t j = 0; j < _recv_ranks.size(); j++)
+                for (size_t k = 0; k < _recv_coarse[j].size(); k++)
+                    if (sel[_recv_coarse[j][k]])
+                        coarse[_recv_coarse[j][k]] += _recv_weight[j][k] * recvbufs[j][k];
+        }
+
+        template <int NDIM>
+        template <class U>
+        void AdaptiveMPIGridTransfer<NDIM>::gather_from_coarse_selected(const std::vector<U> & coarse,
+                                                                       std::vector<U> & fine,
+                                                                       const std::vector<char> & sel,
+                                                                       const std::vector<IndexInt> & pairs) const {
+            assert_mpi(IndexInt(coarse.size()) == _ncoarse, "gather_from_coarse_selected: coarse vector has wrong size");
+            std::vector<std::vector<U>> sendbufs(_recv_ranks.size()), recvbufs;
+            for (size_t j = 0; j < _recv_ranks.size(); j++) {
+                sendbufs[j].reserve(_recv_coarse[j].size());
+                for (auto i : _recv_coarse[j])
+                    sendbufs[j].push_back(coarse[i]);
+            }
+            exchange(false, sendbufs, recvbufs);
+            fine.resize(_nfine);
+            for (auto k : pairs)
+                fine[_local_fine[k]] = coarse[_local_coarse[k]];
+            for (size_t j = 0; j < _send_ranks.size(); j++)
+                for (size_t k = 0; k < _send_fine[j].size(); k++)
+                    if (sel[_send_fine[j][k]])
+                        fine[_send_fine[j][k]] = recvbufs[j][k];
         }
 
     } // namespace GRID

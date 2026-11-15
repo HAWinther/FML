@@ -1,0 +1,37 @@
+# AMRNBody parameter file ("key = value", # starts a comment)
+
+# Cosmology (flat LCDM). Linear P(k) at z = 0: a CAMB-format file (k [h/Mpc], P [(Mpc/h)^3])
+# or, if pk_file is empty, Eisenstein & Hu no-wiggle normalized to sigma8
+OmegaM   = 0.3
+OmegaB   = 0.049
+h        = 0.67
+n_s      = 0.96
+sigma8   = 0.81
+pk_file  =
+
+# Box and particles
+box        = 100.0     # Mpc/h
+Npart_1D   = 32
+Nmesh_ic   = 32        # Grid for the initial conditions
+LPT_order  = 2
+seed       = 1234
+fix_amplitude = false
+zini       = 49.0
+
+# AMR
+levelmin   = 5         # Base grid 2^levelmin per dimension (usually Npart_1D)
+levelmax   = 8         # Finest level
+n_refine   = 8         # Refine a leaf with more than this many particles
+cic        = true      # CIC (true) or NGP (false) density and force
+gradient_order = 4     # Force from the 2nd (3 point) or 4th order (5 point, as RAMSES) gradient of phi
+subcycling = true      # Time step dt_coarse / 2^(level - levelmin)
+cfl        = 0.5       # Also |dx| < cfl * cellsize per step (0: off)
+mg_epsilon = 1e-6      # Multigrid tolerance (residual relative to rms(delta))
+
+# Time stepping and output
+nsteps           = 20  # Coarse steps, uniform in log(a)
+output_redshifts = 3, 1, 0
+output_folder    = .
+label            = test
+pofk_ngrid       = 64
+output_gadget    = false

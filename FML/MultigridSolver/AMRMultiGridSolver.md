@@ -90,6 +90,50 @@ Second order (2.35); the residual drops by about 0.1 per V-cycle; identical on 1
 `OmegaM a / (beta alpha) < 1/3`, as DGP in a cosmology does, otherwise the discriminant goes negative where
 `delta ~ -1` (and the solve stalls).
 
+## Symmetron (AMRSymmetronSolver.h)
+
+`AMRSymmetronSolverCosmology<NDIM>` is the AMR version of `SymmetronSolverCosmology` (`SymmetronSolver.h`): the same
+generalised (N, M) potential (even M > N >= 2; (2, 4) is the original symmetron), parameters (`OmegaM`, `assb`, `beta`,
+`L_mpch`, `H0Box`), equation in box units
+
+    D^2 chi = norm [ chi^(N-1) ((a_ssb/a)^3 (1 + delta) - 1) + chi^(M-1) ],   norm = a^2 (H0 Box)^2 / ((M - N) xi^2)
+
+and returned potential `PhiF = forcenorm chi^N` (total force `D(PhiGR + PhiF)`), with the relative criterion
+(`epsilon * rms(norm (a_ssb/a)^3 chi_bar^(N-1) delta)`). Input and output per local leaf:
+
+```cpp
+#include <FML/MultigridSolver/AMRSymmetronSolver.h>
+AMRSymmetronSolverCosmology<3> sym(OmegaM, assb, beta, L_mpch, H0Box, verbose);   // optional N, M
+sym.set_epsilon(1e-6);
+sym.set_relative_criterion(true);
+std::vector<double> phi;
+std::vector<std::array<double, 3>> force;   // optional: D(PhiF) = forcenorm N chi^(N-1) D(chi) per leaf
+sym.solve(a, grid, delta, phi, &force);
+sym.get_field();                            // chi; the next solve on the same leaves starts from it
+                                            // (or set_previous_field(chi)), else from the background value
+```
+
+The equation is local (only the flux Laplacian), so the solver needs no gradient field and no mean subtraction (the
+mass term fixes the constant). It starts from the background (or the previous field), so it follows the positive
+branch; domain walls are only followed if they are in the initial field. Fiducial 4 + 4 Gauss-Seidel sweeps.
+
+Tests (`examples/AMRSymmetronExample.cpp`, `make amrsymmetron`, `mpirun -np 4 ./amrsymmetron [quick]`): a compensated
+spherical overdensity `delta = A exp(-r^2/2s^2)(3 - r^2/s^2)` (A = 6, s = 0.05, `delta >= -1`) in a 100 Mpc/h box with
+L = 2 Mpc/h (range ~0.025 box), assb = 0.7, a = 1: the centre is screened (chi = 0.058 against the background 0.81).
+Reference: the radial equation solved with Newton on 20000 radial cells. Errors within 4s ("quick", levels to 7):
+
+| (2, 4) | leaves | chi rms error | radial force rms error (of the peak) | V-cycles |
+|---|---|---|---|---|
+| uniform level 4 | 4096 | 2.3e-2 | 6.9e-2 | 2 |
+| uniform level 6 | 262144 | 9.1e-4 | 1.1e-2 | 5 |
+| AMR levels 4-6 (refined within 0.2) | 13224 | 9.3e-4 | 1.1e-2 | 7 |
+| AMR levels 5-7 | 103440 | 2.3e-4 | 3.1e-3 | 7 |
+
+Second order (2.00 for chi, 1.89 for the force; (2, 6): 2.01, 1.94). The AMR solution is as accurate as the uniform
+grid at its finest level with 20x fewer leaves. Identical on 1 and 3 tasks (12-digit checksums). On a uniform 64^3
+grid it equals `SymmetronSolverCosmology` to 1.2e-12 (relative, max over the grid) on 1, 2 and 4 tasks. Works with
+both the original and the modified `AMRMultiGridSolver.h` (only the public interface is used).
+
 ## Tests (examples/AMRPoissonExample.cpp)
 
 `D^2 phi = delta` for a Gaussian `phi` (periodic) and `D^2 u - 500 u^3 = s` (Dirichlet, `u = u_exact` on the faces),
