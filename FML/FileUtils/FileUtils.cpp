@@ -1,4 +1,5 @@
 #include "FileUtils.h"
+#include <algorithm>
 #include <cerrno>
 #include <cstdlib>
 #include <fstream>
@@ -50,8 +51,10 @@ namespace FML {
                                               double fraction_to_read,
                                               unsigned int randomSeed) {
                 const std::string caller = "read_regular_ascii";
-                if (cols_to_keep.empty() or nskip < 0 or ncols <= 0)
-                    throw std::runtime_error("[" + caller + "] Need ncols > 0, nskip >= 0 and columns to keep");
+                // nskip < 0: no fixed header (comment lines starting with # are skipped anyway, also in the header)
+                nskip = std::max(nskip, 0);
+                if (cols_to_keep.empty() or ncols <= 0)
+                    throw std::runtime_error("[" + caller + "] Need ncols > 0 and columns to keep");
                 for (auto & i : cols_to_keep)
                     if (i < 0 or i >= ncols)
                         throw std::runtime_error("[" + caller + "] Column " + std::to_string(i) +

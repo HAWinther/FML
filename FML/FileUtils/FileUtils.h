@@ -21,7 +21,8 @@ namespace FML {
         /// / and everything after a # on a line are ignored. nan, inf and very small numbers (denormals) are read.
         /// A token that is not a number gives an error (std::runtime_error) with the line number.
 
-        /// Read a regular ascii file with nskip header lines and ncols columns on every (data) line, keeping the
+        /// Read a regular ascii file with nskip header lines (nskip < 0: none, only the comment lines, which are always
+        /// skipped) and ncols columns on every (data) line, keeping the
         /// columns cols_to_keep (numbering from 0). nestimated_lines is the number of rows reserved initially.
         /// A line with another number of columns gives an error.
         DVector2D read_regular_ascii(std::string filename,

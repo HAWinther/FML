@@ -150,5 +150,15 @@ a method in a new regime.
 
 ## Licence
 
-FML is free software under the [GNU General Public License v3.0](LICENCE): you can redistribute and modify it under
-its terms.
+Except for third-party code carrying separate license notices, FML's original source code is licensed under the GNU
+General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your
+option) any later version (`GPL-3.0-or-later`). See [LICENCE](LICENCE) for the full license text.
+
+FML is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+Third-party code retains its existing copyright and license notices. In particular, `FML/Global/SystemMemory.h`
+carries a CC BY 3.0 notice; this GPL statement does not relicense that file. Its compatibility or replacement must be
+resolved before distributing a combined GPL-covered work that includes it. Other bundled third-party components and
+external dependencies remain subject to their respective licenses. This statement covers source code and does not
+change the licensing of separately published documentation.
