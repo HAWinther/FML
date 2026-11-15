@@ -1,0 +1,235 @@
+{
+  "build-commands": [
+    {
+      "label": "serial-tests",
+      "exit_code": 0,
+      "seconds": 17.813440855010413
+    },
+    {
+      "label": "serial-pm_nonlinear_validation",
+      "exit_code": 0,
+      "seconds": 0.02246389805804938
+    },
+    {
+      "label": "mpi-tests",
+      "exit_code": 0,
+      "seconds": 25.00938059191685
+    },
+    {
+      "label": "mpi-pm_nonlinear_validation",
+      "exit_code": 0,
+      "seconds": 0.02218154608272016
+    },
+    {
+      "label": "mpi-pm_pencil",
+      "exit_code": 0,
+      "seconds": 0.02206813497468829
+    },
+    {
+      "label": "sanitizer-tests",
+      "exit_code": 0,
+      "seconds": 30.015701174968854
+    },
+    {
+      "label": "sanitizer-pm_nonlinear_validation",
+      "exit_code": 0,
+      "seconds": 0.020525312051177025
+    }
+  ],
+  "test-commands": [
+    {
+      "label": "serial0-test_particle_mesh_observation",
+      "exit_code": 0,
+      "seconds": 0.3150204239645973
+    },
+    {
+      "label": "serial0-test_particle_mesh_posterior",
+      "exit_code": 0,
+      "seconds": 7.703013252001256
+    },
+    {
+      "label": "mpi1-test_particle_mesh_observation",
+      "exit_code": 0,
+      "seconds": 1.2541303570615128
+    },
+    {
+      "label": "mpi1-test_particle_mesh_posterior",
+      "exit_code": 0,
+      "seconds": 18.752032210933976
+    },
+    {
+      "label": "mpi2-test_particle_mesh_observation",
+      "exit_code": 0,
+      "seconds": 1.7093126199906692
+    },
+    {
+      "label": "mpi2-test_particle_mesh_posterior",
+      "exit_code": 0,
+      "seconds": 30.156454281066544
+    },
+    {
+      "label": "mpi4-test_particle_mesh_observation",
+      "exit_code": 0,
+      "seconds": 3.526407447992824
+    },
+    {
+      "label": "mpi4-test_particle_mesh_posterior",
+      "exit_code": 0,
+      "seconds": 76.93644987500738
+    },
+    {
+      "label": "serial0-slab-prepare",
+      "exit_code": 0,
+      "seconds": 1.799308335990645
+    },
+    {
+      "label": "serial0-slab-resume",
+      "exit_code": 0,
+      "seconds": 0.6115625709062442
+    },
+    {
+      "label": "mpi1-slab-prepare",
+      "exit_code": 0,
+      "seconds": 2.059280755929649
+    },
+    {
+      "label": "mpi1-slab-resume",
+      "exit_code": 0,
+      "seconds": 0.7161271210061386
+    },
+    {
+      "label": "mpi1-pencil-prepare",
+      "exit_code": 0,
+      "seconds": 1.699140373035334
+    },
+    {
+      "label": "mpi1-pencil-resume",
+      "exit_code": 0,
+      "seconds": 0.8302286940161139
+    },
+    {
+      "label": "mpi2-slab-prepare",
+      "exit_code": 0,
+      "seconds": 5.009039863012731
+    },
+    {
+      "label": "mpi2-slab-resume",
+      "exit_code": 0,
+      "seconds": 2.4766182919265702
+    },
+    {
+      "label": "mpi2-pencil-prepare",
+      "exit_code": 0,
+      "seconds": 5.39947577402927
+    },
+    {
+      "label": "mpi2-pencil-resume",
+      "exit_code": 0,
+      "seconds": 2.8097919559804723
+    },
+    {
+      "label": "mpi4-slab-prepare",
+      "exit_code": 0,
+      "seconds": 8.691599507001229
+    },
+    {
+      "label": "mpi4-slab-resume",
+      "exit_code": 0,
+      "seconds": 4.3162288119783625
+    },
+    {
+      "label": "mpi4-pencil-prepare",
+      "exit_code": 0,
+      "seconds": 8.475840711966157
+    },
+    {
+      "label": "mpi4-pencil-resume",
+      "exit_code": 0,
+      "seconds": 4.398265119991265
+    },
+    {
+      "label": "sanitizer0-test_particle_mesh_observation",
+      "exit_code": 0,
+      "seconds": 2.282028629910201
+    },
+    {
+      "label": "sanitizer0-test_particle_mesh_posterior",
+      "exit_code": 0,
+      "seconds": 29.662143407040276
+    },
+    {
+      "label": "sanitizer0-slab-prepare",
+      "exit_code": 0,
+      "seconds": 7.661339756916277
+    },
+    {
+      "label": "sanitizer0-slab-resume",
+      "exit_code": 0,
+      "seconds": 2.8864702549763024
+    },
+    {
+      "label": "old-prepare-w0",
+      "exit_code": 0,
+      "seconds": 0.553477707086131
+    },
+    {
+      "label": "new-resume-w0",
+      "exit_code": 0,
+      "seconds": 0.29057085898239166
+    },
+    {
+      "label": "old-prepare-w1",
+      "exit_code": 0,
+      "seconds": 0.558627245016396
+    },
+    {
+      "label": "new-resume-w1",
+      "exit_code": 0,
+      "seconds": 0.28762014594394714
+    },
+    {
+      "label": "hybrid-observation",
+      "exit_code": 0,
+      "seconds": 6.582452425034717
+    },
+    {
+      "label": "hybrid-checkpoint-prepare",
+      "exit_code": 0,
+      "seconds": 9.841868740972131
+    },
+    {
+      "label": "hybrid-checkpoint-resume",
+      "exit_code": 0,
+      "seconds": 5.068969605956227
+    }
+  ],
+  "volume-commands": [
+    {
+      "label": "volume-serial0",
+      "exit_code": 0,
+      "seconds": 0.7147471290081739
+    },
+    {
+      "label": "volume-mpi1",
+      "exit_code": 0,
+      "seconds": 1.255928915925324
+    },
+    {
+      "label": "volume-mpi2",
+      "exit_code": 0,
+      "seconds": 3.847295204992406
+    },
+    {
+      "label": "volume-mpi4",
+      "exit_code": 0,
+      "seconds": 6.0291707020951435
+    },
+    {
+      "label": "volume-sanitizer0",
+      "exit_code": 0,
+      "seconds": 2.2708434329833835
+    }
+  ],
+  "recipe_smoke_exit_code": 0,
+  "note": "Earlier incorrect empty-owner fingerprint fixture assertion is retained separately; final fixed fixture passes. All native science cases completed; uncompensated score refinement fails the accuracy criterion."
+}

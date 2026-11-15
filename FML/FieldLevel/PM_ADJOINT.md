@@ -143,3 +143,14 @@ The [periodic posterior/MAP milestone](PM_POSTERIOR.md) is implemented. Small HM
 experiments are the next #52 milestone. Scientific coverage, trajectories near assignment faces, alternative
 smooth assignment kernels, cosmological derivatives, survey/tracer/RSD operators,
 disk checkpoints, 2LPT/COLA starts and broader performance validation remain open.
+
+## Force-window convention
+
+The pullback uses the same selected `PMSettings::force_window` as the forward
+trajectory. Opt-in `CICCompensated` multiplies each skew-adjoint force component
+by the real even inverse squared CIC window. Its transpose is therefore still
+the negative of that filtered component, with identical DC/Nyquist exclusions.
+Both the force-gather position derivative and the density-force-deposition reverse
+path use this convention. [Window-specific tests and results](pm_window_validation/RESULTS.md)
+include full-output cotangents, independent value differences and replay checks.
+This does not add derivatives with respect to the discrete window choice.

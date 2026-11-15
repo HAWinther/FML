@@ -25,7 +25,13 @@ namespace FML::FIELDLEVEL::FRAMEWORK::CHECKPOINT {
             // Bump the version if any fixed numerical convention below changes.
             // Opaque spectrum callbacks and external physics still require the
             // caller's explicit versioned CheckpointOptions::problem_id.
-            e.text("FML periodic PM matter Fourier target 1");
+            const auto & settings = model.dynamics().settings();
+            const bool compensated = settings.force_window == PMForceWindow::CICCompensated;
+            const bool observed = model.observation_response_configured();
+            // Preserve tag-1 bytes for the unchanged default numerical law.
+            e.text(observed ? "FML periodic PM matter Fourier target 3" :
+                   compensated ? "FML periodic PM matter Fourier target 2" : "FML periodic PM matter Fourier target 1");
+            if (observed || compensated) e.integer(static_cast<int>(settings.force_window));
 #ifdef USE_MPI
             e.integer(1);
 #else
@@ -38,15 +44,20 @@ namespace FML::FIELDLEVEL::FRAMEWORK::CHECKPOINT {
 #endif
             e.text("Flat matter+Lambda; x/L; p=a^2 dx/d(H0 t); growing spectrum at a=1");
             e.text("ZA growing lattice IC; equal masses; CIC deposition/gather; density contrast");
-            e.text("Continuous i*k/k^2 force; DC/component Nyquist zero; no CIC deconvolution");
+            e.text(compensated ? "Continuous i*k/k^2 force; DC/component Nyquist zero; inverse squared CIC window" :
+                               "Continuous i*k/k^2 force; DC/component Nyquist zero; no CIC deconvolution");
             e.text("KDK; arithmetic scale-factor midpoint; Simpson 128 background integrals");
             e.text("Euclidean discrete adjoint; binary midpoint/prefix replay; identity white metric");
-            const auto & settings = model.dynamics().settings();
             e.real(settings.background.omega_m);
             e.vector(settings.scale_factors);
             // Conservative numerical compatibility: replay budgets can change
             // floating-point operation order even when the mathematical target agrees.
             e.integer(model.adjoint_options().max_checkpoints);
+            if (observed) {
+                e.text("Fixed real Fourier signal response; noise after response; raw reconstruction fields");
+                e.integer(model.reference_cic_mesh());
+                e.vector(model.observation_response());
+            }
         }
     };
 } // namespace FML::FIELDLEVEL::FRAMEWORK::CHECKPOINT

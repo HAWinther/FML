@@ -401,3 +401,30 @@ outputs bitwise; serial/MPI/sanitizer, N128 backend and launcher cleanup checks 
 No production physics is changed. Posterior-gradient failures and unconverged MAP
 remain open; next compare explicit force/assignment-window choices against this
 controlled setup. Item 52 remains open.
+
+### Item 52: explicit PM force-window convention (15 November 2026)
+
+`PMForceWindow::CICCompensated` is an opt-in inverse squared CIC force window,
+with a matching discrete adjoint and PM checkpoint law tag 2. Default `None`
+retains tag-1 identity bytes and old numerical outputs/checkpoint compatibility.
+[The controlled comparison](FieldLevel/pm_window_validation/RESULTS.md) reduces the N128 M32→M64 raw density
+correction from 3.775% to 1.768%; after smoothing outputs to a common observation
+window, the descriptive density correction falls from 2.068% to 0.0309%.
+The raw joint-gradient correction improves from 75.1% to 34.9% but still fails
+15%. Dense linear-force controls, derivatives, serial/MPI/sanitizer and restart
+checks pass. Sparse-load compensation is poor and remains unvalidated for use.
+Refining the tiny-kick measurement resolves its amplified sparse-load truncation
+error; the coarse-step failure is retained. This raw-observation study motivated the fixed response implemented below.
+Broader gradient refinement and validation of actual posterior behavior remain open. MAP conditioning, broad calibration and
+PM survey/tracer/RSD/cosmological work remain open; item 52 is not complete.
+
+### Item 52: fixed PM observation convention (15 November 2026)
+
+The [fixed-response study](FieldLevel/pm_observation_validation/RESULTS.md) now implements the
+actual signal response, transpose and checkpoint identity. With a common M32 CIC
+observation window, compensated M32→M64 density and joint-gradient corrections
+are 0.0309% and 0.476%, passing the original bounded criteria. The uncompensated
+joint-gradient baseline still fails at 41.6%. Custom real coefficients, noise after
+response, both distributed backends and legacy bitwise compatibility are tested.
+This is one finite-reference realization; adequate broader gradient sampling,
+posterior calibration, MAP conditioning and PM survey/tracer/RSD work remain open.

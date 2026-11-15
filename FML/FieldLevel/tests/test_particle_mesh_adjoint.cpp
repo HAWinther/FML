@@ -69,8 +69,9 @@ struct Summary { Field gradient, spectrum; double objective{}, directional_error
 template <class Grid>
 static Summary exercise(const FML::Domain & domain, const std::string & label,
                         int n = 8, int nf = 16, double om = .3, int steps = 8, bool detailed = true,
-                        std::ostream * table = nullptr) {
-    FF::ParticleMeshForwardT<Grid> m(configuration(n, nf), spectrum(), settings(om, steps), domain);
+                        std::ostream * table = nullptr, FF::PMForceWindow window = FF::PMForceWindow::None) {
+    auto options = settings(om, steps); options.force_window = window;
+    FF::ParticleMeshForwardT<Grid> m(configuration(n, nf), spectrum(), options, domain);
     FF::ParticleMeshAdjointT<Grid> adjoint(m);
     auto w = m.workspace(); auto s = m.white_noise(91); for (auto & x : s) x *= .7;
     auto theta = m.initial_parameters();
@@ -189,6 +190,7 @@ int main(int argc, char ** argv) {
     }
     auto baseline = exercise<FML::GRID::FFTWGrid<3>>(slab, "slab", 8, 16, .3, 8, true, &table);
     const auto dense = exercise<FML::GRID::FFTWGrid<3>>(slab, "dense-slab", 8, 4, .3, 4, true, &table);
+    const auto compensated = exercise<FML::GRID::FFTWGrid<3>>(slab, "CIC-compensated", 8, 4, .3, 4, true, &table, FF::PMForceWindow::CICCompensated);
     exercise<FML::GRID::FFTWGrid<3>>(slab, "EdS-small", 4, 4, 1., 4, false, &table);
 #ifdef USE_MPI
     for (auto shape : {std::array<int, 2>{FML::NTasks, 1}, {1, FML::NTasks}}) {
@@ -196,6 +198,8 @@ int main(int argc, char ** argv) {
         const auto domain = FML::Domain::uniform_pencil(shape[0], shape[1]); FML::set_domain(domain);
         auto value = exercise<FML::GRID::PencilGrid<3>>(domain, "pencil", 8, 16, .3, 8, false, &table);
         compare(baseline, value, "pencil");
+        if (shape[1] <= 3)
+            compare(compensated, exercise<FML::GRID::PencilGrid<3>>(domain, "compensated-pencil", 8, 4, .3, 4, false, &table, FF::PMForceWindow::CICCompensated), "compensated-pencil");
         if (shape[1] <= 3)
             compare(dense, exercise<FML::GRID::PencilGrid<3>>(domain, "dense-pencil", 8, 4, .3, 4, false, &table), "dense-pencil");
     }

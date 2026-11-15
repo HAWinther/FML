@@ -1,0 +1,59 @@
+{
+  "forward": [
+    {
+      "n": 128,
+      "m": 32,
+      "steps": 32
+    },
+    {
+      "n": 128,
+      "m": 64,
+      "steps": 32
+    }
+  ],
+  "gradients": [
+    {
+      "n": 64,
+      "m": 32,
+      "steps": 32
+    },
+    {
+      "n": 64,
+      "m": 64,
+      "steps": 32
+    }
+  ],
+  "extra_forward": [
+    {
+      "n": 96,
+      "m": 64,
+      "steps": 32
+    },
+    {
+      "n": 128,
+      "m": 64,
+      "steps": 64
+    }
+  ],
+  "reference_cic_mesh": 32,
+  "windows": [
+    0,
+    1
+  ],
+  "seed": 91,
+  "power": 0.002,
+  "final": 1.0,
+  "active": 122,
+  "observed": 256,
+  "noise_power": 0.0001,
+  "accuracy": {
+    "field": 0.05,
+    "gradient": 0.15,
+    "noise": 0.1
+  },
+  "np": 4,
+  "omp_threads": 1,
+  "timeout_seconds": 300,
+  "source_data_sha256": "c26776f6d2782bd1d03d4169cc0bcde0a0a7de93a0993ad5fccec4e2ced55cea",
+  "data_sha256": "1dd383e3bfcf1146cefb612066230accbb509cce47db006e49b81fcd8d56fe4d"
+}

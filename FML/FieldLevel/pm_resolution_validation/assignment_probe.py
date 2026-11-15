@@ -25,11 +25,13 @@ def density(x,m):
     for index,w in nodes(x,m):grid+=np.bincount(index,weights=w,minlength=m**3)
     return (grid*m**3/len(x)-1).reshape(m,m,m)
 
-def force(x,m):
+def force(x,m,compensated=False):
     rho=np.fft.fftn(density(x,m),norm='forward');f=np.fft.fftfreq(m)*m;ks=np.meshgrid(f,f,f,indexing='ij');k2=sum(k*k for k in ks);den=np.where(k2>0,k2,1)
+    compensation=1/np.prod([np.sinc(k/m)**4 for k in ks],axis=0) if compensated else None
     grid=[]
     for k in ks:
         kernel=1j*k/(2*np.pi*den);kernel[(k2==0)|(np.abs(k)==m//2)]=0
+        if compensated:kernel*=compensation
         grid.append(np.fft.ifftn(rho*kernel,norm='forward').real.ravel())
     out=np.zeros_like(x)
     for index,w in nodes(x,m):
@@ -37,12 +39,12 @@ def force(x,m):
     return out
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--initial',type=Path,required=True);p.add_argument('--output',type=Path,required=True);a=p.parse_args();a.output.mkdir(parents=True,exist_ok=True)
+    p=argparse.ArgumentParser();p.add_argument('--initial',type=Path,required=True);p.add_argument('--output',type=Path,required=True);p.add_argument('--force-window',type=int,choices=[0,1],default=0);a=p.parse_args();a.output.mkdir(parents=True,exist_ok=True)
     coefficients=np.loadtxt(a.initial,delimiter=',');rows=[]
     for n,m in [(8,m) for m in [8,16,32,64]]+[(n,32) for n in [4,16,32,64]]+[(32,16),(64,16),(64,8)]:
         q,psi=setup(n,coefficients)
         for amplitude in [1e-3,1e-4]:
-            f=force(q+amplitude*psi,m);response=float(np.sum(f*psi)/(amplitude*np.sum(psi*psi)))
+            f=force(q+amplitude*psi,m,a.force_window==1);response=float(np.sum(f*psi)/(amplitude*np.sum(psi*psi)))
             residual=float(np.linalg.norm(f-amplitude*psi)/np.linalg.norm(amplitude*psi));rows.append([n,m,amplitude,response,residual])
             print(n,m,amplitude,response,residual,flush=True)
     with (a.output/'linear_force.csv').open('w') as file:

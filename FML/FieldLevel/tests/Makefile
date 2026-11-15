@@ -1,7 +1,7 @@
 USE_MPI ?= false
 USE_OMP ?= false
 USE_FFTW ?= true
-TARGETS := test_particle_mesh_checkpoint test_particle_mesh_adjoint test_particle_mesh_posterior
+TARGETS := test_particle_mesh_observation test_particle_mesh_checkpoint test_particle_mesh_adjoint test_particle_mesh_posterior
 TARGETS += test_survey_checkpoint_mpi test_survey_likelihood_mpi test_bao_gradients test_bao_validation test_field_level test_field_level_safety test_framework test_framework_resolution test_framework_mpi test_framework_lpt_mpi test_framework_reconstruction_mpi test_framework_checkpoint_mpi test_particle_mesh
 ifeq ($(USE_MPI),true)
 TARGETS += test_framework_linear_grid_mpi test_framework_lpt_grid_mpi test_survey_grid_mpi test_checkpoint_grid_mpi
@@ -17,6 +17,8 @@ test_particle_mesh: test_particle_mesh.o Global.o $(PM_GRID_OBJECT)
 test_particle_mesh_adjoint: test_particle_mesh_adjoint.o Global.o $(PM_GRID_OBJECT)
 	$(LINK_EXE)
 test_particle_mesh_posterior: test_particle_mesh_posterior.o Global.o $(PM_GRID_OBJECT)
+	$(LINK_EXE)
+test_particle_mesh_observation: test_particle_mesh_observation.o Global.o $(PM_GRID_OBJECT)
 	$(LINK_EXE)
 # Do not reuse a VPATH object compiled with another module's MPI/precision flags.
 Global.o: $(FML_ROOT)/Global/Global.cpp
@@ -112,6 +114,11 @@ particle-mesh-posterior: test_particle_mesh_posterior
 	@set -e; for np in $(NP_LIST); do $(SAFETY_RUN) ./test_particle_mesh_posterior; done
 run: particle-mesh-posterior
 
+.PHONY: particle-mesh-observation
+particle-mesh-observation: test_particle_mesh_observation
+	@set -e; for np in $(NP_LIST); do $(SAFETY_RUN) ./test_particle_mesh_observation; done
+run: particle-mesh-observation
+
 # Generic distributed linear backend (the pencil grid requires MPI/FFTW).
 PencilGrid.o: $(FML_ROOT)/PencilDomain/PencilGrid.cpp
 	$(CC) $(DEPFLAGS) -c -o $@ $< $(OPTIONS) $(INC)
@@ -168,5 +175,10 @@ particle-mesh-checkpoint: test_particle_mesh_checkpoint
 	for backend in $(PM_CHECKPOINT_BACKENDS); do for np in $(NP_LIST); do for dense in 0 1; do \
 	  $(SAFETY_RUN) ./test_particle_mesh_checkpoint "$$pm_tmp/$$backend-np$$np-dense$$dense" prepare $$backend 0 $$dense; \
 	  $(SAFETY_RUN) ./test_particle_mesh_checkpoint "$$pm_tmp/$$backend-np$$np-dense$$dense" resume $$backend 0 $$dense; \
-	done; done; done
+	done; \
+	  $(SAFETY_RUN) ./test_particle_mesh_checkpoint "$$pm_tmp/$$backend-np$$np-compensated" prepare $$backend 0 1 1; \
+	  $(SAFETY_RUN) ./test_particle_mesh_checkpoint "$$pm_tmp/$$backend-np$$np-compensated" resume $$backend 0 1 1; \
+	  $(SAFETY_RUN) ./test_particle_mesh_checkpoint "$$pm_tmp/$$backend-np$$np-observed" prepare $$backend 0 1 1 4; \
+	  $(SAFETY_RUN) ./test_particle_mesh_checkpoint "$$pm_tmp/$$backend-np$$np-observed" resume $$backend 0 1 1 4; \
+	done; done
 run: particle-mesh-checkpoint

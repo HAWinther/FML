@@ -85,12 +85,39 @@ finite nodes in `[1e-4,1]`. Its dimension, values and background are checked
 collectively before trajectory execution. It is not an adaptive timestep solver.
 
 CIC scatters mass onto the force mesh, normalizing to mean density one. The
-continuous spectral force is `i k delta(k)/k^2` in box coordinates. DC and each
-even-grid Nyquist derivative component are zero. There is no assignment-window
-deconvolution, smoothing, interlacing, short-range force or force-dependent cutoff.
+default continuous spectral force is `i k delta(k)/k^2` in box coordinates. DC and each
+even-grid Nyquist derivative component are zero. The default `PMForceWindow::None` has no assignment-window deconvolution.
+There is no implicit smoothing, interlacing, short-range force or force-dependent cutoff.
 CIC gathers the three force components at the same particle positions. This is
 the same discretization as native NBody with continuous kernels and deconvolution
 disabled. Mesh/particle discreteness remains a numerical modeling choice.
+
+## Optional CIC force compensation
+
+```cpp
+c.mesh = 64; c.density_mesh = 32; // Dense particle sampling; keep IC cutoff below both Nyquists.
+options.force_window = FF::PMForceWindow::CICCompensated;
+```
+
+This explicit opt-in convention multiplies the spectral force by `1/W_CIC^2`,
+where `W_CIC=product_i sinc(pi*n_i/M)^2` for integer wavevector n and force mesh M.
+It compensates CIC deposition and force gathering. The real even multiplier is
+also used by the discrete adjoint; DC/component Nyquist handling stays the same.
+The original `None` convention remains the default and preserves existing targets.
+
+This setting changes dynamics. It does **not** deconvolve `matter_density`, change
+its likelihood response, remove aliasing or suppress particle noise. The inverse
+window can amplify short-scale errors, especially for sparse loads. In the recorded N8/M64 linear control, its
+longitudinal response is about 53.65 rather than the fluid value 1. Validate the
+particle sampling, time/cutoff choices and posterior for the intended application.
+[The controlled comparison](pm_window_validation/RESULTS.md) reports raw-density,
+common-window diagnostic and posterior-gradient results separately. A common-window
+plot is postprocessing, not an implemented PM observation adapter.
+
+Compensated targets use checkpoint numerical-law tag 2. Default targets retain
+tag-1 identity bytes and old checkpoint compatibility. Cross-window restart is
+rejected even at a zero state. Settings remain immutable in a constructed model;
+make a new model/workspace to choose a different convention.
 
 ## Ownership and workspace
 

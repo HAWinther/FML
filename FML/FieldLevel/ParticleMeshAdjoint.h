@@ -133,7 +133,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                     double square = 0; for (int v : k) square += double(v) * v;
                     if (square == 0 || std::abs(k[c]) == n / 2) continue;
                     const auto value = w.force[c].get_fourier_from_index(i) *
-                                       FML::GRID::ComplexType(0, -k[c] / (2 * M_PI * square));
+                                       FML::GRID::ComplexType(0, model.force_coefficient(k, square, c, true));
                     w.density.set_fourier_from_index(i, w.density.get_fourier_from_index(i) + value);
                 }
             }

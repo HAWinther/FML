@@ -131,7 +131,7 @@ static void dense_stencil(Vec x, int n, Visit visit) {
         visit(q, weight);
     }
 }
-static std::vector<Vec> dense_force(const std::vector<Vec> & x, int n, Field & delta) {
+static std::vector<Vec> dense_force(const std::vector<Vec> & x, int n, Field & delta, bool compensated = false) {
     const int total = n * n * n;
     delta.assign(total, -1.);
     for (auto p : x) dense_stencil(p, n, [&](size_t q, double v) { delta[q] += v * total / x.size(); });
@@ -146,6 +146,14 @@ static std::vector<Vec> dense_force(const std::vector<Vec> & x, int n, Field & d
             const double phase = 2 * M_PI / n * (wave[0] * (j / (n * n)) + wave[1] * (j / n % n) + wave[2] * (j % n));
             value += delta[j] * std::exp(std::complex<double>(0, -phase)) / double(total);
         }
+        if (compensated) {
+            double response = 1.;
+            for (int component : wave) if (component) {
+                const double angle = M_PI * component / n;
+                response *= std::pow(std::sin(angle) / angle, 4);
+            }
+            value /= response;
+        }
         for (int j = 0; j < total; ++j) {
             const double phase = 2 * M_PI / n * (wave[0] * (j / (n * n)) + wave[1] * (j / n % n) + wave[2] * (j % n));
             const auto z = value * std::exp(std::complex<double>(0, phase));
@@ -158,8 +166,10 @@ static std::vector<Vec> dense_force(const std::vector<Vec> & x, int n, Field & d
         dense_stencil(x[q], n, [&](size_t j, double weight) { for (int d = 0; d < 3; ++d) out[q][d] += weight * force[j][d]; });
     return out;
 }
-static void direct_reference(int n = 4, int force = 4) {
-    FF::ParticleMeshForward model(config(n, force), spectrum(), settings(1., 3));
+static void direct_reference(int n = 4, int force = 4, bool compensated = false) {
+    auto options = settings(1., 3);
+    if (compensated) options.force_window = FF::PMForceWindow::CICCompensated;
+    FF::ParticleMeshForward model(config(n, force), spectrum(), options);
     auto w = model.workspace(); auto s = initial(model, .2);
     const auto actual = snapshot(model.evolve(s, {}, w));
     std::vector<Vec> x(n * n * n), p(x.size()), shift(x.size());
@@ -175,7 +185,7 @@ static void direct_reference(int n = 4, int force = 4) {
         }
     }
     Field delta;
-    auto f = dense_force(x, force, delta);
+    auto f = dense_force(x, force, delta, compensated);
     const auto nodes = settings(1., 3).scale_factors;
     for (size_t j = 1; j < nodes.size(); ++j) {
         const double a = nodes[j - 1], b = nodes[j], mid = (a + b) / 2;
@@ -184,7 +194,7 @@ static void direct_reference(int n = 4, int force = 4) {
             const double dx = 2 * (1 / std::sqrt(a) - 1 / std::sqrt(b)) * p[q][d];
             x[q][d] += dx; shift[q][d] += dx;
         }
-        f = dense_force(x, force, delta);
+        f = dense_force(x, force, delta, compensated);
         for (size_t q = 0; q < x.size(); ++q) for (int d = 0; d < 3; ++d)
             p[q][d] += 3 * (std::sqrt(b) - std::sqrt(mid)) * f[q][d];
     }
@@ -256,9 +266,12 @@ int main(int argc, char ** argv) {
     double norm = 0; for (auto x : u.matter_density) norm = std::max(norm, std::abs(x));
     for (const auto & d : u.displacement) for (double x : d) norm = std::max(norm, std::abs(x));
     check(uniform.maximum(norm) < 1e-14, "uniform lattice remains exactly homogeneous and stationary");
+    check(FML::TESTS::throws([&] { auto options = settings(); options.force_window = static_cast<FF::PMForceWindow>(9);
+        FF::ParticleMeshForward bad(config(), spectrum(), options); }), "invalid force window rejected");
     const auto baseline = exercise<Grid>(slab, "slab");
     direct_reference();
     direct_reference(8, 4);
+    direct_reference(8, 4, true);
     const auto dense = exercise<Grid>(slab, "dense-slab", .3, 8, 4);
 #ifdef USE_GSL
     native_reference();

@@ -49,9 +49,10 @@ static Field global_modes(const Model & m, const FF::Modes & local) {
 struct Summary { Field prediction, data, gradient, scalar, fit, reconstruction; double potential{}, fit_potential{}; int status{}; };
 template <class Grid>
 static Summary exercise(const FML::Domain & domain, const std::string & label, bool recovery,
-                        int n = 4, int force = 8, std::ostream * table = nullptr, std::ostream * fields = nullptr) {
+                        int n = 4, int force = 8, std::ostream * table = nullptr, std::ostream * fields = nullptr, FF::PMForceWindow window = FF::PMForceWindow::None) {
     using Model = FF::PeriodicPMModelT<Grid>;
-    Model m(configuration(n, force), spectrum(), settings(), noise(), {3}, domain);
+    auto options = settings(); options.force_window = window;
+    Model m(configuration(n, force), spectrum(), options, noise(), {3}, domain);
     auto w = m.workspace(); auto p = m.initial_parameters(); auto truth = m.white_noise(91);
     auto white = m.white_noise(93); for (auto & x : white) x *= .2;
     const auto mean = m.predict(truth, p, w); const auto true_initial = m.reconstruction(w).initial_density;
@@ -95,7 +96,7 @@ static Summary exercise(const FML::Domain & domain, const std::string & label, b
         power.evaluate = [base_power](double k, const auto & p) { auto value = base_power(2 * k, p); value.value *= 8; return value; };
         auto np = noise(); np.initial += std::log(8.); np.mean += std::log(8.);
         np.lower += std::log(8.); np.upper += std::log(8.);
-        Model scaled(c, power, settings(), np, {3}, domain); auto sw = scaled.workspace();
+        Model scaled(c, power, options, np, {3}, domain); auto sw = scaled.workspace();
         const auto sp = scaled.initial_parameters(); const auto sd = scaled.mock(truth, sp, 92, sw);
         FF::PeriodicPMPosteriorT<Grid> scaled_posterior(scaled, sd);
         Field gs; std::vector<double> gsp;
@@ -185,6 +186,7 @@ int main(int argc, char ** argv) {
     }
     const auto baseline = exercise<FML::GRID::FFTWGrid<3>>(slab, "slab", true, 4, 8, &table, &fields);
     const auto dense = exercise<FML::GRID::FFTWGrid<3>>(slab, "dense-slab", false, 8, 4, &table);
+    const auto compensated = exercise<FML::GRID::FFTWGrid<3>>(slab, "compensated-slab", false, 8, 4, &table, nullptr, FF::PMForceWindow::CICCompensated);
     check(FML::TESTS::throws([&] { auto bad = noise(); bad.sigma = 0; FF::PeriodicPMModel invalid(configuration(), spectrum(), settings(), bad); }),
           "invalid noise prior rejected");
 #ifdef USE_MPI
@@ -192,6 +194,7 @@ int main(int argc, char ** argv) {
     const auto pencil = FML::Domain::uniform_pencil(px, py); FML::set_domain(pencil);
     compare(baseline, exercise<FML::GRID::PencilGrid<3>>(pencil, "pencil", true, 4, 8, &table, &fields), "pencil", true);
     compare(dense, exercise<FML::GRID::PencilGrid<3>>(pencil, "dense-pencil", false, 8, 4, &table), "dense-pencil", false);
+    compare(compensated, exercise<FML::GRID::PencilGrid<3>>(pencil, "compensated-pencil", false, 8, 4, &table, nullptr, FF::PMForceWindow::CICCompensated), "compensated-pencil", false);
     if (FML::NTasks == 4) {
         exercise<FML::GRID::PencilGrid<3>>(pencil, "unequal-N10", false, 10, 20, &table);
     }

@@ -140,3 +140,9 @@ Controls are deliberately bounded (N<=64, 4<=M<=64, steps<=64 for the main drive
 Replicated inputs are checked before grid construction; inconsistent MPI geometry
 or data paths reject collectively. `pm_force_probe` requires one rank. Canonical
 field gathers are bounded validation output, not a production chain-storage design.
+
+The force probe accepts an optional final `FORCE_WINDOW` argument (0/1), and the
+independent NumPy probe accepts `--force-window 0|1`. Compensated probes add a
+1e-10 kick to check refinement of the amplified sparse-load response. Default
+probe steps/output remain unchanged. [The window experiment](../pm_window_validation/RESULTS.md)
+retains the coarse-step failure and reports accepted refined checks separately.

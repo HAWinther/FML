@@ -52,8 +52,8 @@ on the force mesh, restricted to nonzero modes `k < likelihood_cutoff`. The init
 white field and power spectrum use `mesh`; the likelihood and noise use
 `density_mesh`. `initial_cutoff` remains below the IC Nyquist. The observation
 cutoff may exceed the IC Nyquist but must be below the force-grid Nyquist; the
-PM-generated nonlinear modes then contribute. No assignment deconvolution or
-extra observational filter is applied.
+PM-generated nonlinear modes then contribute. By default no assignment deconvolution
+or extra observational filter is applied; optional fixed responses are described below.
 
 Parameters are the spectrum's existing `Parameter` specifications followed by
 `log_noise_power`. The default noise prior is Gaussian with initial/mean `log(1000)`,
@@ -129,3 +129,31 @@ chains, exact-prior null moments and posterior predictions for one small mock.
 Broader scientific calibration, smooth assignment alternatives,
 preconditioning, changed-layout PM restart, tracer/RSD/survey models,
 cosmological derivatives, 2LPT/COLA starts and production performance remain open.
+
+## Force compensation and observations
+
+`PMForceWindow::CICCompensated` selects opt-in dynamics independently of the
+observation convention. The final optional constructor argument, after `domain`,
+is `PMObservationSettings`. Its `reference_cic_mesh` applies `W_reference/W_force`
+to final retained modes, keeping a common coarser CIC window as the force mesh
+changes. Zero selects the legacy raw observation. Positive references must be
+even, at least four, no larger than the force mesh, and support the strict
+observed band below their Nyquist. This changes a window, not spatial regridding,
+mode ownership or the two-layout contract.
+
+`response.multiplier` accepts fixed finite real coefficients in local mode order;
+negative/zero values are allowed and compose with the reference window. If any
+rank supplies custom values, every rank supplies its owned-mode count (including
+empty vectors for zero-mode owners). Coefficients are copied, cached and checked
+for cross-rank Hermitian symmetry. They are fixed, not inferred parameters.
+Prediction applies the response to the signal; pullback applies its real transpose
+before the existing density adjoint. Noise is added **after** the response with
+unchanged P_noise/V normalization. Supply data in this declared observation space.
+Raw `reconstruction(work)` fields are unchanged. No generic `response()` accessor
+or Cartesian survey adapter is enabled.
+
+[The actual common-observation likelihood study](pm_observation_validation/RESULTS.md)
+reduces the compensated M32→M64 joint-gradient correction from the raw-window
+34.9% to 0.476%, with density correction 0.0309%. The uncompensated baseline still
+fails the gradient criterion. This bounded result does not establish posterior
+coverage, broad physical accuracy or safe sparse-load compensation.

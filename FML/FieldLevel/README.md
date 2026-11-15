@@ -52,6 +52,10 @@ A [particle-sampled force reference](pm_force_reference_validation/RESULTS.md) n
 shows that the observed density's force-grid sensitivity persists at N128, while
 particle and time corrections are small. This forward-only check leaves the
 posterior-gradient and optimizer issues open.
+An [opt-in CIC-compensated force](pm_window_validation/RESULTS.md) now reduces the
+controlled dense-grid density difference, with a verified adjoint and distinct
+checkpoint identity. Raw joint-gradient accuracy remains unresolved; final CIC
+observation windows and force windows are treated separately. The default is unchanged.
 
 ## BAO application (prototype)
 
@@ -222,3 +226,14 @@ These are scientific reference directions, not code ports or compatibility claim
 The native periodic framework and its adjoints are tested against exact linear
 results, finite differences and MPI decompositions. These checks do not establish
 nonlinear accuracy against independent simulations or realistic survey validity.
+
+## Fixed PM observation convention (15 November 2026)
+
+The [fixed-response study](pm_observation_validation/RESULTS.md) now implements the
+actual signal response, transpose and checkpoint identity. With a common M32 CIC
+observation window, compensated M32→M64 density and joint-gradient corrections
+are 0.0309% and 0.476%, passing the original bounded criteria. The uncompensated
+joint-gradient baseline still fails at 41.6%. Custom real coefficients, noise after
+response, both distributed backends and legacy bitwise compatibility are tested.
+This is one finite-reference realization; adequate broader gradient sampling,
+posterior calibration, MAP conditioning and PM survey/tracer/RSD work remain open.

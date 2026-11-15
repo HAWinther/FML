@@ -6,7 +6,7 @@ supports the periodic Fourier-Gaussian PM posterior on FFTW slabs or MPI pencils
 [The example](example/ParticleMeshCheckpoint.cpp) supplies a complete small mock.
 [Runtime results](tests/PM_CHECKPOINT_RESULTS.md) record validation and limits.
 [Dense IC/particle sampling N>M](pm_oversampling_validation/RESULTS.md) is also
-supported and tested for fresh-process continuation. The numerical-law tag remains
+supported and tested for fresh-process continuation. The default numerical-law tag remains
 1 because the force/assignment/evolution map is unchanged for old valid targets;
 existing layout metadata already distinguishes newly permitted mesh orderings.
 
@@ -66,7 +66,7 @@ The PM adapter extends the existing local per-rank target fingerprint with:
   mode flags are also encoded for PM.
 - Flat matter/Lambda background Omega_m and the complete ordered scale-factor list.
 - Versioned ZA/lattice, equal-mass CIC deposition/gather, continuous spectral force,
-  DC/component-Nyquist handling, no-deconvolution, KDK/background-integration,
+  DC/component-Nyquist handling, selected force-window convention, KDK/background-integration,
   discrete-adjoint/replay and identity-metric conventions.
 - The adjoint replay checkpoint budget, conservatively treated as numerical
   compatibility metadata.
@@ -121,3 +121,24 @@ make -C FML/FieldLevel/tests particle-mesh-checkpoint USE_MPI=true NP_LIST="1 2 
 MPI builds test both slabs and pencils, including unequal pencil boxes. The bounded
 fixture checks full retained fields and scalar rows, adaptation, cumulative results,
 nonzero seed high bits and sink indices, rather than merely successful file reads.
+
+## Explicit compensated-force targets
+
+`PMForceWindow::CICCompensated` has PM law tag 2 with explicit window metadata.
+The default `None` convention retains the original tag-1 byte encoding, including
+its no-deconvolution description. No shared codec or non-PM identity changes.
+Tests resume old default PM checkpoints and new compensated checkpoints in fresh
+processes. Switching windows rejects even when the saved field/data are zero and
+forces/potential agree. [The result guide](pm_window_validation/RESULTS.md) states
+actual backend and validation scope. The window is a fixed model convention,
+not a sampled scalar parameter or a restart-time override.
+
+## Fixed PM observation response
+
+Explicit `PMObservationSettings` responses use target tag 3, fingerprinting the
+force convention, reference CIC mesh and immutable effective per-mode response
+coefficients. Raw default/compensated observations retain their exact tag-1/tag-2
+encodings and bitwise old-checkpoint replay. Fingerprints are per-rank: an owner
+without retained modes need not change its local hash when other coefficients
+change, but collective loading rejects a changed global target. Same-layout
+restart remains required. See [response validation](pm_observation_validation/RESULTS.md).

@@ -80,7 +80,7 @@ Use `RESULTS.md` for measured outcomes and actual backend/runtime scope.
 Native interface:
 
 ```text
-pm_nonlinear PREFIX N M STEPS SEED POWER FINAL_A DATA_PATH FD FIT_ITERATIONS [FORWARD_ONLY]
+pm_nonlinear PREFIX N M STEPS SEED POWER FINAL_A DATA_PATH FD FIT_ITERATIONS [FORWARD_ONLY] [FORCE_WINDOW]
 ```
 
 By default, N/M are even 16..64; steps 2..64; P in (0,.01]; final a in (.2,1]; FD is 0/1;
@@ -95,3 +95,17 @@ compatible data. It computes one forward trajectory and a value-only posterior
 without requesting a pullback. It emits `.forward_meta.csv` and no gradient file;
 the original default-mode output schema and N<=64 bound are unchanged. This
 extension does not change or overwrite the original measurements above.
+
+`FORCE_WINDOW=0` retains the original numerical law; `1` selects the opt-in
+CIC-compensated force. It requires the preceding forward-mode argument (0 for
+full gradients). Every run writes a `.window.csv` sidecar; old output schemas
+stay unchanged. The [separate window campaign](../pm_window_validation/README.md)
+reports new measurements without overwriting this historical default-law study.
+
+### Optional fixed observation window
+
+The final optional CLI argument after `FORWARD_ONLY` and `FORCE_WINDOW` is
+`CIC_REFERENCE` (zero by default). Positive values select the fixed coarser CIC
+window; data headers must explicitly match `observation_cic,REFERENCE`, and
+`.observation.csv` records it. Legacy raw data and output bytes remain unchanged
+when the reference is zero. See [the response study](../pm_observation_validation/README.md).

@@ -1,0 +1,667 @@
+{
+  "passed": false,
+  "consistency_passed": true,
+  "compensated_accuracy_passed": true,
+  "checks": [
+    {
+      "check": "source frozen data hash",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "tagged frozen data hash",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "tag changes declared window only; data values unchanged",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "independent observed degrees",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w0-128-32-32 matched physical IC",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w0-128-32-32 finite supported output",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w0-128-32-32 fixture metadata",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w0-128-32-32 fixed force/observation conventions",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w0-128-32-32 same tagged data",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w0-128-32-32 mass/momentum and complete nodes",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w0-128-64-32 matched physical IC",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w0-128-64-32 finite supported output",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w0-128-64-32 fixture metadata",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w0-128-64-32 fixed force/observation conventions",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w0-128-64-32 same tagged data",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w0-128-64-32 mass/momentum and complete nodes",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "gradient-w0-64-32-32 matched physical IC",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "gradient-w0-64-32-32 finite supported output",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "gradient-w0-64-32-32 fixture metadata",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "gradient-w0-64-32-32 fixed force/observation conventions",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "gradient-w0-64-32-32 same tagged data",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "gradient-w0-64-32-32 finite posterior gradient",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "gradient-w0-64-64-32 matched physical IC",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "gradient-w0-64-64-32 finite supported output",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "gradient-w0-64-64-32 fixture metadata",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "gradient-w0-64-64-32 fixed force/observation conventions",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "gradient-w0-64-64-32 same tagged data",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "gradient-w0-64-64-32 finite posterior gradient",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w1-128-32-32 matched physical IC",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w1-128-32-32 finite supported output",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w1-128-32-32 fixture metadata",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w1-128-32-32 fixed force/observation conventions",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w1-128-32-32 same tagged data",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w1-128-32-32 mass/momentum and complete nodes",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w1-128-64-32 matched physical IC",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w1-128-64-32 finite supported output",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w1-128-64-32 fixture metadata",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w1-128-64-32 fixed force/observation conventions",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w1-128-64-32 same tagged data",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w1-128-64-32 mass/momentum and complete nodes",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w1-96-64-32 matched physical IC",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w1-96-64-32 finite supported output",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w1-96-64-32 fixture metadata",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w1-96-64-32 fixed force/observation conventions",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w1-96-64-32 same tagged data",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w1-96-64-32 mass/momentum and complete nodes",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w1-128-64-64 matched physical IC",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w1-128-64-64 finite supported output",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w1-128-64-64 fixture metadata",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w1-128-64-64 fixed force/observation conventions",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w1-128-64-64 same tagged data",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "forward-w1-128-64-64 mass/momentum and complete nodes",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "gradient-w1-64-32-32 matched physical IC",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "gradient-w1-64-32-32 finite supported output",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "gradient-w1-64-32-32 fixture metadata",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "gradient-w1-64-32-32 fixed force/observation conventions",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "gradient-w1-64-32-32 same tagged data",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "gradient-w1-64-32-32 finite posterior gradient",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "gradient-w1-64-64-32 matched physical IC",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "gradient-w1-64-64-32 finite supported output",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "gradient-w1-64-64-32 fixture metadata",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "gradient-w1-64-64-32 fixed force/observation conventions",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "gradient-w1-64-64-32 same tagged data",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "gradient-w1-64-64-32 finite posterior gradient",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "w0 common-observation field_error < 0.05",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "w0 common-observation noise_rms_units < 0.1",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "w0 common-observation gradient_error < 0.15",
+      "passed": false,
+      "kind": "accuracy"
+    },
+    {
+      "check": "w1 common-observation field_error < 0.05",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "w1 common-observation noise_rms_units < 0.1",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "w1 common-observation gradient_error < 0.15",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "compensated observed particle refinement",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "compensated observed time refinement",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "observed compensated FD 0",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "observed compensated FD 1",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "FD uses nontrivial M64 to M32 response and compensated force",
+      "passed": true,
+      "kind": "consistency"
+    }
+  ],
+  "convergence": {
+    "0": {
+      "field_error": 0.02067622000876069,
+      "noise_rms_units": 0.05731234505439802,
+      "gradient_error": 0.4155333196466372,
+      "field_gradient_error": 0.09638203966211571,
+      "scalar_gradients": [
+        [
+          -26.9906795470599,
+          0.6453062280435162
+        ],
+        [
+          -6.799501864348308,
+          0.7095308601217889
+        ]
+      ]
+    },
+    "1": {
+      "field_error": 0.00030894266399637626,
+      "noise_rms_units": 0.0008617665597128556,
+      "gradient_error": 0.004756184772778074,
+      "field_gradient_error": 0.003265925318806457,
+      "scalar_gradients": [
+        [
+          0.05875123351335709,
+          0.5411883066007848
+        ],
+        [
+          0.23188980002160697,
+          0.5382797047953751
+        ]
+      ]
+    }
+  },
+  "extra": {
+    "particle": {
+      "field_error": 0.0010589185544649154,
+      "noise_rms_units": 0.002953753903371675
+    },
+    "time": {
+      "field_error": 0.00012136061665924937,
+      "noise_rms_units": 0.00033855842533857483
+    }
+  },
+  "finite_differences": {
+    "0": {
+      "h": [
+        0.003,
+        0.001,
+        0.0003,
+        0.0001,
+        3e-05,
+        1e-05,
+        3e-06,
+        1e-06
+      ],
+      "error": [
+        0.0001464182003666448,
+        6.812955600852585e-05,
+        2.59231839476012e-05,
+        1.4574942252804518e-05,
+        5.088756214224645e-06,
+        3.765471612601053e-07,
+        3.421790926062758e-07,
+        2.2236380731786903e-07
+      ]
+    },
+    "1": {
+      "h": [
+        0.003,
+        0.001,
+        0.0003,
+        0.0001,
+        3e-05,
+        1e-05,
+        3e-06,
+        1e-06
+      ],
+      "error": [
+        0.00032903650260511524,
+        0.00016976408131895364,
+        7.332985516279903e-05,
+        5.0141272657542547e-05,
+        1.694099525695647e-05,
+        6.239402419861756e-06,
+        1.1273738453523185e-07,
+        5.001558851428053e-08
+      ]
+    }
+  },
+  "power": {
+    "squared_wavenumber": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      16
+    ],
+    "fractional_difference": {
+      "0": [
+        -0.005428269946712527,
+        -0.011991255998437533,
+        -0.016381796792904968,
+        -0.022510927197429753,
+        -0.027605748934602437,
+        -0.03407419263124256,
+        -0.04481412363535209,
+        -0.05011633088549261,
+        -0.05877314481393903,
+        -0.06332049039900156,
+        -0.07671547919531807,
+        -0.0701697939972018,
+        -0.07530398604624833,
+        -0.07808526811152705
+      ],
+      "1": [
+        1.9223741940965766e-05,
+        -5.2563331347954545e-05,
+        -9.625864523088445e-05,
+        -0.00023575369050321537,
+        -0.00016568401125904852,
+        -9.404394534140437e-05,
+        -0.00024493199635522434,
+        -0.00038102671451101244,
+        -0.0012079903323738428,
+        -0.0008463407947575385,
+        -0.0006192873372337093,
+        -0.00047302894323786315,
+        -0.0009102964893533683,
+        -0.00024150880686446552
+      ]
+    }
+  },
+  "metadata": {
+    "forward-w0-128-32-32": {
+      "n": 128.0,
+      "m": 32.0,
+      "steps": 32.0,
+      "seed": 91.0,
+      "power": 0.002,
+      "final": 1.0,
+      "active": 122.0,
+      "potential": -1003.193003137361,
+      "density_rms": 0.49559942112237065,
+      "diagnostic_nodes": 33.0,
+      "max_mass_error": 1.5543122344752192e-15,
+      "max_mean_momentum": 1.5959455978986625e-16
+    },
+    "forward-w0-128-64-32": {
+      "n": 128.0,
+      "m": 64.0,
+      "steps": 32.0,
+      "seed": 91.0,
+      "power": 0.002,
+      "final": 1.0,
+      "active": 122.0,
+      "potential": -1003.2466295373345,
+      "density_rms": 0.5428533661697232,
+      "diagnostic_nodes": 33.0,
+      "max_mass_error": 1.1324274851176597e-14,
+      "max_mean_momentum": 1.8995222061946038e-16
+    },
+    "gradient-w0-64-32-32": {
+      "n": 64.0,
+      "m": 32.0,
+      "steps": 32.0,
+      "seed": 91.0,
+      "power": 0.002,
+      "final": 1.0,
+      "active": 122.0,
+      "potential": -1003.2705862218809,
+      "density_rms": 0.49715096327522623,
+      "checkpoint_bytes": 18874368.0,
+      "force_evaluations": 288.0
+    },
+    "gradient-w0-64-64-32": {
+      "n": 64.0,
+      "m": 64.0,
+      "steps": 32.0,
+      "seed": 91.0,
+      "power": 0.002,
+      "final": 1.0,
+      "active": 122.0,
+      "potential": -1003.3348108539586,
+      "density_rms": 0.5515230483104657,
+      "checkpoint_bytes": 18874368.0,
+      "force_evaluations": 288.0
+    },
+    "forward-w1-128-32-32": {
+      "n": 128.0,
+      "m": 32.0,
+      "steps": 32.0,
+      "seed": 91.0,
+      "power": 0.002,
+      "final": 1.0,
+      "active": 122.0,
+      "potential": -1003.0820751827146,
+      "density_rms": 0.5212746106394128,
+      "diagnostic_nodes": 33.0,
+      "max_mass_error": 2.886579864025407e-15,
+      "max_mean_momentum": 2.484991379336776e-16
+    },
+    "forward-w1-128-64-32": {
+      "n": 128.0,
+      "m": 64.0,
+      "steps": 32.0,
+      "seed": 91.0,
+      "power": 0.002,
+      "final": 1.0,
+      "active": 122.0,
+      "potential": -1003.0718672421986,
+      "density_rms": 0.5544675072127235,
+      "diagnostic_nodes": 33.0,
+      "max_mass_error": 7.549516567451064e-15,
+      "max_mean_momentum": 1.0581813203458523e-16
+    },
+    "forward-w1-96-64-32": {
+      "n": 96.0,
+      "m": 64.0,
+      "steps": 32.0,
+      "seed": 91.0,
+      "power": 0.002,
+      "final": 1.0,
+      "active": 122.0,
+      "potential": -1002.945780112963,
+      "density_rms": 0.5656001396577287,
+      "diagnostic_nodes": 33.0,
+      "max_mass_error": 6.106226635438361e-15,
+      "max_mean_momentum": 8.429471112894708e-17
+    },
+    "forward-w1-128-64-64": {
+      "n": 128.0,
+      "m": 64.0,
+      "steps": 64.0,
+      "seed": 91.0,
+      "power": 0.002,
+      "final": 1.0,
+      "active": 122.0,
+      "potential": -1003.0711853806508,
+      "density_rms": 0.554594904221572,
+      "diagnostic_nodes": 65.0,
+      "max_mass_error": 7.771561172376096e-15,
+      "max_mean_momentum": 1.474514954580286e-16
+    },
+    "gradient-w1-64-32-32": {
+      "n": 64.0,
+      "m": 32.0,
+      "steps": 32.0,
+      "seed": 91.0,
+      "power": 0.002,
+      "final": 1.0,
+      "active": 122.0,
+      "potential": -1003.1664683004383,
+      "density_rms": 0.5234599423426829,
+      "checkpoint_bytes": 18874368.0,
+      "force_evaluations": 288.0
+    },
+    "gradient-w1-64-64-32": {
+      "n": 64.0,
+      "m": 64.0,
+      "steps": 32.0,
+      "seed": 91.0,
+      "power": 0.002,
+      "final": 1.0,
+      "active": 122.0,
+      "potential": -1003.1635596986323,
+      "density_rms": 0.5662618237030187,
+      "checkpoint_bytes": 18874368.0,
+      "force_evaluations": 288.0
+    }
+  },
+  "limits": [
+    "One strong realization, fixed nuisance values and finite references; no coverage or global convergence proof.",
+    "Forward density uses N128, projected-gradient comparison uses finite N64. Further particle/gradient calibration remains useful.",
+    "No new MAP/HMC scientific chains, PM survey/tracer/RSD integration or cosmological derivatives."
+  ]
+}

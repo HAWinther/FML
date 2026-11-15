@@ -4,6 +4,12 @@
 #include <FML/FieldLevel/ForwardGrid.h>
 
 namespace FML::FIELDLEVEL::FRAMEWORK {
+    // Fixed signal response; noise is added afterwards. The CIC reference is
+    // a window convention only, not a new data layout or a spatial regridding.
+    struct PMObservationSettings {
+        FourierResponse response;
+        int reference_cic_mesh{0}; // 0: raw force-grid CIC window; otherwise smooth to this coarser window.
+    };
     // Periodic matter-only Fourier adapter. Particle/white layout is on mesh N;
     // observation modes and grid indices are on density_mesh M, which may differ.
     template <class GridType = FML::GRID::FFTWGrid<3>>
@@ -19,6 +25,9 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         Observation observation_;
         std::vector<Parameter> parameters_;
         PMAdjointOptions reverse_;
+        std::vector<double> observation_response_;
+        int reference_cic_mesh_{};
+        bool observation_response_configured_{};
         static Configuration initial_configuration(Configuration c) {
             // Likelihood support belongs to the force/observation mesh, not the
             // IC generator. This also permits observed nonlinear modes above N's Nyquist.
@@ -67,7 +76,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         };
         PeriodicPMModelT(Configuration c, Spectrum spectrum, PMSettings settings = {},
                         Parameter noise = {"log_noise_power", std::log(1000.), std::log(1000.), 2., -30., 40.},
-                        PMAdjointOptions reverse = {}, const FML::Domain & domain = FML::domain)
+                        PMAdjointOptions reverse = {}, const FML::Domain & domain = FML::domain,
+                        PMObservationSettings observed = {})
             : config_(c), dynamics_(initial_configuration(c), std::move(spectrum), std::move(settings), domain),
               observation_(observation_configuration(c), Spectrum::fixed([](double) { return 1.; }), {}, {}, domain),
               reverse_(reverse) {
@@ -79,10 +89,47 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             FML::COMMUNICATION::collective_try([&] {
                 parameters_ = dynamics_.parameters(); parameters_.push_back(std::move(noise));
             }, "Periodic PM parameters");
+            controls({double(observed.reference_cic_mesh)});
+            require(observed.reference_cic_mesh == 0 ||
+                        (observed.reference_cic_mesh >= 4 && observed.reference_cic_mesh % 2 == 0 &&
+                         observed.reference_cic_mesh <= c.density_mesh &&
+                         c.likelihood_cutoff < M_PI * observed.reference_cic_mesh / c.boxsize),
+                    "[Periodic PM] CIC reference must be an even coarser mesh supporting the observed band");
+            int custom = !observed.response.multiplier.empty();
+            FML::MaxOverTasks(&custom);
+            require(!custom || observed.response.multiplier.size() == modes().size(),
+                    "[Periodic PM] Custom response needs one value per owned mode on every rank");
+            reference_cic_mesh_ = observed.reference_cic_mesh;
+            observation_response_configured_ = custom || reference_cic_mesh_ != 0;
+            FML::COMMUNICATION::collective_try([&] {
+                observation_response_ = std::move(observed.response.multiplier);
+                if (!custom) observation_response_.assign(modes().size(), 1.);
+                if (reference_cic_mesh_) for (size_t i = 0; i < modes().size(); ++i) {
+                    double coarse = 1., fine = 1.;
+                    for (int k : modes()[i].n) if (k) {
+                        const double x = M_PI * k / reference_cic_mesh_, y = M_PI * k / c.density_mesh;
+                        coarse *= std::pow(std::sin(x) / x, 2);
+                        fine *= std::pow(std::sin(y) / y, 2);
+                    }
+                    observation_response_[i] *= coarse / fine;
+                }
+            }, "Periodic PM observation response");
+            bool finite = true; for (double x : observation_response_) finite &= std::isfinite(x);
+            require(finite, "[Periodic PM] Nonfinite observation response");
+            if (observation_response_configured_) {
+                Modes response_modes;
+                FML::COMMUNICATION::collective_try([&] {
+                    response_modes.assign(observation_response_.begin(), observation_response_.end());
+                }, "Periodic PM response validation storage");
+                observation_.validate_modes(response_modes);
+            }
         }
         const Configuration & configuration() const { return config_; }
         const Dynamics & dynamics() const { return dynamics_; }
         const PMAdjointOptions & adjoint_options() const { return reverse_; }
+        const auto & observation_response() const { return observation_response_; }
+        bool observation_response_configured() const { return observation_response_configured_; }
+        int reference_cic_mesh() const { return reference_cic_mesh_; }
         const auto & domain() const { return dynamics_.domain(); }
         const auto & modes() const { return observation_.modes(); }
         const auto & parameters() const { return parameters_; }
@@ -124,7 +171,13 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 w.prediction.resize(modes().size()); w.parameters = p;
                 for (size_t i = 0; i < modes().size(); ++i)
                     w.prediction[i] = w.grid.get_fourier_from_index(modes()[i].fourier_index);
+                if (observation_response_configured_)
+                    for (size_t i = 0; i < modes().size(); ++i) w.prediction[i] *= observation_response_[i];
             }, "Periodic PM prediction");
+            if (observation_response_configured_) {
+                bool finite = true; for (auto z : w.prediction) finite &= std::isfinite(z.real()) && std::isfinite(z.imag());
+                if (maximum(finite ? 0 : 1) != 0) throw UnrepresentableState("[Periodic PM] Observation response overflow");
+            }
             w.valid = true; return w.prediction;
         }
         void pullback(const std::vector<double> & p, const Modes & g, Workspace & w,
@@ -138,7 +191,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             w.grid.fill_fourier_grid(0.); w.grid.set_grid_status_real(false);
             const double mesh_cells = observation_layout().global_cells;
             for (size_t i = 0; i < g.size(); ++i)
-                w.grid.set_fourier_from_index(modes()[i].fourier_index, FML::GRID::ComplexType(g[i] / mesh_cells));
+                w.grid.set_fourier_from_index(modes()[i].fourier_index, FML::GRID::ComplexType((observation_response_configured_ ? g[i] * observation_response_[i] : g[i]) / mesh_cells));
             w.grid.fftw_c2r();
             PMCotangent cotangent;
             FML::COMMUNICATION::collective_try([&] {

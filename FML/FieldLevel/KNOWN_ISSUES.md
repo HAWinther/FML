@@ -218,6 +218,16 @@ finite, forward-only checks resolve the earlier particle-load ambiguity for this
 fixture; they do not close posterior-gradient, full-mesh/high-cutoff or MAP issues.
 No force law or checkpoint identity is changed.
 
+An [explicit compensated-force option](pm_window_validation/RESULTS.md) now has a
+verified adjoint and distinct law-tag-2 checkpoint identity. In the controlled
+N128 comparison it reduces the raw density correction to 1.768% (0.0501 noise
+SD), and a common-window postprocessing diagnostic to 0.0309%. Raw joint-gradient
+changes remain 34.9% versus the 15% criterion. Sparse compensation strongly
+amplifies alias/lattice errors; dense linear-force controls improve, not a general
+accuracy guarantee. A coarse tiny-kick measurement failed and is retained;
+1e-9/1e-10 refinements pass unchanged tolerances. The explicit fixed observation response is now implemented (see below); broader
+gradient refinement and posterior validation remain open.
+
 Follow-ups before a broad PM accuracy claim:
 
 1. Extend these finite-reference, one-realization checks to more physical modes,
@@ -231,7 +241,18 @@ Follow-ups before a broad PM accuracy claim:
    Recheck inference against refined or independent data before adding coverage
    or production claims.
 
-The current numerical law is preserved; no hidden filter or rescaling has been
-introduced. Its checkpoint tag remains 1: old valid targets are unchanged, and
+The default numerical law is preserved; no hidden filter or rescaling has been
+introduced. Its default checkpoint tag remains 1: old valid targets are unchanged, and
 new mesh orderings are encoded by existing layout metadata. Changed-layout
 restart and survey/tracer/RSD remain separate.
+
+## Fixed PM observation convention (15 November 2026)
+
+The [fixed-response study](pm_observation_validation/RESULTS.md) now implements the
+actual signal response, transpose and checkpoint identity. With a common M32 CIC
+observation window, compensated M32→M64 density and joint-gradient corrections
+are 0.0309% and 0.476%, passing the original bounded criteria. The uncompensated
+joint-gradient baseline still fails at 41.6%. Custom real coefficients, noise after
+response, both distributed backends and legacy bitwise compatibility are tested.
+This is one finite-reference realization; adequate broader gradient sampling,
+posterior calibration, MAP conditioning and PM survey/tracer/RSD work remain open.

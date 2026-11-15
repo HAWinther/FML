@@ -49,9 +49,13 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             }, std::log(a), std::log(b));
         }
     };
+    // Numerical force convention; compensation removes both CIC windows in
+    // the mesh force, not the CIC window in the reported density observable.
+    enum class PMForceWindow { None = 0, CICCompensated = 1 };
     struct PMSettings {
         PMBackground background;
         std::vector<double> scale_factors{.05, .1, .2, .4, .7, 1.};
+        PMForceWindow force_window{PMForceWindow::None};
     };
     struct PMDiagnostic {
         double a{}, mass_error{}, density_rms{};
@@ -150,10 +154,26 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 w.density.set_real_from_index(i, w.density.get_real_from_index(i) - 1.);
             w.density.set_grid_status_real(true);
         }
+        template <class Wave>
+        double force_coefficient(const Wave & wave, double square, int component, bool transpose = false) const {
+            double value = (transpose ? -wave[component] : wave[component]) / (2 * M_PI * square);
+            if (settings_.force_window == PMForceWindow::CICCompensated) {
+                // CIC deposit and gather each have product sinc(k_i dx/2)^2.
+                // The real, even compensation preserves the skew-adjoint force.
+                double window = 1.;
+                for (int k : wave) if (k != 0) {
+                    const double x = M_PI * k / configuration().density_mesh;
+                    const double sinc = std::sin(x) / x;
+                    window *= sinc * sinc;
+                }
+                value /= window * window;
+            }
+            return value;
+        }
         void force(Workspace & w) const {
             w.density.fftw_r2c();
             // Same continuous i*k/k^2 kernel as NBody, without importing its
-            // unrelated GSL/ODE dependencies. No CIC deconvolution. Each even
+            // unrelated GSL/ODE dependencies. Optional explicit CIC compensation. Each even
             // Nyquist derivative component is zero, preserving Hermitian symmetry.
             for (int d = 0; d < 3; ++d) {
                 w.force[d].fill_fourier_grid(0.);
@@ -168,7 +188,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 for (int d = 0; d < 3; ++d)
                     if (std::abs(wave[d]) != n / 2)
                         w.force[d].set_fourier_from_index(i, w.density.get_fourier_from_index(i) *
-                            FML::GRID::ComplexType(0, wave[d] / (2 * M_PI * square)));
+                            FML::GRID::ComplexType(0, force_coefficient(wave, square, d)));
             }
             for (auto & g : w.force) g.fftw_c2r();
         }
@@ -235,7 +255,10 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                     "[Field PM] Requires real-space band-limited ICs and a supported even force mesh >= 4");
             const size_t n = size_t(initial.density_mesh);
             require(n <= Field().max_size() / n / n, "[Field PM] Force mesh storage overflow");
-            linear_.controls({settings_.background.omega_m, double(settings_.scale_factors.size())});
+            linear_.controls({settings_.background.omega_m, double(settings_.scale_factors.size()),
+                              double(static_cast<int>(settings_.force_window))});
+            require(settings_.force_window == PMForceWindow::None || settings_.force_window == PMForceWindow::CICCompensated,
+                    "[Field PM] Unsupported force-window convention");
             require(settings_.background.omega_m > 0 && settings_.background.omega_m <= 1 &&
                         settings_.scale_factors.size() >= 2 && settings_.scale_factors.size() <= 100001,
                     "[Field PM] Requires 0 < Omega_m <= 1 and 2..100001 scale-factor nodes");

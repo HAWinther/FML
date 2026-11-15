@@ -1,0 +1,5 @@
+{
+  "passed": true,
+  "default_case_bitwise": true,
+  "data_identity_rejections": true
+}

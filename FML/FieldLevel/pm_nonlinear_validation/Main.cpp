@@ -11,7 +11,7 @@ using FML::FIELDLEVEL::Field;
 using Model = FF::PeriodicPMModelT<FML::FIELDLEVEL::FRONTEND::Grid>;
 struct Wave { int x, y, z; };
 struct Controls {
-    int n{}, m{}, steps{}, seed{}, fd{}, fit{}, forward{};
+    int n{}, m{}, steps{}, seed{}, fd{}, fit{}, forward{}, window{}, reference{};
     double power{}, final{};
     std::string prefix, data;
 };
@@ -76,10 +76,11 @@ static Model make_model(const Controls & c) {
     config.likelihood_cutoff=2*M_PI*std::sqrt(16.5);
     FF::Spectrum spectrum{{{"log_amplitude",0.,0.,.5,-1.,1.}},
                          [power=c.power](double,const auto & p) { return FF::Power{power*std::exp(p[0]),{1.}}; }};
-    FF::PMSettings pm; pm.scale_factors.clear();
+    FF::PMSettings pm; pm.force_window=static_cast<FF::PMForceWindow>(c.window); pm.scale_factors.clear();
     for (int j=0; j<=c.steps; ++j) pm.scale_factors.push_back(.2+(c.final-.2)*j/c.steps);
     const double noise=std::log(noise_power);
-    return Model(config,spectrum,pm,{"log_noise_power",noise,noise,.5,-16.,-4.},{8});
+    FF::PMObservationSettings observed;observed.reference_cic_mesh=c.reference;
+    return Model(config,spectrum,pm,{"log_noise_power",noise,noise,.5,-16.,-4.},{8},FML::domain,observed);
 }
 static size_t mode_index(const int * k) {
     return (size_t((k[0]+common_mesh)%common_mesh)*common_mesh+(k[1]+common_mesh)%common_mesh)*(common_mesh/2+1)+k[2];
@@ -103,6 +104,7 @@ static void row(std::ofstream & file,const Field & values) {
 }
 static std::string identity(const Controls & c) {
     std::ostringstream text; text<<std::setprecision(17)<<"PM-nonlinear-v1,"<<c.seed<<','<<c.power<<','<<c.final<<",9,16,"<<noise_power;
+    if(c.reference)text<<",observation_cic,"<<c.reference;
     return text.str();
 }
 static FF::Modes load_data(const Model & model,const Controls & c) {
@@ -204,15 +206,15 @@ static void run(const Controls & c,Model & model) {
 int main(int argc,char ** argv) {try {
     Controls c;
     FML::COMMUNICATION::collective_try([&] {
-        if(argc!=11 && argc!=12)throw std::invalid_argument("pm_nonlinear PREFIX N M STEPS SEED POWER FINAL_A DATA_PATH FD FIT_ITERATIONS [FORWARD_ONLY]");
+        if(argc<11 || argc>14)throw std::invalid_argument("pm_nonlinear PREFIX N M STEPS SEED POWER FINAL_A DATA_PATH FD FIT_ITERATIONS [FORWARD_ONLY] [FORCE_WINDOW] [CIC_REFERENCE]");
         auto integer=[](const char * text){size_t end;int x=std::stoi(text,&end);if(end!=std::string(text).size())throw std::invalid_argument("Invalid integer");return x;};
         auto real=[](const char * text){size_t end;double x=std::stod(text,&end);if(end!=std::string(text).size()||!std::isfinite(x))throw std::invalid_argument("Invalid real");return x;};
-        c.prefix=argv[1];c.n=integer(argv[2]);c.m=integer(argv[3]);c.steps=integer(argv[4]);c.seed=integer(argv[5]);c.power=real(argv[6]);c.final=real(argv[7]);c.data=argv[8];c.fd=integer(argv[9]);c.fit=integer(argv[10]);if(argc==12)c.forward=integer(argv[11]);
+        c.prefix=argv[1];c.n=integer(argv[2]);c.m=integer(argv[3]);c.steps=integer(argv[4]);c.seed=integer(argv[5]);c.power=real(argv[6]);c.final=real(argv[7]);c.data=argv[8];c.fd=integer(argv[9]);c.fit=integer(argv[10]);if(argc>=12)c.forward=integer(argv[11]);if(argc>=13)c.window=integer(argv[12]);if(argc==14)c.reference=integer(argv[13]);
     },"PM nonlinear controls");
     require(c.n>=16&&c.n<=(c.forward==1?128:64)&&c.n%2==0&&c.m>=16&&c.m<=64&&c.m%2==0&&c.steps>=2&&c.steps<=64&&c.seed>=0&&c.seed<=1000000&&c.power>0&&c.power<=.01&&c.final>.2&&c.final<=1&&
-            (c.fd==0||c.fd==1)&&c.fit>=0&&c.fit<=200&&(c.forward==0||c.forward==1)&&
+            (c.fd==0||c.fd==1)&&c.fit>=0&&c.fit<=200&&(c.forward==0||c.forward==1)&&(c.window==0||c.window==1)&&c.reference>=0&&c.reference<=64&&
             (!c.forward||(c.fd==0&&c.fit==0&&c.data!="-")),"Invalid bounded PM controls");
-    std::ostringstream controls;controls<<std::setprecision(17)<<c.n<<','<<c.m<<','<<c.steps<<','<<c.seed<<','<<c.power<<','<<c.final<<','<<c.fd<<','<<c.fit<<','<<c.forward;
+    std::ostringstream controls;controls<<std::setprecision(17)<<c.n<<','<<c.m<<','<<c.steps<<','<<c.seed<<','<<c.power<<','<<c.final<<','<<c.fd<<','<<c.fit<<','<<c.forward<<','<<c.window<<','<<c.reference;
     FF::CHECKPOINT::same_string(controls.str());FF::CHECKPOINT::same_string(c.prefix);FF::CHECKPOINT::same_string(c.data);
-    FML::FIELDLEVEL::FRONTEND::initialize(c.n,c.m);auto model=make_model(c);if(c.forward)forward_only(c,model);else run(c,model);return 0;
+    FML::FIELDLEVEL::FRONTEND::initialize(c.n,c.m);auto model=make_model(c);auto window_file=output(c.prefix+".window.csv");if(FML::ThisTask==0)window_file<<"force_window\n"<<c.window<<'\n';auto observation_file=output(c.prefix+".observation.csv");if(FML::ThisTask==0)observation_file<<"reference_cic_mesh\n"<<c.reference<<'\n';if(c.forward)forward_only(c,model);else run(c,model);return 0;
 } catch(const std::exception & e) {if(FML::ThisTask==0)std::cerr<<e.what()<<'\n';return 1;}}

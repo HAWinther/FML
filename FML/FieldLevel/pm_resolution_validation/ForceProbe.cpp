@@ -10,7 +10,8 @@ int main(int argc,char ** argv){
     FML::FMLSetup::init(&argc,&argv);
     try {
         FML::COMMUNICATION::require_count(FML::NTasks==1,"Force probe requires one rank");
-        if(argc!=3)throw std::invalid_argument("pm_force_probe INITIAL_COEFFICIENTS.csv OUTPUT.csv");
+        if(argc!=3 && argc!=4)throw std::invalid_argument("pm_force_probe INITIAL_COEFFICIENTS.csv OUTPUT.csv [FORCE_WINDOW]");
+        int window=0;if(argc==4){size_t used;window=std::stoi(argv[3],&used);if(used!=std::string(argv[3]).size()||(window!=0&&window!=1))throw std::invalid_argument("Invalid force window");}
         std::ifstream input(argv[1]);std::string line,cell;std::getline(input,line);std::stringstream row(line);Field coefficients;
         while(std::getline(row,cell,','))coefficients.push_back(std::stod(cell));
         if(coefficients.size()!=18)throw std::invalid_argument("Expected 18 initial coefficients");
@@ -19,9 +20,9 @@ int main(int argc,char ** argv){
         std::ofstream output(argv[2]);if(!output)throw std::runtime_error("Cannot open force probe output");
         output<<std::setprecision(17)<<"n,m,amplitude,delta_a,longitudinal_response,relative_force_error\n";
         const double a0=1e-4;
-        for(const auto & grids:std::vector<std::pair<int,int>>{{8,8},{8,16},{8,32},{8,64},{4,32},{16,32},{32,32},{64,32},{32,16},{64,16},{64,8}})for(double da:{1e-8,1e-9}){
+        for(const auto & grids:std::vector<std::pair<int,int>>{{8,8},{8,16},{8,32},{8,64},{4,32},{16,32},{32,32},{64,32},{32,16},{64,16},{64,8}})for(double da:(window?std::vector<double>{1e-8,1e-9,1e-10}:std::vector<double>{1e-8,1e-9})){
             const int n=grids.first,m=grids.second;FF::Configuration c;c.mesh=n;c.density_mesh=m;c.boxsize=1.;c.evolution=FF::Evolution::Linear;c.initial_cutoff=c.bias_cutoff=10.;c.likelihood_cutoff=15.;
-            FF::PMSettings settings;settings.background.omega_m=1.;settings.scale_factors={a0,a0+da};
+            FF::PMSettings settings;settings.force_window=static_cast<FF::PMForceWindow>(window);settings.background.omega_m=1.;settings.scale_factors={a0,a0+da};
             FF::PeriodicPMModel model(c,FF::Spectrum::fixed([](double){return .002;}),settings);auto work=model.workspace();
             Field white(model.cells(),0.);std::array<Field,3> psi;for(auto & x:psi)x.assign(model.cells(),0.);
             for(size_t q=0;q<white.size();++q){const auto xyz=model.layout().global_coordinate(q);size_t j=0;
