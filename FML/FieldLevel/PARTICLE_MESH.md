@@ -7,8 +7,9 @@ It supports `FFTWGrid<3>` and `PencilGrid<3>` with a copied model domain.
 The companion [discrete adjoint](PM_ADJOINT.md) now differentiates this map with
 bounded in-memory checkpoints/replay. A [periodic Gaussian posterior/MAP adapter](PM_POSTERIOR.md) now supplies the first
 inference application. [Bounded HMC checks](pm_full_validation/RESULTS.md) cover
-small mocks. [Spatial convergence remains unresolved](pm_resolution_validation/RESULTS.md):
-see the open [PM-S1 issue](KNOWN_ISSUES.md). Tracer/bias/RSD models and an analytic
+small mocks. [Dense particle sampling](pm_oversampling_validation/RESULTS.md) now passes
+bounded spatial-refinement checks after the original sparse-load failure; broader
+calibration remains open under [PM-S1](KNOWN_ISSUES.md). Tracer/bias/RSD models and an analytic
 tangent API remain subsequent milestones. The existing LPT inference API
 and its evolution enum are unchanged.
 
@@ -101,6 +102,19 @@ checked MPI-int transport limits still apply; it does not add unbounded-count
 support to that router. Cell edges must align on both meshes. Slabs retain the
 initial model's divisibility restrictions; pencils support unequal boxes.
 
+`Configuration::mesh=N` controls both the initial white/IC lattice and N^3
+particles; `density_mesh=M` controls the force and observation mesh. **N may exceed
+M.** Both meshes must be even and at least 4. The strict initial cutoff must be
+below `pi*min(N,M)/boxsize`; a periodic posterior also checks its observation
+cutoff against M. Increasing N at fixed physical cutoff adds sampling and prior-null
+white coordinates, not new supported physical modes. Particle/white memory grows
+as N^3; the force workspace grows as M^3. There is no independent particle lattice.
+
+For slabs both N and M must be divisible by `NTasks`. For pencils, process dimensions must fit
+both grids, including `px<=M` and `py<=M/2+1` for the force rFFT transpose, and
+all copied domain edges must align on both meshes. Unsupported coarse-force
+process layouts reject collectively before force-workspace allocation.
+
 The workspace retains one linear workspace, a density grid, three force grids,
 six local particle fields, output fields and sparse routing buffers, plus a cached
 copy of the white input and spectrum parameters for the companion pullback. It stores
@@ -122,9 +136,9 @@ Outputs have separate particle and force-density `Model::Layout` descriptors:
 
 The density is the CIC mesh density, without later filtering or Fourier response.
 Diagnostics measure mass and momentum, not total energy or posterior calibration.
-The larger force mesh can resolve particle lattice structure even for unperturbed
-particles; zero density contrast is expected for a uniform lattice only when
-particle and force meshes coincide.
+A fine force mesh can resolve particle lattice structure even for unperturbed
+particles. Coincident grids and aligned integer particle oversampling give a
+homogeneous uniform load; arbitrary mesh ratios need not.
 
 ## Validation and next stages
 
@@ -146,6 +160,8 @@ See [the recorded validation and convergence plot](tests/PM_FORWARD_RESULTS.md) 
 measured agreement and sanitizer/compiler limits. These bounded checks do not
 establish production cosmological accuracy. The [reverse discrete map and bounded
 replay](PM_ADJOINT.md) and [periodic posterior/MAP](PM_POSTERIOR.md) are implemented
-in companion headers. Bounded HMC scientific validation is next. Full cosmological
+in companion headers. Bounded HMC and same-layout restart are implemented;
+[dense-sampling validation](pm_oversampling_validation/README.md) records the new N>M
+forward/adjoint/posterior/restart checks. Broader calibration and full cosmological
 derivatives, 2LPT starts, COLA, RSD/tracer bias,
 changed-rank restarts and survey integration remain separate extensions.

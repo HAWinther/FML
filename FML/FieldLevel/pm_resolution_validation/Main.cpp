@@ -115,7 +115,7 @@ int main(int argc,char ** argv){try{
         auto integer=[](const char * s){size_t k;int x=std::stoi(s,&k);if(k!=std::string(s).size())throw std::invalid_argument("Invalid integer");return x;};mode=argv[1];prefix=argv[2];n=integer(argv[3]);m=integer(argv[4]);steps=integer(argv[5]);
         if(mode=="case" && argc==8){path=argv[6];fd=integer(argv[7]);}else if(mode=="chain" && argc==11){id=integer(argv[6]);warm=integer(argv[7]);draws=integer(argv[8]);leap=integer(argv[9]);stride=integer(argv[10]);}else throw std::invalid_argument("Invalid argument count/mode");
     },"PM resolution input");
-    require(n>=4&&n<=32&&n%2==0&&m>=n&&m<=64&&m%2==0&&steps>=1&&steps<=64&&(fd==0||fd==1)&&id>=0&&id<16&&warm>=0&&warm<=4096&&draws>=0&&draws<=8192&&
+    require(n>=4&&n<=64&&n%2==0&&m>=4&&m<=64&&m%2==0&&steps>=1&&steps<=64&&(fd==0||fd==1)&&id>=0&&id<16&&warm>=0&&warm<=4096&&draws>=0&&draws<=8192&&
         (mode!="chain"||(draws>0&&leap>=2&&leap<=64&&stride>0&&stride<=draws)),"Invalid bounded resolution controls");
     FF::CHECKPOINT::same_string(mode+":"+std::to_string(n)+":"+std::to_string(m)+":"+std::to_string(steps)+":"+std::to_string(id)+":"+std::to_string(warm)+":"+std::to_string(draws)+":"+std::to_string(leap)+":"+std::to_string(stride)+":"+std::to_string(fd));
     FF::CHECKPOINT::same_string(path);

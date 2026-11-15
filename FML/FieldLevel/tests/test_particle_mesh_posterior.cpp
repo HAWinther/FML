@@ -12,7 +12,7 @@ using FML::TESTS::check;
 static FF::Configuration configuration(int n = 4, int force = 8) {
     FF::Configuration c; c.mesh = n; c.density_mesh = force; c.boxsize = 1;
     c.evolution = FF::Evolution::Linear;
-    c.initial_cutoff = c.bias_cutoff = 10.; c.likelihood_cutoff = 15.;
+    c.initial_cutoff = c.bias_cutoff = 10.; c.likelihood_cutoff = std::min(15., .9 * M_PI * force);
     return c;
 }
 static FF::Spectrum spectrum() {
@@ -184,12 +184,14 @@ int main(int argc, char ** argv) {
         fields << std::setprecision(17) << "backend,cell,truth,start,map\n";
     }
     const auto baseline = exercise<FML::GRID::FFTWGrid<3>>(slab, "slab", true, 4, 8, &table, &fields);
+    const auto dense = exercise<FML::GRID::FFTWGrid<3>>(slab, "dense-slab", false, 8, 4, &table);
     check(FML::TESTS::throws([&] { auto bad = noise(); bad.sigma = 0; FF::PeriodicPMModel invalid(configuration(), spectrum(), settings(), bad); }),
           "invalid noise prior rejected");
 #ifdef USE_MPI
     const int px = FML::NTasks == 4 ? 2 : FML::NTasks, py = FML::NTasks / px;
     const auto pencil = FML::Domain::uniform_pencil(px, py); FML::set_domain(pencil);
     compare(baseline, exercise<FML::GRID::PencilGrid<3>>(pencil, "pencil", true, 4, 8, &table, &fields), "pencil", true);
+    compare(dense, exercise<FML::GRID::PencilGrid<3>>(pencil, "dense-pencil", false, 8, 4, &table), "dense-pencil", false);
     if (FML::NTasks == 4) {
         exercise<FML::GRID::PencilGrid<3>>(pencil, "unequal-N10", false, 10, 20, &table);
     }

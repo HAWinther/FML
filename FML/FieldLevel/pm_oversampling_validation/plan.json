@@ -1,0 +1,101 @@
+[
+  {
+    "n": 64,
+    "m": 8,
+    "steps": 16,
+    "families": [
+      "dense-force"
+    ]
+  },
+  {
+    "n": 64,
+    "m": 16,
+    "steps": 16,
+    "families": [
+      "dense-force",
+      "particles-M16"
+    ]
+  },
+  {
+    "n": 64,
+    "m": 32,
+    "steps": 16,
+    "families": [
+      "dense-force",
+      "particles-M32"
+    ]
+  },
+  {
+    "n": 64,
+    "m": 64,
+    "steps": 16,
+    "families": [
+      "dense-force"
+    ]
+  },
+  {
+    "n": 16,
+    "m": 16,
+    "steps": 16,
+    "families": [
+      "particles-M16"
+    ]
+  },
+  {
+    "n": 32,
+    "m": 16,
+    "steps": 16,
+    "families": [
+      "particles-M16",
+      "time"
+    ]
+  },
+  {
+    "n": 48,
+    "m": 16,
+    "steps": 16,
+    "families": [
+      "particles-M16"
+    ]
+  },
+  {
+    "n": 32,
+    "m": 32,
+    "steps": 16,
+    "families": [
+      "particles-M32"
+    ]
+  },
+  {
+    "n": 48,
+    "m": 32,
+    "steps": 16,
+    "families": [
+      "particles-M32"
+    ]
+  },
+  {
+    "n": 32,
+    "m": 16,
+    "steps": 4,
+    "families": [
+      "time"
+    ]
+  },
+  {
+    "n": 32,
+    "m": 16,
+    "steps": 8,
+    "families": [
+      "time"
+    ]
+  },
+  {
+    "n": 32,
+    "m": 16,
+    "steps": 32,
+    "families": [
+      "time"
+    ]
+  }
+]

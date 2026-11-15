@@ -19,7 +19,7 @@ int main(int argc,char ** argv){
         std::ofstream output(argv[2]);if(!output)throw std::runtime_error("Cannot open force probe output");
         output<<std::setprecision(17)<<"n,m,amplitude,delta_a,longitudinal_response,relative_force_error\n";
         const double a0=1e-4;
-        for(const auto & grids:std::vector<std::pair<int,int>>{{8,8},{8,16},{8,32},{8,64},{4,32},{16,32},{32,32}})for(double da:{1e-8,1e-9}){
+        for(const auto & grids:std::vector<std::pair<int,int>>{{8,8},{8,16},{8,32},{8,64},{4,32},{16,32},{32,32},{64,32},{32,16},{64,16},{64,8}})for(double da:{1e-8,1e-9}){
             const int n=grids.first,m=grids.second;FF::Configuration c;c.mesh=n;c.density_mesh=m;c.boxsize=1.;c.evolution=FF::Evolution::Linear;c.initial_cutoff=c.bias_cutoff=10.;c.likelihood_cutoff=15.;
             FF::PMSettings settings;settings.background.omega_m=1.;settings.scale_factors={a0,a0+da};
             FF::PeriodicPMModel model(c,FF::Spectrum::fixed([](double){return .002;}),settings);auto work=model.workspace();

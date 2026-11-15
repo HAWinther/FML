@@ -10,7 +10,9 @@ now compares a two-mode conditional posterior with quadrature and exercises the
 public full-field and joint-parameter sampler.
 
 The [resolution campaign](pm_resolution_validation/RESULTS.md) records a spatial
-force/particle accuracy limitation ([PM-S1](KNOWN_ISSUES.md)). Same-model inference
+force/particle accuracy limitation ([PM-S1](KNOWN_ISSUES.md)). A
+[dense-sampling follow-up](pm_oversampling_validation/RESULTS.md) now passes bounded
+refinement criteria with N>M; broader calibration remains open. Same-model inference
 checks validate the discrete target; broader physical accuracy remains unresolved.
 
 ## Use

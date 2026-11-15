@@ -50,19 +50,19 @@ static FF::Spectrum spectrum(double power=.02, double prior_sigma=.5) {
 }
 static FF::PMSettings settings() {FF::PMSettings s;s.scale_factors={.2,.4,.6};return s;}
 static FF::Parameter noise() {const double x=std::log(.001);return {"log_noise_power",x,x,.5,-14.,-3.};}
-static FML::MCMC::HMCOptions options(bool joint) {
-    FML::MCMC::HMCOptions o;o.warmup=joint?120:6;o.samples=joint?6:4;o.n_leapfrog=2;
+static FML::MCMC::HMCOptions options(bool joint, bool dense=false) {
+    FML::MCMC::HMCOptions o;o.warmup=joint?(dense?16:120):6;o.samples=joint?6:4;o.n_leapfrog=2;
     o.step_size=.025;o.seed=(std::uint64_t(1)<<40)+37;o.target_acceptance=.85;
-    o.adapt_step_size=o.adapt_mass=joint;return o;
+    o.adapt_step_size=joint;o.adapt_mass=joint && !dense;return o;
 }
 template<class Grid>
-void exercise(const FS::path & root,const std::string & phase,const FML::Domain & domain) {
+void exercise(const FS::path & root,const std::string & phase,const FML::Domain & domain,bool dense=false) {
     using Model=FF::PeriodicPMModelT<Grid>;
-    auto c=configuration();const auto pm=settings();const auto prior=noise();
+    auto c=configuration();if(dense){c.mesh=8;c.density_mesh=4;c.likelihood_cutoff=9.;}const auto pm=settings();const auto prior=noise();
     Model model(c,spectrum(),pm,prior,{2},domain);auto work=model.workspace();const auto parameters=model.initial_parameters();
     const auto data=model.mock(model.white_noise(91),parameters,92,work);FF::BasicPosterior<Model> posterior(model,data);
     for(bool joint:{true,false}) {
-        const std::string name=joint?"joint":"fixed";const auto o=options(joint);
+        const std::string name=joint?"joint":"fixed";const auto o=options(joint,dense);
         FF::CheckpointOptions io;io.directory=(root/name).string();io.problem_id="PM-checkpoint-fixture-1:P0.02:mock91:noise92";io.every=17;
         const auto file=root/(name+".reference.rank"+std::to_string(FML::ThisTask));
         if(phase=="reject") {
@@ -75,7 +75,7 @@ void exercise(const FS::path & root,const std::string & phase,const FML::Domain 
             reference.result=FF::sample(posterior,model.white_noise(300),parameters,o,joint,[&](const auto & w,const auto &,size_t){reference.fields.push_back(w);});
             FML::COMMUNICATION::collective_try([&]{write_reference(file,reference);},"PM checkpoint reference write");
             std::vector<Field> fields;std::vector<std::vector<double>> rows;Field potentials;std::vector<size_t> indices;
-            for(int budget:(joint?std::vector<int>{27,33,55,7}:std::vector<int>{3})) {
+            for(int budget:(joint?(dense?std::vector<int>{5,7,6}:std::vector<int>{27,33,55,7}):std::vector<int>{3})) {
                 io.max_iterations=budget;
                 auto sink=[&](const auto & white,const auto &,size_t draw){fields.push_back(white);indices.push_back(draw);};
                 auto part=io.resume?FF::sample_checkpointed(posterior,{}, {},o,io,joint,sink):
@@ -88,8 +88,8 @@ void exercise(const FS::path & root,const std::string & phase,const FML::Domain 
                     fields==std::vector<Field>(reference.fields.begin(),reference.fields.begin()+n) && indices==(joint?std::vector<size_t>{0,1}:std::vector<size_t>{}),
                     name+" warmup/window/draw splits preserve full fields, rows, potentials and sink indices bitwise");
             const auto state=CP::load(io.directory,CP::identity(posterior,io.problem_id),model.cells(),parameters.size(),joint);
-            check(state.frozen==parameters && state.sampler.next_iteration==(joint?122:3),name+" frozen parameters and iteration retained");
-            if(joint)check(state.sampler.window==2 && state.sampler.diagonal.size()==2,name+" scalar mass-adaptation windows and diagonal retained");
+            check(state.frozen==parameters && state.sampler.next_iteration==(joint?(dense?18:122):3),name+" frozen parameters and iteration retained");
+            if(joint)check(state.sampler.window==(dense?0:2) && state.sampler.diagonal.size()==2,name+" scalar mass-adaptation windows and diagonal retained");
             continue;
         }
         if(phase!="resume")throw std::invalid_argument("Expected prepare, resume or reject");
@@ -155,11 +155,11 @@ void exercise(const FS::path & root,const std::string & phase,const FML::Domain 
             check(CP::identity(different,io.problem_id)!=CP::identity(zero,io.problem_id),label+" changes PM identity");
             check(FML::TESTS::throws([&]{FF::sample_checkpointed(different,{}, {},o,io,false);}),"rejects "+label);
         };
-        auto altered=c;altered.mesh=8;reject_config(altered,"IC mesh");
+        auto altered=c;altered.mesh=2*c.mesh;reject_config(altered,"IC mesh");
         altered=c;altered.density_mesh=16;reject_config(altered,"force/observation mesh");
         altered=c;altered.boxsize=1.1;reject_config(altered,"box length");
         altered=c;altered.initial_cutoff=8.;reject_config(altered,"initial cutoff");
-        altered=c;altered.likelihood_cutoff=14.;reject_config(altered,"likelihood cutoff");
+        altered=c;altered.likelihood_cutoff=.9*c.likelihood_cutoff;reject_config(altered,"likelihood cutoff");
 
     }
 }
@@ -172,16 +172,16 @@ static std::vector<double> edges(int parts,bool alternate) {
 int main(int argc,char ** argv) {
     FML::FMLSetup::init(&argc,&argv);
     try {
-        std::string directory,phase,backend;int alternate=0;
-        FML::COMMUNICATION::collective_try([&]{if(argc<4 || argc>5)throw std::invalid_argument("test_particle_mesh_checkpoint DIRECTORY prepare|resume|reject slab|pencil [alternate]");directory=argv[1];phase=argv[2];backend=argv[3];if(argc==5)alternate=std::stoi(argv[4]);},"PM checkpoint test input");
-        CP::same_string(directory);CP::same_string(phase);CP::same_string(backend);CP::same_string(std::to_string(alternate));
+        std::string directory,phase,backend;int alternate=0,dense=0;
+        FML::COMMUNICATION::collective_try([&]{if(argc<4 || argc>6)throw std::invalid_argument("test_particle_mesh_checkpoint DIRECTORY prepare|resume|reject slab|pencil [alternate] [dense]");directory=argv[1];phase=argv[2];backend=argv[3];if(argc>=5)alternate=std::stoi(argv[4]);if(argc==6)dense=std::stoi(argv[5]);},"PM checkpoint test input");
+        CP::same_string(directory);CP::same_string(phase);CP::same_string(backend);CP::same_string(std::to_string(alternate));CP::same_string(std::to_string(dense));
         FML::COMMUNICATION::collective_try([&]{if(FML::ThisTask==0)FS::create_directories(directory);},"PM test directory");
-        if(backend=="slab")exercise<FML::GRID::FFTWGrid<3>>(directory,phase,FML::domain);
+        if(backend=="slab")exercise<FML::GRID::FFTWGrid<3>>(directory,phase,FML::domain,dense!=0);
 #ifdef USE_MPI
         else if(backend=="pencil") {
             int dims[2]={0,0};MPI_Dims_create(FML::NTasks,2,dims);if(alternate==2){dims[0]=FML::NTasks;dims[1]=1;}
             const auto domain=FML::Domain::pencil(edges(dims[0],alternate!=0),edges(dims[1],alternate!=0));
-            exercise<FML::GRID::PencilGrid<3>>(directory,phase,domain);
+            exercise<FML::GRID::PencilGrid<3>>(directory,phase,domain,dense!=0);
         }
 #endif
         else throw std::invalid_argument("Unsupported backend");

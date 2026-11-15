@@ -188,6 +188,7 @@ int main(int argc, char ** argv) {
         table.open(argv[1]); table << std::setprecision(17) << "backend,channel,h,analytic,numeric,relative_error\n";
     }
     auto baseline = exercise<FML::GRID::FFTWGrid<3>>(slab, "slab", 8, 16, .3, 8, true, &table);
+    const auto dense = exercise<FML::GRID::FFTWGrid<3>>(slab, "dense-slab", 8, 4, .3, 4, true, &table);
     exercise<FML::GRID::FFTWGrid<3>>(slab, "EdS-small", 4, 4, 1., 4, false, &table);
 #ifdef USE_MPI
     for (auto shape : {std::array<int, 2>{FML::NTasks, 1}, {1, FML::NTasks}}) {
@@ -195,6 +196,8 @@ int main(int argc, char ** argv) {
         const auto domain = FML::Domain::uniform_pencil(shape[0], shape[1]); FML::set_domain(domain);
         auto value = exercise<FML::GRID::PencilGrid<3>>(domain, "pencil", 8, 16, .3, 8, false, &table);
         compare(baseline, value, "pencil");
+        if (shape[1] <= 3)
+            compare(dense, exercise<FML::GRID::PencilGrid<3>>(domain, "dense-pencil", 8, 4, .3, 4, false, &table), "dense-pencil");
     }
     if (FML::NTasks == 4) {
         const auto domain = FML::Domain::uniform_pencil(2, 2); FML::set_domain(domain);

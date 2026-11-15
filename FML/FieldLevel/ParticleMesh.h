@@ -227,9 +227,12 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                              const FML::Domain & domain = FML::domain)
             : linear_(initial, std::move(spectrum), {}, {}, domain), settings_(std::move(settings)) {
             // The supplied configuration describes the initial-field generator.
-            require(initial.growth_rate == 0 && initial.density_mesh >= initial.mesh && initial.density_mesh % 2 == 0 &&
+            // A denser particle/IC lattice may sample a coarser force mesh. Keep
+            // the initial band below BOTH Nyquists; linear_ checks the IC one.
+            require(initial.growth_rate == 0 && initial.density_mesh >= 4 && initial.density_mesh % 2 == 0 &&
+                        initial.initial_cutoff < M_PI * initial.density_mesh / initial.boxsize &&
                         (!FML::GRID::is_fftwgrid_v<Grid> || initial.density_mesh % FML::NTasks == 0),
-                    "[Field PM] Requires real-space linear ICs and a supported even force mesh >= IC mesh");
+                    "[Field PM] Requires real-space band-limited ICs and a supported even force mesh >= 4");
             const size_t n = size_t(initial.density_mesh);
             require(n <= Field().max_size() / n / n, "[Field PM] Force mesh storage overflow");
             linear_.controls({settings_.background.omega_m, double(settings_.scale_factors.size())});
@@ -246,11 +249,13 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             // Check common cell edges before sparse mesh ownership is constructed.
             if (!domain.is_slab()) {
                 const auto & p = domain.template get<FML::PencilDomain>();
+                const auto dims = p.process_grid();
+                valid &= dims[0] <= initial.density_mesh && dims[1] <= initial.density_mesh / 2 + 1;
                 for (const auto & edges : {p.x_edges(), p.y_edges()})
                     for (double edge : edges)
                         valid &= std::abs(edge * initial.density_mesh - std::round(edge * initial.density_mesh)) < 1e-9;
             }
-            require(valid, "[Field PM] Domain edges must align with the force mesh");
+            require(valid, "[Field PM] Process grid must fit the force mesh and domain edges must align");
             FML::COMMUNICATION::collective_try([&] {
                 parameters_.assign(linear_.parameters().begin(), linear_.parameters().end() - 2);
                 for (size_t j = 1; j < settings_.scale_factors.size(); ++j) {

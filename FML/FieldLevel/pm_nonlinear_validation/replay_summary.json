@@ -1,0 +1,255 @@
+{
+  "passed": true,
+  "checks": [
+    {
+      "check": "slab1 shape modes",
+      "passed": true
+    },
+    {
+      "check": "slab1 shape initial",
+      "passed": true
+    },
+    {
+      "check": "slab1 shape gradient",
+      "passed": true
+    },
+    {
+      "check": "slab1 shape fit_coefficients",
+      "passed": true
+    },
+    {
+      "check": "slab1 shape fit_modes",
+      "passed": true
+    },
+    {
+      "check": "slab1 forward/gradient/three-iteration MAP replay",
+      "passed": true
+    },
+    {
+      "check": "slab2 shape modes",
+      "passed": true
+    },
+    {
+      "check": "slab2 shape initial",
+      "passed": true
+    },
+    {
+      "check": "slab2 shape gradient",
+      "passed": true
+    },
+    {
+      "check": "slab2 shape fit_coefficients",
+      "passed": true
+    },
+    {
+      "check": "slab2 shape fit_modes",
+      "passed": true
+    },
+    {
+      "check": "slab2 forward/gradient/three-iteration MAP replay",
+      "passed": true
+    },
+    {
+      "check": "slab4 shape modes",
+      "passed": true
+    },
+    {
+      "check": "slab4 shape initial",
+      "passed": true
+    },
+    {
+      "check": "slab4 shape gradient",
+      "passed": true
+    },
+    {
+      "check": "slab4 shape fit_coefficients",
+      "passed": true
+    },
+    {
+      "check": "slab4 shape fit_modes",
+      "passed": true
+    },
+    {
+      "check": "slab4 forward/gradient/three-iteration MAP replay",
+      "passed": true
+    },
+    {
+      "check": "pencil1 shape modes",
+      "passed": true
+    },
+    {
+      "check": "pencil1 shape initial",
+      "passed": true
+    },
+    {
+      "check": "pencil1 shape gradient",
+      "passed": true
+    },
+    {
+      "check": "pencil1 shape fit_coefficients",
+      "passed": true
+    },
+    {
+      "check": "pencil1 shape fit_modes",
+      "passed": true
+    },
+    {
+      "check": "pencil1 forward/gradient/three-iteration MAP replay",
+      "passed": true
+    },
+    {
+      "check": "pencil2 shape modes",
+      "passed": true
+    },
+    {
+      "check": "pencil2 shape initial",
+      "passed": true
+    },
+    {
+      "check": "pencil2 shape gradient",
+      "passed": true
+    },
+    {
+      "check": "pencil2 shape fit_coefficients",
+      "passed": true
+    },
+    {
+      "check": "pencil2 shape fit_modes",
+      "passed": true
+    },
+    {
+      "check": "pencil2 forward/gradient/three-iteration MAP replay",
+      "passed": true
+    },
+    {
+      "check": "pencil4 shape modes",
+      "passed": true
+    },
+    {
+      "check": "pencil4 shape initial",
+      "passed": true
+    },
+    {
+      "check": "pencil4 shape gradient",
+      "passed": true
+    },
+    {
+      "check": "pencil4 shape fit_coefficients",
+      "passed": true
+    },
+    {
+      "check": "pencil4 shape fit_modes",
+      "passed": true
+    },
+    {
+      "check": "pencil4 forward/gradient/three-iteration MAP replay",
+      "passed": true
+    },
+    {
+      "check": "sanitizer0 shape modes",
+      "passed": true
+    },
+    {
+      "check": "sanitizer0 shape initial",
+      "passed": true
+    },
+    {
+      "check": "sanitizer0 shape gradient",
+      "passed": true
+    },
+    {
+      "check": "sanitizer0 shape fit_coefficients",
+      "passed": true
+    },
+    {
+      "check": "sanitizer0 shape fit_modes",
+      "passed": true
+    },
+    {
+      "check": "sanitizer0 forward/gradient/three-iteration MAP replay",
+      "passed": true
+    },
+    {
+      "check": "replay-serial0 FD 0",
+      "passed": true
+    },
+    {
+      "check": "replay-serial0 FD 1",
+      "passed": true
+    },
+    {
+      "check": "replay-slab1 FD 0",
+      "passed": true
+    },
+    {
+      "check": "replay-slab1 FD 1",
+      "passed": true
+    },
+    {
+      "check": "replay-slab2 FD 0",
+      "passed": true
+    },
+    {
+      "check": "replay-slab2 FD 1",
+      "passed": true
+    },
+    {
+      "check": "replay-slab4 FD 0",
+      "passed": true
+    },
+    {
+      "check": "replay-slab4 FD 1",
+      "passed": true
+    },
+    {
+      "check": "replay-pencil1 FD 0",
+      "passed": true
+    },
+    {
+      "check": "replay-pencil1 FD 1",
+      "passed": true
+    },
+    {
+      "check": "replay-pencil2 FD 0",
+      "passed": true
+    },
+    {
+      "check": "replay-pencil2 FD 1",
+      "passed": true
+    },
+    {
+      "check": "replay-pencil4 FD 0",
+      "passed": true
+    },
+    {
+      "check": "replay-pencil4 FD 1",
+      "passed": true
+    },
+    {
+      "check": "replay-sanitizer0 FD 0",
+      "passed": true
+    },
+    {
+      "check": "replay-sanitizer0 FD 1",
+      "passed": true
+    },
+    {
+      "check": "independent DFT initial normalization",
+      "passed": true
+    },
+    {
+      "check": "all expected successes/rejections",
+      "passed": true
+    }
+  ],
+  "replay_errors": {
+    "slab1": 4.973799150320701e-14,
+    "slab2": 9.947598300641403e-14,
+    "slab4": 9.947598300641403e-14,
+    "pencil1": 4.973799150320701e-14,
+    "pencil2": 9.947598300641403e-14,
+    "pencil4": 1.2079226507921703e-13,
+    "sanitizer0": 0.0
+  },
+  "direct_dft_error": 3.0531133177191805e-16
+}

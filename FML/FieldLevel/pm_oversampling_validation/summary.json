@@ -1,0 +1,405 @@
+{
+  "passed": true,
+  "consistency_passed": true,
+  "gates": [
+    {
+      "check": "64-8-16: matched physical initial coefficients",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "64-8-16: finite common-band outputs/gradients",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "64-16-16: matched physical initial coefficients",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "64-16-16: finite common-band outputs/gradients",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "64-32-16: matched physical initial coefficients",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "64-32-16: finite common-band outputs/gradients",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "64-64-16: matched physical initial coefficients",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "64-64-16: finite common-band outputs/gradients",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "16-16-16: matched physical initial coefficients",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "16-16-16: finite common-band outputs/gradients",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "32-16-16: matched physical initial coefficients",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "32-16-16: finite common-band outputs/gradients",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "32-16-16: refined FD probe 0",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "32-16-16: refined FD probe 1",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "48-16-16: matched physical initial coefficients",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "48-16-16: finite common-band outputs/gradients",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "32-32-16: matched physical initial coefficients",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "32-32-16: finite common-band outputs/gradients",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "48-32-16: matched physical initial coefficients",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "48-32-16: finite common-band outputs/gradients",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "32-16-4: matched physical initial coefficients",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "32-16-4: finite common-band outputs/gradients",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "32-16-8: matched physical initial coefficients",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "32-16-8: finite common-band outputs/gradients",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "32-16-32: matched physical initial coefficients",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "32-16-32: finite common-band outputs/gradients",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "one oversampled field/scalar directional-check fixture",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "dense-force: improving field",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "dense-force: improving gradient",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "dense-force: finest field <5% and gradient <15%",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "dense-force: finest discrepancy <0.1 noise SD",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "particles-M16: improving field",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "particles-M16: improving gradient",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "particles-M16: finest field <5% and gradient <15%",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "particles-M16: finest discrepancy <0.1 noise SD",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "particles-M32: improving field",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "particles-M32: improving gradient",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "particles-M32: finest field <5% and gradient <15%",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "particles-M32: finest discrepancy <0.1 noise SD",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "time: improving field",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "time: improving gradient",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "time: finest field <5% and gradient <15%",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "time: finest discrepancy <0.1 noise SD",
+      "passed": true,
+      "kind": "accuracy"
+    }
+  ],
+  "convergence": {
+    "dense-force": {
+      "variable": "m",
+      "reference": "64-64-16",
+      "rows": [
+        {
+          "key": "64-8-16",
+          "resolution": 8,
+          "field_error": 0.137697116702986,
+          "gradient_error": 0.9977692214259064,
+          "noise_rms_units": 0.2668895936597676
+        },
+        {
+          "key": "64-16-16",
+          "resolution": 16,
+          "field_error": 0.03592677647504985,
+          "gradient_error": 0.2938186938898268,
+          "noise_rms_units": 0.0696345936975122
+        },
+        {
+          "key": "64-32-16",
+          "resolution": 32,
+          "field_error": 0.007351031862296549,
+          "gradient_error": 0.061980544932971074,
+          "noise_rms_units": 0.014248039128809049
+        },
+        {
+          "key": "64-64-16",
+          "resolution": 64,
+          "field_error": 0.0,
+          "gradient_error": 0.0,
+          "noise_rms_units": 0.0
+        }
+      ]
+    },
+    "particles-M16": {
+      "variable": "n",
+      "reference": "64-16-16",
+      "rows": [
+        {
+          "key": "16-16-16",
+          "resolution": 16,
+          "field_error": 0.22951528716195344,
+          "gradient_error": 1.5589476917397722,
+          "noise_rms_units": 0.43016643130979326
+        },
+        {
+          "key": "32-16-16",
+          "resolution": 32,
+          "field_error": 0.05737764552064687,
+          "gradient_error": 0.2569680802975331,
+          "noise_rms_units": 0.10753940321700069
+        },
+        {
+          "key": "48-16-16",
+          "resolution": 48,
+          "field_error": 0.010356786767214483,
+          "gradient_error": 0.061818276622629696,
+          "noise_rms_units": 0.019411090470611885
+        },
+        {
+          "key": "64-16-16",
+          "resolution": 64,
+          "field_error": 0.0,
+          "gradient_error": 0.0,
+          "noise_rms_units": 0.0
+        }
+      ]
+    },
+    "particles-M32": {
+      "variable": "n",
+      "reference": "64-32-16",
+      "rows": [
+        {
+          "key": "32-32-16",
+          "resolution": 32,
+          "field_error": 0.06002314680578394,
+          "gradient_error": 0.23614967414755555,
+          "noise_rms_units": 0.1155554551140502
+        },
+        {
+          "key": "48-32-16",
+          "resolution": 48,
+          "field_error": 0.005343409614088493,
+          "gradient_error": 0.018773449055623774,
+          "noise_rms_units": 0.010287033630787375
+        },
+        {
+          "key": "64-32-16",
+          "resolution": 64,
+          "field_error": 0.0,
+          "gradient_error": 0.0,
+          "noise_rms_units": 0.0
+        }
+      ]
+    },
+    "time": {
+      "variable": "steps",
+      "reference": "32-16-32",
+      "rows": [
+        {
+          "key": "32-16-4",
+          "resolution": 4,
+          "field_error": 0.0014861485824325562,
+          "gradient_error": 0.00982216190818687,
+          "noise_rms_units": 0.002802040065233854
+        },
+        {
+          "key": "32-16-8",
+          "resolution": 8,
+          "field_error": 0.0003801957652008199,
+          "gradient_error": 0.002538674897522153,
+          "noise_rms_units": 0.0007168353012060196
+        },
+        {
+          "key": "32-16-16",
+          "resolution": 16,
+          "field_error": 7.754292138993434e-05,
+          "gradient_error": 0.000518897986627693,
+          "noise_rms_units": 0.00014620232127411504
+        },
+        {
+          "key": "32-16-32",
+          "resolution": 32,
+          "field_error": 0.0,
+          "gradient_error": 0.0,
+          "noise_rms_units": 0.0
+        }
+      ]
+    }
+  },
+  "finite_differences": {
+    "32-16-16": {
+      "0": {
+        "h": [
+          0.003,
+          0.001,
+          0.0003,
+          0.0001,
+          3e-05,
+          1e-05,
+          3e-06,
+          1e-06
+        ],
+        "scaled_error": [
+          0.00035222231142963134,
+          0.00028282190659927736,
+          9.734144716337656e-05,
+          4.7043405875850375e-05,
+          2.0293393275527816e-06,
+          2.936617232163208e-07,
+          2.9339825520502405e-08,
+          1.51289708053004e-08
+        ]
+      },
+      "1": {
+        "h": [
+          0.003,
+          0.001,
+          0.0003,
+          0.0001,
+          3e-05,
+          1e-05,
+          3e-06,
+          1e-06
+        ],
+        "scaled_error": [
+          0.00024201621043684824,
+          0.00018637619510864168,
+          6.448069585526743e-05,
+          3.1508165704801243e-05,
+          1.7581861349448924e-06,
+          1.9196478256371394e-07,
+          5.806949916179412e-09,
+          5.8639723678535716e-08
+        ]
+      }
+    }
+  },
+  "limits": [
+    "One weakly nonlinear realization, IC k<10 and observed k<15; no shell-crossing or high-cutoff claim.",
+    "Each family uses its own finite reference, not an exact continuum solution.",
+    "No MCMC or repeated-mock coverage study in this follow-up; no force-law change."
+  ]
+}

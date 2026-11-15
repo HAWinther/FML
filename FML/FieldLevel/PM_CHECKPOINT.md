@@ -5,6 +5,10 @@ Include [ParticleMeshCheckpoint.h](ParticleMeshCheckpoint.h) to use the existing
 supports the periodic Fourier-Gaussian PM posterior on FFTW slabs or MPI pencils.
 [The example](example/ParticleMeshCheckpoint.cpp) supplies a complete small mock.
 [Runtime results](tests/PM_CHECKPOINT_RESULTS.md) record validation and limits.
+[Dense IC/particle sampling N>M](pm_oversampling_validation/RESULTS.md) is also
+supported and tested for fresh-process continuation. The numerical-law tag remains
+1 because the force/assignment/evolution map is unchanged for old valid targets;
+existing layout metadata already distinguishes newly permitted mesh orderings.
 
 ## Use
 

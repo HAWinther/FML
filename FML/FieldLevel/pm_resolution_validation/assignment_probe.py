@@ -39,7 +39,7 @@ def force(x,m):
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--initial',type=Path,required=True);p.add_argument('--output',type=Path,required=True);a=p.parse_args();a.output.mkdir(parents=True,exist_ok=True)
     coefficients=np.loadtxt(a.initial,delimiter=',');rows=[]
-    for n,m in [(8,m) for m in [8,16,32,64]]+[(n,32) for n in [4,16,32,64]]:
+    for n,m in [(8,m) for m in [8,16,32,64]]+[(n,32) for n in [4,16,32,64]]+[(32,16),(64,16),(64,8)]:
         q,psi=setup(n,coefficients)
         for amplitude in [1e-3,1e-4]:
             f=force(q+amplitude*psi,m);response=float(np.sum(f*psi)/(amplitude*np.sum(psi*psi)))

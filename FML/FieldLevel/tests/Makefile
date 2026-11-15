@@ -165,8 +165,8 @@ test_particle_mesh_checkpoint: test_particle_mesh_checkpoint.o Global.o $(PM_GRI
 	$(LINK_EXE)
 particle-mesh-checkpoint: test_particle_mesh_checkpoint
 	@set -e; pm_tmp=$$(mktemp -d "$${TMPDIR:-/tmp}/fml-pm-checkpoint.XXXXXX"); trap 'rm -rf "$$pm_tmp"' EXIT; \
-	for backend in $(PM_CHECKPOINT_BACKENDS); do for np in $(NP_LIST); do \
-	  $(SAFETY_RUN) ./test_particle_mesh_checkpoint "$$pm_tmp/$$backend-np$$np" prepare $$backend; \
-	  $(SAFETY_RUN) ./test_particle_mesh_checkpoint "$$pm_tmp/$$backend-np$$np" resume $$backend; \
-	done; done
+	for backend in $(PM_CHECKPOINT_BACKENDS); do for np in $(NP_LIST); do for dense in 0 1; do \
+	  $(SAFETY_RUN) ./test_particle_mesh_checkpoint "$$pm_tmp/$$backend-np$$np-dense$$dense" prepare $$backend 0 $$dense; \
+	  $(SAFETY_RUN) ./test_particle_mesh_checkpoint "$$pm_tmp/$$backend-np$$np-dense$$dense" resume $$backend 0 $$dense; \
+	done; done; done
 run: particle-mesh-checkpoint

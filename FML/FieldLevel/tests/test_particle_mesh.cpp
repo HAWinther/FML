@@ -158,9 +158,8 @@ static std::vector<Vec> dense_force(const std::vector<Vec> & x, int n, Field & d
         dense_stencil(x[q], n, [&](size_t j, double weight) { for (int d = 0; d < 3; ++d) out[q][d] += weight * force[j][d]; });
     return out;
 }
-static void direct_reference() {
-    const int n = 4;
-    FF::ParticleMeshForward model(config(n, n), spectrum(), settings(1., 3));
+static void direct_reference(int n = 4, int force = 4) {
+    FF::ParticleMeshForward model(config(n, force), spectrum(), settings(1., 3));
     auto w = model.workspace(); auto s = initial(model, .2);
     const auto actual = snapshot(model.evolve(s, {}, w));
     std::vector<Vec> x(n * n * n), p(x.size()), shift(x.size());
@@ -176,7 +175,7 @@ static void direct_reference() {
         }
     }
     Field delta;
-    auto f = dense_force(x, n, delta);
+    auto f = dense_force(x, force, delta);
     const auto nodes = settings(1., 3).scale_factors;
     for (size_t j = 1; j < nodes.size(); ++j) {
         const double a = nodes[j - 1], b = nodes[j], mid = (a + b) / 2;
@@ -185,7 +184,7 @@ static void direct_reference() {
             const double dx = 2 * (1 / std::sqrt(a) - 1 / std::sqrt(b)) * p[q][d];
             x[q][d] += dx; shift[q][d] += dx;
         }
-        f = dense_force(x, n, delta);
+        f = dense_force(x, force, delta);
         for (size_t q = 0; q < x.size(); ++q) for (int d = 0; d < 3; ++d)
             p[q][d] += 3 * (std::sqrt(b) - std::sqrt(mid)) * f[q][d];
     }
@@ -259,6 +258,8 @@ int main(int argc, char ** argv) {
     check(uniform.maximum(norm) < 1e-14, "uniform lattice remains exactly homogeneous and stationary");
     const auto baseline = exercise<Grid>(slab, "slab");
     direct_reference();
+    direct_reference(8, 4);
+    const auto dense = exercise<Grid>(slab, "dense-slab", .3, 8, 4);
 #ifdef USE_GSL
     native_reference();
 #endif
@@ -266,6 +267,10 @@ int main(int argc, char ** argv) {
           "non-increasing timestep schedule rejected");
     check(FML::TESTS::throws([&] { auto s = settings(); s.background.omega_m = -1; FF::ParticleMeshForward bad(config(), spectrum(), s); }),
           "invalid fixed cosmology rejected");
+    check(FML::TESTS::throws([&] { auto c = config(8, 4); c.initial_cutoff = 13.; FF::ParticleMeshForward bad(c, spectrum(), settings()); }),
+          "IC support above coarser force Nyquist rejected");
+    check(FML::TESTS::throws([&] { FF::ParticleMeshForward bad(config(8, 2), spectrum(), settings()); }),
+          "force mesh below minimum rejected");
     check(FML::TESTS::throws([&] { auto c = config(); c.growth_rate = .5; FF::ParticleMeshForward bad(c, spectrum(), settings()); }),
           "initial redshift-space response rejected");
     {
@@ -290,6 +295,12 @@ int main(int argc, char ** argv) {
     for (auto shape : {std::array<int, 2>{FML::NTasks, 1}, {1, FML::NTasks}}) {
         if (shape[0] > 8 || shape[1] > 5) continue;
         auto domain = FML::Domain::uniform_pencil(shape[0], shape[1]); FML::set_domain(domain);
+        if (shape[1] <= 3)
+            check(error(exercise<FML::GRID::PencilGrid<3>>(domain, "dense-pencil", .3, 8, 4), dense) < 2e-12,
+                  "oversampled slab/pencil forward equality");
+        else
+            check(FML::TESTS::throws([&] { FF::ParticleMeshForwardT<FML::GRID::PencilGrid<3>> bad(config(8,4), spectrum(), settings(), domain); }),
+                  "force Fourier process grid too narrow rejects before workspace allocation");
         auto pencil = exercise<FML::GRID::PencilGrid<3>>(domain, "pencil");
         const double e = error(pencil, baseline);
         check(e < 2e-12, "slab/pencil trajectory and output equality");

@@ -6,6 +6,10 @@ joint posterior and backend/sanitizer replay pass. [RESULTS.md](RESULTS.md) reco
 both outcomes; [PM-S1](../KNOWN_ISSUES.md) tracks the accuracy follow-up. No force,
 adjoint or sampler implementation is changed by this validation.
 
+**Follow-up:** [native N>M and dense-sampling results](../pm_oversampling_validation/RESULTS.md)
+now implement the previously blocked experiment. The measurements and failed
+criteria below describe the original sparse-load campaign and remain unchanged.
+
 ## Matched physical initial conditions
 
 The box has length 1, initial linear power `P=0.002*exp(log_amplitude)`, initial
@@ -95,10 +99,12 @@ increments 1e-8/1e-9. `force_analysis.py` checks both normalized force-response 
 RMS-error statistics against NumPy and shrinking-kick consistency. This localizes
 the limitation to the current discrete force/assignment setup.
 
-NumPy also studies N=64/M=32. That point is **not supported by the current native PM
-constructor**, which requires M>=N; it illustrates a particle-oversampling follow-up,
-not a newly implemented library capability. No smoothing or force-law correction
-is silently applied. Any future numerical-law change must update PM checkpoint identity.
+The original NumPy N=64/M=32 point was unsupported by the native constructor at
+that time. Native support and extended force-probe cases are now implemented;
+[the separate follow-up](../pm_oversampling_validation/RESULTS.md) saves their results.
+Rerunning the extended force probe produces extra N>M rows and a third plot panel;
+the historical data/figures in this directory are preserved. No smoothing or
+force-law correction is applied. Future numerical-law changes must update PM identity.
 
 ## Reproduce
 
@@ -130,7 +136,7 @@ pm_resolution chain PREFIX N M STEPS CHAIN_ID WARMUP DRAWS LEAPFROG PREDICTIVE_S
 ```
 
 `DATA_PATH=-` creates a same-model mock; otherwise it reads the common Fourier data.
-Controls are deliberately bounded (N<=32, M<=64, steps<=64 for the main driver).
+Controls are deliberately bounded (N<=64, 4<=M<=64, steps<=64 for the main driver).
 Replicated inputs are checked before grid construction; inconsistent MPI geometry
 or data paths reject collectively. `pm_force_probe` requires one rank. Canonical
 field gathers are bounded validation output, not a production chain-storage design.

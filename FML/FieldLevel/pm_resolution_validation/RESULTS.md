@@ -6,6 +6,10 @@ criteria are retained in [summary.json](summary.json), not loosened. [The guide]
 records the fixed initial field, observed band, priors, controls and error definitions.
 See also the open [PM-S1 issue](../KNOWN_ISSUES.md).
 
+**Historical sparse-load campaign:** the subsequent [dense-sampling follow-up](../pm_oversampling_validation/RESULTS.md)
+implements native N>M and passes bounded refinement criteria. Native-support
+limitations below describe the original run; its measured results are preserved.
+
 ## One-factor convergence
 
 All initial physical Fourier coefficients match across resolutions within 2e-12.
@@ -64,8 +68,8 @@ The matching independent calculation localizes the limitation to the discrete
 force/assignment setup. Increasing force resolution at fixed sparse particle load
 is not a sufficient continuum-accuracy prescription. Particle oversampling and the
 assignment/force-window treatment need a separate controlled follow-up. Native
-N>M support is currently excluded by the PM constructor; the NumPy N=64/M=32 point
-is diagnostic evidence, not added functionality. No force law/filter is changed here.
+N>M support was excluded by the constructor for this original run; that restriction
+is removed and tested in the linked follow-up. No force law/filter is changed here.
 
 ## More active modes: larger joint posterior
 

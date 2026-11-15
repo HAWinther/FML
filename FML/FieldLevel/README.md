@@ -41,7 +41,13 @@ predictions for one small mock; broader calibration remains open.
 configuration, with explicit PM physics identity and complete HMC/adaptation state.
 The [resolution study](pm_resolution_validation/RESULTS.md) adds 18-mode inference
 and time/gradient checks, but finds unresolved spatial force/particle accuracy;
-see [PM-S1](KNOWN_ISSUES.md) before making a continuum-accuracy claim.
+[dense particle sampling N>M](pm_oversampling_validation/RESULTS.md) now passes
+bounded refinement checks with the same force law. Broader [PM-S1](KNOWN_ISSUES.md)
+calibration remains open before a continuum-accuracy claim.
+A [wider 122-mode study](pm_nonlinear_validation/RESULTS.md) now finds remaining
+force-grid sensitivity at greater mode support/strength, while particle/time,
+derivative and backend checks pass. It also tests fixed-parameter reconstruction
+from finer-grid data; bounded MAP diagnostics are distinct from posterior coverage.
 
 ## BAO application (prototype)
 

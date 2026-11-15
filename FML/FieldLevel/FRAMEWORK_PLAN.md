@@ -293,3 +293,33 @@ strong sparse-load/force-grid dependence. [PM-S1](KNOWN_ISSUES.md) prioritizes d
 particle support and controlled force/assignment investigation before accuracy or
 coverage claims. The numerical force law is unchanged. [Results and plots](pm_resolution_validation/RESULTS.md)
 retain the failed criteria. Item 52 remains open.
+
+## PM dense-particle sampling (15 November 2026)
+
+Native N>M now supports more IC/particle cells than force cells, with initial
+support below both Nyquists and compatible slab/pencil geometry. The force law,
+adjoint and checkpoint codec are unchanged. Serial, 1/2/4-rank MPI, sanitizer,
+normalized posterior and fresh-process restart checks pass, including old PM
+checkpoint continuation. The [dense-sampling study](pm_oversampling_validation/RESULTS.md)
+passes the original bounded finest-correction criteria: N=64, M=32 vs 64 changes
+density/gradient by 0.735%/6.198%; particle and time refinements also pass. This
+completes native oversampling support and this refinement experiment, not broad
+PM calibration. The original sparse-load failures remain recorded; more modes,
+nonlinear regimes, refined-data inference and repeated-mock coverage are open.
+Particle/white memory grows as N^3. Item 52 remains open.
+
+## Many-mode PM accuracy and refined-data reconstruction (15 November 2026)
+
+[The broader PM campaign](pm_nonlinear_validation/RESULTS.md) increases initial support to
+122 real directions and observations to 256 real degrees, using two seeds and
+three strength/time fixtures. Particle/time finest-correction checks and
+forward/adjoint/backend checks pass. Force-grid projected-gradient changes of
+16.3%/75.1%/60.6% fail the unchanged 15% criterion; both stronger fixtures also
+fail the noise-scaled field criterion. Finite force references still need
+controlled particle sampling. Fixed-parameter MAP diagnostics now use data from
+a finer discretization, with optimizer status and recovery measures explicit.
+All three 12-iteration fits improve reconstruction but remain unconverged; initial
+error ratios are 0.585/0.560/0.290 with correlations 0.816/0.834/0.969. The original
+80-iteration attempts were interrupted for runtime; criteria are unchanged.
+No force law, posterior, sampler or optimizer is changed. The original and dense
+18-mode studies remain preserved. Broad PM calibration and item 52 remain open.
