@@ -144,4 +144,4 @@ together give an error; the list is at the end of [PARAMETERS.md](PARAMETERS.md)
 ## Contributors
 
 Many people have helped improve the code, among them Bartolomeo Fiorini, Guilherme Brando, Kazuya Koyama, Daniela
-Saadeh, Herman Slettmoen and Renate Mauland-Hus.
+Saadeh, Herman Sletmoen and Renate Mauland-Hus.

@@ -158,6 +158,11 @@ The regression tests run in CI on every push. They compare against analytic resu
 possible. The module READMEs describe what has been validated and over which range, so check them before relying on
 a method in a new regime.
 
+## Contributors
+
+FML is developed by Hans A. Winther. Many people have helped improve it, among them Bartolomeo Fiorini, Guilherme
+Brando, Kazuya Koyama, Daniela Saadeh, Herman Sletmoen, Renate Mauland-Hus and Gareth Cabourn Davies.
+
 ## Licence
 
 Except for third-party code carrying separate license notices, FML's original source code is licensed under the GNU
