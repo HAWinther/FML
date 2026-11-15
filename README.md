@@ -2,11 +2,14 @@
 
 [![CI](https://github.com/HAWinther/FML/actions/workflows/ci.yml/badge.svg)](https://github.com/HAWinther/FML/actions/workflows/ci.yml)
 
+**This is FML 2.0.** The changes since 1.0 are in the [changelog](FML/CHANGELOG.md); for the old version see
+[Version 1.0](#version-10).
+
 **FML is a C++17 library for large-scale-structure cosmology.** It has the pieces you need to set up, run and analyse
 cosmological simulations and to compare them with theory. The library covers initial conditions, N-body and COLA
 evolution, halo finding, clustering statistics, perturbation theory and an Einstein–Boltzmann solver. Most of it is
 header-only and templated on the particle type and the number of dimensions, so you can use your own particle
-struct directly. It runs in serial or in parallel with MPI (slab decomposition) and OpenMP.
+struct directly. It runs in serial or in parallel with MPI (slab or pencil decomposition) and OpenMP.
 
 The library also contains [SimulationCode](FML/SimulationCode/README.md), a complete PM/COLA N-body code for ΛCDM and
 modified gravity. It is driven by a parameter file and computes power spectra, halos and other outputs on the fly.
@@ -110,16 +113,23 @@ CGAL and Python are optional and only needed by the modules that use them. Set p
 `FML/Makefile.local`; the defaults are in [Makefile.config](FML/Makefile.config).
 
 ```sh
-git clone --recursive https://github.com/HAWinther/FML/   # --recursive also fetches the example data
+git clone https://github.com/HAWinther/FML.git
 
 make -C FML examples -j4                                  # build the examples
 make -C FML test MPIRUN=mpirun NP_LIST="1 2 4"           # run the regression tests with 1, 2 and 4 MPI tasks
 make -C FML/tests USE_MPI=false USE_OMP=false USE_FFTW=false USE_GSL=false USE_LUA=false test_core   # minimal serial test
 ```
 
-The example data are a git submodule. Only some examples need them; if you cloned without `--recursive`, fetch them
-with `git submodule update --init --recursive`. The [build guide](FML/BUILDING.md) explains the options and how to
-use FML from your own code. Clean the objects when you change the compiler, precision or feature flags.
+The examples need no data files: they make their own input. The [build guide](FML/BUILDING.md) explains the options
+and how to use FML from your own code. Clean the objects when you change the compiler, precision or feature flags.
+
+### Version 1.0
+
+The previous version, FML 1.0, is the tag `v1.0.0`. To get it (with the `TestData` submodule its examples use):
+
+```sh
+git clone --branch v1.0.0 --depth 1 --recursive https://github.com/HAWinther/FML.git FML-1.0
+```
 
 ## Python
 
