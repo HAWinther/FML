@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 440" role="img" aria-labelledby="title desc">
+<title id="title">SimulationCode particle-mesh and COLA workflow</title><desc id="desc">Initial conditions and LPT feed a particle-mesh density and gravity solve. Forces are interpolated to particles for the time integrator. Snapshots and on-the-fly statistics are written.</desc>
+<defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#64748b"/></marker></defs>
+<rect width="1120" height="440" rx="18" fill="#f8fafc"/>
+<g font-family="Inter,Arial,sans-serif" text-anchor="middle" fill="#0f172a">
+ <text x="560" y="42" font-size="22" font-weight="700">Particle-mesh / COLA simulation loop</text>
+ <g font-size="16" font-weight="600">
+  <rect x="34" y="90" width="190" height="82" rx="12" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/><text x="129" y="124">Initial conditions</text><text x="129" y="148" font-size="13" font-weight="400">transfer functions + phases</text>
+  <rect x="270" y="90" width="190" height="82" rx="12" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/><text x="365" y="124">LPT reference</text><text x="365" y="148" font-size="13" font-weight="400">1LPT / 2LPT / 3LPT</text>
+  <rect x="506" y="90" width="190" height="82" rx="12" fill="#ccfbf1" stroke="#0f766e" stroke-width="2"/><text x="601" y="124">Density on mesh</text><text x="601" y="148" font-size="13" font-weight="400">particle assignment</text>
+  <rect x="742" y="90" width="190" height="82" rx="12" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/><text x="837" y="124">Gravity solve</text><text x="837" y="148" font-size="13" font-weight="400">PM or screened field</text>
+  <rect x="742" y="260" width="190" height="82" rx="12" fill="#ffedd5" stroke="#ea580c" stroke-width="2"/><text x="837" y="294">Interpolate force</text><text x="837" y="318" font-size="13" font-weight="400">mesh → particles</text>
+  <rect x="506" y="260" width="190" height="82" rx="12" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/><text x="601" y="294">Kick / drift</text><text x="601" y="318" font-size="13" font-weight="400">Quinn · Tassev · FastPM · BullFrog</text>
+  <rect x="270" y="260" width="190" height="82" rx="12" fill="#f1f5f9" stroke="#475569" stroke-width="2"/><text x="365" y="294">Update particles</text><text x="365" y="318" font-size="13" font-weight="400">COLA evolves residual motion</text>
+  <rect x="34" y="260" width="190" height="82" rx="12" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/><text x="129" y="294">Outputs</text><text x="129" y="318" font-size="13" font-weight="400">snapshots · spectra · halos · lightcones</text>
+ </g>
+ <g fill="none" stroke="#64748b" stroke-width="3" marker-end="url(#a)"><path d="M224 131h38"/><path d="M460 131h38"/><path d="M696 131h38"/><path d="M837 172v80"/><path d="M742 301h-38"/><path d="M506 301h-38"/><path d="M270 301h-38"/><path d="M365 260V211Q365 192 384 192H601V177"/></g>
+ <text x="955" y="217" font-size="14" fill="#475569">Cosmology controls</text><text x="955" y="239" font-size="13" fill="#475569">H(a), growth and force law</text>
+ <path d="M932 215h14" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+ <text x="560" y="395" font-size="14" fill="#475569">The same loop supports GR and the documented modified-gravity force options.</text>
+</g></svg>

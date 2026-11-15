@@ -1,0 +1,442 @@
+/* === FONTS === */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap");
+
+/* === BASE === */
+html, body {
+  height: 100%;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 16px;
+  line-height: 1.7;
+  color: #1e293b;
+  background: #ffffff;
+  padding-top: 56px; /* space for fixed navbar */
+  position: relative;
+  min-height: 100vh;
+}
+
+/* === NAVBAR === */
+.navbar {
+  background: #0f172a;
+  border: none;
+  border-radius: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.30);
+  min-height: 56px;
+  margin-bottom: 0;
+}
+
+.navbar-brand {
+  color: #e2e8f0 !important;
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+  padding: 16px 20px;
+}
+
+.navbar-nav > li > a {
+  color: #94a3b8 !important;
+  font-size: 13.5px;
+  font-weight: 500;
+  padding: 18px 14px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.navbar-nav > li > a:hover,
+.navbar-nav > li > a:focus {
+  color: #ffffff !important;
+  background: rgba(255,255,255,0.07) !important;
+}
+
+.navbar-nav > .open > a,
+.navbar-nav > .open > a:hover,
+.navbar-nav > .open > a:focus {
+  color: #ffffff !important;
+  background: rgba(255,255,255,0.10) !important;
+}
+
+.dropdown-menu {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0 0 6px 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  min-width: 230px;
+  padding: 6px 0;
+  z-index: 1040;
+}
+
+.dropdown-menu > li > a {
+  color: #1e293b;
+  font-size: 13.5px;
+  font-weight: 400;
+  padding: 8px 20px;
+  transition: all 0.12s;
+}
+
+.dropdown-menu > li > a:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.dropdown-menu .divider {
+  background-color: #e2e8f0;
+  margin: 5px 0;
+}
+
+.navbar-toggle {
+  border-color: rgba(255,255,255,0.2);
+  margin-top: 10px;
+}
+
+.navbar-toggle .icon-bar {
+  background-color: #94a3b8;
+}
+
+/* === HEADER BANNER === */
+.my-header-block {
+  text-align: center;
+  height: 220px;
+  margin: 0 auto;
+  background-image: url('../images/frattonstation5.jpg');
+  background-size: cover;
+  background-position: center 40%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.my-header-block > div {
+  background: rgba(8, 15, 40, 0.60);
+  padding: 22px 40px;
+  border-radius: 6px;
+}
+
+.my-header-block h1 {
+  color: #ffffff !important;
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0 0 6px;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+}
+
+.my-header-block h3 {
+  color: #cbd5e1 !important;
+  font-size: 14px;
+  font-weight: 400;
+  margin: 0 0 3px;
+  line-height: 1.4;
+}
+
+.my-header-block h4 {
+  color: #94a3b8 !important;
+  font-size: 12.5px;
+  font-weight: 400;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* === HEADINGS === */
+h1, h2, h3, h4, h5, h6,
+h1.entry-title, h2.entry-title, h3.entry-title, h4.entry-title,
+h1 a, h1 a:link, h2 a, h2 a:link,
+h3 a, h3 a:link, h4 a, h4 a:link,
+h5 a, h5 a:link, h6 a, h6 a:link {
+  color: #0f172a;
+}
+
+h1, h1.entry-title {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.3;
+  padding: 0;
+}
+
+h2, h2.entry-title {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+h3 { font-size: 17px; font-weight: 600; }
+h4 { font-size: 15px; font-weight: 600; }
+
+p { color: #1e293b; }
+
+/* === LINKS === */
+a:link {
+  color: #1d64c8;
+  text-decoration: none;
+}
+
+a:hover, a:active {
+  color: #c2410c;
+  text-decoration: none;
+}
+
+h1 a:hover, h2 a:hover, h3 a:hover, h4 a:hover {
+  color: #c2410c;
+}
+
+/* === SECTION DIVIDERS === */
+hr {
+  border: none;
+  border-top: 1px solid #e2e8f0;
+  margin: 1.4em 0;
+}
+
+.entry-header {
+  margin: 0.2em 0 0;
+}
+
+/* === BODY TEXT === */
+.body-text-markup {
+  display: block;
+  margin: 28px auto 16px;
+  width: 100%;
+  max-width: 920px;
+  text-align: left;
+  word-wrap: break-word;
+}
+
+.body-text-markup p {
+  font-size: 16px;
+  line-height: 1.75;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  word-wrap: break-word;
+  color: #1e293b;
+}
+
+/* Fix: inline links inside paragraphs */
+.body-text-markup p a,
+.body-text-markup li a {
+  display: inline;
+}
+
+.body-text-markup ul,
+.body-text-markup ol {
+  font-size: 16px;
+  line-height: 1.7;
+  word-wrap: break-word;
+}
+
+/* === CODE === */
+pre, code, pre.prettyprint {
+  font-family: 'JetBrains Mono', 'Fira Mono', 'Courier New', monospace;
+  font-size: 13.5px;
+}
+
+pre.prettyprint {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 6px;
+  padding: 16px 20px;
+  overflow-x: auto;
+  line-height: 1.55;
+}
+
+pre.prettyprint ol.linenums > li {
+  list-style-type: decimal;
+}
+
+code:not([class]) {
+  background: #f1f5f9;
+  color: #c2410c;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 13.5px;
+}
+
+/* === TABLES === */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1.5em 0;
+  font-size: 15px;
+}
+
+thead th {
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 10px 16px;
+  text-align: left;
+  font-weight: 500;
+  font-size: 13.5px;
+  letter-spacing: 0.02em;
+}
+
+tbody td {
+  padding: 9px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #1e293b;
+  vertical-align: top;
+}
+
+tbody tr:nth-child(even) td {
+  background: #f8fafc;
+}
+
+tbody tr:hover td {
+  background: #f1f5f9;
+}
+
+/* === LAYOUT === */
+.row-fix { margin-right: 0; margin-left: 0; }
+.col-fix { padding-right: 0; padding-left: 0; }
+
+.page-wrap {
+  position: relative;
+  min-height: 100%;
+  margin-bottom: -200px;
+}
+
+.page-wrap:after {
+  height: 200px;
+  content: "";
+  display: block;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  width: auto\9;
+}
+
+figure.science-figure {
+  max-width: 1000px;
+  margin: 24px auto 30px;
+  padding: 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+figure.science-figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+figure.science-figure figcaption {
+  margin: 10px 4px 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+a:hover, a:focus {
+  text-decoration: none;
+}
+
+/* Cinematic concept illustrations: preserve the full panoramic composition. */
+figure.cinematic-figure {
+  max-width: 1100px;
+  margin: 24px auto 32px;
+  overflow: hidden;
+  background: #071018;
+  border: 1px solid #223441;
+  border-radius: 10px;
+}
+
+figure.cinematic-figure > a {
+  display: block;
+}
+
+figure.cinematic-figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 2 / 1;
+  object-fit: contain;
+}
+
+figure.cinematic-figure figcaption {
+  padding: 12px 18px 15px;
+  color: #d4dfe6;
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: left;
+}
+
+figure.cinematic-figure figcaption strong {
+  color: #f4f0e8;
+}
+
+figure.cinematic-figure .cinematic-credit {
+  color: #a9bdc9;
+}
+
+@media (max-width: 600px) {
+  figure.cinematic-figure {
+    margin: 18px auto 24px;
+    border-radius: 6px;
+  }
+
+  figure.cinematic-figure figcaption {
+    padding: 10px 12px 12px;
+  }
+}
+
+/* === FOOTER === */
+.footer-wrapper {
+  background: #0f172a;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  height: 200px;
+  max-width: 100%;
+  margin-top: 15px;
+  padding-top: 22px;
+}
+
+.footer-wrapper h4 {
+  color: #e2e8f0 !important;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.footer-wrapper p, .footer-wrapper p a {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.footer-wrapper p { color: #64748b !important; }
+.footer-wrapper p a { color: #60a5fa !important; display: inline; }
+.footer-wrapper p a:hover { color: #93c5fd !important; }
+
+.footer-wrapper input[type="text"] {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #e2e8f0;
+  border-radius: 3px;
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+.footer-wrapper input[type="submit"] {
+  background: #1d5fb4;
+  color: #ffffff;
+  border: none;
+  border-radius: 3px;
+  padding: 4px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.footer-wrapper input[type="submit"]:hover {
+  background: #1d4ed8;
+}
+
+.footer-logo {
+  height: 200px;
+  width: 200px;
+  padding: 10px;
+  text-align: center;
+  display: block;
+  margin: 0 auto;
+  border: none;
+}

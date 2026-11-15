@@ -5,6 +5,9 @@ it, how it is validated and the references. Build with `make` (latexmk; needs a 
 bibtex and makeindex) or `pdflatex main; bibtex main; makeindex main; pdflatex main; pdflatex main`.
 Output: `main.pdf`.
 
+The other documentation of FML is next to the book: the website in [`website/`](website/README.md) and the Doxygen
+API reference in `doxygen/` (`./run_doxygen.sh` there).
+
 ## Layout
 
 | File | Content |

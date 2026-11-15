@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 410" role="img" aria-labelledby="title desc">
+<title id="title">Einstein-Boltzmann solver pipeline</title><desc id="desc">Cosmological species and gravity define background expansion. Recombination and perturbation histories generate source functions, which feed line-of-sight CMB spectra and matter power, lensing, and two-point observables.</desc>
+<defs><marker id="a" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0 0L9 4.5L0 9z" fill="#64748b"/></marker></defs><rect width="1120" height="410" rx="18" fill="#f8fafc"/>
+<g font-family="Inter,Arial,sans-serif" fill="#0f172a" text-anchor="middle"><text x="560" y="42" font-size="22" font-weight="700">Einstein–Boltzmann calculation</text>
+<g font-size="16" font-weight="600">
+<rect x="35" y="95" width="185" height="88" rx="12" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/><text x="127" y="127">Species + gravity</text><text x="127" y="153" font-size="13" font-weight="400">matter · radiation · fields</text>
+<rect x="258" y="95" width="185" height="88" rx="12" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/><text x="350" y="127">Background</text><text x="350" y="153" font-size="13" font-weight="400">H(a) · distances · time</text>
+<rect x="481" y="95" width="185" height="88" rx="12" fill="#ccfbf1" stroke="#0f766e" stroke-width="2"/><text x="573" y="127">Recombination</text><text x="573" y="153" font-size="13" font-weight="400">Xₑ · visibility · sound horizon</text>
+<rect x="704" y="95" width="185" height="88" rx="12" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/><text x="796" y="127">Perturbations</text><text x="796" y="153" font-size="13" font-weight="400">species hierarchies per k</text>
+<rect x="927" y="95" width="158" height="88" rx="12" fill="#ffedd5" stroke="#ea580c" stroke-width="2"/><text x="1006" y="127">Sources</text><text x="1006" y="153" font-size="13" font-weight="400">temperature · E-mode</text>
+<rect x="180" y="260" width="225" height="76" rx="12" fill="#f1f5f9" stroke="#475569" stroke-width="2"/><text x="292" y="292">Line-of-sight projection</text><text x="292" y="316" font-size="13" font-weight="400">spherical Bessel kernels</text>
+<rect x="448" y="260" width="225" height="76" rx="12" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/><text x="560" y="292">CMB spectra</text><text x="560" y="316" font-size="13" font-weight="400">CℓTT · CℓTE · CℓEE</text>
+<rect x="715" y="260" width="225" height="76" rx="12" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/><text x="827" y="292">Matter + observables</text><text x="827" y="316" font-size="13" font-weight="400">P(k) · lensing · projected 2-point</text>
+</g>
+<g fill="none" stroke="#64748b" stroke-width="3" marker-end="url(#a)"><path d="M220 139h32"/><path d="M443 139h32"/><path d="M666 139h32"/><path d="M889 139h32"/><path d="M1005 183v34H292v38"/><path d="M405 298h37"/><path d="M673 298h37"/></g>
+<path d="M350 183v34h477v38" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="7 6" marker-end="url(#a)"/>
+<text x="560" y="380" font-size="14" fill="#475569">Model registry supplies the background, species equations and gravity response.</text></g></svg>
