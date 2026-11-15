@@ -1,11 +1,13 @@
-\chapter{Short-range forces: P$^3$M and TreePM}\label{ch:short-range}
-\chapterstatus{written}{2026-11-14}
+\chapter{Short-range forces: P$^3$M, TreePM and AMR}\label{ch:short-range}
+\chapterstatus{written}{2026-11-15}
 
 A PM force is accurate only on scales several cells above the mesh spacing. To resolve gravity below the mesh scale,
 \fml{} splits the force into a long-range part, computed on the mesh, and a short-range part, summed over particle
 pairs within a cutoff: the P$^3$M method with cell lists, or a TreePM method with a monopole octree. The same split
 supports Newtonian gravity plus a Yukawa fifth force, the linear force of chameleon-like theories. This chapter
-describes the kernels, the search structures, the MPI ghost exchange and the integration into SimulationCode.
+describes the kernels, the search structures, the MPI ghost exchange and the integration into SimulationCode. The
+other route to small scales, refining the mesh where the particles are, is the adaptive $N$-body code \file{AMRCode}
+(\cref{sec:sr-amr}), which also solves the nonlinear symmetron fifth force with screening.
 
 \begin{modulebox}{ShortRangeGravity}
 Namespace \nsp{FML::SHORT_RANGE_GRAVITY}, header-only: \file{ShortRangeGravity.h} (\cls{Options}, \cls{Kernel},
@@ -164,4 +166,80 @@ timestep_method                     = "Quinn"
       (\file{CLUSTERED_FORCE.md}).
 \end{itemize}
 These are controlled verification cases, not a calibration of nonlinear cosmological statistics.
+\end{validation}
+
+\section{Adaptive mesh refinement: AMRCode}\label{sec:sr-amr}
+
+\begin{modulebox}{AMRCode}
+Program \code{amrnbody} (\file{AMRCode/Main.cpp}); the code \file{AMRCode/AMRNBody.h} (\cls{AMRNBodySimulation},
+\code{assign_mass_to_leaves}, \code{compute_force_field}, \code{refine_on_particle_count}). Built on
+\cls{AdaptiveMPIGrid} and \cls{AMRMultiGridSolver} (\cref{sec:mg-amr}).\par
+Documentation: \file{AMRCode/README.md}. Tests: \file{AMRCode/tests} (\file{TestAMRNBody.cpp},
+\file{TestPartialSolve.cpp}).
+\end{modulebox}
+
+\file{AMRCode} is a simple adaptive mesh refinement $N$-body code for $\Lambda$CDM and the symmetron, in the spirit of
+RAMSES \cite{Teyssier2002}. Positions are in box units, $\tau=\ln a$ is the time variable and the velocities are
+\fml{}'s $v=a^2\dot x/(H_0B)$:
+\begin{equation}
+\frac{dx}{d\tau}=\frac{v}{a^2E},\qquad\frac{dv}{d\tau}=-\frac{3\Omega_m}{2aE}\nabla\phi,\qquad\nabla^2\phi=\delta .
+\end{equation}
+\begin{itemize}
+\item \emph{Initial conditions}: 1LPT or 2LPT from a linear $P(k)$ at $z=0$ (a table, or Eisenstein--Hu normalised to
+      $\sigma_8$), with the growth rates of the flat $\Lambda$CDM background.
+\item \emph{Grid}: the base level \param{levelmin} (usually $\log_2 N_{\rm part}^{1/3}$), refined up to \param{levelmax}
+      where a leaf holds more than \param{n_refine} particles (cloud-in-cell mass, as RAMSES); once per coarse step,
+      then load balanced along the Peano--Hilbert curve, with the particles following the grid's domain.
+\item \emph{Gravity}: cloud-in-cell assignment on the tree (each particle on the cells of its leaf's level, mass
+      conserved exactly), the Poisson equation on the leaves with \cls{AMRMultiGridSolver}, and the fourth-order
+      gradient of $\phi$ where the neighbours are at the same level (second order otherwise), interpolated back with the
+      same stencil.
+\item \emph{Time stepping}: kick--drift--kick with block time steps: a particle in a leaf at level $l$ has the step
+      $\Delta\tau_{\rm coarse}/2^{l-l_{\rm min}}$ (or smaller for the condition $|\Delta x|<$\,\param{cfl} cells). At a
+      sub-step where only the levels $\geq L$ are active, Poisson is solved only on those leaves (a partial solve,
+      \cref{sec:mg-amr}), the coarser ones keeping their last potential as boundary values; a partial solve that does not
+      converge is redone as a full solve.
+\item \emph{Symmetron} (\param{gravity_model} \code{= "Symmetron"}; \param{symmetron_assb}, \param{symmetron_beta},
+      \param{symmetron_L_mpch}, \param{symmetron_N}, \param{symmetron_M}): the field $\chi=\phi/\phi_*$ of the
+      quasi-static symmetron equation (\cref{sec:mgsim-screening}) is solved on the same leaves with the same multigrid,
+      with full and partial solves exactly as the potential (so at every sub-step), started from the last field, which
+      is carried through refinement. Its fifth force $-\nabla\Phi_F/(a^2E)$, $\Phi_F\propto\chi^N$, is added to the
+      force on the leaves; before symmetry breaking the run is $\Lambda$CDM.
+\end{itemize}
+
+\begin{implementation}
+The Newton--Gauss--Seidel update of $\chi$ uses the derivative of the source only where it is positive: where $\chi$ is
+below the minimum of the potential (just after symmetry breaking) the full derivative can vanish on the coarse levels,
+whose cells are larger than the range, and the update diverged; the solution is the same. The field is started from its
+background value just after $a_{\rm ssb}$ ($\chi=0$ also solves the equation, and an output at exactly $a_{\rm ssb}$ left it
+there). Memory is about $2.7\,$kB per particle for $\Lambda$CDM and $4.8\,$kB with the symmetron (a second solver), most of
+it the multigrid levels; the old solver is freed before the new one is built at a regrid.
+\end{implementation}
+
+\begin{paramfile}[AMRCode: symmetron (the parameter file is \code{key = value})]
+Npart_1D   = 256
+box        = 128.0
+levelmin   = 8
+levelmax   = 14
+n_refine   = 8
+subcycling = true
+gravity_model    = Symmetron
+symmetron_assb   = 0.5
+symmetron_beta   = 1.0
+symmetron_L_mpch = 1.0
+output_images    = true     # a PNG of a slab of the particles at the outputs
+\end{paramfile}
+A parameter file can \code{include = file} another (shared settings), and keys that are not parameters give a warning.
+Outputs at \param{output_redshifts}: $P(k)$ with the linear prediction, GADGET snapshots and images.
+
+\begin{validation}[Validation: AMRCode]
+\file{AMRCode/tests}: the deposit conserves mass to $10^{-15}$; the force of a Gaussian blob against the exact periodic
+force has an rms error of 47--54\% on a uniform level-5 grid, 2--5\% with levels 5--7 and 1.3--1.6\% with levels 5--9
+(particle noise); a Zel'dovich plane wave to just before shell crossing has rms position errors of 2.3\% ($32^3$) and
+1.0\% ($64^3$), 0.8--0.9\% refined on the pancake, with subcycling changing the result by 0.15\%; partial solves recover
+the full solution to $10^{-10}$. A $64^3$ $\Lambda$CDM run follows linear growth on large scales and gives the same
+$P(k)$ on 1 and 2 tasks to 0.4\%. Symmetron ($64^3$ in $128\Mpch$, $a_{\rm ssb}=0.5$, $\beta=1$, $L=1\Mpch$):
+$P_{\rm sym}/P_{\Lambda\rm CDM}$ at $z=0$ is 1.023 and 1.031 at $k=0.3$ and $0.5\,h/$Mpc against 1.019 and 1.027 from
+\file{SimulationCode} with the exact symmetron solver (PM, the same initial amplitude); at $k>1\,h/$Mpc it stays near 1.03
+while the PM run reaches 1.09 at $k=2\,h/$Mpc, because the AMR resolves the haloes, in which the field is screened.
 \end{validation}

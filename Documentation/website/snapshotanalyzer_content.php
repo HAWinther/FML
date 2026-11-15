@@ -31,6 +31,7 @@ mpirun -np 4 FML/SnapshotAnalyzer/snapshot_analyzer analysis.lua</pre></div></di
 <tr><td>Standard or relaxed FoF and spherical overdensity</td><td><tt>fof_*</tt>, <tt>fof_relaxed</tt>, <tt>fof_so_definitions</tt>; catalogues, mass functions and overlap flags.</td></tr>
 <tr><td>T-web and Minkowski functionals</td><td><tt>cosmicweb_*</tt>, <tt>minkowski_*</tt>; web mass/volume fractions and excursion-set morphology with Gaussian-field predictions.</td></tr>
 <tr><td>Hybrid Lagrangian bias spectra</td><td><tt>hybridbias_*</tt>; 15 advected operator cross-spectra with a supplied or recovered initial linear field.</td></tr>
+<tr><td>Images</td><td><tt>images_*</tt>; PNG (and <tt>.npy</tt>) of a projected slab of the density and the velocity divergence, as in SimulationCode.</td></tr>
 <tr><td>Voids, DTFE and baryonification</td><td>Voxel watershed, spherical underdensity and optional ZOBOV; optional DTFE density/velocity fields and spectra; position-only baryonification and optional corrected Gadget output.</td></tr>
 </tbody></table></div>
 <p>The shared <tt>FML::ANALYSIS</tt> headers provide the context, settings and measurement/output routines. Power, multipoles, bispectrum, FoF/SO and baryonification share algorithms and parameter names with SimulationCode. Extra standalone analyses and their requirements are documented here rather than implying that every option is wired into in-run analysis.</p>

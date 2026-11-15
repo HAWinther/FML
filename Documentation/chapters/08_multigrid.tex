@@ -1,5 +1,5 @@
 \chapter{Multigrid solvers}\label{ch:multigrid}
-\chapterstatus{written}{2026-11-14}
+\chapterstatus{written}{2026-11-15}
 
 Screened modified-gravity theories have nonlinear elliptic field equations that cannot be solved with FFTs. \fml{} has a
 general nonlinear multigrid solver on uniform, MPI-distributed grids in any dimension, with the field equations of
@@ -215,8 +215,13 @@ follow the grid.
       second derivatives (\code{get_hessian}) are derivatives of the gradient field, lagged within a sweep.
 \end{itemize}
 \cls{AMRDGPSolverCosmology} is the DGP solver on these grids, with the same equation, splitting, units and options as
-\cls{DGPSolverCosmology}, input and output per local leaf. Limitations: no OpenMP yet, no helper for
-$\nabla\cdot(b(f)\nabla f)$ (needed for $f(R)$), and the AMR solver is not yet used by \file{SimulationCode}.
+\cls{DGPSolverCosmology}, input and output per local leaf. The symmetron solver on these grids is
+\cls{AMRSymmetronSolverCosmology} (\file{AMRSymmetronSolver.h}). A \emph{partial solve} (\code{solve(eq, min_level)}) treats only the leaves at levels
+$\geq$ \code{min_level} (and the coarser cells made of them) as unknowns and the rest as Dirichlet values, with V-cycles
+that touch only the unknowns; it is what the adaptive $N$-body code \file{AMRCode} uses at its fine sub-steps
+(\cref{sec:sr-amr}). The face table, most of the solver's memory, stores 32-bit indices. Limitations: no OpenMP yet,
+no helper for $\nabla\cdot(b(f)\nabla f)$ (needed for $f(R)$), every multigrid level between the base level and the
+finest holds a copy of the base leaves, and the AMR solver is not used by \file{SimulationCode}.
 
 \begin{cppcode}[Poisson on an adaptive grid]
 #include <FML/MultigridSolver/AMRMultiGridSolver.h>

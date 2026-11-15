@@ -1,5 +1,5 @@
 \chapter{SimulationCode}\label{ch:simulation-code}
-\chapterstatus{written}{2026-11-14}
+\chapterstatus{written}{2026-11-15}
 
 SimulationCode is the complete particle--mesh and COLA simulation program of \fml{}: one parameter file sets up the
 initial conditions, the evolution and the analysis during the run. It uses the slab decomposition, so it is not meant
@@ -144,6 +144,14 @@ all the dark matter (\code{axion_as_cdm}, \cref{sec:transfer}); the evolution is
       several force cells (at $1\Mpch$ cells the 200m mass function is 0.56 of the Tinker fit), while FoF masses are much
       less sensitive.
 \item \textbf{Baryonification} of a copy of the particles at each output (\cref{ch:pgd-baryonification}).
+\item \textbf{Images} (\param{images}): PNG pictures (and optionally \code{.npy} values) of a slab of fields projected
+      along an axis at every output, \file{image_<field>_z<z>.png}, made with \file{Visualization}
+      (\cref{sec:io-visualization}): \code{density}; \code{velocity_divergence} $-\nabla\cdot\bm v/(aH)$, equal to
+      $f\delta$ in linear theory (checked to 2--4\% below $3k_f$); \code{baryons_minus_cdm}; \code{neutrinos} (particles,
+      or linear theory on top of $\delta_{cb}$); and \code{fifth_force}, $|\bm F_5|/|\bm F_N|$ with the gravity model's
+      own screening method or exact solver (whose state for the next step is kept: the $P(k)$ are the same with and
+      without images). Settings \param{images_fields}, \param{images_nmesh}, \param{images_npix}, \param{images_axis},
+      \param{images_slab_center}, \param{images_slab_thickness}, \param{images_colormap}, \param{images_npy}.
 \item \textbf{Snapshots}: GADGET binary or HDF5 (CDM type 1, baryons type 2, neutrinos type 3 with their weights).
 \item \textbf{Lightcones}: particles crossing the past lightcone of an observer (with box replicas), written in ascii,
       GADGET or HDF5, in batches if needed, and HEALPix ``onion'' density maps; with \code{plc_relativistic_effects} the

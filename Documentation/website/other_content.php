@@ -11,6 +11,7 @@
 <a href="#Timing">2. Timing</a><br>
 <a href="#Units">3. Units</a><br>
 <a href="#Plot">4. Plotting</a><br>
+<a href="#Visualization">4b. Pictures without Python (Visualization)</a><br>
 <a href="#Math">5. Math</a><br>
 <a href="#Wrap">6. Making Python wrapper</a><br>
 <a href="#KDTree">7. KD-tree</a><br>
@@ -177,6 +178,23 @@ It's possible to produce plots directly from C++ using <a href="https://github.c
 </div>
 </div>
 </p>
+
+<header class="entry-header text-center">
+  <h1 class="entry-title" id="Visualization">Pictures without Python (Visualization)</h1>
+</header>
+<hr/>
+
+<p>
+<tt>FML/Visualization</tt> makes pictures of fields and particles straight from C++ with no dependencies, for a quick look at a run or the frames of a movie. <tt>project_grid</tt> projects a slab of an FFTWGrid or PencilGrid along any axis (the mean or the sum over the slab, which may wrap around the box) and <tt>project_particles</tt> the particles themselves (NGP or CIC, mass weighted); every task gets the same image. Colour maps: magma, inferno, viridis, plasma, cividis, coolwarm, grey and cubehelix (add <tt>_r</tt> to reverse), on a linear, log or symmetric scale with fixed limits or percentiles. The PNG writer has its own deflate, and <tt>write_npy</tt> writes the values for numpy. SimulationCode and SnapshotAnalyzer use it for their <a href="nbodycode.php#Analysis" style="display: inline">images</a>.
+</p>
+<pre class="prettyprint">
+#include &lt;FML/Visualization/Visualization.h&gt;
+using namespace FML::VISUALIZATION;
+
+Image image = project_grid(density, 2, 0.45, 0.1);   // a slab of 10% of the box, seen along z
+if (FML::ThisTask == 0)
+    write_png("density.png", image, "magma", ColorScale::automatic_log());
+</pre>
 
 <header class="entry-header text-center">
   <h1 class="entry-title" id="Math">Math</h1>

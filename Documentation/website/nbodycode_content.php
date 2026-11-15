@@ -28,7 +28,7 @@
 <a href="#EarlyForce">19. Forces, the lattice offset and starting from the Big Bang</a><br>
 <a href="#NbodyGauge">20. The N-body gauge</a><br>
 <a href="#ICs">21. Initial conditions: Philox fields and internal transfer functions</a><br>
-<a href="#Analysis">22. On-the-fly analysis: SO masses, hybrid bias spectra, baryonification, lightcone</a><br>
+<a href="#Analysis">22. On-the-fly analysis: SO masses, hybrid bias spectra, baryonification, lightcone, images</a><br>
 <a href="#References">Method references and scope</a><br>
 <a href="#Interacting">Interacting dark sectors and species evolution</a><br>
 <a href="#Horndeski">Reduced Horndeski from a Lagrangian</a><br>
@@ -510,7 +510,7 @@ The Gaussian field can be generated with the 2LPTic/N-GenIC generator (the defau
 </p>
 
 <header class="entry-header text-center">
-  <h1 class="entry-title" id="Analysis">On-the-fly analysis: spectra, halos, hybrid bias and baryonification</h1>
+  <h1 class="entry-title" id="Analysis">On-the-fly analysis: spectra, halos, hybrid bias, baryonification and images</h1>
 </header>
 <hr/>
 
@@ -521,7 +521,12 @@ The Gaussian field can be generated with the 2LPTic/N-GenIC generator (the defau
 <li><b>Snapshot baryonification:</b> the <a href="halomodel.php#Baryons" style="display: inline">baryonification</a> of each output (on a copy of the particles) with the corrected/original $P(k)$ ratio.</li>
 <li><b>Lightcone</b> particles (ascii, GADGET or HDF5, in batches), HEALPix onion-shell density maps and their $C_\ell$; optionally the potential, radial velocity and observed redshift $1 + z_{\rm obs} = (1+z)(1 + v_r/c - \Phi/c^2)$ of each particle.</li>
 <li>Particles in GADGET binary or HDF5 format.</li>
+<li><b>Images</b> (<tt>images = true</tt>): a PNG (and optionally the values as <tt>.npy</tt>) of a slab of each chosen field projected along an axis, <tt>image_&lt;field&gt;_z&lt;z&gt;.png</tt> in the snapshot folder, made with <a href="other.php#Visualization" style="display: inline">FML/Visualization</a>. The fields (<tt>images_fields</tt>): <tt>density</tt>; <tt>velocity_divergence</tt>, $-\nabla\cdot v/(aH)$, which equals $f\delta$ in linear theory; <tt>baryons_minus_cdm</tt>; <tt>neutrinos</tt>; and <tt>fifth_force</tt>, $|F_5|/|F_N|$, computed with the gravity model's own screening method or exact solver, so screened regions are dark. The images do not change the run.</li>
 </ul>
+<figure class="science-figure">
+  <img src="images/simulation_images.png" alt="Six projected slabs of a small test simulation at z = 0: the density, the velocity divergence, baryons minus CDM, the linear neutrino density, and the density and the fifth-force ratio of an f(R) run">
+  <figcaption>The images of the test runs at $z = 0$ ($32^3$ particles in 256 Mpc/$h$): density, velocity divergence, $\delta_b - \delta_c$, linear neutrinos, and the density and $|F_5|/|F_N|$ of an $f(R)$ run with screening.</figcaption>
+</figure>
 <p>
 All parameters, with types, defaults and allowed values, are listed in <tt>SimulationCode/PARAMETERS.md</tt> (<tt>./nbody --parameters PARAMETERS.md</tt>); misspelled parameter names give a warning with a suggestion.
 </p>

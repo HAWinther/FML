@@ -1,5 +1,5 @@
 \chapter{Power spectra and polyspectra}\label{ch:power-spectra}
-\chapterstatus{written}{2026-11-14}
+\chapterstatus{written}{2026-11-15}
 
 Fourier-space statistics of particles and fields in periodic boxes: auto and cross power spectra, redshift-space
 multipoles, the bispectrum and higher polyspectra with the shell-product method, and the hybrid Lagrangian-bias basis
@@ -71,14 +71,27 @@ disconnected Gaussian part.
 \item \emph{Selected configurations} and \emph{sparse results} (\cls{SparseBispectrumBinning}, \ldots) store only the requested canonical
       configurations instead of $n_{\rm bins}^{\rm ORDER}$ values (e.g.\ 1.5\,GiB per task for 100 fourth-order bins); permutation-aware lookup.
 \item A per-component report of the evaluation storage (input, results, shells, padding, remapping, reductions).
+\item \emph{Shell overlap weights} (\code{shell_overlap_weights}, off by default; the global
+      \code{polyspectrum_shell_overlap_weights_default} sets it for new binnings): each Fourier cell is weighted by the
+      exact fraction of its volume inside the shell $[k_{\rm low},k_{\rm high})$ instead of 0 or 1 from its centre
+      (``shell anti-aliasing'' as in CONCEPT, \arxiv{2112.01508}, whose closed-form overlap of a cell and a ball is ported in
+      \file{ShellOverlap.h}). The weights enter the shell fields, the counts and the mean $k$ of the bins. The shells are
+      then continuous: the mean $k$ of a bin moves smoothly with its edges, and for equilateral bins one cell wide the
+      count follows the continuum $8\pi^2k^3\Delta k^3$ (in units of the fundamental mode) to better than 1\% from $k=3k_f$,
+      where 0/1 shells scatter by 10--30\%. This helps comparisons with bin-averaged theory at low $k$ and for thin bins;
+      it does not reduce the statistical errors, and neighbouring bins share their boundary cells. About 10\% more
+      time for a $128^3$ bispectrum.
 \end{itemize}
-In \file{SimulationCode}: \param{bispectrum}, \param{bispectrum_nmesh}, \param{bispectrum_nbins} and the assignment options.
+In \file{SimulationCode}: \param{bispectrum}, \param{bispectrum_nmesh}, \param{bispectrum_nbins},
+\param{bispectrum_shell_overlap_weights} and the assignment options.
 
 \begin{validation}[Validation: spectra]
 \file{tests/test_pofk.cpp}: the shot noise for masses and $\delta f$ weights (exact, and Poisson particles give $P-P_{\rm shot}\approx0$), mass
 conservation with interlacing, the triangle counts against a brute-force count, closure of high-frequency triangles as integer vectors, even and odd
-meshes, the monopole equal to $P(k)$, and empty bins. \file{tests/test_spectra_pencil.cpp}: mono-, bi- and trispectra with and without padding equal on
-slabs and every pencil layout. Primordial non-Gaussianity tests use the bispectrum of $f_{\rm NL}$ fields (\cref{sec:rf-fnl}).
+meshes, the monopole equal to $P(k)$, and empty bins; for the shell overlap weights the exact cube--ball overlaps (the ball minus six caps), the
+cells adding up to the ball, the weights of a cell summing to 1 over the bins, and the counts and the bispectrum of a random field equal to brute-force
+weighted sums over the triangles. \file{tests/test_spectra_pencil.cpp}: mono-, bi- and trispectra with and without padding (and the bispectrum with
+overlap weights) equal on slabs and every pencil layout. Primordial non-Gaussianity tests use the bispectrum of $f_{\rm NL}$ fields (\cref{sec:rf-fnl}).
 \end{validation}
 
 \section{Hybrid bias spectra}\label{sec:pk-hybrid}

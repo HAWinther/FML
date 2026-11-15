@@ -1,5 +1,5 @@
 \chapter{Snapshot analysis}\label{ch:snapshot-analyzer}
-\chapterstatus{written}{2026-11-14}
+\chapterstatus{written}{2026-11-15}
 
 The analyses of the previous chapters are collected in an analysis layer that takes N-body particles and a description of the
 cosmology and units, independent of any simulation code or file format. The standalone program \file{SnapshotAnalyzer} uses it to
@@ -39,6 +39,8 @@ Analysis & Method & Output \\
 \code{find_*_voids} & voxel, spherical, ZOBOV voids (\cref{sec:voids-finders}) & \file{voids_*z<z>.txt} \\
 \code{compute_dtfe_fields} & DTFE density and velocity fields and spectra (\cref{sec:voids-dtfe}) & \file{dtfe_spectra_z<z>.txt} \\
 \code{baryonify} & position-only baryonification (\cref{ch:pgd-baryonification}) & \file{baryonification_z<z>.txt} \\
+\code{project_image} & images of a slab of the density and of $-\nabla\cdot\bm v/(aH)$ (\file{Images.h},
+\cref{sec:io-visualization}) & \file{image_<field>_z<z>.png} \\
 \bottomrule
 \end{tabularx}
 \end{table}
