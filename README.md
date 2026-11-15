@@ -1,6 +1,6 @@
 # FML
 
-[![CI](https://github.com/HAWinther/FML/actions/workflows/ci.yml/badge.svg)](https://github.com/HAWinther/FML/actions/workflows/ci.yml)
+[![CI](https://github.com/HAWinther/FML/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/HAWinther/FML/actions/workflows/ci.yml?query=branch%3Amaster)
 
 The library is constantly under construction. **This is FML 2.0.** The changes since 1.0 are in the [changelog](FML/CHANGELOG.md); for the old version see
 [Version 1.0](#version-10).

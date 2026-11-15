@@ -8,10 +8,11 @@ on:
   pull_request:
   workflow_dispatch:
 
-# A new push to a branch cancels the CI still running for an older commit of it
+# A new push to a branch cancels the CI still running for an older commit of it, except on master: there every commit
+# gets a full result (a cancelled run shows as failing in the README badge)
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 env:
   # Idle OpenMP threads sleep: the tests run more tasks x threads than the runner has cores (also set by the Makefiles)
