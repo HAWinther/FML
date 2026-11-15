@@ -115,7 +115,9 @@ identity accessor is exposed, so PM checkpoint integration is not silently enabl
 
 [Conditional HMC results](pm_hmc_validation/RESULTS.md) include moment comparisons,
 step-size/reversibility probes and dispersed-chain diagnostics. Short full-field
-and joint-parameter traces establish integration and replay, not their posterior
-calibration. Broad scientific calibration, smooth assignment alternatives,
+and joint-parameter traces establish integration and replay. The subsequent
+[full-field campaign](pm_full_validation/RESULTS.md) checks dispersed fixed/joint
+chains, exact-prior null moments and posterior predictions for one small mock.
+Broader scientific calibration, smooth assignment alternatives,
 preconditioning, PM-specific restart identities, tracer/RSD/survey models,
 cosmological derivatives, 2LPT/COLA starts and production performance remain open.

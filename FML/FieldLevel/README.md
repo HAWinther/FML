@@ -34,7 +34,9 @@ now supplies white/spectrum gradients with bounded checkpoint/recomputation.
 The [periodic PM Gaussian posterior and MAP adapter](PM_POSTERIOR.md) connects it
 to the shared likelihood, priors and optimizer. [Bounded HMC validation](pm_hmc_validation/README.md)
 compares a two-mode conditional posterior with quadrature and checks short full-field
-and joint-parameter runs; wider full-field calibration remains open.
+and joint-parameter runs. [Full-field PM validation](pm_full_validation/README.md)
+now checks dispersed fixed/joint chains, exact-prior null directions and posterior
+predictions for one small mock; broader calibration remains open.
 
 ## BAO application (prototype)
 

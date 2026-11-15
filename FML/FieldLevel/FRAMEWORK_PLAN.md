@@ -249,3 +249,16 @@ canonical replay; they do not establish full-posterior mixing or calibration.
 See [results and limitations](pm_hmc_validation/RESULTS.md). Larger fields, longer
 joint runs, posterior predictive checks, repeated-mock coverage and PM-specific
 restart/survey/tracer/cosmological derivatives remain separate; item 52 stays open.
+
+## Bounded full-field PM posterior validation (15 November 2026)
+
+[The full-field campaign](pm_full_validation/README.md) samples all 64 white
+coordinates in four dispersed fixed-parameter and four joint spectrum/noise chains.
+For this N=4/M=8 mock, six IC directions affect the likelihood and 58 have an exact
+unit-Gaussian posterior. All declared feature-mixing, analytic null-moment,
+normalization and posterior-predictive checks pass. Backend/thread/sanitizer replay
+also passes. [Results and plots](pm_full_validation/RESULTS.md) separate latent
+uncertainty from noisy predictions. This is bounded single-mock evidence;
+larger fields/mode support, repeated-mock coverage and numerical convergence remain
+open, along with PM checkpoint/restart, tracer/RSD/survey and cosmological derivatives.
+Item 52 remains open.

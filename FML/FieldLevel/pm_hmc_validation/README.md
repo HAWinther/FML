@@ -121,3 +121,7 @@ calibration remain open. The conditional test does not establish production accu
 all-direction reconstruction, cosmological inference, survey/tracer/RSD likelihoods
 or posterior coverage. Smoother assignment, improved metrics/optimization, PM-specific
 restart identities and wider resolution/performance validation remain extensions.
+
+The subsequent [full-field campaign](../pm_full_validation/README.md) adds dispersed
+fixed/joint chains and posterior predictions for one small mock. The results here
+remain the separate two-mode conditional reference and short integration milestone.
