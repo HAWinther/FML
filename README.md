@@ -2,56 +2,69 @@
 
 [![CI](https://github.com/HAWinther/FML/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/HAWinther/FML/actions/workflows/ci.yml?query=branch%3Amaster) [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/HAWinther/FML/issues) [![HitCount](https://hits.dwyl.com/HAWinther/FML.svg?style=flat-square)](http://hits.dwyl.com/HAWinther/FML)
 
-The library is constantly under construction. **This is FML 2.0.** The changes since 1.0 are in the [changelog](FML/CHANGELOG.md); for the old version see [Version 1.0](#version-10). Development happens in the FMLDevelop branch.
+**This is FML 2.0.** The library is constantly under construction. The changes since 1.0 are in the [changelog](FML/CHANGELOG.md); for the old version see [Version 1.0](#version-10). Development happens in the FMLDevelop branch.
 
-**FML is a C++17 library for large-scale-structure cosmology.** It has the pieces you need to set up, run and analyse
-cosmological simulations and to compare them with theory. The library covers initial conditions, N-body and COLA
-evolution, halo finding, clustering statistics, perturbation theory and an Einstein–Boltzmann solver. Most of it is
-header-only and templated on the particle type and the number of dimensions, so you can use your own particle
-struct directly. It runs in serial or in parallel with MPI (slab or pencil decomposition) and OpenMP.
-
-The library also contains [SimulationCode](FML/SimulationCode/README.md), a complete PM/COLA N-body code for ΛCDM and
-modified gravity. It is driven by a parameter file and computes power spectra, halos and other outputs on the fly.
+**FML is a C++17 library for working with particles and grids in parallel, made for large-scale-structure
+cosmology.** It gives you the parallel building blocks (grids that do FFTs, particle containers that move particles
+between tasks, mass assignment, PDE solvers) and, built on them, the methods you need to set up, run and analyse
+cosmological simulations and to compare them with theory. Most of it is header-only and templated on the particle
+type and the number of dimensions, so your own particle struct works directly, and it runs in serial or in parallel
+with MPI and OpenMP: you write the algorithm, FML handles most of the communication.
 
 ## What's inside
 
-**Simulations and initial conditions**
-- Gaussian and non-Gaussian random fields (N-GenIC compatible or Philox), fixed amplitudes and glass initial
-  conditions.
-- 1LPT, 2LPT, 3LPT and arbitrary-order LPT displacements, with transfer functions from CAMB, CLASS or the built-in
-  solver.
-- PM and COLA N-body evolution with short-range and TreePM-style forces. Includes massive neutrinos and wave
-  (fuzzy) dark matter.
-- Conservative [finite-volume Euler gas dynamics](FML/Hydrodynamics/README.md), with Rusanov/HLLE/HLLC fluxes,
-  limited reconstruction, MPI/OpenMP and explicit source conventions.
-- Standalone conservative [SPH gas dynamics](FML/SPH/README.md), with adaptive smoothing lengths, shock viscosity,
-  MPI/OpenMP and explicit gravity/expansion hooks.
-- Modified gravity in SimulationCode: f(R), DGP, symmetron, dilaton, Jordan–Brans–Dicke, μ-parametrised and more.
-  Screening is handled either exactly with multigrid solvers or with fast approximations.
+**Parallel building blocks**
+- Grids for FFTs (`FFTWGrid`, real and complex) split in slabs, or in [pencils](FML/PencilDomain/README.md) for
+  many tasks, behind one grid interface; a general distributed grid (`MPIGrid`); and an
+  [adaptively refined grid](FML/AdaptiveMPIGrid/README.md) distributed along a Peano–Hilbert curve.
+- `MPIParticles`: a container for any particle type that sends particles to the task that owns them, with slab,
+  pencil or Peano–Hilbert domains.
+- Particle–grid assignment and interpolation (B-splines from NGP to PQS, interlacing, window deconvolution), also for particles on
+  any domain, and non-uniform FFTs.
+- [Multigrid solvers](FML/MultigridSolver) for general (non-linear) PDEs, on uniform and on adaptive grids.
+- Smoothing and convolutions, random fields, splines and ODE solvers (GSL wrappers), FFTLog, a KD-tree, Lua parameter
+  files, and reading and writing Gadget (binary and HDF5), RAMSES and ascii files.
 
-**Measuring statistics**
-- Power spectra and multipoles, bispectra and higher polyspectra, interlacing and higher-order mass assignment.
-- Survey estimators with windows and BAO reconstruction.
-- Pair counting, 2PCF and 3PCF multipoles, counts-in-cells, kNN distributions and marked or environment-split
-  correlations.
-- Cosmic-web classification, Minkowski functionals and topology, void finders and weak-lensing maps and profiles.
+**Simulations**
+- [SimulationCode](FML/SimulationCode/README.md): a complete PM/COLA N-body code driven by a parameter file. Many
+  cosmologies and theories of gravity (f(R), DGP, symmetron, dilaton, Jordan–Brans–Dicke, cubic Galileon, reduced
+  Horndeski, coupled and interacting dark energy, dark scattering, μ–Σ), screening solved exactly with multigrid or
+  approximated, massive neutrinos, separate CDM and baryons, lightcones, and power spectra, bispectra, halos and
+  more computed on the fly.
+- The pieces to build your own: Gaussian and non-Gaussian initial conditions (N-GenIC compatible), 1LPT–3LPT and
+  arbitrary-order LPT, PM forces and time stepping (COLA, FastPM, BullFrog), short-range forces for P3M/TreePM, and
+  modified-gravity solvers.
+- Smaller, newer codes: an [AMR N-body code](FML/AMRCode/README.md), [wave dark matter](FML/WaveDarkMatter/README.md)
+  (Schrödinger–Poisson), and gas dynamics with [finite volumes](FML/Hydrodynamics/README.md) and
+  [SPH](FML/SPH/README.md).
 
-**Halos and galaxies**
-- Friends-of-friends, spherical overdensity and a phase-space halo finder.
-- Merger histories, HOD mocks and baryonification.
+**Analysing simulations and surveys**
+- Power spectra, multipoles, bispectra and higher polyspectra; pair counting and 2- and 3-point correlation
+  functions.
+- Surveys: power-spectrum multipoles with window functions, and BAO reconstruction.
+- Halos and structures: friends-of-friends (also relaxed FoF), spherical-overdensity masses, a phase-space halo and
+  subhalo finder, merger histories, void finders (ZOBOV, voxel watershed, spherical), Delaunay tessellations and the
+  DTFE, and cosmic-web classification.
+- Summary statistics: counts-in-cells, kNN distributions, density-split and marked statistics, Minkowski functionals,
+  weak-lensing maps, and HOD mocks and baryonification.
+- [SnapshotAnalyzer](FML/SnapshotAnalyzer/README.md): all of this on Gadget snapshots from a parameter file.
 
 **Theory**
-- Einstein–Boltzmann solver for ΛCDM and extensions: massive neutrinos, dark energy, Horndeski and more.
-- Halofit, HMcode-2016 and HMcode-2020, a general halo model, ReACT, EuclidEmulator2 and spherical collapse.
-- One-loop perturbation theory for matter and biased tracers: Lagrangian and IR-resummed Eulerian PT in redshift
-  space, hybrid-bias EFT spectra, wiggle/no-wiggle splits and FFTLog.
+- An [Einstein–Boltzmann solver](FML/Cosmology/EinsteinBoltzmannSolver/README.md) (background, recombination,
+  perturbations, CMB and matter spectra, lensing) for ΛCDM and many extensions, validated against CLASS.
+- Perturbation theory: one-loop SPT, Lagrangian and IR-resummed Eulerian PT for biased tracers in redshift space,
+  TNS and EFTofLSS, and hybrid-bias spectra.
+- Nonlinear power spectra: Halofit, HMcode-2016/2020, a general halo model, ReACT, EuclidEmulator2, and spherical
+  collapse with screening.
 
-**Inference and numerics**
-- MCMC and HMC samplers, field-level inference, cosmology fitting and ensemble statistics with control variates.
-- Multigrid solver, ODE solvers, splines, NUFFT, KD-tree and FFTW grids with MPI.
+**Inference**
+- MCMC (adaptive Metropolis–Hastings) and HMC samplers, cosmological fits with supernova, BAO, BBN and CMB
+  likelihoods, and trainable neural-network emulators.
+- [Field-level inference](FML/FieldLevel/README.md) with linear, LPT and particle-mesh forward models and their
+  adjoints, on slabs or pencils.
 
 The [capability matrix](FML/CAPABILITIES.md) lists every module with its scope, dependencies, parallel behaviour and
-tests.
+tests, and the [website](https://fml.wintherscoming.no/) explains the methods.
 
 ## Example
 
@@ -151,7 +164,8 @@ There is also a [SWIG wrapper tutorial](FML/MakePythonWrapper) and a pybind11 wr
 - [SimulationCode](FML/SimulationCode/README.md): the N-body code, its [parameters](FML/SimulationCode/PARAMETERS.md)
   and [tests](FML/SimulationCode/tests/README.md).
 - [Changelog](FML/CHANGELOG.md) and [development backlog](FML/DEVELOPMENT_BACKLOG.md).
-- [Website](https://fml.wintherscoming.no/) and [Doxygen reference](https://fml.wintherscoming.no/doxygen/).
+- [Website](https://fml.wintherscoming.no/) and [Doxygen reference](https://fml.wintherscoming.no/doxygen/); their
+  sources are in [Documentation](Documentation/), with the LaTeX source of the FML book.
 
 The regression tests run in CI on every push. They compare against analytic results or reference codes where
 possible. The module READMEs describe what has been validated and over which range, so check them before relying on
