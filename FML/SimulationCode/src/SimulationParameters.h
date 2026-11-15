@@ -1028,6 +1028,7 @@ namespace SIMCODE {
         std::string density_assignment_method; // Density assignment method (NGP, CIC, ...)
         bool interlacing;                      // Use interlacing for alias reduction?
         bool subtract_shotnoise;               // Subtract shotnoise?
+        bool shell_overlap_weights;            // Weight the cells by their overlap with the k-shells?
 
         /// The parameters (see ParameterFields.h)
         template <class F>
@@ -1047,6 +1048,11 @@ namespace SIMCODE {
                            choices::assignment_methods);
                 f.optional("bispectrum_interlacing", interlacing, true, "Use interlaced grids to reduce aliasing");
                 f.optional("bispectrum_subtract_shotnoise", subtract_shotnoise, false, "Subtract shot-noise");
+                f.optional("bispectrum_shell_overlap_weights",
+                           shell_overlap_weights,
+                           false,
+                           "Weight the Fourier cells by their volume overlap with the k-shells (continuous shells, "
+                           "as in CONCEPT) instead of 0/1 from the cell centre");
             });
         }
     };

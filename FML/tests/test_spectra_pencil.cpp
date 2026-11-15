@@ -1,4 +1,5 @@
-// The polyspectra (mono-, bi- and trispectrum, with and without the padding that removes aliasing) on
+// The polyspectra (mono-, bi- and trispectrum, with and without the padding that removes aliasing, the bispectrum
+// also with shell overlap weights) on
 // pencils give the same as on the FFTWGrid slabs (the same density field) on every pencil layout
 #include <FML/ComputePowerSpectra/ComputePowerSpectrum.h>
 #include <FML/ConnectedFourPoint/Fourier.h>
@@ -32,9 +33,10 @@ namespace {
         std::vector<double> r;
         d.fftw_r2c();
         const int nmesh = d.get_nmesh();
-        for (bool dealias : {false, true}) {
+        for (int variant = 0; variant < 3; variant++) {
             BispectrumBinning<3> b(0.0, 2.0 * M_PI * nmesh / 2.5, 5, BispectrumBinning<3>::LINEAR_SPACING);
-            b.dealias = dealias;
+            b.dealias = variant > 0;
+            b.shell_overlap_weights = variant == 2;
             compute_bispectrum(d, b);
             r.insert(r.end(), b.P123.begin(), b.P123.end());
             r.insert(r.end(), b.N123.begin(), b.N123.end());
@@ -77,7 +79,9 @@ int main() {
         const double diff = max_rel_diff(spectra(dp), ref);
         check(diff < 1e-12,
               "pencils " + std::to_string(p0) + "x" + std::to_string(FML::NTasks / p0) +
-                  ": the bi- (also padded), tri- and monospectrum, the connected 4-point function and the matched spectra of the slabs (rel. diff " + num(diff, 2) + ")");
+                  ": the bi- (also padded and with shell overlap weights), tri- and monospectrum, the connected "
+                  "4-point function and the matched spectra of the slabs (rel. diff " +
+                  num(diff, 2) + ")");
     }
     return FML::TESTS::summary("polyspectra on pencils");
 }

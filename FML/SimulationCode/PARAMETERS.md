@@ -341,6 +341,7 @@ Parameters marked *optional* take the default value if they are not in the param
 | `bispectrum_density_assignment_method` | string | `"CIC"` | bispectrum = true | Density assignment method. Options: `NGP`, `CIC`, `TSC`, `PCS`, `PQS` |
 | `bispectrum_interlacing` | bool | `true` | bispectrum = true | Use interlaced grids to reduce aliasing |
 | `bispectrum_subtract_shotnoise` | bool | `false` | bispectrum = true | Subtract shot-noise |
+| `bispectrum_shell_overlap_weights` | bool | `false` | bispectrum = true | Weight the Fourier cells by their volume overlap with the k-shells (continuous shells, as in CONCEPT) instead of 0/1 from the cell centre |
 
 ## Hybrid bias spectra
 

@@ -141,6 +141,7 @@ namespace FML {
             std::string density_assignment_method;
             bool interlacing;
             bool subtract_shotnoise;
+            bool shell_overlap_weights;
 
             BispectrumSettings() {
                 parameters([](const char *, auto & value, const auto & default_value, const char *) {
@@ -162,6 +163,10 @@ namespace FML {
                   "Density assignment method (NGP, CIC, TSC, PCS, PQS)");
                 f("interlacing", interlacing, true, "Use interlaced grids to reduce aliasing");
                 f("subtract_shotnoise", subtract_shotnoise, false, "Subtract shot-noise");
+                f("shell_overlap_weights",
+                  shell_overlap_weights,
+                  false,
+                  "Weight the Fourier cells by their volume overlap with the k-shells instead of 0/1");
             }
 
             void validate() const {
@@ -203,6 +208,7 @@ namespace FML {
             using Binning = FML::CORRELATIONFUNCTIONS::BispectrumBinning<NDIM>;
             Binning bofk(0.0, 2.0 * M_PI * settings.nmesh / 2, settings.nbins, Binning::LINEAR_SPACING);
             bofk.subtract_shotnoise = settings.subtract_shotnoise;
+            bofk.shell_overlap_weights = settings.shell_overlap_weights;
             FML::CORRELATIONFUNCTIONS::compute_bispectrum<NDIM, P, false, AnalysisGrid>(settings.nmesh,
                                                           particles,
                                                           npart,

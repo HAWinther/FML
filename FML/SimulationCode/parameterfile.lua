@@ -899,6 +899,9 @@ bispectrum_nbins = 10
 bispectrum_interlacing = true
 -- Subtract shotnoise?
 bispectrum_subtract_shotnoise = false
+-- Weight the Fourier cells by their volume overlap with the k-shells (continuous
+-- shells, as in CONCEPT) instead of 0/1 from where the cell centre is
+bispectrum_shell_overlap_weights = false
 -- Density assignment method: NGP, CIC, TSC, PCS, PQS
 bispectrum_density_assignment_method = "PCS"
 

@@ -10,6 +10,8 @@
 //   - the P(k) bin index below the first bin is -1
 //   - the monopole from compute_power_spectrum_multipoles_fourier = P(k) from bin_up_power_spectrum (counts too)
 //   - PolyspectrumBinning: the binning type is kept, reset() clears the bin count, empty bins give 0 (not NaN)
+//   - shell_overlap_weights: exact cell/ball overlaps (caps, sums over cells = the ball), the weights of a cell sum to
+//     1 over the bins, N123 = a brute-force weighted triangle count and close to the continuum 8 pi^2 k^3 dk^3
 // The header is also included in test_pofk_odr.cpp (the header must be usable from several translation units)
 // Run with: make run (in this folder) or make test (from the top folder)
 //==========================================================
@@ -17,6 +19,7 @@
 #include <FML/Global/Global.h>
 
 #include <cmath>
+#include <complex>
 #include <cstdint>
 #include <iostream>
 #include <numeric>
@@ -655,6 +658,241 @@ void test_memory_report() {
                 "memory report remains usable after an overflow rejection");
 }
 
+// The polyspectrum shells weighted by the exact overlap of the cells with the shells (shell_overlap_weights)
+void test_shell_overlap_weights() {
+    using namespace FML::CORRELATIONFUNCTIONS::SHELLOVERLAP;
+    // A cube centred at the origin and a ball through its faces: the ball minus six caps of height h
+    {
+        const double R = 0.6, h = R - 0.5;
+        const double cap3 = M_PI * h * h * (3 * R - h) / 3.0;
+        const double seg2 = R * R * std::acos((R - h) / R) - (R - h) * std::sqrt(2 * R * h - h * h);
+        const double v3 = box_ball_overlap<3>({-0.5, -0.5, -0.5}, {0.5, 0.5, 0.5}, R);
+        const double v2 = box_ball_overlap<2>({-0.5, -0.5}, {0.5, 0.5}, R);
+        check_local(std::fabs(v3 - (4.0 / 3.0 * M_PI * R * R * R - 6 * cap3)) < 1e-13 and
+                        std::fabs(v2 - (M_PI * R * R - 4 * seg2)) < 1e-13 and
+                        std::fabs(box_ball_overlap<3>({-0.5, -0.5, -0.5}, {0.5, 0.5, 0.5}, 0.5) - M_PI / 6) < 1e-13 and
+                        box_ball_overlap<3>({-0.5, -0.5, -0.5}, {0.5, 0.5, 0.5}, 0.87) == 1.0 and
+                        box_ball_overlap<1>({1.0}, {3.0}, 2.5) == 1.5,
+                    "shell overlap: unit cell and ball = ball minus caps (3D), segments (2D), inscribed, 1D");
+        // The cells add up to the ball
+        double s3 = 0.0, s2 = 0.0;
+        const double r3 = 3.3, r2 = 4.7;
+        for (int a = -5; a <= 5; a++)
+            for (int b = -5; b <= 5; b++) {
+                s2 += cell_shell_overlap<2>({double(a), double(b)}, 0.0, r2);
+                for (int c = -5; c <= 5; c++)
+                    s3 += cell_shell_overlap<3>({double(a), double(b), double(c)}, 0.0, r3);
+            }
+        check_local(std::fabs(s3 - 4.0 / 3.0 * M_PI * r3 * r3 * r3) < 1e-9 and std::fabs(s2 - M_PI * r2 * r2) < 1e-9,
+                    "shell overlap: the cells add up to the ball (3D " + num(s3) + ", 2D " + num(s2) + ")");
+    }
+
+    // The weights of a cell over all bins add up to 1 (the shells tile the space between kmin = 0 and kmax)
+    {
+        const int Nmesh = 16;
+        BispectrumBinning<3> b(0.0, 2.0 * M_PI * 7.0, 9, BispectrumBinning<3>::LINEAR_SPACING);
+        b.shell_overlap_weights = true;
+        FML::CORRELATIONFUNCTIONS::detail::PolyspectrumShellWeights<3, 3> weight(b);
+        Grid<3> grid(Nmesh);
+        double maxerr = 0.0, fractional = 0;
+        for (int x = -7; x <= 7; x++)
+            for (int y = -7; y <= 7; y++)
+                for (int z = -7; z <= 7; z++) {
+                    const double n = std::sqrt(double(x * x + y * y + z * z));
+                    if (n == 0.0 or n + 0.87 > 7.0)
+                        continue;
+                    std::array<double, 3> wave{2 * M_PI * x, 2 * M_PI * y, 2 * M_PI * z};
+                    double sum = 0.0;
+                    for (int bin = 0; bin < b.n; bin++) {
+                        const double w = weight(grid, wave, 4 * M_PI * M_PI * n * n, bin);
+                        sum += w;
+                        fractional += w > 0.0 and w < 1.0;
+                    }
+                    maxerr = std::max(maxerr, std::fabs(sum - 1.0));
+                }
+        check_local(maxerr < 1e-12 and fractional > 100,
+                    "shell overlap weights of a cell add up to 1 over the bins (max error " + num(maxerr) + ")");
+    }
+
+    // N123 with weights = the brute-force weighted triangle count, and close to the continuum count
+    {
+        const int Nmesh = 16, nbins = 5;
+        BispectrumBinning<3> b(0.0, 2.0 * M_PI * 4.0, nbins, BispectrumBinning<3>::LINEAR_SPACING);
+        b.shell_overlap_weights = true;
+        compute_polyspectrum_bincount<3, 3>(Nmesh, b);
+        std::vector<std::array<int, 3>> modes;
+        std::vector<std::vector<double>> w;
+        auto weights = [&](const std::array<int, 3> & k) {
+            std::vector<double> out(nbins, 0.0);
+            if (k[0] == 0 and k[1] == 0 and k[2] == 0)
+                return out;
+            for (int i = 0; i < nbins; i++)
+                out[i] = cell_shell_overlap<3>(
+                    {double(k[0]), double(k[1]), double(k[2])}, b.klow[i] / (2 * M_PI), b.khigh[i] / (2 * M_PI));
+            return out;
+        };
+        for (int x = -5; x <= 5; x++)
+            for (int y = -5; y <= 5; y++)
+                for (int z = -5; z <= 5; z++) {
+                    auto wk = weights({x, y, z});
+                    if (std::accumulate(wk.begin(), wk.end(), 0.0) > 0.0) {
+                        modes.push_back({x, y, z});
+                        w.push_back(wk);
+                    }
+                }
+        std::vector<double> count(b.N123.size(), 0.0);
+        for (size_t i = 0; i < modes.size(); i++)
+            for (size_t j = 0; j < modes.size(); j++) {
+                const auto w3 = weights({-modes[i][0] - modes[j][0], -modes[i][1] - modes[j][1],
+                                         -modes[i][2] - modes[j][2]});
+                for (int b1 = 0; b1 < nbins; b1++)
+                    for (int b2 = b1; b2 < nbins; b2++)
+                        for (int b3 = b2; b3 < nbins; b3++)
+                            count[b.get_index_from_coord(std::array<int, 3>{b1, b2, b3})] +=
+                                w[i][b1] * w[j][b2] * w3[b3];
+            }
+        double maxerr = 0.0;
+        for (int b1 = 0; b1 < nbins; b1++)
+            for (int b2 = b1; b2 < nbins; b2++)
+                for (int b3 = b2; b3 < nbins; b3++) {
+                    const auto i = b.get_index_from_coord(std::array<int, 3>{b1, b2, b3});
+                    maxerr = std::max(maxerr, std::fabs(b.N123[i] * std::pow(2.0 * M_PI, 3) - count[i]) /
+                                                  std::max(1.0, count[i]));
+                }
+        check_local(maxerr < 1e-9, "shell overlap N123 x (2pi)^3 = brute-force weighted triangle count (max rel. "
+                                   "error " + num(maxerr) + ")");
+    }
+    {
+        // Equilateral bins of width ~1 cell: the continuum count 8 pi^2 k^3 dk^3. The 0/1 shells scatter by tens of
+        // per cent around it, the weighted ones agree to < 1% from k = 3 (CONCEPT's motivation for the weights)
+        const int Nmesh = 32;
+        double err_binary = 0.0, err_overlap = 0.0;
+        for (bool overlap : {false, true}) {
+            BispectrumBinning<3> b(0.0, 2.0 * M_PI * 15.0, 14, BispectrumBinning<3>::LINEAR_SPACING);
+            b.shell_overlap_weights = overlap;
+            compute_polyspectrum_bincount<3, 3>(Nmesh, b);
+            for (int i = 3; i < 13; i++) {
+                const double k = b.kbin[i] / (2 * M_PI), dk = (b.khigh[i] - b.klow[i]) / (2 * M_PI);
+                const double ratio =
+                    b.get_bincount(i, i, i) * std::pow(2 * M_PI, 3) / (8 * M_PI * M_PI * std::pow(k * dk, 3));
+                (overlap ? err_overlap : err_binary) =
+                    std::max(overlap ? err_overlap : err_binary, std::fabs(ratio - 1.0));
+            }
+            // Turning the option on or off invalidates the cached bin count
+            b.shell_overlap_weights = not overlap;
+            check_local(not b.has_bincount(Nmesh), "changing shell_overlap_weights invalidates the cached N123");
+        }
+        check_local(err_overlap < 1e-2 and err_binary > 0.1,
+                    "equilateral N123 vs continuum 8 pi^2 k^3 dk^3: max deviation " + num(err_overlap) +
+                        " with shell overlap weights, " + num(err_binary) + " with 0/1 shells");
+    }
+    {
+        // The global default applies to binnings made after it is set
+        polyspectrum_shell_overlap_weights_default = true;
+        BispectrumBinning<3> on(0.0, 1.0, 4, BispectrumBinning<3>::LINEAR_SPACING);
+        polyspectrum_shell_overlap_weights_default = false;
+        BispectrumBinning<3> off(0.0, 1.0, 4, BispectrumBinning<3>::LINEAR_SPACING);
+        check_local(on.shell_overlap_weights and not off.shell_overlap_weights and
+                        on.to_dense().shell_overlap_weights,
+                    "polyspectrum_shell_overlap_weights_default sets the option of new binnings");
+    }
+    {
+        // The bispectrum of a random field with weights = a brute-force weighted sum over the triangles:
+        // sum w1 w2 w3 Re(d1 d2 d3) / sum w1 w2 w3
+        const int Nmesh = 16, nbins = 4;
+        Grid<3> field(Nmesh);
+        std::mt19937 gen(5 + FML::ThisTask);
+        std::normal_distribution<double> normal;
+        for (auto && index : field.get_real_range())
+            field.set_real_from_index(index, normal(gen) + 0.3 * std::pow(normal(gen), 2));
+        field.fftw_r2c();
+        BispectrumBinning<3> b(0.0, 2.0 * M_PI * 3.5, nbins, BispectrumBinning<3>::LINEAR_SPACING);
+        b.shell_overlap_weights = true;
+        b.subtract_shotnoise = false;
+        compute_bispectrum(field, b);
+        // The modes on every task (brute force on task 0)
+        std::vector<std::complex<double>> modes(size_t(Nmesh) * Nmesh * Nmesh, 0.0);
+        std::vector<double> filled(modes.size(), 0.0);
+        for (auto && index : field.get_fourier_range()) {
+            auto c = field.get_fourier_coord_from_index(index);
+            c[0] += int(field.get_local_x_start());
+            auto value = std::complex<double>(field.get_fourier_from_index(index));
+            auto put = [&](int x, int y, int z, std::complex<double> v) {
+                const size_t i =
+                    (size_t((x + Nmesh) % Nmesh) * Nmesh + (y + Nmesh) % Nmesh) * Nmesh + (z + Nmesh) % Nmesh;
+                modes[i] += v;
+                filled[i] += 1.0;
+            };
+            put(c[0], c[1], c[2], value);
+            put(-c[0], -c[1], -c[2], std::conj(value));
+        }
+        std::vector<double> re(modes.size()), im(modes.size());
+        for (size_t i = 0; i < modes.size(); i++) {
+            re[i] = modes[i].real();
+            im[i] = modes[i].imag();
+        }
+        FML::SumArrayOverTasks(re.data(), re.size());
+        FML::SumArrayOverTasks(im.data(), im.size());
+        FML::SumArrayOverTasks(filled.data(), filled.size());
+        // A mode on the planes z = 0 and Nyquist is put twice (as itself and as the conjugate of its mirror)
+        for (size_t i = 0; i < modes.size(); i++)
+            if (filled[i] > 1.0) {
+                re[i] /= filled[i];
+                im[i] /= filled[i];
+            }
+        auto mode = [&](int x, int y, int z) {
+            const size_t i = (size_t((x + Nmesh) % Nmesh) * Nmesh + (y + Nmesh) % Nmesh) * Nmesh + (z + Nmesh) % Nmesh;
+            return std::complex<double>(re[i], im[i]);
+        };
+        auto weights = [&](int x, int y, int z) {
+            std::vector<double> out(nbins, 0.0);
+            if (x == 0 and y == 0 and z == 0)
+                return out;
+            for (int i = 0; i < nbins; i++)
+                out[i] = cell_shell_overlap<3>({double(x), double(y), double(z)}, b.klow[i] / (2 * M_PI),
+                                               b.khigh[i] / (2 * M_PI));
+            return out;
+        };
+        const int h = 5;
+        std::vector<double> sum(b.P123.size(), 0.0), count(b.P123.size(), 0.0);
+        for (int x1 = -h; x1 <= h; x1++)
+            for (int y1 = -h; y1 <= h; y1++)
+                for (int z1 = -h; z1 <= h; z1++)
+                    for (int x2 = -h; x2 <= h; x2++)
+                        for (int y2 = -h; y2 <= h; y2++)
+                            for (int z2 = -h; z2 <= h; z2++) {
+                                const int x3 = -x1 - x2, y3 = -y1 - y2, z3 = -z1 - z2;
+                                if (std::abs(x3) > h or std::abs(y3) > h or std::abs(z3) > h)
+                                    continue;
+                                const auto w1 = weights(x1, y1, z1), w2 = weights(x2, y2, z2),
+                                           w3 = weights(x3, y3, z3);
+                                const double d =
+                                    (mode(x1, y1, z1) * mode(x2, y2, z2) * mode(x3, y3, z3)).real();
+                                for (int b1 = 0; b1 < nbins; b1++)
+                                    for (int b2 = b1; b2 < nbins; b2++)
+                                        for (int b3 = b2; b3 < nbins; b3++) {
+                                            const double w = w1[b1] * w2[b2] * w3[b3];
+                                            if (w == 0.0)
+                                                continue;
+                                            const auto i = b.get_index_from_coord(std::array<int, 3>{b1, b2, b3});
+                                            sum[i] += w * d;
+                                            count[i] += w;
+                                        }
+                            }
+        double maxerr = 0.0, scale = 0.0;
+        for (size_t i = 0; i < sum.size(); i++)
+            if (count[i] > 0.0)
+                scale = std::max(scale, std::fabs(sum[i] / count[i]));
+        for (size_t i = 0; i < sum.size(); i++)
+            if (count[i] > 0.0) {
+                // The estimator: (2pi)^3 B = <d1 d2 d3> / Nmesh^9 relative to the FFT normalization of FFTWGrid
+                maxerr = std::max(maxerr, std::fabs(b.P123[i] - sum[i] / count[i]) / scale);
+            }
+        check_local(maxerr < 1e-9, "shell overlap weights: B of a random field = brute-force weighted triangle sum "
+                                   "(max error " + num(maxerr) + " of the largest |B|)");
+    }
+}
+
 int main(int argc, char ** argv) {
     if (argc > 1 && std::string(argv[1]) == "memory") {
         test_memory_report<2>();
@@ -667,6 +905,7 @@ int main(int argc, char ** argv) {
     }
     test_memory_report<2>();
     test_memory_report<3>();
+    test_shell_overlap_weights();
     check_local(pofk_odr_check() == 1, "ComputePowerSpectrum.h can be included in several translation units");
 
     // Shot noise: equal masses, masses and delta-f weights

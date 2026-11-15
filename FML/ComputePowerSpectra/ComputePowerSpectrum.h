@@ -20,6 +20,9 @@
 #include <FML/FFTWGrid/FourierResampling.h>
 #include <numeric>
 #include <climits>
+#include <map>
+#include <unordered_map>
+#include <algorithm>
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/LPT/Reconstruction.h>        // For particles->redshiftspace
@@ -28,6 +31,7 @@
 // The classes that define how to bin and return the data
 #include <FML/ComputePowerSpectra/PolyspectrumBinning.h>
 #include <FML/ComputePowerSpectra/PolyspectrumWorkspace.h>
+#include <FML/ComputePowerSpectra/ShellOverlap.h>
 #include <FML/ComputePowerSpectra/PowerSpectrumBinning.h>
 
 namespace FML {
@@ -1175,6 +1179,88 @@ namespace FML {
                             return false;
                 return true;
             }
+
+            /// The weight of a Fourier mode in the shell of a bin: 0 or 1 from where the cell centre is
+            /// (polyspectrum_uses_mode), or with shell_overlap_weights the fraction of the cell inside the shell
+            /// (ShellOverlap.h). The ball overlaps are remembered per cell (up to the symmetries of the grid) and edge,
+            /// as every shell is built more than once. Not thread safe
+            template <int N, int ORDER>
+            class PolyspectrumShellWeights {
+              public:
+                template <class Binning>
+                explicit PolyspectrumShellWeights(const Binning & bins)
+                    : overlap(bins.shell_overlap_weights), dealias(bins.dealias), klow(bins.klow), khigh(bins.khigh) {
+                    static_assert(N >= 1, "[PolyspectrumShellWeights] N >= 1");
+                    assert_mpi(not overlap or N <= 3,
+                               "[polyspectrum] shell_overlap_weights is only implemented for N = 1, 2 and 3");
+                    // The distinct edges in units of the fundamental mode (k = 2 pi n for a box of size 1)
+                    for (const auto & edges : {klow, khigh})
+                        for (double k : edges)
+                            if (edge_id.find(k) == edge_id.end()) {
+                                edge_id[k] = int(radius.size());
+                                radius.push_back(k / (2.0 * M_PI));
+                            }
+                }
+
+                template <class Grid>
+                double operator()(const Grid & grid, const std::array<double, N> & wave, double k2, int bin) {
+                    if (not overlap)
+                        return polyspectrum_uses_mode<N, ORDER>(
+                                   grid, wave, k2, klow[bin] * klow[bin], khigh[bin] * khigh[bin], dealias) ?
+                                   1.0 :
+                                   0.0;
+                    if (!(k2 > 0))
+                        return 0.0;
+                    if (dealias && ORDER > 2 && grid.get_nmesh() % 2 == 0)
+                        for (auto k : wave)
+                            if (std::abs(k) >= M_PI * grid.get_nmesh())
+                                return 0.0;
+                    if constexpr (N <= 3) {
+                        // The cell up to reflections and permutations: sorted |n|
+                        std::array<double, N> n;
+                        for (int d = 0; d < N; d++)
+                            n[d] = std::round(std::fabs(wave[d]) / (2.0 * M_PI));
+                        std::sort(n.begin(), n.end());
+                        const double d = std::sqrt(k2) / (2.0 * M_PI), half_diagonal = 0.5 * std::sqrt(double(N));
+                        const double r_low = radius[edge_id[klow[bin]]], r_high = radius[edge_id[khigh[bin]]];
+                        if (d + half_diagonal <= r_low or d - half_diagonal >= r_high)
+                            return 0.0;
+                        if (d - half_diagonal >= r_low and d + half_diagonal <= r_high)
+                            return 1.0;
+                        return std::clamp(ball(n, edge_id[khigh[bin]], d) - ball(n, edge_id[klow[bin]], d), 0.0, 1.0);
+                    }
+                    return 0.0;
+                }
+
+              private:
+                bool overlap, dealias;
+                std::vector<double> klow, khigh, radius;
+                std::map<double, int> edge_id;
+                std::unordered_map<uint64_t, double> memory;
+
+                /// The volume of the unit cell centred at n (>= 0, sorted) inside the ball of edge e
+                double ball(const std::array<double, N> & n, int e, double d) {
+                    const double r = radius[e], half_diagonal = 0.5 * std::sqrt(double(N));
+                    if (d + half_diagonal <= r)
+                        return 1.0;
+                    if (d - half_diagonal >= r)
+                        return 0.0;
+                    uint64_t key = uint64_t(e);
+                    for (int i = 0; i < N; i++)
+                        key = key * (uint64_t(1) << 20) + uint64_t(n[i]);
+                    auto found = memory.find(key);
+                    if (found != memory.end())
+                        return found->second;
+                    std::array<double, N> lo, hi;
+                    for (int i = 0; i < N; i++) {
+                        lo[i] = n[i] - 0.5;
+                        hi[i] = n[i] + 0.5;
+                    }
+                    const double v = FML::CORRELATIONFUNCTIONS::SHELLOVERLAP::box_ball_overlap<N>(lo, hi, r);
+                    memory[key] = v;
+                    return v;
+                }
+            };
         } // namespace detail
 
         //================================================================================
@@ -1214,6 +1300,7 @@ namespace FML {
                 for (auto bin : cfg)
                     requested_kmax = std::max(requested_kmax, bins.khigh[bin]);
             const int mesh = detail::polyspectrum_work_mesh_like<ORDER>(like, Nmesh, {requested_kmax}, bins.dealias);
+            detail::PolyspectrumShellWeights<N, ORDER> shell_weight(bins);
             auto build = [&](int bin) {
                 auto field = make_grid_like(like, Nmesh, 0, 0);
                 field.set_grid_status_real(false);
@@ -1221,16 +1308,7 @@ namespace FML {
                     std::array<double, N> wave;
                     double k2;
                     field.get_fourier_wavevector_and_norm2_by_index(index, wave, k2);
-                    field.set_fourier_from_index(
-                        index,
-                        detail::polyspectrum_uses_mode<N, ORDER>(field,
-                                                                 wave,
-                                                                 k2,
-                                                                 bins.klow[bin] * bins.klow[bin],
-                                                                 bins.khigh[bin] * bins.khigh[bin],
-                                                                 bins.dealias) ?
-                            1.0 :
-                            0.0);
+                    field.set_fourier_from_index(index, shell_weight(field, wave, k2, bin));
                 }
                 if (mesh != Nmesh) {
                     auto & memory = bins.statistics.memory;
@@ -1267,7 +1345,8 @@ namespace FML {
                 bins.statistics.geometry_reduction_batches,
                 [&](auto cfg, double sum) {
                     double value = sum * norm;
-                    if (value * measure < 0.5)
+                    // Counts are integers (round-off below 0.5); with overlap weights any positive count
+                    if (value * measure < (bins.shell_overlap_weights ? 1e-6 : 0.5))
                         value = 0;
                     detail::store_permutations<N, ORDER>(bins, bins.N123, cfg, value);
                 });
@@ -1323,19 +1402,16 @@ namespace FML {
             const size_t metadata_count = 3 * size_t(bins.n);
             assert_mpi(metadata_count <= size_t(INT_MAX), "[polyspectrum] Too many shell statistics for MPI");
             std::vector<double> metadata(metadata_count, 0.0);
+            detail::PolyspectrumShellWeights<N, ORDER> shell_weight(bins);
             for (auto index : input.get_fourier_range()) {
                 std::array<double, N> wave;
                 double k2;
                 input.get_fourier_wavevector_and_norm2_by_index(index, wave, k2);
                 for (int bin = 0; bin < bins.n; bin++) {
-                    if (!detail::polyspectrum_uses_mode<N, ORDER>(input,
-                                                                  wave,
-                                                                  k2,
-                                                                  bins.klow[bin] * bins.klow[bin],
-                                                                  bins.khigh[bin] * bins.khigh[bin],
-                                                                  bins.dealias))
+                    const double fraction = shell_weight(input, wave, k2, bin);
+                    if (fraction == 0.0)
                         continue;
-                    const double weight = FML::GRID::fourier_mode_multiplicity(
+                    const double weight = fraction * FML::GRID::fourier_mode_multiplicity(
                         is_fftwgrid ? int(index % (Nmesh / 2 + 1)) : input.get_fourier_integer_wavevector_from_index(index)[N - 1],
                         Nmesh);
                     metadata[3 * bin] += weight * std::sqrt(k2);
@@ -1359,13 +1435,10 @@ namespace FML {
                     std::array<double, N> wave;
                     double k2;
                     input.get_fourier_wavevector_and_norm2_by_index(index, wave, k2);
-                    const bool use = detail::polyspectrum_uses_mode<N, ORDER>(input,
-                                                                              wave,
-                                                                              k2,
-                                                                              bins.klow[bin] * bins.klow[bin],
-                                                                              bins.khigh[bin] * bins.khigh[bin],
-                                                                              bins.dealias);
-                    field.set_fourier_from_index(index, use ? input.get_fourier_from_index(index) : 0.0);
+                    const double fraction = shell_weight(input, wave, k2, bin);
+                    field.set_fourier_from_index(index,
+                                                 fraction != 0.0 ? fraction * input.get_fourier_from_index(index) :
+                                                                   0.0);
                 }
                 if (mesh != Nmesh) {
                     auto & memory = bins.statistics.memory;

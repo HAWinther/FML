@@ -12,6 +12,9 @@
 namespace FML {
     namespace CORRELATIONFUNCTIONS {
 
+        /// The default of PolyspectrumBinning::shell_overlap_weights for binnings made after it is set (false)
+        inline bool polyspectrum_shell_overlap_weights_default = false;
+
         struct PolyspectrumOptions {
             /// Zero retains all needed shells. Otherwise cap the resident shell count.
             size_t max_cached_shells{0};
@@ -79,6 +82,13 @@ namespace FML {
             /// True integer-wavevector closure. False retains legacy modulo-grid closure.
             /// Nonlinear estimates exclude even-mesh Nyquist planes when enabled.
             bool dealias{true};
+            /// Weight each Fourier cell by the fraction of its volume inside the shell [klow, khigh) instead of 0 or 1
+            /// from where its centre is ("shell anti-aliasing" as in CONCEPT, see ShellOverlap.h). The shells are then
+            /// continuous: the mean k of a bin moves smoothly with its edges and N123 is close to the continuum
+            /// triangle count, which makes comparisons with bin-averaged theory easier (mostly at low k and for thin
+            /// bins). Neighbouring bins share their boundary cells (correlated). Default: off, or
+            /// polyspectrum_shell_overlap_weights_default when the binning is made
+            bool shell_overlap_weights{polyspectrum_shell_overlap_weights_default};
             PolyspectrumOptions options;
             PolyspectrumStatistics statistics;
             using Configuration = std::array<int, ORDER>;
@@ -173,7 +183,7 @@ namespace FML {
 
             bool has_bincount(int nmesh) {
                 if (!bincount_is_set || cached_low != klow || cached_high != khigh || cached_dealias != dealias ||
-                    cached_selected != selected)
+                    cached_overlap != shell_overlap_weights || cached_selected != selected)
                     return false;
                 if (cached_mesh == 0)
                     cached_mesh = nmesh; // legacy explicitly imported counts
@@ -184,6 +194,7 @@ namespace FML {
                 cached_low = klow;
                 cached_high = khigh;
                 cached_dealias = dealias;
+                cached_overlap = shell_overlap_weights;
                 cached_selected = selected;
                 bincount_is_set = true;
             }
@@ -205,6 +216,7 @@ namespace FML {
             int cached_mesh{-1};
             std::vector<double> cached_low, cached_high;
             bool cached_dealias{true};
+            bool cached_overlap{false};
 
           public:
             PolyspectrumBinning() = default;
@@ -366,17 +378,19 @@ namespace FML {
         bool PolyspectrumBinning<N, ORDER, COMPACT>::compute_this_configuration(const std::array<int, ORDER> & ik) {
             if (!selected.empty() && !std::binary_search(selected.begin(), selected.end(), ik))
                 return false;
+            // With shell_overlap_weights a shell has cells up to half a cell diagonal outside its edges
+            const double extend = shell_overlap_weights ? M_PI * std::sqrt(double(N)) : 0.0;
             double ksum = 0.0;
             for (int ii = 1; ii < ORDER; ii++) {
                 if (ik[ii - 1] > ik[ii]) {
                     return false;
                 }
-                ksum += khigh[ik[ii - 1]];
+                ksum += khigh[ik[ii - 1]] + extend;
             }
 
             // No valid 'triangles' if k1+k2+... < kN so can just set too zero right away
             // Saves a bit of time computing, but not significantly so its fine to remove this just to be sure
-            if (ksum < klow[ik[ORDER - 1]] and ORDER > 2)
+            if (ksum < klow[ik[ORDER - 1]] - extend and ORDER > 2)
                 return false;
 
             return true;
@@ -577,7 +591,8 @@ namespace FML {
             prepare_storage();
             rhs.prepare_storage();
             assert_mpi(n == rhs.n and bin_type == rhs.bin_type && klow == rhs.klow && khigh == rhs.khigh &&
-                           dealias == rhs.dealias && selected == rhs.selected && compact_configs == rhs.compact_configs,
+                           dealias == rhs.dealias &&
+                           shell_overlap_weights == rhs.shell_overlap_weights && selected == rhs.selected && compact_configs == rhs.compact_configs,
                        "[PolyspectrumBinning::combine] Incompatible binnings\n");
             if (nbinnings == 0) {
                 P123 = rhs.P123;
@@ -627,6 +642,7 @@ namespace FML {
                 PolyspectrumBinning<N, ORDER, false> dense(kmin, kmax, n, bin_type);
                 dense.subtract_shotnoise = subtract_shotnoise;
                 dense.dealias = dealias;
+                dense.shell_overlap_weights = shell_overlap_weights;
                 dense.options = options;
                 dense.statistics = statistics;
                 dense.pofk = pofk;
@@ -649,6 +665,7 @@ namespace FML {
                 dense.cached_low = cached_low;
                 dense.cached_high = cached_high;
                 dense.cached_dealias = cached_dealias;
+                dense.cached_overlap = cached_overlap;
                 dense.cached_selected = cached_selected;
                 return dense;
             }

@@ -5,6 +5,16 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Polyspectra: optional shell overlap weights
+- `PolyspectrumBinning::shell_overlap_weights` (off by default; `polyspectrum_shell_overlap_weights_default` sets it
+  for new binnings): each Fourier cell is weighted by the exact fraction of its volume inside the shell instead of 0/1
+  from its centre ("shell anti-aliasing" as in CONCEPT, whose closed-form cell/ball overlap is ported in
+  `ComputePowerSpectra/ShellOverlap.h`). The bin-count N123 then follows the continuum triangle count (equilateral
+  bins one cell wide: within 1% from k = 3 k_f instead of 10-30% scatter) and a measurement belongs to its nominal k.
+  The triangle-closure check and the bin-count round-off cut allow for the cells that stick out of a shell. Exposed as
+  `bispectrum_shell_overlap_weights` in SimulationCode and SnapshotAnalyzer. Tests: exact overlaps, weights summing
+  to 1 over the bins, N123 and B of a random field against brute-force weighted sums, slabs vs pencils.
+
 ### New module: Visualization
 - `Visualization/`: pictures of grids and particles from C++ with no dependencies. `project_grid` projects a slab of
   an FFTWGrid or PencilGrid (any axis, periodic slab, sum or mean), `project_particles` the particles (NGP or CIC,

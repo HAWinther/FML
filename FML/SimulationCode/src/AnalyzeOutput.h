@@ -239,6 +239,7 @@ void compute_bispectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::st
     const auto bin_type = FML::CORRELATIONFUNCTIONS::BispectrumBinning<NDIM>::LINEAR_SPACING;
     FML::CORRELATIONFUNCTIONS::BispectrumBinning<NDIM> bofk(kmin, kmax, bispectrum_nbins, bin_type);
     bofk.subtract_shotnoise = bispectrum_subtract_shotnoise;
+    bofk.shell_overlap_weights = settings.shell_overlap_weights;
 
     if (FML::ThisTask == 0) {
         std::cout << "\n";

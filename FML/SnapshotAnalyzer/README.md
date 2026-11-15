@@ -144,6 +144,7 @@ bispectrum_nbins = 16 -- linear bins from 0 to the Nyquist frequency
 bispectrum_density_assignment_method = "CIC"
 bispectrum_interlacing = true
 bispectrum_subtract_shotnoise = false
+bispectrum_shell_overlap_weights = false -- weight the cells by their overlap with the shells
 
 hybridbias = false
 hybridbias_nmesh = 128

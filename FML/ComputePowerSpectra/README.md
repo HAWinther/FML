@@ -24,12 +24,41 @@ have no particle-deposition halos.
 
 Geometry counts are cached automatically after successful computation. Internal
 cache identities include the source mesh width, exact shell edges and the
-closure policy. Changing any of these, or calling `reset`, invalidates reuse.
+closure policy and `shell_overlap_weights`. Changing any of these, or calling `reset`, invalidates reuse.
 For external counts use `set_bincount(counts, source_mesh)` to record the mesh
 identity. The legacy `set_bincount(counts)` overload trusts the caller and binds
 the counts to the mesh of their first use; it cannot verify which mesh originally
 produced an unlabelled vector. Imported counts must use the same bin edges and
 closure convention as the receiving object.
+
+## Shell overlap weights
+
+`PolyspectrumBinning::shell_overlap_weights` (default `false`) gives each Fourier
+cell the fraction of its volume inside the shell `[klow, khigh)` instead of 0 or 1
+from where its centre is. The shells are then continuous spheres ("shell
+anti-aliasing" in [CONCEPT](https://github.com/jmd-dk/concept/blob/ab6d8d7d9a7c9e5010a206bbea3b22d0f15c4608/src/analysis.py#L2619),
+whose closed-form cell/ball primitive is ported in `ShellOverlap.h`). The weights
+enter the shell fields, the triangle counts `N123` and the mean k and P(k) of the
+bins.
+
+```cpp
+FML::CORRELATIONFUNCTIONS::BispectrumBinning<3> b(0.0, kmax, nbins, BispectrumBinning<3>::LINEAR_SPACING);
+b.shell_overlap_weights = true;
+// Or for every binning made afterwards:
+FML::CORRELATIONFUNCTIONS::polyspectrum_shell_overlap_weights_default = true;
+```
+
+What it changes: a measured value belongs to its nominal k (the bin's mean k moves
+smoothly with the edges instead of in steps when cell centres cross them), and
+`N123` follows the continuum triangle count. For equilateral bins one cell wide,
+`N123` with 0/1 shells scatters by 10-30% around `8 pi^2 k^3 dk^3` (in units of
+the fundamental mode), with the weights it agrees to better than 1% from k = 3 and
+0.1% from k = 5 (`tests/test_pofk.cpp`). This matters most at low k and for thin
+bins, and makes comparisons with bin-averaged theory simpler. It does not reduce
+the statistical errors. Cells on a shell edge are shared by the two neighbouring
+bins, so neighbouring bins are correlated. The weights are cached per cell (up to
+the grid symmetries) and edge: about 10% extra time for a 128^3 bispectrum. Only
+N = 1, 2 and 3. SimulationCode and SnapshotAnalyzer: `bispectrum_shell_overlap_weights`.
 
 ## Memory and MPI execution options
 
