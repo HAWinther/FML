@@ -1096,5 +1096,7 @@ compute_power_spectrum(NBodySimulation<NDIM, T> & sim, double redshift, std::str
 
 // The FoF halos (compute_fof_halos)
 #include "HaloFinding.h"
+// The images (output_images)
+#include "OutputImages.h"
 
 #endif

@@ -6,6 +6,7 @@
 #include "ParameterDefaults.h"
 #include "ParameterFields.h"
 #include "ShortRangeSettings.h"
+#include <FML/Analysis/Images.h>
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/ParameterMap/ParameterMap.h>
@@ -1048,11 +1049,32 @@ namespace SIMCODE {
                            choices::assignment_methods);
                 f.optional("bispectrum_interlacing", interlacing, true, "Use interlaced grids to reduce aliasing");
                 f.optional("bispectrum_subtract_shotnoise", subtract_shotnoise, false, "Subtract shot-noise");
-                f.optional("bispectrum_shell_overlap_weights",
-                           shell_overlap_weights,
-                           false,
-                           "Weight the Fourier cells by their volume overlap with the k-shells (continuous shells, "
-                           "as in CONCEPT) instead of 0/1 from the cell centre");
+                f.always_optional("bispectrum_shell_overlap_weights",
+                                  shell_overlap_weights,
+                                  false,
+                                  "Weight the Fourier cells by their volume overlap with the k-shells (continuous "
+                                  "shells, as in CONCEPT) instead of 0/1 from the cell centre");
+            });
+        }
+    };
+
+    struct ImagesSettings {
+        bool enabled;                       // Draw images of fields at every output
+        FML::ANALYSIS::ImageSettings image; // Which fields, the grid, the slab and the colours (images_<name>)
+
+        /// The parameters (see ParameterFields.h): images_<name> as in FML/Analysis/Images.h (also SnapshotAnalyzer)
+        template <class F>
+        void fields(F && f) {
+            f.always_optional("images",
+                              enabled,
+                              false,
+                              "Draw PNG images of fields at every output: a slab projected along an axis "
+                              "(image_<field>_z<z>.png in the snapshot folder)");
+            f.if_true("images", [&]() {
+                image.parameters([&](const char * name, auto & value, const auto & default_value, const char * text) {
+                    f.always_optional(
+                        std::string(FML::ANALYSIS::ImageSettings::prefix) + name, value, default_value, text);
+                });
             });
         }
     };
@@ -1359,6 +1381,7 @@ namespace SIMCODE {
         PofkSettings pofk;
         PofkMultipoleSettings pofk_multipole;
         BispectrumSettings bispectrum;
+        ImagesSettings images;
         HybridBiasSettings hybridbias;
         OutputSettings output;
         LightconeSettings lightcone;
@@ -1394,6 +1417,7 @@ namespace SIMCODE {
             pofk_multipole.fields(f);
             bispectrum.fields(f);
             hybridbias.fields(f);
+            images.fields(f);
             output.fields(f);
             lightcone.fields(f);
 
@@ -1456,6 +1480,22 @@ namespace SIMCODE {
         /// Check that the parameters are consistent. Throws if not
         void validate() {
             auto fail = [](const std::string & msg) { throw std::runtime_error("Invalid parameters: " + msg); };
+
+            if (images.enabled) {
+                try {
+                    images.image.validate();
+                    std::vector<std::string> allowed{"density", "velocity_divergence", "fifth_force"};
+                    if (particle.baryons)
+                        allowed.push_back("baryons_minus_cdm");
+                    if (particle.neutrinos or force.linear_massive_neutrinos)
+                        allowed.push_back("neutrinos");
+                    images.image.check_fields(allowed,
+                                              "; baryons_minus_cdm needs particle_baryons, neutrinos needs "
+                                              "particle_neutrinos or force_linear_massive_neutrinos");
+                } catch (const std::exception & e) {
+                    fail(e.what());
+                }
+            }
 
             if (baryonification.enabled) {
                 baryonification.validate();

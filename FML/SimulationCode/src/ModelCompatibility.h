@@ -30,6 +30,14 @@ namespace SIMCODE {
             grav.short_range_interaction(params.ic.a_initial());
         }
 
+        if (params.images.enabled) {
+            if (NDIM != 3)
+                fail("images are only implemented for NDIM = 3");
+            if (params.images.image.wants("fifth_force") and not grav.has_fifth_force_field())
+                fail("images_fields: fifth_force needs a gravity model with a fifth force (gravity_model = " +
+                     grav.get_name() + ")");
+        }
+
         if (params.baryonification.enabled) {
             if (NDIM != 3 || grav.get_name() != "GR" || cosmo.get_OmegaMNu() != 0.0)
                 fail("baryonification currently requires NDIM=3, gravity_model=GR and cosmology_OmegaMNu=0");

@@ -17,6 +17,7 @@ Everything is in `FML::ANALYSIS` and header-only (C++17).
 | `Baryonification.h` | Position-only baryonification (FoF/M200c hosts + FML/Baryonification profiles) |
 | `Voids.h` | Void catalogues: voxel watershed, spherical underdensities, ZOBOV (CGAL) |
 | `DTFE.h` | DTFE density and velocity fields and their power spectra (CGAL) |
+| `Images.h` | Images of fields (`images_*`): the density and the velocity divergence of particles, projected slabs, PNG/.npy files with FML/Visualization |
 | `ParticleUtils.h` | `redistribute_particles`: move displaced particles to their owner task, growing storage as needed |
 | `Output.h` | `write_on_root` and `throw_if_any_task_failed`: errors are agreed on by all tasks (no deadlocks) |
 
@@ -84,6 +85,10 @@ SimulationCode does not have: `pofk_nbins`, `pofk_log_binning` (and the multipol
 - `baryonify`: the hosts are the resolved, non-truncated, non-overlapping M200c halos above the mass cut whose
   profile support is below half the box; the particles are displaced and redistributed. `write_baryonification_hosts`
   and `write_baryonified_power_spectrum` write `baryonification_z<z>.txt` and `pofk_baryonified_z<z>.txt`.
+
+- `particle_density_contrast`, `particle_velocity_divergence` (theta = -div v times the velocity-to-displacement
+  factor: f delta in linear theory), `project_image` and `write_field_image` (settings `images_*`): the images
+  `image_<field>_z<z>.png` (and `.npy`) of SimulationCode and the SnapshotAnalyzer.
 
 All functions are collective (call them on every task); an error on one task is turned into an exception on every
 task.

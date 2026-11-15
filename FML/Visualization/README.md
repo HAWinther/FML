@@ -33,10 +33,17 @@ if (FML::ThisTask == 0) {
 
 Projecting along an axis, the image axes are the two others in order (along z: x to the right and y up; along y: x
 and z; along x: y and z). A slab `[start, start + thickness)` in box units may wrap past 1; the whole box is the
-default. For a grid, the cells whose centres are in the slab are used.
+default. For a grid, the cells whose positions are in the slab are used (FML's cells are at i / Nmesh, as in the
+assignment and the Fourier transforms), and pixel (ix, iy) of the image is the cell at (ix, iy) / Nmesh.
 
 The writers are not collective: call them on one task. The PNGs are a few times larger than with zlib at its best
 setting; colour-mapped fields compress well (a 512^2 density map is about 0.2-0.5 MB).
+
+## In SimulationCode and the SnapshotAnalyzer
+
+`images = true` draws fields at every output (`image_<field>_z<z>.png`): the density, the velocity divergence, the
+neutrinos, baryons - CDM and the fifth force (SimulationCode), with the settings `images_*` of FML/Analysis/Images.h.
+See SimulationCode/ANALYSIS.md.
 
 ## Example and tests
 

@@ -906,6 +906,31 @@ bispectrum_shell_overlap_weights = false
 bispectrum_density_assignment_method = "PCS"
 
 ------------------------------------------------------------
+-- Images: PNG pictures of fields at every output, image_<field>_z<z>.png
+-- in the snapshot folder (see ANALYSIS.md). A slab of the field
+-- projected along an axis (the mean over the slab)
+------------------------------------------------------------
+-- Draw the images when we output?
+images = false
+-- The fields: density, velocity_divergence, baryons_minus_cdm (particle_baryons),
+-- neutrinos (neutrino particles or linear neutrinos), fifth_force (|F_5th| / |F_Newton|)
+images_fields = {"density"}
+-- Grid size of the fields and pixels per side of the images (0: the grid size)
+images_nmesh = 256
+images_npix = 0
+-- Projected along this axis (0, 1, 2), the slab centre and thickness in units of the box (1: the whole box)
+images_axis = 2
+images_slab_center = 0.5
+images_slab_thickness = 0.1
+-- Density assignment method: NGP, CIC, TSC, PCS, PQS
+images_density_assignment_method = "CIC"
+-- Colour map for all fields (magma, inferno, viridis, plasma, cividis, coolwarm, grey, cubehelix; _r
+-- reverses). "": each field its own
+images_colormap = ""
+-- Also write the projected values as .npy files (for numpy)
+images_npy = false
+
+------------------------------------------------------------
 -- Hybrid bias (Lagrangian bias basis) spectra
 -- The cross spectra P_ab(k) of the operators 1, delta_L, delta_L^2, s^2
 -- and nabla^2 delta_L (delta_L is the linear field of the IC scaled to the

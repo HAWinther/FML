@@ -5,6 +5,7 @@
 #include <FML/Analysis/DTFE.h>
 #include <FML/Analysis/Halos.h>
 #include <FML/Analysis/HybridBias.h>
+#include <FML/Analysis/Images.h>
 #include <FML/Analysis/Output.h>
 #include <FML/Analysis/ParticleUtils.h>
 #include <FML/Analysis/PowerSpectrum.h>

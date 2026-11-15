@@ -563,6 +563,7 @@ void NBodySimulation<NDIM, T>::analyze_and_output(int ioutput, double redshift) 
          [&]() { compute_power_spectrum_multipoles(*this, redshift, snapshot_folder); }},
         {"FOF", params.fof.enabled, [&]() { compute_fof_halos(*this, redshift, snapshot_folder); }},
         {"Bispectrum", params.bispectrum.enabled, [&]() { compute_bispectrum(*this, redshift, snapshot_folder); }},
+        {"Images", params.images.enabled, [&]() { output_images(*this, redshift, snapshot_folder); }},
         {"Hybrid bias spectra",
          params.hybridbias.enabled,
          [&]() { compute_hybrid_bias_spectra(*this, redshift, snapshot_folder); }},

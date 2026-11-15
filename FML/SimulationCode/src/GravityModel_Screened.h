@@ -388,6 +388,45 @@ class GravityModelScreened : public GravityModel<NDIM> {
         FML::NBODY::compute_delta_fifth_force<NDIM>(density_fourier, density_fifth_force, coupling);
     }
 
+    /// For the images: delta_FF as in compute_force (the same method at the same redshift). The exact solver starts
+    /// from scratch on the image grid and leaves its starting point for the next step as it was
+    double fifth_force_density_for_output(double a,
+                                          double H0Box,
+                                          FFTWGrid<NDIM> & density_fourier,
+                                          FFTWGrid<NDIM> & density_fifth_force) const override {
+        const double norm_poisson_equation = 1.5 * this->cosmo->get_OmegaM() * a;
+        const double newton = newtonian_factor(a);
+        auto coupling = [&](double kBox) { return this->GeffOverG(a, kBox / H0Box) - newton; };
+        const bool before_start =
+            solve_exact_equation and multigrid_start_redshift >= 0.0 and 1.0 / a - 1.0 > multigrid_start_redshift;
+        if (before_start and not multigrid_linear_before_start) {
+            // No fifth force yet
+            FML::NBODY::compute_delta_fifth_force<NDIM>(density_fourier, density_fifth_force, [](double) {
+                return 0.0;
+            });
+        } else if (before_start) {
+            compute_linear_fifth_force(coupling, density_fourier, density_fifth_force);
+        } else if (solve_exact_equation) {
+            auto previous_solution = std::move(multigrid_previous_solution);
+            const double previous_a = multigrid_previous_a;
+            multigrid_previous_solution = FFTWGrid<NDIM>();
+            multigrid_previous_a = -1.0;
+            compute_exact_fifth_force(a, H0Box, norm_poisson_equation, density_fourier, density_fifth_force);
+            multigrid_previous_solution = std::move(previous_solution);
+            multigrid_previous_a = previous_a;
+        } else if (use_screening_method) {
+            compute_screened_fifth_force_blended(a,
+                                                 H0Box,
+                                                 norm_poisson_equation,
+                                                 coupling,
+                                                 density_fourier,
+                                                 density_fifth_force);
+        } else {
+            compute_linear_fifth_force(coupling, density_fourier, density_fifth_force);
+        }
+        return newton;
+    }
+
     //========================================================================
     // Compute the force DPhi from the density field delta in fourier space
     // We compute this from D^2 Phi_GR = norm_poisson_equation * delta and the fifth force delta_FF

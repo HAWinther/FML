@@ -31,6 +31,15 @@
 namespace FML {
     namespace VISUALIZATION {
         namespace detail {
+            /// The position of cell i of an nmesh grid along an axis (box units): FML's cells are at i / nmesh (the
+            /// assignment and the Fourier transforms), at (i + 1/2) / nmesh with -DCELLCENTERSHIFTED
+            inline double cell_position(int i, int nmesh) {
+#ifdef CELLCENTERSHIFTED
+                return (i + 0.5) / nmesh;
+#else
+                return double(i) / nmesh;
+#endif
+            }
             /// Is the coordinate x (box units, in [0,1)) in the periodic slab [start, start + thickness)?
             inline bool in_slab(double x, double start, double thickness) {
                 if (thickness >= 1.0)
@@ -51,8 +60,9 @@ namespace FML {
         } // namespace detail
 
         /// A projection of a real-space grid (FFTWGrid<N> or PencilGrid<N>, N = 2 or 3) along an axis: the sum or the
-        /// mean (average = true) over the cells whose centre is in the slab. An Nmesh x Nmesh image. For N = 2 the
-        /// image is the grid itself (axis and slab are ignored). Collective
+        /// mean (average = true) over the cells whose position (cell_position: i / Nmesh) is in the slab. An Nmesh x
+        /// Nmesh image: pixel (ix, iy) is the cell at (ix, iy) / Nmesh. For N = 2 the image is the grid itself (axis
+        /// and slab are ignored). Collective
         template <int N, template <int> class Grid>
         Image project_grid(const Grid<N> & grid,
                            int axis = N - 1,
@@ -75,10 +85,10 @@ namespace FML {
             if (N == 3) {
                 ncells = 0;
                 for (int i = 0; i < nmesh; i++)
-                    if (detail::in_slab((i + 0.5) / nmesh, slab_start, slab_thickness))
+                    if (detail::in_slab(detail::cell_position(i, nmesh), slab_start, slab_thickness))
                         ncells++;
                 if (ncells == 0)
-                    throw std::runtime_error("[FML::VISUALIZATION::project_grid] No cell centre is in the slab: "
+                    throw std::runtime_error("[FML::VISUALIZATION::project_grid] No cell is in the slab: "
                                              "make it thicker than a cell");
             }
 
@@ -87,7 +97,8 @@ namespace FML {
                 auto coord = grid.get_coord_from_index(index);
                 for (int d = 0; d < N; d++)
                     coord[d] += int(offset[d]);
-                if (N == 3 and not detail::in_slab((coord[axis] + 0.5) / nmesh, slab_start, slab_thickness))
+                if (N == 3 and
+                    not detail::in_slab(detail::cell_position(coord[axis], nmesh), slab_start, slab_thickness))
                     continue;
                 image(coord[ax[0]], coord[ax[1]]) += double(grid.get_real_from_index(index));
             }

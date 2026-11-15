@@ -9,6 +9,7 @@
 #include <FML/Analysis/Baryonification.h>
 #include <FML/Analysis/Halos.h>
 #include <FML/Analysis/HybridBias.h>
+#include <FML/Analysis/Images.h>
 #include <FML/Analysis/ParticleUtils.h>
 #include <FML/Analysis/PowerSpectrum.h>
 #include <FML/Analysis/Voids.h>
@@ -847,6 +848,83 @@ int main() {
                         FML::TESTS::throws<std::runtime_error>([&] { bad_mink.validate(); }) and
                         FML::TESTS::throws<std::runtime_error>([&] { bad_range.validate(); }),
                     "cosmic-web and Minkowski settings checks");
+    }
+
+    //=========================================================================
+    // Images: the velocity divergence of a known velocity field, the density of a lattice, the files
+    //=========================================================================
+    {
+        // Particles on the cells of a 32^3 lattice (at x = i / 32, no assignment window) with v_x = A sin(2 pi x) and
+        // v_y = B cos(4 pi y): theta = -div v = -2 pi A cos(2 pi x) + 4 pi B sin(4 pi y)
+        const int n = 32;
+        const double A = 0.01, B = 0.02;
+        std::vector<Particle> lattice;
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++)
+                for (int k = 0; k < n; k++) {
+                    const double x = double(i) / n, y = double(j) / n, z = double(k) / n;
+                    if (x < FML::xmin_domain or x >= FML::xmax_domain)
+                        continue;
+                    lattice.push_back({{x, y, z}, {A * std::sin(2 * M_PI * x), B * std::cos(4 * M_PI * y), 0.0}, 1.0});
+                }
+        AN::ImageSettings settings;
+        settings.nmesh = n;
+        settings.slab_thickness = 1.0;
+        settings.fields = {"density", "velocity_divergence"};
+        const auto theta = AN::project_image(
+            AN::particle_velocity_divergence<AN::AnalysisGrid<3>>(lattice.data(), lattice.size(), n, "CIC", 1.0),
+            settings);
+        double maxerr = 0.0;
+        for (int ix = 0; ix < n; ix++)
+            for (int iy = 0; iy < n; iy++) {
+                const double x = double(ix) / n, y = double(iy) / n;
+                const double expected =
+                    -2 * M_PI * A * std::cos(2 * M_PI * x) + 4 * M_PI * B * std::sin(4 * M_PI * y);
+                maxerr = std::max(maxerr, std::abs(theta(ix, iy) - expected));
+            }
+        check_local(maxerr < 1e-9 * 4 * M_PI * B,
+                    "images: the velocity divergence of a sine velocity field (max error " + num(maxerr) + ")");
+        // TSC (extra slices on both sides): the weights 1/8, 3/4, 1/8 of the lattice points smooth v by the window
+        // 3/4 + cos(k / 32) / 4 of each mode
+        const auto theta_tsc = AN::project_image(
+            AN::particle_velocity_divergence<AN::AnalysisGrid<3>>(lattice.data(), lattice.size(), n, "TSC", 1.0),
+            settings);
+        const double w1 = 0.75 + 0.25 * std::cos(2 * M_PI / n), w2 = 0.75 + 0.25 * std::cos(4 * M_PI / n);
+        maxerr = 0.0;
+        for (int ix = 0; ix < n; ix++)
+            for (int iy = 0; iy < n; iy++) {
+                const double x = double(ix) / n, y = double(iy) / n;
+                const double expected =
+                    -2 * M_PI * A * w1 * std::cos(2 * M_PI * x) + 4 * M_PI * B * w2 * std::sin(4 * M_PI * y);
+                maxerr = std::max(maxerr, std::abs(theta_tsc(ix, iy) - expected));
+            }
+        check_local(maxerr < 1e-9 * 4 * M_PI * B,
+                    "images: the velocity divergence with TSC (window 3/4 + cos(k h) / 4; max error " + num(maxerr) +
+                        ")");
+        const auto density = AN::project_image(
+            AN::particle_density_contrast<AN::AnalysisGrid<3>>(lattice.data(), lattice.size(), n, "CIC"), settings);
+        check_local(std::abs(density.min()) < 1e-12 and std::abs(density.max()) < 1e-12,
+                    "images: the density contrast of a lattice is 0");
+        settings.npix = 48;
+        settings.npy = true;
+        const auto resized = AN::project_image(
+            AN::particle_density_contrast<AN::AnalysisGrid<3>>(lattice.data(), lattice.size(), n, "CIC"), settings);
+        const auto file = AN::write_field_image(".", "density", 0.5, resized, settings);
+        bool ok = resized.nx == 48 and file == "./image_density_z0.500.png";
+        if (FML::ThisTask == 0) {
+            ok = ok and std::ifstream(file).good() and std::ifstream("./image_density_z0.500.npy").good();
+            std::remove(file.c_str());
+            std::remove("./image_density_z0.500.npy");
+        }
+        check_local(ok, "images: image_<field>_z<z>.png and .npy written (resized to images_npix)");
+        bool threw = false;
+        try {
+            settings.fields = {"neutrinos"};
+            settings.check_fields({"density", "velocity_divergence"});
+        } catch (const std::exception &) {
+            threw = true;
+        }
+        check_local(threw, "images: a field that is not available is an error");
     }
 
     return FML::TESTS::summary("Analysis");

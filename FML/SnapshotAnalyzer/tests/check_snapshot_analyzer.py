@@ -277,6 +277,8 @@ def main():
         'baryonification': True, 'baryonification_output_particles': True, 'baryonification_baryon_fraction': 0.16,
         'baryonification_fof_buffer_mpch': 5.0, 'baryonification_max_radius_over_r200': SUPPORT,
         'voids': True, 'spherical_voids': True, 'void_nmesh': 64,
+        'images': True, 'images_fields': ['density', 'velocity_divergence'], 'images_nmesh': 32,
+        'images_slab_thickness': 1.0, 'images_npy': True,
     }
     if have_cgal:
         base.update({'zobov_voids': True, 'dtfe': True, 'dtfe_nmesh': 32, 'dtfe_buffer_fraction': 1.0})
@@ -284,7 +286,8 @@ def main():
              'minkowski_z0.000.txt', 'halos_z0.000.txt', 'massfunc_z0.000.txt',
              'massfunc_so200m_z0.000.txt', 'massfunc_so200c_z0.000.txt', 'massfunc_sovir_z0.000.txt',
              'baryonification_z0.000.txt', 'pofk_baryonified_z0.000.txt', 'voids_z0.000.txt',
-             'voids_spherical_z0.000.txt'] + (['voids_zobov_z0.000.txt', 'dtfe_spectra_z0.000.txt'] if have_cgal else [])
+             'voids_spherical_z0.000.txt', 'image_density_z0.000.png', 'image_density_z0.000.npy',
+             'image_velocity_divergence_z0.000.png'] + (['voids_zobov_z0.000.txt', 'dtfe_spectra_z0.000.txt'] if have_cgal else [])
 
     runs = [(n, 'files_per_task') for n in tasks] + [(max(tasks), 'all_tasks')]
     results = {}
@@ -315,6 +318,8 @@ def main():
         for f in ['pofk_z0.000.txt', 'pofk_multipole_z0.000.txt', 'bispectrum_z0.000.txt', 'cosmicweb_z0.000.txt',
                   'minkowski_z0.000.txt', 'pofk_baryonified_z0.000.txt', 'baryonification_z0.000.txt']:
             check(same(sorted_rows(ref / f), sorted_rows(d / f), 1e-6), f'{name}: {f} as {ref_name}')
+        for f in ['image_density_z0.000.npy', 'image_velocity_divergence_z0.000.npy']:
+            check(same(np.load(ref / f), np.load(d / f), 1e-6), f'{name}: {f} as {ref_name}')
         # Voids: the same voids (see same_voids)
         for f in ['voids_z0.000.txt', 'voids_spherical_z0.000.txt']:
             check(same_voids(table(ref / f), table(d / f)), f'{name}: {f} as {ref_name}')
@@ -332,6 +337,18 @@ def main():
           np.allclose(B, B.transpose(1, 0, 2), rtol=1e-6, atol=1e-6 * np.abs(B).max()),
           'bispectrum: B and N symmetric under permutations of (k1, k2, k3)')
     check(B[1, 1, 1] > 0, f'bispectrum: positive equilateral B on large scales (clustered snapshot) ({B[1, 1, 1]:.4g})')
+
+    # Images: valid PNGs; the density projected through the box is largest at a blob and low at the hole
+    for f in ['image_density_z0.000.png', 'image_velocity_divergence_z0.000.png']:
+        data = (ref / f).read_bytes()
+        width, height = struct.unpack('>II', data[16:24])
+        check(data[:8] == b'\x89PNG\r\n\x1a\n' and (width, height) == (32, 32), f'images: {f} is a 32x32 PNG')
+    img = np.load(ref / 'image_density_z0.000.npy')  # (y, x), row 0 the bottom
+    iy, ix = np.unravel_index(np.argmax(img), img.shape)
+    at_blob = any(abs((ix + 0.5) * BOX / 32 - c[0]) < 4 and abs((iy + 0.5) * BOX / 32 - c[1]) < 4 for c, _ in BLOBS)
+    hole = img[int(HOLE_CENTER[1] / BOX * 32), int(HOLE_CENTER[0] / BOX * 32)]
+    check(at_blob and hole < np.median(img), f'images: the density is largest at a blob ({ix}, {iy}) and low at the '
+                                            f'hole ({hole:.3f} < median {np.median(img):.3f})')
 
     # Cosmic web: the fractions sum to 1, more voids and fewer knots for a higher threshold
     w = table(ref / 'cosmicweb_z0.000.txt')

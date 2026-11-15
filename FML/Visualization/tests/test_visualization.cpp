@@ -27,7 +27,7 @@ namespace {
         Image image(nmesh, nmesh);
         int ncells = 0;
         for (int i = 0; i < nmesh; i++) {
-            double d = (i + 0.5) / nmesh - start;
+            double d = double(i) / nmesh - start; // the cells are at i / nmesh
             d -= std::floor(d);
             if (thickness >= 1.0 or d < thickness) {
                 ncells++;

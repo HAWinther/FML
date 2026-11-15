@@ -122,6 +122,20 @@ maps (zero outside, zero mean inside) are the full sky maps restricted to the oc
 pseudo-C_ell divided by fsky (without USE_HEALPIX: the maps are an error when reading the parameters). Run the tests
 separately by naming them after the outdir.
 
+## Images (`check_images.py`)
+
+```bash
+python3 tests/check_images.py ./nbody /tmp/images   # about 15 s, needs numpy
+```
+
+32^3 particles in 256 Mpc/h, `images = true`. The PNG files are valid (chunk CRCs, zlib stream, size) with their
+`.npy`. `velocity_divergence` = f delta below 3 k_f to 2-4% (f = Omega_m(z)^0.55) at z = 1 and 0; `baryons_minus_cdm`
+is small compared to delta; the linear `neutrinos` are delta_cb T_nu / T_cb (in (0, 1], falling with k) and the
+neutrino particles follow delta_cb on large scales. `fifth_force` in f(R) (|fR0| = 1e-5): |F_5| / |F_N| in [0, 0.5),
+and with approximate screening and the exact solver it is smaller relative to the linear run in the densest pixels
+(0.65 and 0.85) than in the empty half (0.92 and 0.98). The P(k) of the exact solver are the same with and without
+the images. Errors: `fifth_force` in GR, `baryons_minus_cdm` without baryons, an unknown field.
+
 ## Initial conditions (`check_initial_conditions.py`)
 
 ```bash

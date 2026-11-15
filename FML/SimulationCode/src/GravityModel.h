@@ -473,6 +473,23 @@ class GravityModel {
                                          options);
     }
 
+    /// Does the model have a fifth force to draw (images_fields = fifth_force)? Every model but GR
+    virtual bool has_fifth_force_field() const { return get_name() != "GR"; }
+
+    /// For the images (OutputImages.h): the fifth-force density delta_FF(k) of the density delta(k) (Fourier space),
+    /// defined as in the force: D^2 Phi = 1.5 OmegaM a (newton delta + delta_FF), so the Newtonian force comes from
+    /// newton delta and the fifth force from delta_FF. Returns newton. The default is linear theory, delta_FF =
+    /// (G_eff/G(a, k) - 1) delta; screened models override it with the same method as their force
+    virtual double fifth_force_density_for_output(double a,
+                                                  double H0Box,
+                                                  FFTWGrid<NDIM> & density_fourier,
+                                                  FFTWGrid<NDIM> & density_fifth_force) const {
+        FML::NBODY::compute_delta_fifth_force<NDIM>(density_fourier, density_fifth_force, [&](double kBox) {
+            return GeffOverG_force(a, kBox / H0Box) - 1.0;
+        });
+        return 1.0;
+    }
+
     // Model-owned split. The resolved remainder keeps arbitrary future Geff(k,a) models intact:
     // mu_long = mu_true - mu_pair + mu_pair_long. For an exact Yukawa model the remainder is zero.
     void compute_force_for_step(double a,

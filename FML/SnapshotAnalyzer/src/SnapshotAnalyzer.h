@@ -12,6 +12,7 @@
 #include <FML/Analysis/DTFE.h>
 #include <FML/Analysis/Halos.h>
 #include <FML/Analysis/HybridBias.h>
+#include <FML/Analysis/Images.h>
 #include <FML/Analysis/Minkowski.h>
 #include <FML/Analysis/Output.h>
 #include <FML/Analysis/ParticleUtils.h>
@@ -194,6 +195,8 @@ namespace FML {
             FML::ANALYSIS::ZobovSettings zobov_settings;
             bool dtfe{false};
             FML::ANALYSIS::DTFESettings dtfe_settings;
+            bool images{false};
+            FML::ANALYSIS::ImageSettings image_settings;
 
             explicit AnalyzerOptions(FML::FILEUTILS::LuaFileParser & lua) {
                 LuaReader r(lua);
@@ -233,6 +236,8 @@ namespace FML {
                 r.read(zobov_settings);
                 get("dtfe", dtfe);
                 r.read(dtfe_settings);
+                get("images", images);
+                r.read(image_settings);
                 r.check_names();
                 validate();
             }
@@ -261,10 +266,10 @@ namespace FML {
                     throw std::runtime_error("cosmology_Omega_r must be >= 0");
                 if (not pofk and not pofk_multipole and not bispectrum and not hybridbias and not cosmicweb and
                     not minkowski and not fof and not voids and not spherical_voids and not zobov_voids and not dtfe and
-                    not baryonification)
+                    not baryonification and not images)
                     throw std::runtime_error("Enable at least one analysis: pofk, pofk_multipole, bispectrum, "
                                              "hybridbias, cosmicweb, minkowski, fof, baryonification, voids, "
-                                             "spherical_voids, zobov_voids or dtfe");
+                                             "spherical_voids, zobov_voids, dtfe or images");
                 if (pofk or baryonification)
                     pofk_settings.validate();
                 if (pofk_multipole)
@@ -292,6 +297,11 @@ namespace FML {
                     zobov_settings.validate();
                 if (dtfe)
                     dtfe_settings.validate();
+                if (images) {
+                    image_settings.validate();
+                    image_settings.check_fields({"density", "velocity_divergence"},
+                                                " (the other fields need a simulation: SimulationCode)");
+                }
 #ifndef USE_CGAL
                 if (zobov_voids or dtfe)
                     throw std::runtime_error("zobov_voids and dtfe need a USE_CGAL=true build");
@@ -332,6 +342,8 @@ namespace FML {
                     find_zobov_voids();
                 if (options.dtfe)
                     analyze_dtfe();
+                if (options.images)
+                    make_images();
                 // Last: it moves the particles
                 if (options.baryonification)
                     baryonify_snapshot();
@@ -521,6 +533,31 @@ namespace FML {
                                                   {{"modes", [&](int i) { return pofk.count[i]; }}});
                 if (FML::ThisTask == 0)
                     std::cout << "P(k) written: " << filename << "\n";
+            }
+
+            /// images = true: image_<field>_z<z>.png of the density and the velocity divergence (FML/Analysis/Images.h)
+            void make_images() {
+                const auto & s = options.image_settings;
+                using Grid = ANALYSIS::AnalysisGrid<3>;
+                auto * part = mpiparticles.get_particles_ptr();
+                const size_t npart = mpiparticles.get_npart();
+                if (s.wants("density")) {
+                    auto delta = ANALYSIS::particle_density_contrast<Grid>(part, npart, s.nmesh,
+                                                                           s.density_assignment_method);
+                    auto image = ANALYSIS::project_image(delta, s);
+                    for (auto & v : image.data)
+                        v += 1.0;
+                    ANALYSIS::write_field_image(options.output_folder, "density", context.redshift(), image, s);
+                }
+                if (s.wants("velocity_divergence")) {
+                    auto theta = ANALYSIS::particle_velocity_divergence<Grid>(
+                        part, npart, s.nmesh, s.density_assignment_method, context.velocity_to_displacement());
+                    ANALYSIS::write_field_image(options.output_folder,
+                                                "velocity_divergence",
+                                                context.redshift(),
+                                                ANALYSIS::project_image(theta, s),
+                                                s);
+                }
             }
 
             void measure_bispectrum() {

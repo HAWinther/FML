@@ -97,6 +97,10 @@ and output files as SimulationCode, so the two give the same result for the same
 - DTFE density contrast, peculiar velocity (km/s), divergence and vorticity (km/s per Mpc/h) spectra when built with
   CGAL (`dtfe_spectra_z<z>.txt`); optionally the fields as one text file per MPI task
   (`dtfe_fields_z<z>.rank<NNNNN>.txt`).
+- Images (`images = true`): PNG pictures of a slab of the density (1 + delta) and the velocity divergence
+  (-div v / (a H) = f delta in linear theory) projected along an axis, `image_density_z<z>.png` and
+  `image_velocity_divergence_z<z>.png` (and `.npy` with `images_npy`), as SimulationCode's images (the same keys;
+  the other fields of SimulationCode need a simulation). See FML/Analysis/Images.h and FML/Visualization.
 - Position-only baryonification with M200c hosts around FoF halos and the FML finite-support profile transport:
   the host catalogue (`baryonification_z<z>.txt`), P(k) before and after (`pofk_baryonified_z<z>.txt`) and, with
   `baryonification_output_particles = true`, the corrected Gadget snapshot (`gadget_baryonified_z<z>.*`).
@@ -145,6 +149,17 @@ bispectrum_density_assignment_method = "CIC"
 bispectrum_interlacing = true
 bispectrum_subtract_shotnoise = false
 bispectrum_shell_overlap_weights = false -- weight the cells by their overlap with the shells
+
+images = false
+images_fields = {"density"} -- and "velocity_divergence"
+images_nmesh = 256
+images_npix = 0 -- pixels per side (0: images_nmesh)
+images_axis = 2
+images_slab_center = 0.5 -- units of the box
+images_slab_thickness = 0.1 -- units of the box (1: the whole box)
+images_density_assignment_method = "CIC"
+images_colormap = "" -- "": magma for the density, coolwarm for the velocity divergence
+images_npy = false
 
 hybridbias = false
 hybridbias_nmesh = 128

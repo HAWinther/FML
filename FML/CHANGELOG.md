@@ -5,6 +5,21 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Images of fields at the outputs (SimulationCode and SnapshotAnalyzer)
+- `images = true` writes PNG pictures (and with `images_npy` the values as .npy) of a slab of fields projected along an
+  axis, `image_<field>_z<z>.png` in the snapshot folder, with FML/Visualization (no dependencies). Fields: `density`,
+  `velocity_divergence` (-div v / (a H) = f delta in linear theory), `baryons_minus_cdm`, `neutrinos` (particles, or
+  linear on top of delta_cb) and `fifth_force` (|F_5th| / |F_Newton| with the model's own screening method or exact
+  solver, whose state for the next step is kept). Settings `images_*` (grid, pixels, axis, slab, assignment, colour
+  map) in `FML/Analysis/Images.h`, shared with the SnapshotAnalyzer (density and velocity divergence of snapshots).
+  New `GravityModel::fifth_force_density_for_output`. Tests: `SimulationCode/tests/check_images.py` (nightly; theta =
+  f delta on large scales to 2-4%, neutrinos, f(R) screening in dense regions, unchanged P(k), errors, slabs and
+  pencils), the velocity divergence of a known field (`Analysis/tests`), the SnapshotAnalyzer images.
+- `FML/Visualization`: the projection of a grid uses FML's cell positions i / Nmesh (it took (i + 1/2) / Nmesh, half a
+  cell off the assignment); pixel (ix, iy) is the cell at (ix, iy) / Nmesh.
+- `bispectrum_shell_overlap_weights` is `always_optional` (runs with `all_parameters_must_be_in_file = true` and
+  `bispectrum = true` needed it in the parameter file).
+
 ### Polyspectra: optional shell overlap weights
 - `PolyspectrumBinning::shell_overlap_weights` (off by default; `polyspectrum_shell_overlap_weights_default` sets it
   for new binnings): each Fourier cell is weighted by the exact fraction of its volume inside the shell instead of 0/1

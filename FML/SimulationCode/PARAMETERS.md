@@ -366,6 +366,21 @@ Parameters marked *optional* take the default value if they are not in the param
 | `hybridbias_zeldovich_cv_beta_dk` | double | `0.167` | hybridbias = true | The width dk (h/Mpc) of beta(k) of the Zel'dovich control variate (see hybridbias_zeldovich_cv_beta_k0) |
 | `hybridbias_oneloop_kernels` | string | `"EdS"` | hybridbias = true | The kernels of the one-loop prediction. EdS: the Einstein-de Sitter kernels with the linear P(k) of the gravity model. model: the scale- and time-dependent LPT kernels of the gravity model (f(R) and DGP with their screening if gravity_model_screening, the other models from G_eff(k,a) without screening, LCDM for GR). Options: `EdS`, `model` |
 
+## Images
+
+| Parameter | Type | Default | Used when | Description |
+|---|---|---|---|---|
+| `images` | bool | `false` | always | Draw PNG images of fields at every output: a slab projected along an axis (image_<field>_z<z>.png in the snapshot folder) |
+| `images_fields` | string list | `{density}` | images = true | The fields to draw, e.g. {"density", "velocity_divergence"}: density (1 + delta of the particles, log colours), velocity_divergence (-div v / (a H) = f delta in linear theory); SimulationCode also neutrinos (delta_nu), baryons_minus_cdm (delta_b - delta_c) and fifth_force (|F_5th| / |F_Newton|) |
+| `images_nmesh` | int | `256` | images = true | Grid size of the fields |
+| `images_npix` | int | `0` | images = true | Pixels per side of the images (0: nmesh) |
+| `images_axis` | int | `2` | images = true | Projected along this axis (0, 1, 2: x, y, z) |
+| `images_slab_center` | double | `0.5` | images = true | Centre of the projected slab along the axis (units of the box) |
+| `images_slab_thickness` | double | `0.1` | images = true | Thickness of the projected slab (units of the box; 1: the whole box). The image is the mean over it |
+| `images_density_assignment_method` | string | `"CIC"` | images = true | Density assignment method (NGP, CIC, TSC, PCS, PQS) |
+| `images_colormap` | string | `""` | images = true | Colour map for all fields (magma, inferno, viridis, plasma, cividis, coolwarm, grey, cubehelix; _r reverses). Empty: each field its own (density magma, signed fields coolwarm) |
+| `images_npy` | bool | `false` | images = true | Also write the projected values as .npy files (for numpy) |
+
 ## Options with separate particle species
 
 Not everything is implemented yet for CDM and baryons as separate particles (`particle_baryons`) and for neutrino particles (`particle_neutrinos`). The code stops with a message if one of these is not satisfied (generated from `species_requirements()` in `src/SimulationParameters.h`):

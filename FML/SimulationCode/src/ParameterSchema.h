@@ -269,6 +269,8 @@ namespace SIMCODE {
             BispectrumSettings{}.fields(fields);
             b.section("Hybrid bias spectra");
             HybridBiasSettings{}.fields(fields);
+            b.section("Images");
+            ImagesSettings{}.fields(fields);
             return b.specs;
         }();
         return schema;
