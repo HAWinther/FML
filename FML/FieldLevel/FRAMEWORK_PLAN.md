@@ -323,3 +323,18 @@ error ratios are 0.585/0.560/0.290 with correlations 0.816/0.834/0.969. The orig
 80-iteration attempts were interrupted for runtime; criteria are unchanged.
 No force law, posterior, sampler or optimizer is changed. The original and dense
 18-mode studies remain preserved. Broad PM calibration and item 52 remain open.
+
+## Particle-sampled PM force reference (15 November 2026)
+
+[The controlled forward study](pm_force_reference_validation/RESULTS.md) extends strong91 to
+N64/96/128 on M32 and M64, with a N128/M64 timestep check. Particle corrections
+N96→N128 are 0.0648%/0.0424% in observed-band density; the N128 time correction
+is 0.0119%. Force M32→M64 at N128 still changes density by 3.7749% and 0.1063
+noise SD per observed degree, retaining the failed 0.1-noise criterion. The density
+force-grid difference is stable across particle loads. This establishes a better
+sampled finite reference in the tested band, not an exact continuum solution.
+A forward-only validation CLI avoids adjoint/MAP cost, preserving original full-mode
+outputs bitwise; serial/MPI/sanitizer, N128 backend and launcher cleanup checks pass.
+No production physics is changed. Posterior-gradient failures and unconverged MAP
+remain open; next compare explicit force/assignment-window choices against this
+controlled setup. Item 52 remains open.

@@ -48,6 +48,10 @@ A [wider 122-mode study](pm_nonlinear_validation/RESULTS.md) now finds remaining
 force-grid sensitivity at greater mode support/strength, while particle/time,
 derivative and backend checks pass. It also tests fixed-parameter reconstruction
 from finer-grid data; bounded MAP diagnostics are distinct from posterior coverage.
+A [particle-sampled force reference](pm_force_reference_validation/RESULTS.md) now
+shows that the observed density's force-grid sensitivity persists at N128, while
+particle and time corrections are small. This forward-only check leaves the
+posterior-gradient and optimizer issues open.
 
 ## BAO application (prototype)
 

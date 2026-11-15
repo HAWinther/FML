@@ -1,0 +1,536 @@
+{
+  "passed": false,
+  "consistency_passed": true,
+  "checks": [
+    {
+      "check": "independent observed degrees",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "frozen input reference.data.csv",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "frozen input reference.initial.csv",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "matched physical initial 64-32-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite supported density 64-32-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite complete metadata 64-32-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "mass/momentum conservation 64-32-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "same frozen data 64-32-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "no gradient output in forward-only mode 64-32-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "matched physical initial 96-32-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite supported density 96-32-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite complete metadata 96-32-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "mass/momentum conservation 96-32-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "same frozen data 96-32-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "no gradient output in forward-only mode 96-32-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "matched physical initial 128-32-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite supported density 128-32-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite complete metadata 128-32-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "mass/momentum conservation 128-32-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "same frozen data 128-32-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "no gradient output in forward-only mode 128-32-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "matched physical initial 64-64-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite supported density 64-64-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite complete metadata 64-64-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "mass/momentum conservation 64-64-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "same frozen data 64-64-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "no gradient output in forward-only mode 64-64-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "matched physical initial 96-64-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite supported density 96-64-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite complete metadata 96-64-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "mass/momentum conservation 96-64-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "same frozen data 96-64-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "no gradient output in forward-only mode 96-64-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "matched physical initial 128-64-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite supported density 128-64-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite complete metadata 128-64-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "mass/momentum conservation 128-64-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "same frozen data 128-64-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "no gradient output in forward-only mode 128-64-32",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "matched physical initial 128-64-64",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite supported density 128-64-64",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite complete metadata 128-64-64",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "mass/momentum conservation 128-64-64",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "same frozen data 128-64-64",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "no gradient output in forward-only mode 128-64-64",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "particles-M32 last field <5%",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "particles-M32 last discrepancy <0.1 noise SD",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "particles-M32 improving particle correction",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "particles-M64 last field <5%",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "particles-M64 last discrepancy <0.1 noise SD",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "particles-M64 improving particle correction",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "force-N128 last field <5%",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "force-N128 last discrepancy <0.1 noise SD",
+      "passed": false,
+      "kind": "accuracy"
+    },
+    {
+      "check": "time-N128-M64 last field <5%",
+      "passed": true,
+      "kind": "accuracy"
+    },
+    {
+      "check": "time-N128-M64 last discrepancy <0.1 noise SD",
+      "passed": true,
+      "kind": "accuracy"
+    }
+  ],
+  "convergence": {
+    "particles-M32": {
+      "reference": "128-32-32",
+      "rows": [
+        {
+          "case": "64-32-32",
+          "resolution": 64,
+          "field_error": 0.003371452308241145,
+          "noise_rms_units": 0.0091733193686899
+        },
+        {
+          "case": "96-32-32",
+          "resolution": 96,
+          "field_error": 0.0006477430767953308,
+          "noise_rms_units": 0.001762431607819854
+        },
+        {
+          "case": "128-32-32",
+          "resolution": 128,
+          "field_error": 0.0,
+          "noise_rms_units": 0.0
+        }
+      ]
+    },
+    "particles-M64": {
+      "reference": "128-64-32",
+      "rows": [
+        {
+          "case": "64-64-32",
+          "resolution": 64,
+          "field_error": 0.003643456727002762,
+          "noise_rms_units": 0.010260444989879536
+        },
+        {
+          "case": "96-64-32",
+          "resolution": 96,
+          "field_error": 0.00042373886217846653,
+          "noise_rms_units": 0.0011933033959848664
+        },
+        {
+          "case": "128-64-32",
+          "resolution": 128,
+          "field_error": 0.0,
+          "noise_rms_units": 0.0
+        }
+      ]
+    },
+    "force-N128": {
+      "reference": "128-64-32",
+      "rows": [
+        {
+          "case": "128-32-32",
+          "resolution": 32,
+          "field_error": 0.037749086759513974,
+          "noise_rms_units": 0.10630630665752641
+        },
+        {
+          "case": "128-64-32",
+          "resolution": 64,
+          "field_error": 0.0,
+          "noise_rms_units": 0.0
+        }
+      ]
+    },
+    "time-N128-M64": {
+      "reference": "128-64-64",
+      "rows": [
+        {
+          "case": "128-64-32",
+          "resolution": 32,
+          "field_error": 0.0001192921459590651,
+          "noise_rms_units": 0.00033597566813767563
+        },
+        {
+          "case": "128-64-64",
+          "resolution": 64,
+          "field_error": 0.0,
+          "noise_rms_units": 0.0
+        }
+      ]
+    }
+  },
+  "force_power": {
+    "squared_wavenumber": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      16
+    ],
+    "fractional_difference": {
+      "64": [
+        -0.01015179116480569,
+        -0.0214144954021378,
+        -0.030389042746863715,
+        -0.041039176554407586,
+        -0.05054642474283444,
+        -0.06140083809097763,
+        -0.08080004928857265,
+        -0.09021942979860098,
+        -0.1036845969962642,
+        -0.11227748264605242,
+        -0.12880128470716212,
+        -0.1279283697904614,
+        -0.1356726452301651,
+        -0.14884215978177207
+      ],
+      "96": [
+        -0.010271867124411749,
+        -0.021550244419539455,
+        -0.030307445506505548,
+        -0.041701892808385876,
+        -0.05091064014529334,
+        -0.061830342831701746,
+        -0.08067580745386649,
+        -0.09064558292531288,
+        -0.10299591884887671,
+        -0.1141159187064984,
+        -0.13097568323391895,
+        -0.1269351051351606,
+        -0.13797019503448082,
+        -0.1444019109947554
+      ],
+      "128": [
+        -0.010211639422849639,
+        -0.02147201220008088,
+        -0.03050571604292751,
+        -0.041202882067188806,
+        -0.05078755594682505,
+        -0.061636639302487306,
+        -0.0809957714359637,
+        -0.09051564002482904,
+        -0.10319975087789901,
+        -0.11182476014643328,
+        -0.12867538976321669,
+        -0.1268001801219656,
+        -0.13579812452346196,
+        -0.1469263799613626
+      ]
+    }
+  },
+  "metadata": {
+    "64-32-32": {
+      "n": 64.0,
+      "m": 32.0,
+      "steps": 32.0,
+      "seed": 91.0,
+      "power": 0.002,
+      "final": 1.0,
+      "active": 122.0,
+      "potential": -1003.270586221869,
+      "density_rms": 0.49715096327522623,
+      "diagnostic_nodes": 33.0,
+      "max_mass_error": 2.7755575615628914e-15,
+      "max_mean_momentum": 6.591949208711867e-17
+    },
+    "96-32-32": {
+      "n": 96.0,
+      "m": 32.0,
+      "steps": 32.0,
+      "seed": 91.0,
+      "power": 0.002,
+      "final": 1.0,
+      "active": 122.0,
+      "potential": -1003.1857412650518,
+      "density_rms": 0.4957847970203464,
+      "diagnostic_nodes": 33.0,
+      "max_mass_error": 2.886579864025407e-15,
+      "max_mean_momentum": 8.22387425648264e-17
+    },
+    "128-32-32": {
+      "n": 128.0,
+      "m": 32.0,
+      "steps": 32.0,
+      "seed": 91.0,
+      "power": 0.002,
+      "final": 1.0,
+      "active": 122.0,
+      "potential": -1003.193003137361,
+      "density_rms": 0.49559942112237065,
+      "diagnostic_nodes": 33.0,
+      "max_mass_error": 1.5543122344752192e-15,
+      "max_mean_momentum": 1.5959455978986625e-16
+    },
+    "64-64-32": {
+      "n": 64.0,
+      "m": 64.0,
+      "steps": 32.0,
+      "seed": 91.0,
+      "power": 0.002,
+      "final": 1.0,
+      "active": 122.0,
+      "potential": -1002.6729330296596,
+      "density_rms": 0.5515230483104657,
+      "diagnostic_nodes": 33.0,
+      "max_mass_error": 7.216449660063518e-15,
+      "max_mean_momentum": 6.396792817664476e-17
+    },
+    "96-64-32": {
+      "n": 96.0,
+      "m": 64.0,
+      "steps": 32.0,
+      "seed": 91.0,
+      "power": 0.002,
+      "final": 1.0,
+      "active": 122.0,
+      "potential": -1002.5360362813684,
+      "density_rms": 0.5466756083173319,
+      "diagnostic_nodes": 33.0,
+      "max_mass_error": 6.217248937900877e-15,
+      "max_mean_momentum": 9.663052251367103e-17
+    },
+    "128-64-32": {
+      "n": 128.0,
+      "m": 64.0,
+      "steps": 32.0,
+      "seed": 91.0,
+      "power": 0.002,
+      "final": 1.0,
+      "active": 122.0,
+      "potential": -1002.5826700745852,
+      "density_rms": 0.5428533661697232,
+      "diagnostic_nodes": 33.0,
+      "max_mass_error": 1.1324274851176597e-14,
+      "max_mean_momentum": 1.8995222061946038e-16
+    },
+    "128-64-64": {
+      "n": 128.0,
+      "m": 64.0,
+      "steps": 64.0,
+      "seed": 91.0,
+      "power": 0.002,
+      "final": 1.0,
+      "active": 122.0,
+      "potential": -1002.5798921789242,
+      "density_rms": 0.5429632873120056,
+      "diagnostic_nodes": 65.0,
+      "max_mass_error": 8.215650382226158e-15,
+      "max_mean_momentum": 2.3592239273284576e-16
+    }
+  },
+  "limits": [
+    "One strong initial-field realization, fixed IC/observed support and finite references.",
+    "Field-only test; no new adjoint/gradient, optimization, posterior or coverage validation.",
+    "Finite particle/force/time corrections do not identify an exact continuum solution or optimal numerical law."
+  ]
+}

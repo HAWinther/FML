@@ -202,11 +202,21 @@ initial-field seeds and three strength/time fixtures, with final density RMS
 M64 at N64 changes the full projected gradient by 16.3%/75.1%/60.6%. Both stronger
 fixtures also exceed the 0.1-noise-SD criterion. Derivative/backend checks pass;
 the spatial failures are retained. M64 has only one particle per force cell here,
-so additional particle refinement is needed to establish a controlled force
-reference before choosing a numerical-law correction. Refined-data MAP is a
+which motivated a controlled force-reference follow-up before choosing a
+numerical-law correction. Refined-data MAP is a
 bounded optimization diagnostic, not posterior calibration: all three 12-iteration
 fits improve recovery but remain unconverged. The expensive original 80-iteration
 attempts were interrupted; optimizer work budgeting/conditioning remains open.
+
+The [controlled forward follow-up](pm_force_reference_validation/RESULTS.md) now
+checks N64/96/128 on both M32 and M64 for strong91. The last particle corrections
+are 0.0648%/0.0424% in observed-band density and the N128/M64 time correction is
+0.0119%. M32→M64 at N128 still changes density by 3.7749% (0.1063 noise SD per
+observed degree, failing 0.1). Its stability across particle loads points to
+force-grid discretization as the main density sensitivity in this band. These
+finite, forward-only checks resolve the earlier particle-load ambiguity for this
+fixture; they do not close posterior-gradient, full-mesh/high-cutoff or MAP issues.
+No force law or checkpoint identity is changed.
 
 Follow-ups before a broad PM accuracy claim:
 

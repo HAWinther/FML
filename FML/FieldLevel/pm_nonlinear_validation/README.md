@@ -80,11 +80,18 @@ Use `RESULTS.md` for measured outcomes and actual backend/runtime scope.
 Native interface:
 
 ```text
-pm_nonlinear PREFIX N M STEPS SEED POWER FINAL_A DATA_PATH FD FIT_ITERATIONS
+pm_nonlinear PREFIX N M STEPS SEED POWER FINAL_A DATA_PATH FD FIT_ITERATIONS [FORWARD_ONLY]
 ```
 
-N/M are even 16..64; steps 2..64; P in (0,.01]; final a in (.2,1]; FD is 0/1;
+By default, N/M are even 16..64; steps 2..64; P in (0,.01]; final a in (.2,1]; FD is 0/1;
 MAP budget 0..200. `DATA_PATH=-` generates data. The common Fourier export uses
 16x16x9 half-complex indexing with interleaved real/imaginary components. This
 bounded replicated output is for validation, not scalable production storage.
 MPI controls and output paths are checked collectively before model construction.
+
+A separate [particle-sampled force-reference study](../pm_force_reference_validation/README.md)
+uses `FORWARD_ONLY=1`, permitting N<=128 with FD=FIT_ITERATIONS=0 and external
+compatible data. It computes one forward trajectory and a value-only posterior
+without requesting a pullback. It emits `.forward_meta.csv` and no gradient file;
+the original default-mode output schema and N<=64 bound are unchanged. This
+extension does not change or overwrite the original measurements above.

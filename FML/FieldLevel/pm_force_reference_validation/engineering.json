@@ -1,0 +1,142 @@
+{
+  "small_native": {
+    "passed": true,
+    "checks": [
+      {
+        "check": "old/new full mode bitwise modes",
+        "passed": true
+      },
+      {
+        "check": "old/new full mode bitwise initial",
+        "passed": true
+      },
+      {
+        "check": "old/new full mode bitwise gradient",
+        "passed": true
+      },
+      {
+        "check": "old/new full mode bitwise fd",
+        "passed": true
+      },
+      {
+        "check": "old/new full mode bitwise meta",
+        "passed": true
+      },
+      {
+        "check": "forward-serial0 full/forward values and fields",
+        "passed": true
+      },
+      {
+        "check": "forward-serial0 emits no gradients",
+        "passed": true
+      },
+      {
+        "check": "forward-slab1 full/forward values and fields",
+        "passed": true
+      },
+      {
+        "check": "forward-slab1 emits no gradients",
+        "passed": true
+      },
+      {
+        "check": "forward-slab2 full/forward values and fields",
+        "passed": true
+      },
+      {
+        "check": "forward-slab2 emits no gradients",
+        "passed": true
+      },
+      {
+        "check": "forward-slab4 full/forward values and fields",
+        "passed": true
+      },
+      {
+        "check": "forward-slab4 emits no gradients",
+        "passed": true
+      },
+      {
+        "check": "forward-pencil1 full/forward values and fields",
+        "passed": true
+      },
+      {
+        "check": "forward-pencil1 emits no gradients",
+        "passed": true
+      },
+      {
+        "check": "forward-pencil2 full/forward values and fields",
+        "passed": true
+      },
+      {
+        "check": "forward-pencil2 emits no gradients",
+        "passed": true
+      },
+      {
+        "check": "forward-pencil4 full/forward values and fields",
+        "passed": true
+      },
+      {
+        "check": "forward-pencil4 emits no gradients",
+        "passed": true
+      },
+      {
+        "check": "forward-sanitizer0 full/forward values and fields",
+        "passed": true
+      },
+      {
+        "check": "forward-sanitizer0 emits no gradients",
+        "passed": true
+      }
+    ],
+    "replay_errors": {
+      "forward-serial0": 4.206412995699793e-12,
+      "forward-slab1": 4.092726157978177e-12,
+      "forward-slab2": 3.979039320256561e-12,
+      "forward-slab4": 3.979039320256561e-12,
+      "forward-pencil1": 4.206412995699793e-12,
+      "forward-pencil2": 3.751665644813329e-12,
+      "forward-pencil4": 3.751665644813329e-12,
+      "forward-sanitizer0": 4.206412995699793e-12
+    },
+    "native_invocations": 18
+  },
+  "large_backend": {
+    "passed": true,
+    "n": 128,
+    "m": 32,
+    "steps": 2,
+    "ranks": 4,
+    "errors": {
+      "initial": 3.3584246494910985e-15,
+      "modes": 1.3877787807814457e-17
+    }
+  },
+  "historical": {
+    "passed": true,
+    "errors": {
+      "32": {
+        "modes": 2.7755575615628914e-17,
+        "initial": 2.2690183065776637e-15
+      },
+      "64": {
+        "modes": 2.0816681711721685e-17,
+        "initial": 2.2690183065776637e-15
+      }
+    }
+  },
+  "runner": {
+    "stub_checks": [
+      {
+        "check": "timeout",
+        "passed": true,
+        "child_terminated": true
+      },
+      {
+        "check": "interrupt",
+        "passed": true,
+        "child_terminated": true
+      }
+    ],
+    "mpi_timeout_passed": true,
+    "mpi_ranks_terminated": true
+  }
+}

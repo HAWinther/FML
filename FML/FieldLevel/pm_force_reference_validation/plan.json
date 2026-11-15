@@ -1,0 +1,56 @@
+{
+  "cases": [
+    {
+      "n": 64,
+      "m": 32,
+      "steps": 32
+    },
+    {
+      "n": 96,
+      "m": 32,
+      "steps": 32
+    },
+    {
+      "n": 128,
+      "m": 32,
+      "steps": 32
+    },
+    {
+      "n": 64,
+      "m": 64,
+      "steps": 32
+    },
+    {
+      "n": 96,
+      "m": 64,
+      "steps": 32
+    },
+    {
+      "n": 128,
+      "m": 64,
+      "steps": 32
+    },
+    {
+      "n": 128,
+      "m": 64,
+      "steps": 64
+    }
+  ],
+  "seed": 91,
+  "power": 0.002,
+  "final": 1.0,
+  "active": 122,
+  "observed": 256,
+  "noise_power": 0.0001,
+  "accuracy": {
+    "field": 0.05,
+    "noise": 0.1
+  },
+  "np": 4,
+  "omp_threads": 1,
+  "timeout_seconds": 300,
+  "inputs": {
+    "reference.data.csv": "c26776f6d2782bd1d03d4169cc0bcde0a0a7de93a0993ad5fccec4e2ced55cea",
+    "reference.initial.csv": "897d589afd62298f4f5bf862a5c7384aaa534bbc049b3ac23337225158aaccf7"
+  }
+}
