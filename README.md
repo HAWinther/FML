@@ -161,7 +161,7 @@ a method in a new regime.
 ## Contributors
 
 FML is developed by Hans A. Winther. Many people have helped improve it, among them Bartolomeo Fiorini, Guilherme
-Brando, Kazuya Koyama, Daniela Saadeh, Herman Sletmoen, Renate Mauland-Hus and Gareth Cabourn Davies.
+Brando, Kazuya Koyama, Daniela Saadeh, Herman Sletmoen and Renate Mauland-Hus. The two main developers these days are Claude and Codex.
 
 ## Licence
 
