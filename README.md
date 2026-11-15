@@ -147,3 +147,8 @@ There is also a [SWIG wrapper tutorial](FML/MakePythonWrapper) and a pybind11 wr
 The regression tests run in CI on every push. They compare against analytic results or reference codes where
 possible. The module READMEs describe what has been validated and over which range, so check them before relying on
 a method in a new regime.
+
+## Licence
+
+FML is free software under the [GNU General Public License v3.0](LICENCE): you can redistribute and modify it under
+its terms.
