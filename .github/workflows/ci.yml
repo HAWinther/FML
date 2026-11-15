@@ -3,9 +3,21 @@
 # nightly workflow (nightly.yml) adds 2 tasks, the Einstein-Boltzmann solver's tests and the long SimulationCode checks
 name: CI
 
+# Not for changes to documentation only (markdown files, the book and the website); PARAMETERS.md is checked against
+# the parameter schema, so it starts CI. Run CI by hand from the Actions tab, or skip it with [skip ci] in the message
 on:
   push:
+    paths:
+      - '**'
+      - '!**.md'
+      - '!Documentation/**'
+      - 'FML/SimulationCode/PARAMETERS.md'
   pull_request:
+    paths:
+      - '**'
+      - '!**.md'
+      - '!Documentation/**'
+      - 'FML/SimulationCode/PARAMETERS.md'
   workflow_dispatch:
 
 # A new push to a branch cancels the CI still running for an older commit of it, except on master: there every commit
