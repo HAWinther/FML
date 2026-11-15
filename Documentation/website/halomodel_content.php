@@ -74,7 +74,7 @@ The same ratio is used in the solver's existing Limber lensing calculation. Meth
 </table>
 </div>
 <p>
-ReACT uses $P_{\rm NL,target}(k,z)=R(k,z)P_{\rm NL,pseudo}(k,z)$, where the pseudo spectrum is HMcode-2020 in a matched GR cosmology. It uses FML's screened spherical collapse, halo model and modified-gravity one-loop kernels; above its redshift limit, FML explicitly uses the matched baseline with $R=1$. Nonlinear options add the fourth matter-power output column; the linear CDM+baryon column is unchanged. For build requirements, validation ranges and scientific limits, see <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/Cosmology/Spectra/NONLINEAR.md">the nonlinear-method notes</a> and <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/HaloModel/README.md">ReACT documentation</a>.
+ReACT uses $P_{\rm NL,target}(k,z)=R(k,z)P_{\rm NL,pseudo}(k,z)$, where the pseudo spectrum is HMcode-2020 in a matched GR cosmology. It uses FML's screened spherical collapse, halo model and modified-gravity one-loop kernels; above its redshift limit, FML explicitly uses the matched baseline with $R=1$. Nonlinear options add the fourth matter-power output column; the linear CDM+baryon column is unchanged. For build requirements, validation ranges and scientific limits, see <a href="https://github.com/HAWinther/FML/blob/master/FML/Cosmology/Spectra/NONLINEAR.md">the nonlinear-method notes</a> and <a href="https://github.com/HAWinther/FML/blob/master/FML/HaloModel/README.md">ReACT documentation</a>.
 </p>
 
 <header class="entry-header text-center">
@@ -87,7 +87,7 @@ ReACT uses $P_{\rm NL,target}(k,z)=R(k,z)P_{\rm NL,pseudo}(k,z)$, where the pseu
 </p>
 <p>
 The reaction multiplies a matched HMcode-2020 pseudo spectrum. Comparisons with a pinned ACTio-ReACTio build cover selected GR, CPL, $f(R)$ and nDGP cases, with documented environment and third-order-kernel conventions. In particular, the upstream and corrected $f(R)$ third-order kernels are distinct choices; reference-code agreement alone is not a new accuracy calibration. Above the configured reaction redshift range, the solver uses the matched baseline with $R=1$.
-</p><p>See <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/HaloModel/README.md" style="display: inline">the collapse/reaction API and reference comparisons</a> and <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/Cosmology/Spectra/NONLINEAR.md" style="display: inline">nonlinear method scope</a>.</p>
+</p><p>See <a href="https://github.com/HAWinther/FML/blob/master/FML/HaloModel/README.md" style="display: inline">the collapse/reaction API and reference comparisons</a> and <a href="https://github.com/HAWinther/FML/blob/master/FML/Cosmology/Spectra/NONLINEAR.md" style="display: inline">nonlinear method scope</a>.</p>
 
 <header class="entry-header text-center">
   <h1 class="entry-title" id="Axion">Standalone AxionHMcode for mixed cold and ultralight-axion matter</h1>
@@ -95,11 +95,11 @@ The reaction multiplies a matched HMcode-2020 pseudo spectrum. Comparisons with 
 <hr/>
 
 <p>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/AxionHMcode">FML/AxionHMcode</a> is a separate native C++17 implementation of the mixed cold/ultralight-axion halo model of <a href="https://arxiv.org/abs/2209.13445" style="display: inline">Vogt et al. (2022)</a>, with the <a href="https://arxiv.org/abs/2409.11469" style="display: inline">Dome et al. (2024)</a> mass-relation and smoothing calibration. It takes separate linear CDM+baryon and axion auto-spectra at the requested redshift and returns nonlinear cold, cold&ndash;axion cross, axion and total power. The total is
+<a href="https://github.com/HAWinther/FML/tree/master/FML/AxionHMcode">FML/AxionHMcode</a> is a separate native C++17 implementation of the mixed cold/ultralight-axion halo model of <a href="https://arxiv.org/abs/2209.13445" style="display: inline">Vogt et al. (2022)</a>, with the <a href="https://arxiv.org/abs/2409.11469" style="display: inline">Dome et al. (2024)</a> mass-relation and smoothing calibration. It takes separate linear CDM+baryon and axion auto-spectra at the requested redshift and returns nonlinear cold, cold&ndash;axion cross, axion and total power. The total is
 </p>
 $$P_{\rm total}=(1-f)^2P_{\rm cold}+2f(1-f)P_{\rm cold,axion}+f^2P_{\rm axion},\qquad f=\frac{\Omega_{\rm axion}}{\Omega_b+\Omega_{\rm cdm}+\Omega_{\rm axion}}.$$
 <p>
-Its ingredients include the axion Jeans cutoff, a soliton-plus-NFW axion profile, clustered and unclustered axion fractions, and cold/axion cross power. The <tt>Basic</tt> and calibrated <tt>Dome2024</tt> variants are available. This is a standalone library with its own example and tests; it is not currently an Einstein&ndash;Boltzmann Solver nonlinear option. It requires supplied linear spectra (for example from axionCAMB), GSL, a flat late-time LCDM expansion, and has no massive-neutrino or baryonic-feedback model. The FML axion-like EDE background is different physics and does not supply the required axion transfer spectra. The Dome calibration bounds and extrapolation policy are documented in the <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/AxionHMcode/README.md">module README</a>.
+Its ingredients include the axion Jeans cutoff, a soliton-plus-NFW axion profile, clustered and unclustered axion fractions, and cold/axion cross power. The <tt>Basic</tt> and calibrated <tt>Dome2024</tt> variants are available. This is a standalone library with its own example and tests; it is not currently an Einstein&ndash;Boltzmann Solver nonlinear option. It requires supplied linear spectra (for example from axionCAMB), GSL, a flat late-time LCDM expansion, and has no massive-neutrino or baryonic-feedback model. The FML axion-like EDE background is different physics and does not supply the required axion transfer spectra. The Dome calibration bounds and extrapolation policy are documented in the <a href="https://github.com/HAWinther/FML/blob/master/FML/AxionHMcode/README.md">module README</a>.
 </p>
 <figure class="science-figure">
   <img src="images/axionhmcode-components.svg" alt="AxionHMcode flow from supplied cold and axion linear spectra to nonlinear cold, cross, axion, and weighted total power, with a schematic soliton-to-NFW profile">
@@ -157,7 +157,7 @@ auto occupation = [&amp;](const Halo &amp; h) {
     return assembly(baseline(h), calibrated_percentile(h));
 };
 auto mock = populate(prepared, occupation, options);</pre></div></div>
-<p>Satellite decoration acts on the marginal mean $\mu=p_\mathrm{cen}\lambda_\mathrm{sat|cen}$, avoiding an unintended change in mean counts when the central probability changes. Central-required and independent sampling have distinct covariance conventions. See <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/HOD/README.md" style="display: inline">occupation contracts and percentile requirements</a>.</p>
+<p>Satellite decoration acts on the marginal mean $\mu=p_\mathrm{cen}\lambda_\mathrm{sat|cen}$, avoiding an unintended change in mean counts when the central probability changes. Central-required and independent sampling have distinct covariance conventions. See <a href="https://github.com/HAWinther/FML/blob/master/FML/HOD/README.md" style="display: inline">occupation contracts and percentile requirements</a>.</p>
 
 <header class="entry-header text-center">
   <h1 class="entry-title" id="Baryons">Baryonification</h1>
@@ -204,7 +204,7 @@ correction.apply(particles.data(), particles.size());</pre>
   </div>
 </div>
 <p>
-The COLA code (<a href="nbodycode.php" style="display: inline">COLASolver</a>) can apply baryonification to its outputs.
+The N-body code (<a href="nbodycode.php" style="display: inline">SimulationCode</a>) can apply baryonification to its outputs.
 </p>
 
 <header class="entry-header text-center">
@@ -213,5 +213,5 @@ The COLA code (<a href="nbodycode.php" style="display: inline">COLASolver</a>) c
 <hr/>
 
 <p>
-Decorated HOD assembly bias follows <a href="https://arxiv.org/abs/1512.03050" style="display: inline">Hearin et al. (2016)</a> and the Halotools Heaviside prescription. <tt>HOD/AssemblyBias.h</tt> decorates the central probability and the <em>marginal</em> satellite mean at fixed mass; callers supply calibrated conditional percentiles. Population-weighted first moments are preserved, rather than each realized galaxy count. See the <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/HOD/README.md" style="display: inline">HOD conventions and comparison scope</a>. Native halo-model reactions follow <a href="https://arxiv.org/abs/1812.05594" style="display: inline">Cataneo et al. (2019)</a> and <a href="https://arxiv.org/abs/2005.12184" style="display: inline">Bose et al. (2020)</a>; <a href="https://github.com/nebblu/ACTio-ReACTio" style="display: inline">ACTio-ReACTio</a> supplies comparison fixtures.
+Decorated HOD assembly bias follows <a href="https://arxiv.org/abs/1512.03050" style="display: inline">Hearin et al. (2016)</a> and the Halotools Heaviside prescription. <tt>HOD/AssemblyBias.h</tt> decorates the central probability and the <em>marginal</em> satellite mean at fixed mass; callers supply calibrated conditional percentiles. Population-weighted first moments are preserved, rather than each realized galaxy count. See the <a href="https://github.com/HAWinther/FML/blob/master/FML/HOD/README.md" style="display: inline">HOD conventions and comparison scope</a>. Native halo-model reactions follow <a href="https://arxiv.org/abs/1812.05594" style="display: inline">Cataneo et al. (2019)</a> and <a href="https://arxiv.org/abs/2005.12184" style="display: inline">Bose et al. (2020)</a>; <a href="https://github.com/nebblu/ACTio-ReACTio" style="display: inline">ACTio-ReACTio</a> supplies comparison fixtures.
 </p>

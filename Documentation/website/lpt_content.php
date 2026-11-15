@@ -120,7 +120,7 @@ options.max_owned_bytes_per_rank = 512ULL * 1024 * 1024;
 auto orders = compute_eds_lpt(delta_fourier, options);
 auto fields_at_epoch = orders.evaluate(a / a_reference,
                                       options.max_owned_bytes_per_rank);</pre></div></div>
-<p>For derivations, API conventions, reference equations, measured memory and MPI results, see the <a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/LPT">LPT source and documentation</a>.</p>
+<p>For derivations, API conventions, reference equations, measured memory and MPI results, see the <a href="https://github.com/HAWinther/FML/tree/master/FML/LPT">LPT source and documentation</a>.</p>
 
 <p>
 <b>On pencils.</b> <tt>compute_eds_lpt(input, options)</tt> and <tt>for_each_eds_lpt_order</tt> take the grid type of the input: with a <a href="pencilgrid.php" style="display: inline">$\texttt{PencilGrid}$</a> the orders are computed natively on pencils (uniform pencil work grids, the input embedded and the orders cropped by sending each Fourier mode to its owner, the Hermitian $k_z = 0$ and Nyquist planes exchanged between the owners of mirrored modes) and returned on grids decomposed as the input. The results agree with the slabs to round-off; on slabs nothing changed.
@@ -132,7 +132,7 @@ auto fields_at_epoch = orders.evaluate(a / a_reference,
 <hr/>
 
 <p>The independent sparse reference now covers small band-limited seeds through order six in float and double. The sixth-order checks include transverse feedback; a single plane wave remains exactly one-dimensional, with nonlinear coefficients suppressed to roundoff. Fourier resampling retains nonlinear intermediate modes that can return to the output band.</p>
-<p>Sixth order is a validated small-reference range, not a universal production-resolution claim. Conservative work meshes grow quickly with order and seed support. Use the memory planner; cached and recomputed workspace choices trade retained memory for additional FFT work. The arbitrary-order solver remains separate from SimulationCode/COLA and assumes EdS growing-mode time dependence. See <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/LPT/SCIENCE_RESULTS.md" style="display: inline">scientific results</a>.</p>
+<p>Sixth order is a validated small-reference range, not a universal production-resolution claim. Conservative work meshes grow quickly with order and seed support. Use the memory planner; cached and recomputed workspace choices trade retained memory for additional FFT work. The arbitrary-order solver remains separate from SimulationCode/COLA and assumes EdS growing-mode time dependence. See <a href="https://github.com/HAWinther/FML/blob/master/FML/LPT/SCIENCE_RESULTS.md" style="display: inline">scientific results</a>.</p>
 
 <header class="entry-header text-center">
   <h1 class="entry-title" id="Methods">Methods we provide</h1>

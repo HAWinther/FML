@@ -27,6 +27,7 @@ Each page below explains the theory behind the methods and shows how to use them
   <a href="gridop.php">Grid operations: smoothing, whitening and convolutions (FML::GRID)</a><br>
   <a href="randomfield.php">Gaussian and non-Gaussian random fields (FML::RANDOM)</a><br>
   <a href="multigridsolver.php">Solving general PDEs (FML::SOLVERS::MULTIGRIDSOLVER)</a><br>
+  <a href="amr.php">Adaptive mesh refinement: AdaptiveMPIGrid, AMR multigrid (Poisson, DGP, symmetron) and AMRCode</a><br>
   <a href="tidaltensor.php">Hessians and tidal tensor eigenvalues (FML::HESSIAN)</a><br>
 </p>
 
@@ -43,6 +44,9 @@ Each page below explains the theory behind the methods and shows how to use them
   <a href="nbody.php">PM N-body methods, force options and time stepping (FML::NBODY)</a><br>
   <a href="shortrange.php">Short-range gravity for P3M / TreePM, also with a Yukawa force (FML::SHORT_RANGE_GRAVITY)</a><br>
   <a href="nbodycode.php">SimulationCode: PM/COLA model catalogue, equations and analysis capabilities</a><br>
+  <a href="amr.php#AMRCode">AMRCode: an adaptive-mesh-refinement N-body code</a><br>
+  <a href="wavedm.php">Wave (fuzzy) dark matter: Schr&ouml;dinger&ndash;Poisson (FML::WAVEDM)</a><br>
+  <a href="hydro.php">Gas dynamics: finite-volume Euler equations and SPH (FML::HYDRODYNAMICS, FML::SPH)</a><br>
 </p>
 
 <p class="page-toc">
@@ -63,7 +67,7 @@ Each page below explains the theory behind the methods and shows how to use them
 <p class="page-toc">
   Inference:
   <a href="inference.php">MCMC/HMC, cosmological fits and trainable neural-network emulators</a><br>
-  <a href="fieldlevel.php">Field-level inference: serial/MPI linear and LPT, HMC/MAP, reconstruction and restart (FML::FIELDLEVEL)</a><br>
+  <a href="fieldlevel.php">Field-level inference: serial/MPI linear, LPT and PM models, HMC/MAP, reconstruction and restart (FML::FIELDLEVEL)</a><br>
 </p>
 
 <p class="page-toc">
@@ -72,8 +76,8 @@ Each page below explains the theory behind the methods and shows how to use them
   <a href="fileutils.php">Reading and writing files (FML::FILEUTILS)</a><br>
   <a href="random.php">Random numbers, counter-based Philox and Latin hypercube designs</a><br>
   <a href="python.php">Python interfaces</a><br>
-  <a href="other.php#Hilbert">Standalone Peano&ndash;Hilbert key decomposition and distributed grid</a><br>
+  <a href="other.php#Hilbert">Peano&ndash;Hilbert keys, domain decomposition and distributed grid</a><br>
   <a href="other.php">Utils: timing, units, plotting, math, KD-tree, PGD and performance cases</a><br>
 </p>
 
-<p>Scientific papers, external-code lineage and comparison targets are collected in the <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/REFERENCES.md" style="display: inline">FML reference index</a>. Each module documents its own implementation and validation scope.</p>
+<p>Scientific papers, external-code lineage and comparison targets are collected in the <a href="https://github.com/HAWinther/FML/blob/master/FML/REFERENCES.md" style="display: inline">FML reference index</a>. Each module documents its own implementation and validation scope.</p>

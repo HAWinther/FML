@@ -100,7 +100,7 @@ LatinHyperCube lhs(3, true, 1, LHSOptimization::random_cd, 1234);
 auto unit_points = lhs.random(100);
 auto cosmologies = scale(unit_points, {0.1, 0.6, 0.55}, {0.5, 1.0, 0.85});
 double discrepancy = centered_discrepancy(unit_points);</pre></div></div>
-<p><tt>random_cd</tt> lowers centered discrepancy through coordinate swaps, preserving marginal stratification but not strength-2 orthogonality. <tt>lloyd</tt> spreads points through damped centroidal steps and can lose the Latin property. Integer designs, reset and fast-forward are also available; <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/LatinHyperCube/README.md" style="display: inline">the README</a> gives the complete interface.</p>
+<p><tt>random_cd</tt> lowers centered discrepancy through coordinate swaps, preserving marginal stratification but not strength-2 orthogonality. <tt>lloyd</tt> spreads points through damped centroidal steps and can lose the Latin property. Integer designs, reset and fast-forward are also available; <a href="https://github.com/HAWinther/FML/blob/master/FML/LatinHyperCube/README.md" style="display: inline">the README</a> gives the complete interface.</p>
 
 <header class="entry-header text-center">
   <h1 class="entry-title" id="References">Method references and scope</h1>
@@ -108,5 +108,5 @@ double discrepancy = centered_discrepancy(unit_points);</pre></div></div>
 <hr/>
 
 <p>
-<tt>LatinHyperCube</tt> implements <a href="https://doi.org/10.1080/00401706.1979.10489755" style="display: inline">McKay, Beckman &amp; Conover (1979) Latin hypercube sampling</a> and <a href="https://doi.org/10.1080/01621459.1993.10476423" style="display: inline">Tang (1993) orthogonal-array Latin hypercubes</a>, following SciPy method/API choices with its own random-number stream. Random coordinate swaps preserve marginal stratification; Lloyd optimization need not. Discrepancy and optimization sources and differences from SciPy are in the <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/LatinHyperCube/README.md" style="display: inline">module README</a>.
+<tt>LatinHyperCube</tt> implements <a href="https://doi.org/10.1080/00401706.1979.10489755" style="display: inline">McKay, Beckman &amp; Conover (1979) Latin hypercube sampling</a> and <a href="https://doi.org/10.1080/01621459.1993.10476423" style="display: inline">Tang (1993) orthogonal-array Latin hypercubes</a>, following SciPy method/API choices with its own random-number stream. Random coordinate swaps preserve marginal stratification; Lloyd optimization need not. Discrepancy and optimization sources and differences from SciPy are in the <a href="https://github.com/HAWinther/FML/blob/master/FML/LatinHyperCube/README.md" style="display: inline">module README</a>.
 </p>

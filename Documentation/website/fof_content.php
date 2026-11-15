@@ -68,7 +68,7 @@ The fiducial class FoFHalo (FriendsOfFriends/FoFBinning.h) computes the number o
 <hr/>
 
 <p>Set <tt>fof_relaxed = true</tt> in SimulationCode or SnapshotAnalyzer to use the multi-pass relaxed finder. It uses longer links for small halos and rejects groups by their velocity dispersion. The standalone API distinguishes FastPM and paper algorithms. Output catalogues add the pass, size bin, linking length and velocity-dispersion ratio, including an HDF5 <tt>RelaxedFoF</tt> group when enabled.</p>
-<p>The defaults were fitted to a specific FastPM configuration and need recalibration for other resolutions and step schedules. With those defaults the rejection threshold becomes nonpositive above approximately $z=2.2$, rejecting every halo. Peculiar velocities and the correct redshift are required. See <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/FriendsOfFriends/RelaxedFoF.md" style="display: inline">the full relaxed-FoF parameters and algorithms</a> and the <a href="snapshotanalyzer.php" style="display: inline">snapshot workflow</a>.</p>
+<p>The defaults were fitted to a specific FastPM configuration and need recalibration for other resolutions and step schedules. With those defaults the rejection threshold becomes nonpositive above approximately $z=2.2$, rejecting every halo. Peculiar velocities and the correct redshift are required. See <a href="https://github.com/HAWinther/FML/blob/master/FML/FriendsOfFriends/RelaxedFoF.md" style="display: inline">the full relaxed-FoF parameters and algorithms</a> and the <a href="snapshotanalyzer.php" style="display: inline">snapshot workflow</a>.</p>
 
 <header class="entry-header text-center">
   <h1 class="entry-title" id="SO">Spherical-overdensity masses</h1>
@@ -108,5 +108,5 @@ FoF cannot separate a subhalo from its host. The <a href="phasespace.php" style=
 <hr/>
 
 <p>
-Relaxed FoF (<tt>FriendsOfFriends/RelaxedFoF.h</tt>) follows <a href="https://arxiv.org/abs/1908.05276" style="display: inline">Dai, Feng, Seljak &amp; Singh (2019), §2.1 / Algorithm 1</a>. It offers separate paper and FastPM modes, including the linking-length schedule and velocity-dispersion rejection. The default FastPM calibration is specific to its original simulations; it is not a universal halo-mass calibration. The <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/FriendsOfFriends/RelaxedFoF.h" style="display: inline">source documentation</a> records the differences and parameter limits.
+Relaxed FoF (<tt>FriendsOfFriends/RelaxedFoF.h</tt>) follows <a href="https://arxiv.org/abs/1908.05276" style="display: inline">Dai, Feng, Seljak &amp; Singh (2019), §2.1 / Algorithm 1</a>. It offers separate paper and FastPM modes, including the linking-length schedule and velocity-dispersion rejection. The default FastPM calibration is specific to its original simulations; it is not a universal halo-mass calibration. The <a href="https://github.com/HAWinther/FML/blob/master/FML/FriendsOfFriends/RelaxedFoF.h" style="display: inline">source documentation</a> records the differences and parameter limits.
 </p>

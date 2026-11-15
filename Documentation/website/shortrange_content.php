@@ -86,7 +86,7 @@ auto treepm = Octree(particles, kernel, TreeOptions{.3, 16, 40}).compute(particl
 <hr/>
 
 <p>
-<tt>apply_long_range_filter(fourier, kernel)</tt> multiplies a Fourier density (or potential) by the long-range filter before the ordinary PM force solve. For FML's box coordinates with Poisson equation $\nabla_x^2\Phi = C\delta$ (in COLASolver $C = \frac{3}{2}\Omega_Ma$) and total mass $M$, a pair interacts as
+<tt>apply_long_range_filter(fourier, kernel)</tt> multiplies a Fourier density (or potential) by the long-range filter before the ordinary PM force solve. For FML's box coordinates with Poisson equation $\nabla_x^2\Phi = C\delta$ (in SimulationCode $C = \frac{3}{2}\Omega_Ma$) and total mass $M$, a pair interacts as
 $$-\nabla_x\Phi_{\rm pair} = \frac{CL^2}{4\pi M}\,m\frac{\vec r_j - \vec r}{|\vec r_j - \vec r|^3},$$
 so <tt>fml_acceleration_coupling(C, M, L)</tt> gives the coupling that matches the mesh force.
 </p>

@@ -17,7 +17,7 @@
 <hr/>  
 
 <p>
-The domain we are working with in the library is a cubic box $[0,1)^{\rm NDIM}$ of any dimension(s). It is generally assumed periodic for which the point $1$ wraps around to $0$, but several classes and algorithms lets you specify if this is the case or not. There are no units assumed in the library. Grids have the same number of gridcells in each dimension. The parallelization over MPI is a slab-based domain decomposition along the $x$-axis.
+The domain we are working with in the library is a cubic box $[0,1)^{\rm NDIM}$ of any dimension(s). It is generally assumed periodic for which the point $1$ wraps around to $0$, but several classes and algorithms lets you specify if this is the case or not. There are no units assumed in the library. Grids have the same number of gridcells in each dimension. The default parallelization over MPI is a slab-based domain decomposition along the $x$-axis; the domain is an object, <tt>FML::domain</tt> (<tt>Global/Domain.h</tt>), that can also be <a href="pencilgrid.php" style="display: inline">pencils</a> in $x$&ndash;$y$ or contiguous pieces of a Peano&ndash;Hilbert curve.
 </p>
 
 <p>

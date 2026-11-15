@@ -150,7 +150,7 @@ Validation: Monte Carlo of the full train / independent-mean / held-out pipeline
 <hr/>
 
 <p>Control-variate training, cheap-control mean estimation and held-out target evaluation now carry phase identities. Matched target/control rows use the same initial phases; the three stages must use disjoint phase blocks. Average antithetic pairs into one statistical row before estimating moments. The uncertainty of the independently estimated control mean contributes $B\,\mathrm{Cov}(\hat\mu)B^T$ to the controlled mean covariance.</p>
-<p>A matched PM/ZA/LPT/COLA workflow exercises the pipeline against independent NumPy calculations and MPI decompositions. This tests bookkeeping, covariance propagation and selected dynamics, rather than establishing a mesh-converged N-body target. See <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/EnsembleStatistics/matched_validation/README.md" style="display: inline">the runnable matched workflow</a>.</p>
+<p>A matched PM/ZA/LPT/COLA workflow exercises the pipeline against independent NumPy calculations and MPI decompositions. This tests bookkeeping, covariance propagation and selected dynamics, rather than establishing a mesh-converged N-body target. See <a href="https://github.com/HAWinther/FML/blob/master/FML/EnsembleStatistics/matched_validation/README.md" style="display: inline">the runnable matched workflow</a>.</p>
 
 <header class="entry-header text-center">
   <h1 class="entry-title" id="References">Method references and scope</h1>

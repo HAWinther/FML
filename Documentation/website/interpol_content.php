@@ -15,6 +15,7 @@
 <a href="#Window">6. Deconvolution</a><br>
 <a href="#Sheet">7. Sheet interpolation</a><br>
 <a href="#NUFFT">8. Non-uniform FFTs (NUFFT)</a><br>
+<a href="#AnyDomain">9. Assignment for particles on any domain (Peano&ndash;Hilbert)</a><br>
 </p>
 
 <header class="entry-header text-center">
@@ -200,4 +201,21 @@ void particles_to_fourier_grid_sheet(
 Mass assignment with NGP/CIC/TSC/... gives the Fourier transform of the particles multiplied by a window function and contaminated by aliasing. The NUFFT (NUFFT/NUFFT.h) computes it to a chosen precision $\epsilon$ instead,
 $$F(\vec k) = {\rm norm}\sum_pc_pe^{-i\vec k\cdot\vec x_p}\quad\text{(type 1)},\qquad f(\vec x_p) = \sum_{\vec k}F(\vec k)e^{i\vec k\cdot\vec x_p}\quad\text{(type 2)},$$
 with the spreading, FFT, and deconvolution method described by <a href="https://doi.org/10.1137/18M120885X" style="display: inline">Barnett, Magland &amp; af Klinteberg (2019)</a>. The fiducial spreading kernel is now the order-zero prolate spheroidal wave function (PSWF); the exponential-of-semicircle (ES) kernel remains available as an alternative. The PSWF is defined by the <a href="https://dlmf.nist.gov/30.2" style="display: inline">spheroidal differential equation</a>; its numerical properties are treated in <a href="https://doi.org/10.1007/978-1-4614-8259-8" style="display: inline">Osipov, Rokhlin &amp; Xiao (2013)</a>. FML follows the PSWF width/shape strategy introduced in <a href="https://finufft.readthedocs.io/en/v2.5.0/changelog.html" style="display: inline">FINUFFT 2.5</a>, but computes the kernel independently. Type 1 spreads each particle onto a fine grid, FFTs, deconvolves and retains the requested coarse-grid modes; type 2 reverses this operation. The implementation works with MPI and OpenMP. Its accuracy was compared against <a href="https://github.com/flatironinstitute/finufft/releases/tag/v2.5.1" style="display: inline">FINUFFT 2.5.1</a>. <tt>particles_to_fourier_grid_nufft</tt> is a drop-in replacement for <tt>particles_to_grid</tt> + <tt>fftw_r2c</tt> without window and aliasing, and <tt>compute_force_nufft</tt> gives the accurate PM force at particles (used in the COLA code for the early-time force).
+</p>
+
+<header class="entry-header text-center">
+  <h1 class="entry-title" id="AnyDomain">Assignment for particles on any domain (Peano&ndash;Hilbert)</h1>
+</header>
+<hr/>
+<p>
+<tt>particles_to_grid</tt> needs every particle to be on the task that owns its cell of the grid (it stops with a clear message if a particle is outside the local domain, e.g. if <tt>communicate_particles</tt> was not called after moving them). When the particles are distributed differently from the grid, for example along a Peano&ndash;Hilbert curve (<tt>FML::Domain::peano_hilbert</tt>, or following an <a href="amr.php" style="display: inline">adaptive grid</a>) while the grid is in slabs or pencils, use <tt>Interpolation/DistributedDeposit.h</tt>. It does the assignment as GADGET's PM step (Springel 2005), without moving the particles: every task deposits its particles into a dense patch over the bounding box of their cells and sends each part of the patch to the task that owns those cells.
+</p>
+<pre class="prettyprint">
+#include &lt;FML/Interpolation/DistributedDeposit.h&gt;
+
+// As particles_to_grid (NGP-PQS, masses, interlacing offsets), particles on any task
+FML::INTERPOLATION::particles_to_grid_any_domain(particles, grid, "CIC");
+</pre>
+<p>
+The result equals that of <tt>particles_to_grid</tt> up to the order of the floating-point sums (tested to $10^{-15}$ relative on slabs and every pencil layout, 1&ndash;4 tasks), is deterministic with OpenMP, and the memory of the patch is bounded (a non-compact domain is done in several passes). <tt>deposit_to_partitioned_mesh</tt> does the same for any box decomposition of a mesh, with a callback per cell.
 </p>

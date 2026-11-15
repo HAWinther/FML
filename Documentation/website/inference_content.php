@@ -99,7 +99,7 @@ auto x0 = recorded_column(r, 0); // post-warmup samples of parameter 0</pre>
   </div>
 </div>
 
-<p>The generic HMC engine now exposes <tt>HMCState</tt> and <tt>HMCRunControl</tt> for bounded runs and exact continuation at trajectory boundaries, with a versioned state codec in <tt>HMCCheckpoint.h</tt>. Applications supply their target identity and storage policy. The <a href="fieldlevel.php#Outputs" style="display: inline">field-level wrapper</a> adds collective per-rank checkpoint files and restart validation; see the <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/MCMC/README.md#hmc-checkpoint-state" style="display: inline">HMC state contract</a>.</p>
+<p>The generic HMC engine now exposes <tt>HMCState</tt> and <tt>HMCRunControl</tt> for bounded runs and exact continuation at trajectory boundaries, with a versioned state codec in <tt>HMCCheckpoint.h</tt>. Applications supply their target identity and storage policy. The <a href="fieldlevel.php#Outputs" style="display: inline">field-level wrapper</a> adds collective per-rank checkpoint files and restart validation; see the <a href="https://github.com/HAWinther/FML/blob/master/FML/MCMC/README.md#hmc-checkpoint-state" style="display: inline">HMC state contract</a>.</p>
 
 <header class="entry-header text-center">
   <h1 class="entry-title" id="Diagnostics">Convergence diagnostics</h1>
@@ -193,7 +193,7 @@ auto prediction = net(x);
 auto jacobian = net.jacobian(x);
 net.save(&quot;emulator.txt&quot;);
 auto restored = NeuralNetwork::load(&quot;emulator.txt&quot;);</pre></div></div>
-<p>Networks trained with Sesame's PyTorch Lightning emulator can be exported with <tt>export_lightning_emulator.py</tt> and loaded in C++; export needs PyTorch, evaluation does not. See <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/Emulator/NeuralNetwork/README.md" style="display: inline">the training and export guide</a>. The <a href="random.php#LatinHypercube" style="display: inline">Latin hypercube sampler</a> supplies training designs. This trainable module is separate from the fixed EuclidEmulator2 cosmology emulator.</p>
+<p>Networks trained with Sesame's PyTorch Lightning emulator can be exported with <tt>export_lightning_emulator.py</tt> and loaded in C++; export needs PyTorch, evaluation does not. See <a href="https://github.com/HAWinther/FML/blob/master/FML/Emulator/NeuralNetwork/README.md" style="display: inline">the training and export guide</a>. The <a href="random.php#LatinHypercube" style="display: inline">Latin hypercube sampler</a> supplies training designs. This trainable module is separate from the fixed EuclidEmulator2 cosmology emulator.</p>
 
 <header class="entry-header text-center">
   <h1 class="entry-title" id="References">Method references and scope</h1>
@@ -201,5 +201,5 @@ auto restored = NeuralNetwork::load(&quot;emulator.txt&quot;);</pre></div></div>
 <hr/>
 
 <p>
-The native neural-network emulator (<tt>Emulator/NeuralNetwork</tt>) follows the <a href="https://github.com/renmau/Sesame_pipeline/blob/main/Pipeline/neural_network_emulator/Emulator.py" style="display: inline">Sesame pipeline training recipe</a>, using <a href="https://arxiv.org/abs/1412.6980" style="display: inline">Kingma &amp; Ba, Adam</a>, <a href="https://arxiv.org/abs/1803.05407" style="display: inline">Izmailov et al., stochastic weight averaging</a>, and <a href="https://proceedings.mlr.press/v9/glorot10a.html" style="display: inline">Glorot &amp; Bengio (2010) initialization</a>. The C++ implementation is independent; PyTorch supplies comparison fixtures and exportable checkpoints. Input/output standardization and initialization differ from Sesame defaults, as documented in the <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/Emulator/NeuralNetwork/README.md" style="display: inline">module README</a>.
+The native neural-network emulator (<tt>Emulator/NeuralNetwork</tt>) follows the <a href="https://github.com/renmau/Sesame_pipeline/blob/main/Pipeline/neural_network_emulator/Emulator.py" style="display: inline">Sesame pipeline training recipe</a>, using <a href="https://arxiv.org/abs/1412.6980" style="display: inline">Kingma &amp; Ba, Adam</a>, <a href="https://arxiv.org/abs/1803.05407" style="display: inline">Izmailov et al., stochastic weight averaging</a>, and <a href="https://proceedings.mlr.press/v9/glorot10a.html" style="display: inline">Glorot &amp; Bengio (2010) initialization</a>. The C++ implementation is independent; PyTorch supplies comparison fixtures and exportable checkpoints. Input/output standardization and initialization differ from Sesame defaults, as documented in the <a href="https://github.com/HAWinther/FML/blob/master/FML/Emulator/NeuralNetwork/README.md" style="display: inline">module README</a>.
 </p>

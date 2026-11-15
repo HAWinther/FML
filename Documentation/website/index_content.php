@@ -6,6 +6,7 @@
 
 <p class="page-toc">
 <a href="#About">About</a><br>
+<a href="#Code">Getting the code: FML 2.0 and 1.0</a><br>
 <a href="#Features">Features</a><br>
 <a href="#Requirements">Requirements</a><br>
 <a href="#Compiling">Compiling</a><br>
@@ -27,7 +28,7 @@
 </figure>
 
 <p>
-A C++ template library for working with particles and grids and solving PDEs in a parallel and memory efficient way with up to thousands of tasks. The library uses MPI, OpenMP (or both) for the parallelization, though everything also works without an MPI compiler. We take care of most of the communication between tasks under the cover so the user doesn't have to deal with that. It is made mainly for analyzing the large scale structure of the Universe, but it is written in general so it can be useful outside of cosmology. It is not meant to be a replacement for common cosmology codes that do similar things (like initial condition generation, simple N-body simulations, halo and void finders, reconstruction etc.) although these things are very easy to do with the library. The goal of the library is rather to provide users with the basic tools needed to work in parallel so that one doesn't have to start by making the tools before doing the science and to implement general parallel algorithms without making (too many) assumptions about how they are to be used and let the user take all these decisions thus making it easier to do new things without having to modify the whole code (as is usually the case with codes made by physicists). The classes we provide are therefore templated on dimension (well knowing that nobody is going to use it for anything other than $N=2$ or $N=3$) and the types and the algorithms are templated on classes that determine how to process and compile up the data it computes. To be able to do Fourier transforms we settle for a simple slab-based domain decomposition for the parallelization. The library contains algorithms for assigning particles to grids, linking particles together in groups, general watershed, tessellations and the DTFE, void finders, cosmic web classification, Fourier transforms, computing correlation functions and polyspectra, a general multigrid solver, N-body simulations (including a full COLA code) and many more things. We also provide wrappers of methods in libraries like GSL, CGAL and Lua to more easily be able to perform various tasks.
+A C++ template library for working with particles and grids and solving PDEs in a parallel and memory efficient way with up to thousands of tasks. The library uses MPI, OpenMP (or both) for the parallelization, though everything also works without an MPI compiler. We take care of most of the communication between tasks under the cover so the user doesn't have to deal with that. It is made mainly for analyzing the large scale structure of the Universe, but it is written in general so it can be useful outside of cosmology. It is not meant to be a replacement for common cosmology codes that do similar things (like initial condition generation, simple N-body simulations, halo and void finders, reconstruction etc.) although these things are very easy to do with the library. The goal of the library is rather to provide users with the basic tools needed to work in parallel so that one doesn't have to start by making the tools before doing the science and to implement general parallel algorithms without making (too many) assumptions about how they are to be used and let the user take all these decisions thus making it easier to do new things without having to modify the whole code (as is usually the case with codes made by physicists). The classes we provide are therefore templated on dimension (well knowing that nobody is going to use it for anything other than $N=2$ or $N=3$) and the types and the algorithms are templated on classes that determine how to process and compile up the data it computes. For the Fourier transforms the grids are split over the tasks in slabs or, for many tasks, in <a href="pencilgrid.php" style="display: inline">pencils</a>; particles can also be distributed along a Peano&ndash;Hilbert curve, and there is an <a href="amr.php" style="display: inline">adaptively refined grid</a>. The library contains algorithms for assigning particles to grids, linking particles together in groups, general watershed, tessellations and the DTFE, void finders, cosmic web classification, Fourier transforms, computing correlation functions and polyspectra, a general multigrid solver, N-body simulations (including a full COLA code) and many more things. We also provide wrappers of methods in libraries like GSL, CGAL and Lua to more easily be able to perform various tasks.
 </p>
 <p>
 Over time the library has grown into a fairly complete toolbox for cosmology: an Einstein&ndash;Boltzmann solver validated against CLASS with a library of dark-energy and modified-gravity models, MCMC and HMC samplers with cosmological likelihoods (supernovae, DESI BAO, Planck), one-loop perturbation theory, survey power spectra with window functions and reconstruction, halo and subhalo finders with merger trees, HOD mocks and baryonification, summary statistics beyond the power spectrum, and a prototype of field-level inference. Every module has a README with its conventions and validation, examples and tests that run in continuous integration.
@@ -36,6 +37,31 @@ Over time the library has grown into a fairly complete toolbox for cosmology: an
 <p align="center">
   <a href="https://github.com/HAWinther/FML/" title="Code on GitHub"><img src="images/github.png" alt="Code on GitHub"></a>
 Code on GitHub
+</p>
+
+<hr/>
+<header class="entry-header text-center">
+  <h1 class="entry-title" id="Code">Getting the code: FML 2.0 and 1.0</h1>
+</header>
+<hr/>
+
+<p>
+The current version is <b>FML 2.0</b>: the <tt>master</tt> branch on <a href="https://github.com/HAWinther/FML/" style="display: inline">GitHub</a> (tag <tt>v2.0.0</tt>). Compared with 1.0 it adds, among much else, pencil and Peano&ndash;Hilbert domain decompositions, adaptive mesh refinement, SimulationCode (the successor of COLASolver) with many more gravity and dark-sector models, a much extended Einstein&ndash;Boltzmann solver, perturbation theory, MCMC and cosmological fits, field-level inference, halo, void and subhalo finders, HOD mocks, baryonification, summary statistics, wave dark matter and gas dynamics; the full list of changes is in the <a href="https://github.com/HAWinther/FML/blob/master/FML/CHANGELOG.md" style="display: inline">changelog</a>. New development happens in the <tt>FMLDevelop</tt> branch.
+</p>
+<pre class="prettyprint">
+git clone https://github.com/HAWinther/FML.git
+</pre>
+<p>
+The previous version, <b>FML 1.0</b>, is the tag <tt>v1.0.0</tt>. To get it (with the <tt>TestData</tt> submodule its examples use):
+</p>
+<pre class="prettyprint">
+git clone --branch v1.0.0 --depth 1 --recursive https://github.com/HAWinther/FML.git FML-1.0
+</pre>
+<p>
+FML is free software: except for third-party code carrying separate license notices, its source code is licensed under the <a href="https://github.com/HAWinther/FML/blob/master/LICENCE" style="display: inline">GNU General Public License v3.0 or later</a>. Third-party code keeps its own copyright and license notices (for example <tt>FML/Global/SystemMemory.h</tt>, CC BY 3.0).
+</p>
+<p>
+FML is developed by Hans A. Winther. Many people have helped improve it, among them Bartolomeo Fiorini, Guilherme Brando, Kazuya Koyama, Daniela Saadeh, Herman Sletmoen and Renate Mauland-Hus.
 </p>
 
 <hr/>
@@ -53,8 +79,9 @@ The library provides the following building blocks and cosmology workflows. Modu
 <li><a href="pencilgrid.php" style="display: inline">Pencil decomposition</a>: $\texttt{PencilGrid}$ splits a grid over a 2D grid of tasks (up to $N_{\rm mesh}^2$ tasks instead of $N_{\rm mesh}$), and the grid code is written against a common interface, so the library, the N-body code and the snapshot analyzer run on slabs or on pencils (<tt>make USE_PENCIL_GRID=true</tt>). Complex-to-complex grids ($\texttt{CFFTWGrid}$, $\texttt{CPencilGrid}$) for complex fields such as a wave function.</li>
 <li>A general grid class <a href="mpigrid.php" style="display: inline">$\texttt{MPIGrid}$</a> for holding any data shared between tasks.</li>
 <li>A general particle container <a href="mpiparticles.php" style="display: inline">$\texttt{MPIParticles}$</a> for holding particles shared between tasks and communicating them if they leave their domain (neighbour-only routing when possible).</li>
-<li><a href="interpol.php" style="display: inline">Particle-grid assignment and interpolation</a> (NGP, CIC, TSC, PCS, PQS, with interlacing and deconvolution), <a href="interpol.php#NUFFT" style="display: inline">non-uniform FFTs</a> (exact Fourier transforms of particles) and sheet interpolation.</li>
+<li><a href="interpol.php" style="display: inline">Particle-grid assignment and interpolation</a> (NGP, CIC, TSC, PCS, PQS, with interlacing and deconvolution; also for particles on <a href="interpol.php#AnyDomain" style="display: inline">any domain</a>), <a href="interpol.php#NUFFT" style="display: inline">non-uniform FFTs</a> (exact Fourier transforms of particles) and sheet interpolation.</li>
 <li>A general <a href="multigridsolver.php" style="display: inline">multigrid solver</a> for solving PDEs with periodic or Dirichlet boundary conditions with a simple interface for defining the equation.</li>
+<li><a href="amr.php" style="display: inline">Adaptive mesh refinement</a>: an adaptively refined grid $\texttt{AdaptiveMPIGrid}$ distributed along a Peano&ndash;Hilbert curve (refinement, 2:1 balance, load balancing, ghosts), a FAS multigrid solver on it (Poisson, DGP, symmetron) and an AMR N-body code.</li>
 <li><a href="gridop.php" style="display: inline">Typical grid operations</a> like smoothing, whitening, convolutions of a field in Fourier space or real space with an arbitrary kernel.</li>
 <li><a href="randomfield.php" style="display: inline">Gaussian and non-Gaussian random fields</a> (local, equilateral, orthogonal or generic $f_{\rm NL}$) with the N-GenIC generator or <a href="random.php#Philox" style="display: inline">counter-based Philox</a> fields that are independent of the resolution and the number of tasks.</li>
 </ul>
@@ -70,6 +97,9 @@ The library provides the following building blocks and cosmology workflows. Modu
 <li><a href="nbody.php" style="display: inline">N-body</a> methods for computing forces and moving particles (with explicit force options and Quinn, Tassev, FastPM and BullFrog time stepping), including modified gravity solved exactly or with the screening method of Winther &amp; Ferreira 2015.</li>
 <li>A dedicated <a href="nbodycode.php" style="display: inline">SimulationCode</a> site for the PM/COLA N-body code: cosmology and gravity model catalogues (including interacting dark sectors, cubic Galileon and reduced Horndeski), force and time-stepping equations, massive neutrinos, separate CDM/baryons, Big-Bang starts, lightcones and on-the-fly power spectra, multipoles, bispectra, halos, hybrid bias and baryonification.</li>
 <li><a href="shortrange.php" style="display: inline">Short-range gravity</a> for P3M/TreePM codes: Gaussian force split, spline softening, cell lists, an octree, a Yukawa fifth force and MPI ghost exchange.</li>
+<li><a href="amr.php#AMRCode" style="display: inline">AMRCode</a>: an adaptive-mesh-refinement N-body code for $\Lambda$CDM with block time steps, in the spirit of RAMSES.</li>
+<li><a href="wavedm.php" style="display: inline">Wave (fuzzy) dark matter</a>: a Schr&ouml;dinger&ndash;Poisson solver in a static or expanding box, on slabs or pencils, with checkpoints.</li>
+<li><a href="hydro.php" style="display: inline">Gas dynamics</a>: a finite-volume Euler solver (Rusanov, HLLE and HLLC fluxes, exact Riemann reference) and conservative SPH, with MPI, OpenMP and gravity and expansion hooks.</li>
 </ul>
 <p><b>Analysis of simulations and surveys</b></p>
 <ul>
@@ -87,7 +117,7 @@ The library provides the following building blocks and cosmology workflows. Modu
 <li><a href="inference.php#NeuralNetwork" style="display: inline">Trainable neural-network emulators</a> with Jacobians and PyTorch export, and <a href="random.php#LatinHypercube" style="display: inline">Latin hypercube experiment designs</a>.</li>
 <li><a href="inference.php" style="display: inline">MCMC</a>: adaptive Metropolis&ndash;Hastings with parallel chains, fast/slow parameters and checkpoints, a minimizer with profile likelihoods and Hessians, Hamiltonian Monte Carlo for millions of parameters, and rank-normalized $\hat R$ and bulk/tail ESS diagnostics.</li>
 <li><a href="inference.php#Fitting" style="display: inline">Cosmological parameter fits</a> with Pantheon+, DES-SN5YR, Union3, DESI DR1/DR2 BAO, BBN, Planck distance priors, Planck 2018 plik_lite and lensing, and mock CMB likelihoods.</li>
-<li><a href="fieldlevel.php" style="display: inline">Field-level inference</a> with periodic serial/MPI linear, 1LPT and 2LPT models, joint field/bias/noise inference, adjoint gradients, HMC/MAP, reconstruction products and same-rank checkpoint/restart; a separate BAO prototype has simulation-based calibration tests.</li>
+<li><a href="fieldlevel.php" style="display: inline">Field-level inference</a> with periodic serial/MPI linear, 1LPT, 2LPT and <a href="fieldlevel.php#PM" style="display: inline">particle-mesh</a> models (on slabs or pencils), joint field/bias/noise inference, adjoint gradients, HMC/MAP, reconstruction products and same-rank checkpoint/restart; a separate BAO prototype has simulation-based calibration tests.</li>
 </ul>
 <p><b>Other things</b></p>
 <ul>
@@ -152,7 +182,7 @@ In addition to these we have some Makefile options that can be useful:
 
 Headers are included as &lt;FML/...&gt; so the include path is the folder containing FML/, and the *.cpp files of the modules you use (e.g. Global/Global.cpp, Spline/Spline.cpp, ODESolver/ODESolver.cpp) need to be compiled with the code.
 
-The full guide to the build options is in <tt>FML/BUILDING.md</tt> and the list of modules with their tests and examples in <tt>FML/CAPABILITIES.md</tt>. From the repository root, <tt>make -C FML test</tt> builds and runs the library tests and <tt>make -C FML examples</tt> the examples; every module with a <tt>tests</tt> folder is also run (with 1, 2 and 4 MPI tasks where relevant) in continuous integration. The examples need no data files: those that read particles, a survey or a snapshot make a small synthetic data set (<tt>FML/ExampleData</tt>).
+The full guide to the build options is in <tt>FML/BUILDING.md</tt> and the list of modules with their tests and examples in <tt>FML/CAPABILITIES.md</tt>. From the repository root, <tt>make -C FML test</tt> builds and runs the library tests and <tt>make -C FML examples</tt> the examples; every module with a <tt>tests</tt> folder is also run in continuous integration (with 1 and 4 MPI tasks on every push, and 1, 2 and 4 tasks with the longer accuracy checks every night). The examples need no data files: those that read particles, a survey or a snapshot make a small synthetic data set (<tt>FML/ExampleData</tt>).
 
 </p>
 
@@ -166,174 +196,174 @@ The full guide to the build options is in <tt>FML/BUILDING.md</tt> and the list 
 Almost every folder in the code contains an [example] folder showing how one can use the methods and classes. Here are a few of those:
 <ul>
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/ComputePowerSpectra/example/Main.cpp" style="display: inline">Compute power spectra (and multipoles)</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/ComputePowerSpectra/example/Main.cpp" style="display: inline">Compute power spectra (and multipoles)</a>
 </li>
 
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/FFTLog/example/Main.cpp" style="display: inline">Compute the 2pt correlation function from a given power-spectrum</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/FFTLog/example/Main.cpp" style="display: inline">Compute the 2pt correlation function from a given power-spectrum</a>
 </li>
 
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/FFTWGrid/example/Main.cpp" style="display: inline">How to use the FFTWGrid</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/FFTWGrid/example/Main.cpp" style="display: inline">How to use the FFTWGrid</a>
 </li>
 
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/Interpolation/example/Main.cpp" style="display: inline">Interpolating grid to positions</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/Interpolation/example/Main.cpp" style="display: inline">Interpolating grid to positions</a>
 </li>
 
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/LPT/example/Main.cpp" style="display: inline">Generate particles from a given power-spectrum using 2LPT,  compute the power-spectrum of this and check that it matches</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/LPT/example/Main.cpp" style="display: inline">Generate particles from a given power-spectrum using 2LPT,  compute the power-spectrum of this and check that it matches</a>
 </li>
 
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/LuaFileParser/example/Main.cpp" style="display: inline">Read a LUA script (parameter file)</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/LuaFileParser/example/Main.cpp" style="display: inline">Read a LUA script (parameter file)</a>
 </li>
 
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/MPIParticles/example/Main.cpp" style="display: inline">How to create a shared set of particles</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/MPIParticles/example/Main.cpp" style="display: inline">How to create a shared set of particles</a>
 </li>
 
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/MakePythonWrapper" style="display: inline">Create a Python/C++ wrapper</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/MakePythonWrapper" style="display: inline">Create a Python/C++ wrapper</a>
 </li>
 
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/Math/example/Main.cpp" style="display: inline">Use some of the math function</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/Math/example/Main.cpp" style="display: inline">Use some of the math function</a>
 </li>
 
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/ODESolver/example/Main.cpp" style="display: inline">Solve coupled ODEs</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/ODESolver/example/Main.cpp" style="display: inline">Solve coupled ODEs</a>
 </li>
 
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/PairCounting/example/Main.cpp" style="display: inline">Compute the 2pt correlation function for simulation data and for survey data with randoms</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/PairCounting/example/Main.cpp" style="display: inline">Compute the 2pt correlation function for simulation data and for survey data with randoms</a>
 </li>
 
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/Plotting/example/Main.cpp" style="display: inline">Make plots using matplotlib in C++</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/Plotting/example/Main.cpp" style="display: inline">Make plots using matplotlib in C++</a>
 </li>
 
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/RamsesUtils/example/Main.cpp" style="display: inline">Read RAMSES files</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/RamsesUtils/example/Main.cpp" style="display: inline">Read RAMSES files</a>
 </li>
 
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/GadgetUtils/example/Main.cpp" style="display: inline">Read GADGET files</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/GadgetUtils/example/Main.cpp" style="display: inline">Read GADGET files</a>
 </li>
 
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/FileUtils/example/Main.cpp" style="display: inline">Read formatted ascii files</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/FileUtils/example/Main.cpp" style="display: inline">Read formatted ascii files</a>
 </li>
 
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/RandomFields/example/Main.cpp" style="display: inline">Generate non-gaussian fields, compute bispectrum and estimate fNL and compare to the input</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/RandomFields/example/Main.cpp" style="display: inline">Generate non-gaussian fields, compute bispectrum and estimate fNL and compare to the input</a>
 </li>
 
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/Spline/example/Main.cpp" style="display: inline">Make a 1D or 2D spline of some data</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/Spline/example/Main.cpp" style="display: inline">Make a 1D or 2D spline of some data</a>
 </li>
 
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/Survey/example/Main.cpp" style="display: inline">Convert galaxies (RA,DEC,z) to Cartesian coordinates</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/Survey/example/Main.cpp" style="display: inline">Convert galaxies (RA,DEC,z) to Cartesian coordinates</a>
 </li>
 
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/Triangulation/example/Main.cpp" style="display: inline">Make a triangulation and run a watershed algorithm on density to find voids</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/Triangulation/example/Main.cpp" style="display: inline">Make a triangulation and run a watershed algorithm on density to find voids</a>
 </li>
 
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/Triangulation/example/DTFEExample.cpp" style="display: inline">Interpolate the density and velocity field (divergence, vorticity, shear) to a grid with the DTFE</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/Triangulation/example/DTFEExample.cpp" style="display: inline">Interpolate the density and velocity field (divergence, vorticity, shear) to a grid with the DTFE</a>
 </li>
 
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/VoidFinders/example/Main.cpp" style="display: inline">Find voids and clusters with ZOBOV, the voxel watershed and spherical underdensities</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/VoidFinders/example/Main.cpp" style="display: inline">Find voids and clusters with ZOBOV, the voxel watershed and spherical underdensities</a>
 </li>
 
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/CosmicWeb/example/Main.cpp" style="display: inline">Classify the cosmic web with the T-web, V-web and ORIGAMI</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/CosmicWeb/example/Main.cpp" style="display: inline">Classify the cosmic web with the T-web, V-web and ORIGAMI</a>
 </li>
 
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/Units/example/Main.cpp" style="display: inline">How to use the unit class</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/Units/example/Main.cpp" style="display: inline">How to use the unit class</a>
 </li>
 
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/Cosmology/EinsteinBoltzmannSolver/Main.cpp" style="display: inline">A simple Einstein-Boltzmann solver. Compute the CMB angular- and matter power-spectra plus real space correlations function in the $\Lambda$CDM model</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/Cosmology/EinsteinBoltzmannSolver/Main.cpp" style="display: inline">A simple Einstein-Boltzmann solver. Compute the CMB angular- and matter power-spectra plus real space correlations function in the $\Lambda$CDM model</a>
 </li>
 
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/MultigridSolver/examples/FofrExample.cpp" style="display: inline">Solving the Hu-Sawicky $f(R)$ PDE for a given density field</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/MultigridSolver/examples/FofrExample.cpp" style="display: inline">Solving the Hu-Sawicky $f(R)$ PDE for a given density field</a>
 </li>
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/MultigridSolver/examples/SymmetronExample.cpp" style="display: inline">Solving the symmetron model PDE for a given density field</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/MultigridSolver/examples/SymmetronExample.cpp" style="display: inline">Solving the symmetron model PDE for a given density field</a>
 </li>
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/MultigridSolver/examples/dgpExample.cpp" style="display: inline">Solving the nDGP PDE for a given density field</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/MultigridSolver/examples/dgpExample.cpp" style="display: inline">Solving the nDGP PDE for a given density field</a>
 </li>
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/MultigridSolver/examples/Reconstruction.cpp" style="display: inline">Solving the density reconstruction equation (1LPT)</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/MultigridSolver/examples/Reconstruction.cpp" style="display: inline">Solving the density reconstruction equation (1LPT)</a>
 </li>
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/FriendsOfFriends/example/Main.cpp" style="display: inline">Locate Friends-of-Friends groups (halos) in a simulation</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/FriendsOfFriends/example/Main.cpp" style="display: inline">Locate Friends-of-Friends groups (halos) in a simulation</a>
 </li>
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/NBody/example/Main.cpp" style="display: inline">A simple Particle Mesh N-body solver (choice of normal or using the COLA method) with 1LPT,2PT or 3LPT IC (gaussian and non-gaussian fNL) and computation of $P(k),P_\ell(k),B(k_1,k_2,k_3)$ and a halo catalogue from the results.</a>
+<a href="https://github.com/HAWinther/FML/tree/master/FML/NBody/example/Main.cpp" style="display: inline">A simple Particle Mesh N-body solver (choice of normal or using the COLA method) with 1LPT,2PT or 3LPT IC (gaussian and non-gaussian fNL) and computation of $P(k),P_\ell(k),B(k_1,k_2,k_3)$ and a halo catalogue from the results.</a>
 </li>
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/SimulationCode" style="display: inline">A full PM/COLA N-body code</a> for many cosmologies and modified gravity models (see <a href="nbodycode.php" style="display: inline">the documentation</a>).
+<a href="https://github.com/HAWinther/FML/tree/master/FML/SimulationCode" style="display: inline">A full PM/COLA N-body code</a> for many cosmologies and modified gravity models (see <a href="nbodycode.php" style="display: inline">the documentation</a>).
 </li>
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/Cosmology/EinsteinBoltzmannSolver" style="display: inline">[code]</a> The Einstein&ndash;Boltzmann solver <tt>./cmb</tt>: CMB and matter power spectra for $\Lambda$CDM and the models beyond it (see <a href="cosmology.php" style="display: inline">the documentation</a>)
+<a href="https://github.com/HAWinther/FML/tree/master/FML/Cosmology/EinsteinBoltzmannSolver" style="display: inline">[code]</a> The Einstein&ndash;Boltzmann solver <tt>./cmb</tt>: CMB and matter power spectra for $\Lambda$CDM and the models beyond it (see <a href="cosmology.php" style="display: inline">the documentation</a>)
 </li>
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/CosmologyFitting" style="display: inline">[code]</a> <tt>./mcmc</tt>: fit cosmological parameters to supernova, DESI BAO and Planck data (see <a href="inference.php#Fitting" style="display: inline">the documentation</a>)
+<a href="https://github.com/HAWinther/FML/tree/master/FML/CosmologyFitting" style="display: inline">[code]</a> <tt>./mcmc</tt>: fit cosmological parameters to supernova, DESI BAO and Planck data (see <a href="inference.php#Fitting" style="display: inline">the documentation</a>)
 </li>
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/MCMC/example/Main.cpp" style="display: inline">[code]</a> Sample a correlated Gaussian with the adaptive Metropolis sampler, find the best fit, the Hessian and a profile likelihood
+<a href="https://github.com/HAWinther/FML/tree/master/FML/MCMC/example/Main.cpp" style="display: inline">[code]</a> Sample a correlated Gaussian with the adaptive Metropolis sampler, find the best fit, the Hessian and a profile likelihood
 </li>
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/PerturbationTheory/example/Main.cpp" style="display: inline">[code]</a> One-loop SPT power spectrum with the fast FFTLog algorithm, checked against direct quadrature
+<a href="https://github.com/HAWinther/FML/tree/master/FML/PerturbationTheory/example/Main.cpp" style="display: inline">[code]</a> One-loop SPT power spectrum with the fast FFTLog algorithm, checked against direct quadrature
 </li>
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/HaloModel/example/Main.cpp" style="display: inline">[code]</a> Halo model and HMCode non-linear power spectrum
+<a href="https://github.com/HAWinther/FML/tree/master/FML/HaloModel/example/Main.cpp" style="display: inline">[code]</a> Halo model and HMCode non-linear power spectrum
 </li>
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/SphericalCollapse/example/Main.cpp" style="display: inline">[code]</a> Spherical collapse: $\delta_c(z)$ and $\Delta_{\rm vir}(z)$
+<a href="https://github.com/HAWinther/FML/tree/master/FML/SphericalCollapse/example/Main.cpp" style="display: inline">[code]</a> Spherical collapse: $\delta_c(z)$ and $\Delta_{\rm vir}(z)$
 </li>
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/Survey/workflow_example/Main.cpp" style="display: inline">[code]</a> A synthetic survey: power-spectrum multipoles, window multipoles, window matrix and BAO reconstruction
+<a href="https://github.com/HAWinther/FML/tree/master/FML/Survey/workflow_example/Main.cpp" style="display: inline">[code]</a> A synthetic survey: power-spectrum multipoles, window multipoles, window matrix and BAO reconstruction
 </li>
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/HOD/example/Main.cpp" style="display: inline">[code]</a> Populate halos with HOD galaxies and measure kNN-CDFs and counts-in-cells
+<a href="https://github.com/HAWinther/FML/tree/master/FML/HOD/example/Main.cpp" style="display: inline">[code]</a> Populate halos with HOD galaxies and measure kNN-CDFs and counts-in-cells
 </li>
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/Environment/example/Main.cpp" style="display: inline">[code]</a> Density-split cross-correlations and marked correlations
+<a href="https://github.com/HAWinther/FML/tree/master/FML/Environment/example/Main.cpp" style="display: inline">[code]</a> Density-split cross-correlations and marked correlations
 </li>
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/Morphology/example/Main.cpp" style="display: inline">[code]</a> Minkowski functionals of the excursion sets of a field
+<a href="https://github.com/HAWinther/FML/tree/master/FML/Morphology/example/Main.cpp" style="display: inline">[code]</a> Minkowski functionals of the excursion sets of a field
 </li>
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/EnsembleStatistics/example/Main.cpp" style="display: inline">[code]</a> Control-variate estimate of an ensemble mean
+<a href="https://github.com/HAWinther/FML/tree/master/FML/EnsembleStatistics/example/Main.cpp" style="display: inline">[code]</a> Control-variate estimate of an ensemble mean
 </li>
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/PhaseSpaceHaloFinder/example/Main.cpp" style="display: inline">[code]</a> Find halos and subhalos in phase space
+<a href="https://github.com/HAWinther/FML/tree/master/FML/PhaseSpaceHaloFinder/example/Main.cpp" style="display: inline">[code]</a> Find halos and subhalos in phase space
 </li>
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/HaloHistory/example/Main.cpp" style="display: inline">[code]</a> Merger histories from particle IDs
+<a href="https://github.com/HAWinther/FML/tree/master/FML/HaloHistory/example/Main.cpp" style="display: inline">[code]</a> Merger histories from particle IDs
 </li>
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/Baryonification/example/Main.cpp" style="display: inline">[code]</a> Baryonification of a particle distribution around a halo
+<a href="https://github.com/HAWinther/FML/tree/master/FML/Baryonification/example/Main.cpp" style="display: inline">[code]</a> Baryonification of a particle distribution around a halo
 </li>
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/ShortRangeGravity/tests/test_short_range.cpp" style="display: inline">[code]</a> Short-range (P3M/TreePM) forces with cell lists and an octree, checked against direct and Ewald sums
+<a href="https://github.com/HAWinther/FML/tree/master/FML/ShortRangeGravity/tests/test_short_range.cpp" style="display: inline">[code]</a> Short-range (P3M/TreePM) forces with cell lists and an octree, checked against direct and Ewald sums
 </li>
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/FieldLevel/example/Main.cpp" style="display: inline">[code]</a> Field-level inference of the BAO scale with HMC (and <a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/FieldLevel/example/Calibration.cpp" style="display: inline">simulation-based calibration</a>)
+<a href="https://github.com/HAWinther/FML/tree/master/FML/FieldLevel/example/Main.cpp" style="display: inline">[code]</a> Field-level inference of the BAO scale with HMC (and <a href="https://github.com/HAWinther/FML/tree/master/FML/FieldLevel/example/Calibration.cpp" style="display: inline">simulation-based calibration</a>)
 </li>
-<li><a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/FieldLevel/example/FrameworkMPI.cpp" style="display: inline">[code]</a> Distributed periodic field-level inference, reconstruction and <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/FieldLevel/example/CheckpointMPI.cpp" style="display: inline">checkpoint/restart</a></li>
-<li><a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/Emulator/NeuralNetwork/example/Main.cpp" style="display: inline">[code]</a> Train a power-spectrum emulator on Latin hypercube points</li>
+<li><a href="https://github.com/HAWinther/FML/blob/master/FML/FieldLevel/example/FrameworkMPI.cpp" style="display: inline">[code]</a> Distributed periodic field-level inference, reconstruction and <a href="https://github.com/HAWinther/FML/blob/master/FML/FieldLevel/example/CheckpointMPI.cpp" style="display: inline">checkpoint/restart</a></li>
+<li><a href="https://github.com/HAWinther/FML/blob/master/FML/Emulator/NeuralNetwork/example/Main.cpp" style="display: inline">[code]</a> Train a power-spectrum emulator on Latin hypercube points</li>
 <li>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/PythonAnalysis/examples/catalogue_statistics.py" style="display: inline">[code]</a> kNN-CDFs and counts-in-cells from Python
+<a href="https://github.com/HAWinther/FML/tree/master/FML/PythonAnalysis/examples/catalogue_statistics.py" style="display: inline">[code]</a> kNN-CDFs and counts-in-cells from Python
 </li>
 </ul>
 </p>

@@ -38,7 +38,8 @@ CosmologyParameters -> BackgroundCosmology -> RecombinationHistory -> Perturbati
                               ^                                             ^
                     Model = species + gravity  (lcdm, w0wa, musigma, dgp, quintessence, jbd, fr, coupled_quintessence,
                                                 dark_scattering, covariant_dark_scattering, axion,
-                                                cubic_galileon, horndeski, ede, ide)</pre>
+                                                cubic_galileon, horndeski, horndeski_table, ede, ide,
+                                                symmetron, dilaton, mbeta)</pre>
   </div>
 </div>
 <figure class="science-figure">
@@ -182,6 +183,8 @@ A model combines a background/species prescription with linear perturbation equa
 <tr><td><tt>horndeski</tt></td><td><tt>hd_parametrization, hd_cK, hd_cB, hd_cM, ...</tt></td><td>Horndeski $\alpha$-basis with $\alpha_T=0$, scalar perturbations, ghost/gradient/stiffness checks and $M_*^2$ evolution.</td></tr>
 <tr><td><tt>ede</tt>, <tt>ede_zc</tt></td><td><tt>ede_fEDE, ede_log10zc, ede_theta_i, ede_n</tt></td><td>Axion-like early dark energy, $V=m^2f^2[1-\cos(\phi/f)]^n+\Lambda$; field background and perturbations through oscillations, then cycle-averaged fluid.</td></tr>
 <tr><td><tt>ide</tt></td><td><tt>ide_xi, ide_w, ide_cs2, ide_stability_check</tt></td><td>Interacting dark energy with $Q=\xi H\rho_{\rm DE}$ along the CDM velocity and stability checks.</td></tr>
+<tr><td><tt>horndeski_table</tt></td><td><tt>model_file, hd_stability_check</tt></td><td>Reduced Horndeski ($K, G_3, G_4$) from its Lagrangian: the background and the $\alpha$-basis perturbations from the table made by SimulationCode's <tt>horndeski_frontend.py</tt> (e.g. the cubic Galileon, Brans&ndash;Dicke or K-mouflage), with stability checks.</td></tr>
+<tr><td><tt>symmetron</tt>, <tt>dilaton</tt>, <tt>mbeta</tt></td><td><tt>sym_assb, sym_beta, sym_L_mpch, sym_N, sym_M</tt>; <tt>dil_A2, dil_beta0, dil_r, dil_xi</tt>; <tt>mb_beta0, mb_n_beta, mb_m0, mb_n_m</tt></td><td>$\Lambda$CDM background with the quasi-static $\mu(k,a)$ of the symmetron, the dilaton and the general $(m(a), \beta(a))$ parametrization: the linear limit of SimulationCode's gravity models of the same names.</td></tr>
 </tbody>
 </table></div>
 <p>
@@ -206,7 +209,7 @@ Massive neutrinos use momentum-resolved hierarchies (with a fluid approximation 
 ./cmb params/axion.ini
 # Optional nonlinear mixed model:
 ./cmb params/axion.ini nonlinear=axionhmcode</pre></div></div>
-<p>AxionHMcode uses the separate linear inputs; it is a nonlinear prescription with a restricted calibration, rather than a wave simulation. See <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/Cosmology/EinsteinBoltzmannSolver/params/axion.ini" style="display: inline">the parameter example</a> and <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/AxionHMcode/README.md" style="display: inline">calibration and comparison limits</a>.</p>
+<p>AxionHMcode uses the separate linear inputs; it is a nonlinear prescription with a restricted calibration, rather than a wave simulation. See <a href="https://github.com/HAWinther/FML/blob/master/FML/Cosmology/EinsteinBoltzmannSolver/params/axion.ini" style="display: inline">the parameter example</a> and <a href="https://github.com/HAWinther/FML/blob/master/FML/AxionHMcode/README.md" style="display: inline">calibration and comparison limits</a>.</p>
 
 <header class="entry-header text-center">
   <h1 class="entry-title" id="Usage">Running the solver</h1>
@@ -282,5 +285,5 @@ The physics, numerics and validation of every module are described in <tt>Cosmol
 <hr/>
 
 <p>
-The Brans&ndash;Dicke nonlinear option <tt>jbd_boost</tt> follows <a href="https://arxiv.org/abs/2403.03786" style="display: inline">Sletmoen &amp; Winther (2024)</a>, mapping to a matched GR nonlinear spectrum. Mixed ultralight-axion evolution uses <a href="https://github.com/dgrin1/axionCAMB" style="display: inline">axionCAMB</a> as a model/comparison reference, with AxionHMcode as its separate nonlinear prescription. The <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/Cosmology/EinsteinBoltzmannSolver/README.md" style="display: inline">solver overview</a> records option-specific domains and validation. Dark-sector model references are also listed on the <a href="nbodycode.php#References" style="display: inline">SimulationCode page</a>.
+The Brans&ndash;Dicke nonlinear option <tt>jbd_boost</tt> follows <a href="https://arxiv.org/abs/2403.03786" style="display: inline">Sletmoen &amp; Winther (2024)</a>, mapping to a matched GR nonlinear spectrum. Mixed ultralight-axion evolution uses <a href="https://github.com/dgrin1/axionCAMB" style="display: inline">axionCAMB</a> as a model/comparison reference, with AxionHMcode as its separate nonlinear prescription. The <a href="https://github.com/HAWinther/FML/blob/master/FML/Cosmology/EinsteinBoltzmannSolver/README.md" style="display: inline">solver overview</a> records option-specific domains and validation. Dark-sector model references are also listed on the <a href="nbodycode.php#References" style="display: inline">SimulationCode page</a>.
 </p>

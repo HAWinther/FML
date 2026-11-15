@@ -49,7 +49,7 @@
 </figure>  
 
 <p>
-<a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/SimulationCode" style="display: inline">SimulationCode</a> is FML's standalone particle-mesh (PM) and COLA cosmological simulation. It advances particles with MPI and OpenMP slab decomposition, computes forces on FFT grids, and separates the homogeneous expansion (<tt>Cosmology</tt>) from the perturbation growth and force law (<tt>GravityModel</tt>). That split lets a background be paired with GR or a supported modified-gravity model. The slab layout favors fast approximate and medium-scale runs, parameter studies and analysis over very high-resolution production simulations.
+<a href="https://github.com/HAWinther/FML/tree/master/FML/SimulationCode" style="display: inline">SimulationCode</a> is FML's standalone particle-mesh (PM) and COLA cosmological simulation. It advances particles with MPI (slab or pencil decomposition) and OpenMP, computes forces on FFT grids, and separates the homogeneous expansion (<tt>Cosmology</tt>) from the perturbation growth and force law (<tt>GravityModel</tt>). That split lets a background be paired with GR or a supported modified-gravity model. The slab layout favors fast approximate and medium-scale runs, parameter studies and analysis over very high-resolution production simulations.
 </p>
 <figure class="science-figure">
   <img src="images/simulation-workflow.svg" alt="SimulationCode loop from initial conditions and LPT through mesh density, gravity, force interpolation, particle integration, and analysis outputs">
@@ -73,7 +73,7 @@ mpirun -np 4 ./nbody parameterfile.lua
 </div>
 </p>
 <p>
-All parameters, defaults, allowed values and model-specific fields are listed in the generated <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/SimulationCode/PARAMETERS.md" style="display: inline">parameter reference</a>; <tt>parameterfile.lua</tt> is a commented example. Unknown names produce a warning with a suggestion. See the <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/SimulationCode/README.md" style="display: inline">SimulationCode README</a> for build, input and validation details.
+All parameters, defaults, allowed values and model-specific fields are listed in the generated <a href="https://github.com/HAWinther/FML/blob/master/FML/SimulationCode/PARAMETERS.md" style="display: inline">parameter reference</a>; <tt>parameterfile.lua</tt> is a commented example. Unknown names produce a warning with a suggestion. See the <a href="https://github.com/HAWinther/FML/blob/master/FML/SimulationCode/README.md" style="display: inline">SimulationCode README</a> for build, input and validation details.
 </p>
 <p>
 SimulationCode supports generated or supplied initial conditions; scale-independent or scale-dependent 1&ndash;3LPT COLA frames; Quinn, Tassev, FastPM and BullFrog stepping; GR and screened/unscreened modified-gravity forces; linear-grid or particle $\delta f$ neutrinos; separate CDM and baryon particles; snapshot and lightcone output; and on-the-fly power spectra, multipoles, bispectra, halo catalogues and hybrid bias spectra. It can also read transfer functions from the internal Einstein&ndash;Boltzmann solver. The independent arbitrary-order EdS LPT module is a separate library component and is not yet the COLA frame used here.
@@ -139,7 +139,7 @@ Dark scattering changes CDM velocities while leaving the wCDM background unchang
 </p>
 <p>
 IDE differs from these momentum-exchange models: particle masses respond to the local expansion as well as the background. Its volume estimate is smoothed on the particle grid, so the mass response and growth depend on resolution; limiting densities in deep voids are part of the implementation. Internal-solver initial conditions include the corresponding linear perturbations. Smooth dark energy at rest is an N-body-scale approximation and can differ from the full solver on the largest scales.
-</p><p><a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/SimulationCode/MODELS.md" style="display: inline">Model equations and restrictions</a> and <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/SimulationCode/SPECIES.md" style="display: inline">species validation</a> give the supported combinations and measured limits.</p>
+</p><p><a href="https://github.com/HAWinther/FML/blob/master/FML/SimulationCode/MODELS.md" style="display: inline">Model equations and restrictions</a> and <a href="https://github.com/HAWinther/FML/blob/master/FML/SimulationCode/SPECIES.md" style="display: inline">species validation</a> give the supported combinations and measured limits.</p>
 
 <header class="entry-header text-center">
   <h1 class="entry-title" id="Horndeski">Reduced Horndeski from a Lagrangian</h1>
@@ -147,7 +147,7 @@ IDE differs from these momentum-exchange models: particle masses respond to the 
 <hr/>
 
 <p><tt>scripts/horndeski_frontend.py</tt> takes SymPy expressions for $K,G_3,G_4$ in a JSON model, derives and solves the background, and writes an expansion table and a quasi-static force table. Select <tt>cosmology_model = Tabulated</tt> with that expansion and <tt>gravity_model = Horndeski</tt> with <tt>gravity_model_horndeski_filename</tt>. The code checks that the tabulated expansion agrees with the simulation background.</p>
-<p>The force combines a Newtonian rescaling $1/(2G_4)$ with a DGP-form fifth force. Screening may be linear, approximated using a smoothed density, or solved with the DGP multigrid equation when its coefficients permit. The cubic Galileon supplies a dedicated tracker model and density-smoothing controls. In sufficiently deep Galileon voids the quasi-static equation loses a real branch; the implementation uses a zero-discriminant limit and the multigrid solve can stall. Examples and frontend checks against cubic Galileon and Brans–Dicke are in <a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/SimulationCode/input/horndeski" style="display: inline">the model examples</a> and <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/SimulationCode/MODELS.md" style="display: inline">the model guide</a>.</p>
+<p>The force combines a Newtonian rescaling $1/(2G_4)$ with a DGP-form fifth force. Screening may be linear, approximated using a smoothed density, or solved with the DGP multigrid equation when its coefficients permit. The cubic Galileon supplies a dedicated tracker model and density-smoothing controls. In sufficiently deep Galileon voids the quasi-static equation loses a real branch; the implementation uses a zero-discriminant limit and the multigrid solve can stall. K-mouflage ($K = -1 + X + K_0X^2$ with a conformal coupling, in the Jordan frame as in Hi-COLA, <a href="https://arxiv.org/abs/2407.00855" style="display: inline">Sen Gupta, Fiorini &amp; Baker</a>) is one such model: its Newtonian force is rescaled by $A^2$ and its fifth force is linear (the kinetic screening is not modelled, as in Hi-COLA). Examples and frontend checks against cubic Galileon, Brans–Dicke and K-mouflage are in <a href="https://github.com/HAWinther/FML/tree/master/FML/SimulationCode/input/horndeski" style="display: inline">the model examples</a> and <a href="https://github.com/HAWinther/FML/blob/master/FML/SimulationCode/MODELS.md" style="display: inline">the model guide</a>.</p>
 
 <header class="entry-header text-center">
   <h1 class="entry-title" id="TimeStepping">Time-stepping</h1>
@@ -523,7 +523,7 @@ The Gaussian field can be generated with the 2LPTic/N-GenIC generator (the defau
 <li>Particles in GADGET binary or HDF5 format.</li>
 </ul>
 <p>
-All parameters, with types, defaults and allowed values, are listed in <tt>COLASolver/PARAMETERS.md</tt> (<tt>./nbody --parameters PARAMETERS.md</tt>); misspelled parameter names give a warning with a suggestion.
+All parameters, with types, defaults and allowed values, are listed in <tt>SimulationCode/PARAMETERS.md</tt> (<tt>./nbody --parameters PARAMETERS.md</tt>); misspelled parameter names give a warning with a suggestion.
 </p>
 
 <header class="entry-header text-center">
@@ -531,14 +531,14 @@ All parameters, with types, defaults and allowed values, are listed in <tt>COLAS
 </header>
 <hr/>
 
-<p>The internal Boltzmann provider can use a mixed cold/ultralight-axion linear model to generate particle initial conditions. Set <tt>ic_axion_fraction</tt> and <tt>ic_axion_log10_m</tt> with <tt>ic_type_of_input = "internal"</tt> (or matching precomputed tables). The particle transfer represents CDM plus axions and the particles carry all dark matter, subsequently evolved as collisionless matter in an LCDM simulation. Axion wave dynamics and a separate nonlinear axion component are not evolved. See <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/InitialConditions/README.md" style="display: inline">initial-condition model scope</a> before interpreting this as a mixed-dark-matter simulation.</p>
+<p>The internal Boltzmann provider can use a mixed cold/ultralight-axion linear model to generate particle initial conditions. Set <tt>ic_axion_fraction</tt> and <tt>ic_axion_log10_m</tt> with <tt>ic_type_of_input = "internal"</tt> (or matching precomputed tables). The particle transfer represents CDM plus axions and the particles carry all dark matter, subsequently evolved as collisionless matter in an LCDM simulation. Axion wave dynamics and a separate nonlinear axion component are not evolved. See <a href="https://github.com/HAWinther/FML/blob/master/FML/InitialConditions/README.md" style="display: inline">initial-condition model scope</a> before interpreting this as a mixed-dark-matter simulation.</p>
 
 <header class="entry-header text-center">
   <h1 class="entry-title" id="SnapshotAnalysis">Post-process snapshots with shared analysis</h1>
 </header>
 <hr/>
 
-<p><a href="snapshotanalyzer.php" style="display: inline">SnapshotAnalyzer</a> runs independently on Gadget binary or HDF5 outputs. It shares the library's power, multipole, bispectrum, FoF/SO and baryonification kernels with SimulationCode and adds configurable T-web, Minkowski, hybrid-bias, void and DTFE workflows. Use it to reanalyse existing snapshots without rerunning their dynamics. <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/Analysis/README.md" style="display: inline">FML/Analysis</a> also exposes the context and settings for use from another application.</p>
+<p><a href="snapshotanalyzer.php" style="display: inline">SnapshotAnalyzer</a> runs independently on Gadget binary or HDF5 outputs. It shares the library's power, multipole, bispectrum, FoF/SO and baryonification kernels with SimulationCode and adds configurable T-web, Minkowski, hybrid-bias, void and DTFE workflows. Use it to reanalyse existing snapshots without rerunning their dynamics. <a href="https://github.com/HAWinther/FML/blob/master/FML/Analysis/README.md" style="display: inline">FML/Analysis</a> also exposes the context and settings for use from another application.</p>
 
 <header class="entry-header text-center">
   <h1 class="entry-title" id="References">Method references and scope</h1>
@@ -546,7 +546,7 @@ All parameters, with types, defaults and allowed values, are listed in <tt>COLAS
 <hr/>
 
 <p>
-Dark scattering follows <a href="https://arxiv.org/abs/1007.1034" style="display: inline">Simpson (2010)</a> and <a href="https://arxiv.org/abs/1412.1080" style="display: inline">Baldi &amp; Simpson (2015)</a>: momentum exchange changes the CDM velocity evolution while baryons remain uncoupled. Coupled quintessence follows <a href="https://arxiv.org/abs/astro-ph/9908023" style="display: inline">Amendola (2000)</a>, with varying CDM mass, a fifth force and a velocity term. IDE uses the fluid interaction discussed by <a href="https://arxiv.org/abs/0804.0232" style="display: inline">Valiviita, Majerotto &amp; Maartens (2008)</a>; FML's particle masses also respond to local expansion. These are distinct prescriptions; their species and large-scale limitations, including <a href="https://arxiv.org/abs/2510.12551" style="display: inline">covariant dark scattering</a>, are in <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/SimulationCode/MODELS.md" style="display: inline">MODELS.md</a>.
+Dark scattering follows <a href="https://arxiv.org/abs/1007.1034" style="display: inline">Simpson (2010)</a> and <a href="https://arxiv.org/abs/1412.1080" style="display: inline">Baldi &amp; Simpson (2015)</a>: momentum exchange changes the CDM velocity evolution while baryons remain uncoupled. Coupled quintessence follows <a href="https://arxiv.org/abs/astro-ph/9908023" style="display: inline">Amendola (2000)</a>, with varying CDM mass, a fifth force and a velocity term. IDE uses the fluid interaction discussed by <a href="https://arxiv.org/abs/0804.0232" style="display: inline">Valiviita, Majerotto &amp; Maartens (2008)</a>; FML's particle masses also respond to local expansion. These are distinct prescriptions; their species and large-scale limitations, including <a href="https://arxiv.org/abs/2510.12551" style="display: inline">covariant dark scattering</a>, are in <a href="https://github.com/HAWinther/FML/blob/master/FML/SimulationCode/MODELS.md" style="display: inline">MODELS.md</a>.
 </p>
 <p>
 The cubic Galileon uses the quasi-static screening treatment discussed by <a href="https://arxiv.org/abs/1306.3219" style="display: inline">Barreira et al. (2013)</a>. Reduced Horndeski models use the Lagrangian-to-background/force workflow of <a href="https://arxiv.org/abs/2209.01666" style="display: inline">Wright et al. (2023), Hi-COLA</a> and the quasi-static force derivation of <a href="https://arxiv.org/abs/1111.6749" style="display: inline">Kimura, Kobayashi &amp; Yamamoto (2012)</a>. FML has its own symbolic frontend and force tables. Approximate screening follows <a href="https://arxiv.org/abs/1403.6492" style="display: inline">Winther &amp; Ferreira (2014)</a> and, for Vainshtein COLA, <a href="https://arxiv.org/abs/2303.09549" style="display: inline">Brando, Koyama &amp; Winther (2023)</a>; the model documentation specifies the supported force solvers and approximations.

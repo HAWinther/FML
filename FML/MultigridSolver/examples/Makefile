@@ -36,6 +36,10 @@ amrpoisson: AMRPoissonExample.o Global.o
 amrdgp: AMRDGPExample.o Global.o
 	$(LINK_EXE)
 
+# The symmetron on an adaptively refined grid (AMRSymmetronSolver.h): mpirun -np 4 ./amrsymmetron [quick]
+amrsymmetron: AMRSymmetronExample.o Global.o
+	$(LINK_EXE)
+
 fofrsolver: FofrExample.o Global.o
 	$(LINK_EXE)
 

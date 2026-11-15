@@ -178,7 +178,7 @@ std::array&lt;IndexInt, FML::power(3,NDIM) &gt; get_cube_gridindex(int level, In
 <hr/> 
 
 <p>
-In the <a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/MultigridSolver/examples" style="display: inline">source code on GitHub</a> we provide a lot more examples (and ready made solvers for $f(R)$, the symmetron and DGP in FofrSolver.h, SymmetronSolver.h and DGPSolver.h) like:
+In the <a href="https://github.com/HAWinther/FML/tree/master/FML/MultigridSolver/examples" style="display: inline">source code on GitHub</a> we provide a lot more examples (and ready made solvers for $f(R)$, the symmetron and DGP in FofrSolver.h, SymmetronSolver.h and DGPSolver.h) like:
 
 Poisson equation:
 $$\nabla^2\phi = \delta$$

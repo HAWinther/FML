@@ -16,6 +16,7 @@
 <a href="#References">Method references and scope</a><br>
 <a href="#Framework">Periodic field-level inference: serial and MPI</a><br>
 <a href="#Outputs">Reconstruction products and restart</a><br>
+<a href="#PM">Particle-mesh forward model, adjoint and posterior</a><br>
 </p>
 
 <header class="entry-header text-center">
@@ -148,7 +149,7 @@ These tests check that the sampler recovers the posterior of the model that gene
 The general framework accepts a fixed or differentiable parameterized initial power spectrum, a linear, Zel'dovich or EdS-factorized 2LPT forward model, and a Gaussian tracer-field likelihood. It can infer spectrum parameters, bias and positive noise power jointly with the white initial field. For LPT the scalar bias block is $b_1,b_2,b_{s^2},b_{\nabla^2}$; plane-parallel RSD uses a fixed growth rate. Initial, bias and likelihood cutoffs are separate. A fixed Fourier response can model a transfer function; a survey mask and a count likelihood are not yet included.
 </p>
 <p>
-<tt>Model</tt> is the single-rank implementation; <tt>DistributedLinearModel</tt> and <tt>DistributedLPTModel</tt> keep fields and modes local to FFTW slabs. MAP and HMC use the same interfaces, with exact Gaussian conditionals available for linear evolution. All ranks must participate in each collective call with matching scalar parameters and controls. Even meshes must be divisible by the rank count and have nonempty slabs; double FFTW is the validated configuration. Distributed LPT requires an initial cutoff strictly below half the initial-grid Nyquist and an even density mesh at least as large as the initial mesh.
+<tt>Model</tt> is the single-rank implementation; <tt>DistributedLinearModel</tt> and <tt>DistributedLPTModel</tt> keep fields and modes local to FFTW slabs or, with <tt>USE_PENCIL_GRID</tt>, <a href="pencilgrid.php" style="display: inline">PencilGrid</a> pencils. MAP and HMC use the same interfaces, with exact Gaussian conditionals available for linear evolution. All ranks must participate in each collective call with matching scalar parameters and controls. Even meshes must be divisible by the rank count and have nonempty slabs; double FFTW is the validated configuration. Distributed LPT requires an initial cutoff strictly below half the initial-grid Nyquist and an even density mesh at least as large as the initial mesh.
 </p><div style="text-align: center"><div style="max-width:800px;display:inline-block;text-align:left;width:100%"><pre class="prettyprint">#include &lt;FML/FieldLevel/DistributedLPT.h&gt;
 namespace FF = FML::FIELDLEVEL::FRAMEWORK;
 // After FML initialization, on every rank:
@@ -163,7 +164,7 @@ auto data = model.mock(model.white_noise(10), p, 11, work);
 FF::DistributedLPTPosterior posterior(model, data);
 auto fit = FF::map(posterior, model.white_noise(12), p, false);
 // A small periodic mock with field MAP at fixed scalar parameters.</pre></div></div>
-<p>Adjoint, exact-linear and 1/2/4-rank checks establish numerical consistency. Nonlinear posterior calibration, high-cutoff padded adjoints, survey likelihoods and PM/COLA adjoints remain open. See <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/FieldLevel/FRAMEWORK.md" style="display: inline">the framework API and validation limits</a>.</p>
+<p>Adjoint, exact-linear and 1/2/4-rank checks establish numerical consistency. Nonlinear posterior calibration, high-cutoff padded adjoints, survey likelihoods and COLA adjoints remain open (the PM model below has its adjoint). See <a href="https://github.com/HAWinther/FML/blob/master/FML/FieldLevel/FRAMEWORK.md" style="display: inline">the framework API and validation limits</a>.</p>
 
 <header class="entry-header text-center">
   <h1 class="entry-title" id="Outputs">Reconstruction products and restart</h1>
@@ -178,7 +179,33 @@ mpirun -np 4 FML/FieldLevel/example/framework_mpi 2lpt
 make -C FML/FieldLevel/example USE_MPI=true checkpoint_mpi
 mpirun -np 4 FML/FieldLevel/example/checkpoint_mpi /shared/toy-chain start 60
 mpirun -np 4 FML/FieldLevel/example/checkpoint_mpi /shared/toy-chain resume 90</pre></div></div>
-<p><tt>Checkpoint.h</tt> adds <tt>sample_checkpointed</tt>, preserving the state, RNG caches, gradients and adaptation at complete trajectory boundaries. Resume with the same rank/slab layout, build, thread configuration, data and full warmup/sample schedule; a versioned <tt>problem_id</tt> is required. Each call returns only new sample rows. Use one writer job per shared checkpoint directory; earlier sample output is separate from the checkpoint. Rank-changing restore and schedule extension are not supported. See <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/FieldLevel/FRAMEWORK.md#checkpointrestart-stage-4e-13-november-2026" style="display: inline">restart contracts and output semantics</a>.</p>
+<p><tt>Checkpoint.h</tt> adds <tt>sample_checkpointed</tt>, preserving the state, RNG caches, gradients and adaptation at complete trajectory boundaries. Resume with the same rank/slab layout, build, thread configuration, data and full warmup/sample schedule; a versioned <tt>problem_id</tt> is required. Each call returns only new sample rows. Use one writer job per shared checkpoint directory; earlier sample output is separate from the checkpoint. Rank-changing restore and schedule extension are not supported. See <a href="https://github.com/HAWinther/FML/blob/master/FML/FieldLevel/FRAMEWORK.md#checkpointrestart-stage-4e-13-november-2026" style="display: inline">restart contracts and output semantics</a>.</p>
+
+<header class="entry-header text-center">
+  <h1 class="entry-title" id="PM">Particle-mesh forward model, adjoint and posterior</h1>
+</header>
+<hr/>
+
+<p>
+Beyond LPT, the framework has a periodic <b>particle-mesh (PM) forward model</b>: <tt>ParticleMeshForwardT&lt;Grid&gt;</tt> (<tt>FieldLevel/ParticleMesh.h</tt>) evolves the whitened initial field with a PM N-body integration in a fixed flat matter + $\Lambda$ background over a fixed schedule of scale factors, on slabs or pencils, and returns the final matter density and particle fields. <tt>ParticleMeshAdjointT</tt> (<tt>ParticleMeshAdjoint.h</tt>) is its exact discrete adjoint: the gradient of any objective of the outputs with respect to the white field and the spectrum parameters, with bounded memory through checkpointing and recomputation of the time steps.
+</p>
+<p>
+<tt>PeriodicPMPosteriorT</tt> (<tt>ParticleMeshPosterior.h</tt>) connects them to the same Gaussian Fourier likelihood, priors, MAP optimizer and HMC sampler as the LPT models: the data are the Fourier modes of the final matter density on the force mesh below a cutoff, with a homogeneous Gaussian noise (whose amplitude can be fitted jointly). <tt>ParticleMeshCheckpoint.h</tt> adds checkpoint/restart of the HMC chains.
+</p>
+<div style="text-align: center"><div style="max-width:800px;display:inline-block;text-align:left;width:100%"><pre class="prettyprint">#include &lt;FML/FieldLevel/ParticleMeshPosterior.h&gt;
+namespace FF = FML::FIELDLEVEL::FRAMEWORK;
+// c: the IC mesh and the force/observation mesh (density_mesh) and the cutoffs
+FF::PeriodicPMModel model(c, spectrum, pm_settings, noise_parameter, {4});
+auto work = model.workspace();
+auto p = model.initial_parameters();
+auto data = model.mock(model.white_noise(91), p, 92, work);
+FF::PeriodicPMPosterior posterior(model, data);
+auto fit = FF::map(posterior, initial_white, p, false, 200, 2e-5);
+model.predict(fit.white, fit.parameters, work);
+const auto &amp; fields = model.reconstruction(work);</pre></div></div>
+<p>
+The adjoint is checked with directional finite differences, and HMC against quadrature of a two-mode posterior and with full-field and joint-parameter chains on small mocks. The PM model is a prototype: the predicted density is that of the PM integration itself, and a resolution study shows that at the tested (small) meshes it is not yet converged in the force mesh and the number of particles, so it should not be read as the continuum density without such a study. There is no tracer bias, redshift-space distortions or survey geometry yet. See the <a href="https://github.com/HAWinther/FML/blob/master/FML/FieldLevel/PARTICLE_MESH.md" style="display: inline">PM model</a>, <a href="https://github.com/HAWinther/FML/blob/master/FML/FieldLevel/PM_POSTERIOR.md" style="display: inline">posterior</a> and <a href="https://github.com/HAWinther/FML/blob/master/FML/FieldLevel/KNOWN_ISSUES.md" style="display: inline">known-issues</a> notes.
+</p>
 
 <header class="entry-header text-center">
   <h1 class="entry-title" id="References">Method references and scope</h1>
@@ -186,5 +213,5 @@ mpirun -np 4 FML/FieldLevel/example/checkpoint_mpi /shared/toy-chain resume 90</
 <hr/>
 
 <p>
-Scientific reference directions are <a href="https://arxiv.org/abs/1203.3639" style="display: inline">Jasche &amp; Wandelt (2013), BORG</a>, <a href="https://arxiv.org/abs/2409.10937" style="display: inline">Stadler, Schmidt &amp; Reinecke, LEFTfield</a>, and the <a href="https://arxiv.org/abs/2407.01524" style="display: inline">field-level BAO application</a>. FML is an independent periodic-box implementation, not a port of these codes. In addition to the BAO prototype described above, the <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/FieldLevel/FRAMEWORK.md" style="display: inline">framework</a> supports distributed linear, 1LPT and 2LPT models, joint field/bias/noise inference, HMC and MAP, reconstruction outputs, and same-rank checkpoint/restart. Exact linear, adjoint and MPI comparisons test implementation consistency; nonlinear scientific validation and realistic survey extensions remain open.
+Scientific reference directions are <a href="https://arxiv.org/abs/1203.3639" style="display: inline">Jasche &amp; Wandelt (2013), BORG</a>, <a href="https://arxiv.org/abs/2409.10937" style="display: inline">Stadler, Schmidt &amp; Reinecke, LEFTfield</a>, and the <a href="https://arxiv.org/abs/2407.01524" style="display: inline">field-level BAO application</a>. FML is an independent periodic-box implementation, not a port of these codes. In addition to the BAO prototype described above, the <a href="https://github.com/HAWinther/FML/blob/master/FML/FieldLevel/FRAMEWORK.md" style="display: inline">framework</a> supports distributed linear, 1LPT and 2LPT models, joint field/bias/noise inference, HMC and MAP, reconstruction outputs, and same-rank checkpoint/restart. Exact linear, adjoint and MPI comparisons test implementation consistency; nonlinear scientific validation and realistic survey extensions remain open.
 </p>

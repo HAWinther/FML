@@ -231,7 +231,7 @@ double HyperSphericalBesselWKB(int ell, double nu, double chi, double K);
 <hr/>  
 
 <p>
-If you for some reason want to call the library (or any other C++ code) from Python there is an example of how to do this in the <a href="https://github.com/HAWinther/FML/tree/FMLDevelop/FML/MakePythonWrapper" style="display: inline">MakePythonWrapper</a> folder (and HaloModel/PythonWrapper). This is really easy with <a href="https://www.swig.org/" style="display: inline">SWIG</a>: one just has to define a simple interface, compile the C++ code as a shared library, run SWIG and that's it, you can now run C++ code and pass the results back to Python (or the other way around). This works well with threads, but I have never used it with MPI so have no idea how that would work.
+If you for some reason want to call the library (or any other C++ code) from Python there is an example of how to do this in the <a href="https://github.com/HAWinther/FML/tree/master/FML/MakePythonWrapper" style="display: inline">MakePythonWrapper</a> folder (and HaloModel/PythonWrapper). This is really easy with <a href="https://www.swig.org/" style="display: inline">SWIG</a>: one just has to define a simple interface, compile the C++ code as a shared library, run SWIG and that's it, you can now run C++ code and pass the results back to Python (or the other way around). This works well with threads, but I have never used it with MPI so have no idea how that would work.
 </p>
 
 <header class="entry-header text-center">
@@ -264,10 +264,10 @@ with the fitted $\alpha(a)$ (<tt>pgd_fitting_formula_alpha</tt>), see <tt>PGD/Po
 </p>
 
 <header class="entry-header text-center">
-  <h1 class="entry-title" id="Hilbert">Standalone Peano–Hilbert domain decomposition</h1>
+  <h1 class="entry-title" id="Hilbert">Peano–Hilbert domain decomposition</h1>
 </header>
 <hr/>
 
-<p><tt>PeanoHilbertDecomposition</tt> maps periodic 3D positions to 64-bit Hilbert keys (up to 21 bits per coordinate), partitions a distributed prefix histogram into contiguous key intervals, and stores a distributed grid in local key order. <tt>DistributedGrid3D</tt> supports collective remote reads and face/full periodic halo exchange, including empty rank intervals.</p>
-<p>This is a separate module: MPIParticles, SimulationCode and their particle migration still use their existing decomposition. It is not a replacement FFT layout. Strongly clustered identical keys cannot be split among ranks, and exchanges currently require MPI-int counts. See <a href="https://github.com/HAWinther/FML/blob/FMLDevelop/FML/PeanoHilbertDecomposition/README.md" style="display: inline">the standalone API and tests</a>.</p>
+<p><tt>FML/PeanoHilbertDomain</tt> maps periodic positions to Hilbert keys (<tt>HilbertCurve&lt;NDIM&gt;</tt>, up to 21 bits per coordinate in 3D), partitions a distributed prefix histogram into contiguous key intervals (<tt>PeanoHilbertDomain</tt>), and stores a distributed grid in local key order. <tt>DistributedGrid3D</tt> supports collective remote reads and face/full periodic halo exchange, including empty rank intervals. The same keys are used by the <a href="amr.php" style="display: inline">adaptive grid</a> and by the particle domain <tt>FML::Domain::peano_hilbert(...)</tt>, so <a href="mpiparticles.php" style="display: inline">MPIParticles</a> can be distributed along the curve; the density of such particles is assigned to slab or pencil grids with <a href="interpol.php#AnyDomain" style="display: inline">particles_to_grid_any_domain</a>.</p>
+<p>It is not an FFT layout, and SimulationCode does not use it. Strongly clustered identical keys cannot be split among ranks. See <a href="https://github.com/HAWinther/FML/blob/master/FML/PeanoHilbertDomain/README.md" style="display: inline">the standalone API and tests</a>.</p>
 
