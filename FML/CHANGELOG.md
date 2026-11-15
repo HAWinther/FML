@@ -5,6 +5,13 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### New module: Visualization
+- `Visualization/`: pictures of grids and particles from C++ with no dependencies. `project_grid` projects a slab of
+  an FFTWGrid or PencilGrid (any axis, periodic slab, sum or mean), `project_particles` the particles (NGP or CIC,
+  mass weighted), the same image on every task. Colour maps (magma, inferno, viridis, plasma, cividis, coolwarm,
+  grey, cubehelix, reversed with `_r`), linear, log and symmetric colour scales (fixed limits or percentiles), a PNG
+  writer with its own deflate, and .npy output. Example and tests (the PNGs are read back with Python's zlib).
+
 ### The examples run without the TestData submodule
 - `ExampleData/ExampleData.h`: synthetic input for the examples (a toy clustered box with halos, voids and
   velocities; galaxies in redshift space; a survey patch with randoms; a RAMSES snapshot writer). The examples of
