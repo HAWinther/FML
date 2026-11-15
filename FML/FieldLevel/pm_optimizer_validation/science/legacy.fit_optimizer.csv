@@ -1,0 +1,2 @@
+optimizer,history,seconds,forwards,pullbacks,value_evaluations,gradient_evaluations,peak_history_pairs,total_history_bytes,sum_rank_peak_rss_bytes,curvature_skips,history_resets
+0,5,248.498208218,144,144,0,144,0,0,67776512,0,0

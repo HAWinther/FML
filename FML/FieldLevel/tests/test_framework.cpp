@@ -1,4 +1,4 @@
-#include <FML/FieldLevel/Framework.h>
+#include <FML/FieldLevel/MAP.h>
 #include <FML/tests/TestHelpers.h>
 #include <iostream>
 #include <iomanip>
@@ -49,6 +49,11 @@ static void gradients(FF::Evolution kind) {
     Field gs;
     std::vector<double> gp;
     const double U = posterior.evaluate(s, p, w, gs, gp);
+    check_local(relative(U,posterior.value(s,p,w))<1e-13,"value-only target matches full evaluation");
+    FF::MAPOptions options;options.vary_parameters=false;options.max_iterations=2;
+    const auto fit=FF::map(posterior,s,p,options);
+    check_local(std::isfinite(fit.fit.potential) && fit.fit.potential<=U && fit.fit.parameters==p,
+                "options MAP works with serial linear/LPT model and fixed parameters");
     auto direction = model.white_noise(22);
     const double analytic = inner(gs, direction), h = 1e-5;
     auto plus = s, minus = s;

@@ -80,7 +80,7 @@ Use `RESULTS.md` for measured outcomes and actual backend/runtime scope.
 Native interface:
 
 ```text
-pm_nonlinear PREFIX N M STEPS SEED POWER FINAL_A DATA_PATH FD FIT_ITERATIONS [FORWARD_ONLY] [FORCE_WINDOW]
+pm_nonlinear PREFIX N M STEPS SEED POWER FINAL_A DATA_PATH FD FIT_ITERATIONS [FORWARD_ONLY] [FORCE_WINDOW] [CIC_REFERENCE] [OPTIMIZER] [HISTORY]
 ```
 
 By default, N/M are even 16..64; steps 2..64; P in (0,.01]; final a in (.2,1]; FD is 0/1;
@@ -118,3 +118,11 @@ generates a compensated N128/M64 mock in forward-only mode and fits it on a
 coarser discretization with the same declared observation window. Fits also emit
 `.fit_start_modes.csv`, the starting prediction before optimization, for residual
 comparisons. Existing numerical outputs and the public MAP algorithm are unchanged.
+
+### Optional optimizer comparison
+
+Arguments after CIC_REFERENCE are OPTIMIZER (0 legacy, 1 value-only GD, 2 L-BFGS)
+and HISTORY (1..32, default5). Existing numerical files remain unchanged under
+the default. Fits also write `.fit_optimizer.csv` with MAP-only actual call/time
+and history/RSS diagnostics; options-based methods write `.fit_trace.csv`. See
+[the comparison protocol](../pm_optimizer_validation/README.md).

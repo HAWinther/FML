@@ -1,0 +1,142 @@
+{
+  "passed": true,
+  "checks": [
+    {
+      "label": "build-serial",
+      "exit_code": 0,
+      "seconds": null
+    },
+    {
+      "label": "build-mpi",
+      "exit_code": 0,
+      "seconds": null
+    },
+    {
+      "label": "build-sanitizer",
+      "exit_code": 0,
+      "seconds": null
+    },
+    {
+      "label": "serial0-test_map_optimizer",
+      "exit_code": 0,
+      "seconds": 0.6607423170935363
+    },
+    {
+      "label": "serial0-test_particle_mesh_posterior",
+      "exit_code": 0,
+      "seconds": 5.643688148004003
+    },
+    {
+      "label": "serial0-test_survey_likelihood_mpi",
+      "exit_code": 0,
+      "seconds": 1.0568653430091217
+    },
+    {
+      "label": "mpi1-test_map_optimizer",
+      "exit_code": 0,
+      "seconds": 1.1452043669996783
+    },
+    {
+      "label": "mpi1-test_particle_mesh_posterior",
+      "exit_code": 0,
+      "seconds": 16.963784212013707
+    },
+    {
+      "label": "mpi1-test_survey_likelihood_mpi",
+      "exit_code": 0,
+      "seconds": 1.6519133109832183
+    },
+    {
+      "label": "mpi2-test_map_optimizer",
+      "exit_code": 0,
+      "seconds": 3.6036794329993427
+    },
+    {
+      "label": "mpi2-test_particle_mesh_posterior",
+      "exit_code": 0,
+      "seconds": 72.38894166809041
+    },
+    {
+      "label": "mpi2-test_survey_likelihood_mpi",
+      "exit_code": 0,
+      "seconds": 4.9074987339554355
+    },
+    {
+      "label": "mpi4-test_map_optimizer",
+      "exit_code": 0,
+      "seconds": 6.414796528057195
+    },
+    {
+      "label": "mpi4-test_particle_mesh_posterior",
+      "exit_code": 0,
+      "seconds": 79.64667363499757
+    },
+    {
+      "label": "mpi4-test_survey_likelihood_mpi",
+      "exit_code": 0,
+      "seconds": 3.466068089939654
+    },
+    {
+      "label": "sanitizer0-test_map_optimizer",
+      "exit_code": 0,
+      "seconds": 2.072159208008088
+    },
+    {
+      "label": "sanitizer0-test_particle_mesh_posterior",
+      "exit_code": 0,
+      "seconds": 23.29924952192232
+    },
+    {
+      "label": "sanitizer0-test_survey_likelihood_mpi",
+      "exit_code": 0,
+      "seconds": 6.778008027002215
+    },
+    {
+      "label": "serial0-test_framework",
+      "exit_code": 0,
+      "seconds": 2.5619434480322525
+    },
+    {
+      "label": "mpi1-test_framework",
+      "exit_code": 0,
+      "seconds": 2.991637847968377
+    },
+    {
+      "label": "sanitizer0-test_framework",
+      "exit_code": 0,
+      "seconds": 17.488437048974447
+    }
+  ],
+  "builds": [
+    {
+      "variant": "serial",
+      "exit_code": 0
+    },
+    {
+      "variant": "mpi",
+      "exit_code": 0
+    },
+    {
+      "variant": "pencil",
+      "exit_code": 0
+    },
+    {
+      "variant": "sanitizer",
+      "exit_code": 0
+    }
+  ],
+  "extra_serial_model_builds": [
+    {
+      "label": "serial",
+      "exit_code": 0
+    },
+    {
+      "label": "mpi",
+      "exit_code": 0
+    },
+    {
+      "label": "sanitizer",
+      "exit_code": 0
+    }
+  ]
+}

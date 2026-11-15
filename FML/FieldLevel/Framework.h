@@ -596,6 +596,22 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         BasicPosterior(Forward &&, Likelihood) = delete;
         const Forward & model() const { return model_; }
         const Likelihood & likelihood() const { return likelihood_; }
+        // Same normalized target as evaluate(), without the forward-model pullback.
+        // Custom likelihoods retain their existing evaluate interface/cotangent work.
+        template <class Work>
+        double value(const Field & white, const std::vector<double> & p, Work & w) const {
+            Execution<Forward>::validate(model_, white, p);
+            if (!model_.in_support(p)) return HUGE_VAL;
+            double U = 0, unused_noise = 0;
+            try {
+                const auto & prediction = model_.predict(white, p, w);
+                U = likelihood_.evaluate(prediction, p.back(), w.cotangent_buffer(), unused_noise);
+            } catch (const UnrepresentableState &) { return HUGE_VAL; }
+            for (double x : white) U += .5 * x * x;
+            U = Execution<Forward>::sum(model_, U);
+            for (size_t j = 0; j < p.size(); ++j) U += model_.parameters()[j].penalty(p[j]);
+            return U;
+        }
         template <class Work>
         double evaluate(const Field & white,
                         const std::vector<double> & p,

@@ -1,7 +1,7 @@
 USE_MPI ?= false
 USE_OMP ?= false
 USE_FFTW ?= true
-TARGETS := test_particle_mesh_observation test_particle_mesh_checkpoint test_particle_mesh_adjoint test_particle_mesh_posterior
+TARGETS := test_map_optimizer test_particle_mesh_observation test_particle_mesh_checkpoint test_particle_mesh_adjoint test_particle_mesh_posterior
 TARGETS += test_survey_checkpoint_mpi test_survey_likelihood_mpi test_bao_gradients test_bao_validation test_field_level test_field_level_safety test_framework test_framework_resolution test_framework_mpi test_framework_lpt_mpi test_framework_reconstruction_mpi test_framework_checkpoint_mpi test_particle_mesh
 ifeq ($(USE_MPI),true)
 TARGETS += test_framework_linear_grid_mpi test_framework_lpt_grid_mpi test_survey_grid_mpi test_checkpoint_grid_mpi
@@ -182,3 +182,10 @@ particle-mesh-checkpoint: test_particle_mesh_checkpoint
 	  $(SAFETY_RUN) ./test_particle_mesh_checkpoint "$$pm_tmp/$$backend-np$$np-observed" resume $$backend 0 1 1 4; \
 	done; done
 run: particle-mesh-checkpoint
+
+.PHONY: map-optimizer
+test_map_optimizer: test_map_optimizer.o Global.o $(PM_GRID_OBJECT)
+	$(LINK_EXE)
+map-optimizer: test_map_optimizer
+	@set -e; for np in $(NP_LIST); do $(SAFETY_RUN) ./test_map_optimizer; done
+run: map-optimizer

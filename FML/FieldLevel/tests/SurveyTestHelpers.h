@@ -293,6 +293,7 @@ static void posterior_tests(Forward & m,
     Field gs, scratch;
     std::vector<double> gp, sp;
     const double U = post.evaluate(s, p, w, gs, gp), h = 1e-5;
+    check_local(std::abs(U-post.value(s,p,w))<1e-11,"survey value-only target matches full evaluation");
     auto direction = m.white_noise(818), a = s, b = s;
     double analytic = 0;
     for (size_t q = 0; q < s.size(); ++q) {

@@ -378,3 +378,16 @@ Serial/MPI slab/pencil/sanitizer replay and legacy bitwise comparisons pass.
 A costlier N64/M32 attempt is retained; the public optimizer is unchanged.
 Broader seed/amplitude/refinement checks remain explicitly deferred by request;
 this is reconstruction validation, not posterior calibration. Item 52 remains open.
+
+## MAP optimizer and frozen-data comparison (15 November 2026)
+
+`MAP.h` adds an options overload with limited-memory L-BFGS and value-only
+gradient descent; legacy `map()` is unchanged. `BasicPosterior::value` omits the
+forward-model adjoint while retaining the normalized target and priors. Distributed
+field/scalar reductions, controls, curvature and history limits are tested.
+[The frozen-data comparison](pm_optimizer_validation/RESULTS.md) preserves legacy24
+coefficients bitwise; value-only GD cuts pullbacks from 144 to 25.
+L-BFGS status is LineSearchFailed, raw gradient 0.000116038 at
+83 iterations with tolerance2e-5. Its recovery/error and work/memory
+measurements are reported separately. Broader refinement remains deferred, and
+posterior calibration/PM survey/tracer/RSD work remains open.

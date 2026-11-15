@@ -1,4 +1,7 @@
 #include <FML/FieldLevel/ParticleMeshPosterior.h>
+#include <FML/FieldLevel/MAP.h>
+#include <chrono>
+#include <sys/resource.h>
 #include <FML/FieldLevel/Checkpoint.h>
 #include <FML/FieldLevel/Frontend.h>
 #include <fstream>
@@ -8,10 +11,24 @@
 
 namespace FF = FML::FIELDLEVEL::FRAMEWORK;
 using FML::FIELDLEVEL::Field;
-using Model = FF::PeriodicPMModelT<FML::FIELDLEVEL::FRONTEND::Grid>;
+using BaseModel = FF::PeriodicPMModelT<FML::FIELDLEVEL::FRONTEND::Grid>;
+// Validation-only counters around public predictions/pullbacks (reset before MAP).
+struct Model : BaseModel {
+    using BaseModel::BaseModel;
+    mutable size_t forwards{},pullbacks{};
+    const FF::Modes & predict(const Field & s,const std::vector<double> & p,Workspace & w) const {
+        ++forwards;return BaseModel::predict(s,p,w);
+    }
+    void pullback(const std::vector<double> & p,const FF::Modes & g,Workspace & w,Field & gs,std::vector<double> & gp) const {
+        ++pullbacks;BaseModel::pullback(p,g,w,gs,gp);
+    }
+};
+namespace FML::FIELDLEVEL::FRAMEWORK {
+    template <> struct Execution<::Model> : Execution<::BaseModel> {};
+}
 struct Wave { int x, y, z; };
 struct Controls {
-    int n{}, m{}, steps{}, seed{}, fd{}, fit{}, forward{}, window{}, reference{};
+    int n{}, m{}, steps{}, seed{}, fd{}, fit{}, forward{}, window{}, reference{}, optimizer{}, history{5};
     double power{}, final{};
     std::string prefix, data;
 };
@@ -192,7 +209,34 @@ static void run(const Controls & c,Model & model) {
         auto initial=coefficients(300);for(auto & x:initial)x*=.05;
         const auto start=expand(model,initial);const double initial_u=value(model,posterior,start,p,work);
         f=output(c.prefix+".fit_start_modes.csv");row(f,global_modes(model,model.predict(start,p,work)));
-        const auto fit=FF::map(posterior,start,p,false,c.fit,2e-5);
+        model.forwards=model.pullbacks=0;
+        const auto begin=std::chrono::steady_clock::now();
+        FF::MAPOptimizationResult optimization;
+        const auto fit=[&] {
+            if(c.optimizer==0)return FF::map(posterior,start,p,false,c.fit,2e-5);
+            FF::MAPOptions options;options.algorithm=c.optimizer==1?FF::MAPAlgorithm::GradientDescent:FF::MAPAlgorithm::LBFGS;
+            options.vary_parameters=false;options.max_iterations=c.fit;options.tolerance=2e-5;options.history=c.history;
+            optimization=FF::map(posterior,start,p,options);return optimization.fit;
+        }();
+        const double seconds=model.maximum(std::chrono::duration<double>(std::chrono::steady_clock::now()-begin).count());
+        const auto forwards=model.forwards,pullbacks=model.pullbacks;
+        if(c.optimizer==0)optimization.gradient_evaluations=pullbacks;
+        struct rusage usage{};const bool rss_ok=getrusage(RUSAGE_SELF,&usage)==0;
+#ifdef __APPLE__
+        const double rss=rss_ok ? double(usage.ru_maxrss) : -1.;
+#else
+        const double rss=rss_ok ? double(usage.ru_maxrss)*1024 : -1.;
+#endif
+        const double total_rss=model.sum(rss),history_bytes=model.sum(double(optimization.peak_history_bytes));
+        f=output(c.prefix+".fit_optimizer.csv");
+        if(FML::ThisTask==0)f<<"optimizer,history,seconds,forwards,pullbacks,value_evaluations,gradient_evaluations,peak_history_pairs,total_history_bytes,sum_rank_peak_rss_bytes,curvature_skips,history_resets\n"
+            <<c.optimizer<<','<<c.history<<','<<seconds<<','<<forwards<<','<<pullbacks<<','<<optimization.value_evaluations<<','<<optimization.gradient_evaluations<<','
+            <<optimization.peak_history_pairs<<','<<history_bytes<<','<<total_rss<<','<<optimization.curvature_skips<<','<<optimization.history_resets<<'\n';
+        if(c.optimizer) {
+            f=output(c.prefix+".fit_trace.csv");
+            if(FML::ThisTask==0){f<<"iteration,potential,gradient_norm,field_gradient_l2,step,value_evaluations,gradient_evaluations\n";
+                for(const auto & x:optimization.trace)f<<x.iteration<<','<<x.potential<<','<<x.gradient_norm<<','<<x.field_gradient_l2<<','<<x.step<<','<<x.value_evaluations<<','<<x.gradient_evaluations<<'\n';}
+        }
         Field g;std::vector<double> scalar;posterior.evaluate(fit.white,p,work,g,scalar);
         const auto fitted=project(model,fit.white),pg=project(model,g);
         const auto final_modes=global_modes(model,model.predict(fit.white,p,work));
@@ -207,15 +251,15 @@ static void run(const Controls & c,Model & model) {
 int main(int argc,char ** argv) {try {
     Controls c;
     FML::COMMUNICATION::collective_try([&] {
-        if(argc<11 || argc>14)throw std::invalid_argument("pm_nonlinear PREFIX N M STEPS SEED POWER FINAL_A DATA_PATH FD FIT_ITERATIONS [FORWARD_ONLY] [FORCE_WINDOW] [CIC_REFERENCE]");
+        if(argc<11 || argc>16)throw std::invalid_argument("pm_nonlinear PREFIX N M STEPS SEED POWER FINAL_A DATA_PATH FD FIT_ITERATIONS [FORWARD_ONLY] [FORCE_WINDOW] [CIC_REFERENCE] [OPTIMIZER] [HISTORY]");
         auto integer=[](const char * text){size_t end;int x=std::stoi(text,&end);if(end!=std::string(text).size())throw std::invalid_argument("Invalid integer");return x;};
         auto real=[](const char * text){size_t end;double x=std::stod(text,&end);if(end!=std::string(text).size()||!std::isfinite(x))throw std::invalid_argument("Invalid real");return x;};
-        c.prefix=argv[1];c.n=integer(argv[2]);c.m=integer(argv[3]);c.steps=integer(argv[4]);c.seed=integer(argv[5]);c.power=real(argv[6]);c.final=real(argv[7]);c.data=argv[8];c.fd=integer(argv[9]);c.fit=integer(argv[10]);if(argc>=12)c.forward=integer(argv[11]);if(argc>=13)c.window=integer(argv[12]);if(argc==14)c.reference=integer(argv[13]);
+        c.prefix=argv[1];c.n=integer(argv[2]);c.m=integer(argv[3]);c.steps=integer(argv[4]);c.seed=integer(argv[5]);c.power=real(argv[6]);c.final=real(argv[7]);c.data=argv[8];c.fd=integer(argv[9]);c.fit=integer(argv[10]);if(argc>=12)c.forward=integer(argv[11]);if(argc>=13)c.window=integer(argv[12]);if(argc>=14)c.reference=integer(argv[13]);if(argc>=15)c.optimizer=integer(argv[14]);if(argc==16)c.history=integer(argv[15]);
     },"PM nonlinear controls");
     require(c.n>=16&&c.n<=(c.forward==1?128:64)&&c.n%2==0&&c.m>=16&&c.m<=64&&c.m%2==0&&c.steps>=2&&c.steps<=64&&c.seed>=0&&c.seed<=1000000&&c.power>0&&c.power<=.01&&c.final>.2&&c.final<=1&&
-            (c.fd==0||c.fd==1)&&c.fit>=0&&c.fit<=200&&(c.forward==0||c.forward==1)&&(c.window==0||c.window==1)&&c.reference>=0&&c.reference<=64&&
+            (c.fd==0||c.fd==1)&&c.fit>=0&&c.fit<=200&&(c.forward==0||c.forward==1)&&(c.window==0||c.window==1)&&c.reference>=0&&c.reference<=64&&c.optimizer>=0&&c.optimizer<=2&&c.history>=1&&c.history<=32&&
             (!c.forward||(c.fd==0&&c.fit==0)),"Invalid bounded PM controls");
-    std::ostringstream controls;controls<<std::setprecision(17)<<c.n<<','<<c.m<<','<<c.steps<<','<<c.seed<<','<<c.power<<','<<c.final<<','<<c.fd<<','<<c.fit<<','<<c.forward<<','<<c.window<<','<<c.reference;
+    std::ostringstream controls;controls<<std::setprecision(17)<<c.n<<','<<c.m<<','<<c.steps<<','<<c.seed<<','<<c.power<<','<<c.final<<','<<c.fd<<','<<c.fit<<','<<c.forward<<','<<c.window<<','<<c.reference<<','<<c.optimizer<<','<<c.history;
     FF::CHECKPOINT::same_string(controls.str());FF::CHECKPOINT::same_string(c.prefix);FF::CHECKPOINT::same_string(c.data);
     FML::FIELDLEVEL::FRONTEND::initialize(c.n,c.m);auto model=make_model(c);auto window_file=output(c.prefix+".window.csv");if(FML::ThisTask==0)window_file<<"force_window\n"<<c.window<<'\n';auto observation_file=output(c.prefix+".observation.csv");if(FML::ThisTask==0)observation_file<<"reference_cic_mesh\n"<<c.reference<<'\n';if(c.forward)forward_only(c,model);else run(c,model);return 0;
 } catch(const std::exception & e) {if(FML::ThisTask==0)std::cerr<<e.what()<<'\n';return 1;}}
