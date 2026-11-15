@@ -1,0 +1,86 @@
+\chapter{Configuration-space statistics}\label{ch:configuration-space}
+\chapterstatus{written}{2026-11-14}
+
+Statistics measured directly from point catalogues: pair counts and two-point correlation functions in boxes and surveys,
+the isotropic three-point function, $k$-nearest-neighbour distributions and counts-in-cells, and environment-dependent
+clustering (density splits and marked correlations).
+
+\begin{modulebox}{PairCounting, ThreePointCorrelation, CountsInCells, Environment}
+\nsp{FML::CORRELATIONFUNCTIONS::PAIRCOUNTS}: \file{PairCounting/PairCount.h} (\code{RadialCorrelationFunctionBox},
+\code{AngularCorrelationFunctionBox}, \code{RadialCorrelationFunctionSurvey}, \code{AngularCorrelationFunctionSurvey},
+\code{CorrelationFunctionEstimator}). \nsp{FML::THREEPOINT}: \file{ThreePointCorrelation/ThreePointCorrelation.h}
+(\code{periodic}). \nsp{FML::COUNTS_IN_CELLS}: \file{CountsInCells/SpatialStatistics.h} (\cls{SpatialStatistics}).
+\nsp{FML::ENVIRONMENT}: \file{Environment/EnvironmentClustering.h}.\par
+Documentation: \file{PairCounting/RankAssignment.md}, \file{ThreePointCorrelation/README.md} and \file{VALIDATION.md},
+\file{CountsInCells/README.md}, \file{Environment/README.md}. Tests: \file{tests/test_paircount.cpp} and the \file{tests/} folders of
+each module. The catalogue statistics are also available from Python (\cref{sec:io-python}).
+\end{modulebox}
+
+\section{Pair counts and correlation functions}\label{sec:cs-pairs}
+
+Pair counting bins all pairs with separation below $r_{\max}$ on a cell list (\cref{sec:part-search}) whose cells are pruned by distance,
+in 1, 2 or 3 dimensions, periodic or not, with weights (\code{get_weight}), in $r$ or in $(r,\mu)$ with $\mu$ the cosine to the line of sight
+(through the midpoint of the pair from an observer, or a fixed direction). Any extra quantity can be binned over the pairs by a callback
+(e.g.\ pairwise velocities $v_{12}$), and multipoles in $\mu$ are formed from the $(r,\mu)$ counts.
+
+\paragraph*{Estimators.} In a periodic box the random pairs are analytic: $\xi(r)=DD/(N(N-1)/2\cdot f_{\rm shell})-1$ with $f_{\rm shell}$ the shell
+volume fraction. For surveys, with data $D$ and randoms $R$ (normalised pair counts),
+\begin{gather}
+\xi_{\rm LS}=\frac{DD-2DR+RR}{RR},\qquad\xi_{\rm HAM}=\frac{DD\,RR}{DR^2}-1,\qquad\xi_{\rm DP}=\frac{DD}{DR}-1,\qquad\xi_{\rm PH}=\frac{DD}{RR}-1,
+\end{gather}
+Landy--Szalay \cite{LandySzalay1993}, Hamilton \cite{Hamilton1993}, Davis--Peebles \cite{DavisPeebles1983} and Peebles--Hauser, plus Hewett and
+cross-correlation variants with separate random catalogues \cite{Kerscher2000}.
+
+\paragraph*{Parallelism.} Every task holds the complete catalogues and counts a share of the pairs. Occupied cells are assigned to tasks in decreasing
+order of an estimated cost, the number of candidate particle-distance tests with the distance-pruned neighbour cells (including the other catalogue in
+cross counts), using a min-heap of accumulated loads; within a task OpenMP threads share the cells. For a constructed cross-catalogue case the estimate
+halved the load of the busiest task.
+
+\begin{validation}[Validation: pair counts]
+Auto and cross counts in 1D, 2D and 3D, periodic and not, weighted, up to $r_{\max}=0.45$, against brute force; catalogues of very different sizes; $(r,\mu)$
+counts with the observer at infinity; $\xi\approx0$ for uniform points; extra binned quantities; the Landy--Szalay estimate of uniform points; the cost
+estimate against an exhaustive cell geometry count.
+\end{validation}
+
+\section{The three-point correlation function}\label{sec:cs-3pcf}
+
+The isotropic 3PCF of a periodic catalogue is measured in Legendre multipoles of the angle between two legs from a primary, $\zeta(r_1,r_2,\mu)=\sum_\ell
+\zeta_\ell(r_1,r_2)\mathcal L_\ell(\mu)$, up to $\ell=16$, with the spherical-harmonic factorisation of Slepian and Eisenstein \cite{SlepianEisenstein2015}:
+for each primary the neighbours in shell $i$ give $a^t_{\ell m}(i)=\sum Y_{\ell m}(\hat{\bm r})$, and
+\begin{equation}
+M_{\ell}(i,j)\mathrel{+}=\frac{4\pi}{2\ell+1}\sum_ma^a_{\ell m}(i)a^{b*}_{\ell m}(j)-\delta_{ab}\delta_{ij}N_a(i),
+\end{equation}
+the last term removing the same neighbour on both legs (it contributes to every $\ell$). The cost per primary is proportional to its number of neighbours,
+not their square. With a uniform random catalogue $R$ all eight $D/R$ orientations are counted, normalised by the number of distinct objects, and combined
+in the density-contrast form of Szapudi and Szalay \cite{SzapudiSzalay1998},
+\begin{equation}
+\zeta_\ell(i,j)=\frac{2\ell+1}{f_if_j}\sum_{cab}(-1)^{n_R}Q_{cab}(\ell,i,j),
+\end{equation}
+with analytic periodic shell volumes $f_i$ in the denominator, which removes the uniform and disconnected terms. Catalogues are replicated on all tasks and the
+primaries divided among them.
+
+\begin{validation}[Validation: 3PCF]
+All orientations, radial bins and $\ell=0$--16 agree with explicit enumeration of ordered distinct triplets to $2\times10^{-10}$; collinear and right-triangle
+configurations check the angular normalisation; isolated pairs give zero; invariance under permutation, rotation, translation and leg exchange; identical results on
+1, 2 and 4 tasks to $10^{-10}$ (\file{VALIDATION.md}).
+\end{validation}
+
+\section{Nearest neighbours and counts in cells}\label{sec:cs-cic}
+
+\cls{SpatialStatistics} builds a periodic (or non-periodic) KD-tree of a tracer catalogue and evaluates statistics at query points (uniform points from a
+counter-based generator keyed by a global query ID, so they do not depend on the decomposition, with optional exclusion of one tracer for tracer-centred
+statistics):
+\begin{itemize}
+\item the distances to the $k$-th nearest neighbours and the $k$NN-CDFs $F_k(r)=P(d_k\le r)$ \cite{Banerjee2021}, accumulated as exact integer hit counts;
+\item counts in spheres and the counts-in-cells summaries for several radii from one search at the largest radius: the occupation histogram (with an overflow
+      bin), mean and variance, falling factorial moments $F_q=\langle N(N-1)\cdots(N-q+1)\rangle$ (which remove Poisson self-counting) up to $q=16$, the
+      Poisson-subtracted variance, and the PDF of $\delta=N/(\bar nV)-1$.
+\end{itemize}
+Non-periodic catalogues need a rectangular window with all cells inside it.
+
+\section{Environment-dependent clustering}\label{sec:cs-environment}
+
+\file{EnvironmentClustering.h} measures top-hat environments $\delta=N(<R)/\bar N-1$ at query points or at the tracers (excluding themselves), splits the queries
+into $Q$ density quantiles (ties broken by ID) and computes the quantile--tracer cross-correlations $\xi_q$ in one pair traversal \cite{Paillas2021}; the quantiles
+weighted by their sizes sum to the parent cross-correlation. Marked correlation functions weight pairs by marks such as $[(1+\delta_s)/(1+\delta_s+\delta)]^p$
+\cite{White2016}, returning $\xi$, the weighted $\xi$ and the mark ratio $WW/DD$. Catalogues are replicated on all tasks.

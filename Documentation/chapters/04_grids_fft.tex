@@ -1,0 +1,140 @@
+\chapter{Grids and Fourier transforms}\label{ch:grids-fft}
+\chapterstatus{written}{2026-11-14}
+
+Fields are stored on distributed grids with in-place FFTW transforms \cite{Frigo2005}: real grids with real-to-complex
+transforms for densities and potentials, complex grids for wave functions and the NUFFT, and generic MPI grids of any type
+for the multigrid solvers. Generic algorithms are written against one interface, so they run on slabs and on pencils.
+
+\begin{modulebox}{FFTWGrid}
+\nsp{FML::GRID}: \file{FFTWGrid/FFTWGrid.h} (\cls{FFTWGrid}), \file{FFTWGrid/CFFTWGrid.h} (\cls{CFFTWGrid}),
+\file{FFTWGrid/FFTWGlobal.h} (precision), \file{FFTWGrid/GridInterface.h}, \file{FFTWGrid/GhostedCells.h}
+(\cls{GhostedCells}), \file{FFTWGrid/FourierResampling.h} (\code{resize_fourier_grid}, \cls{FourierResamplingPlan}),
+\file{FFTWGrid/CopyFourierModes.h}.\par
+Documentation: \file{FFTWGrid/FourierResampling.md}. Tests: \file{tests/test_grids.cpp}, \file{tests/test_complex_grids.cpp},
+\file{tests/test_grid_generic.cpp}, \file{tests/test_ghosted_cells.cpp}, \file{tests/test_fourier_resampling.cpp}.
+\end{modulebox}
+\begin{modulebox}{MPIGrid}
+\nsp{FML::GRID}: \file{MPIGrid/MPIGrid.h} (\cls{MPIGrid}), \file{MPIGrid/MPIMultiGrid.h} (\cls{MPIMultiGrid}),
+\file{MPIGrid/ConvertMPIGridFFTWGrid.h}. The adaptive grid \cls{AdaptiveMPIGrid} is described with its solver in
+\cref{sec:mg-amr}.
+\end{modulebox}
+
+\section{FFTWGrid}\label{sec:grids-fftwgrid}
+
+\cls{FFTWGrid} holds an $N_{\rm mesh}^D$ real field ($D\ge2$) split in x-slabs, with the real and the Fourier grid in the
+same array: the transforms are in place. The real grid is padded to $2(N_{\rm mesh}/2+1)$ along the last axis; the Fourier
+grid has $N_{\rm mesh}^{D-1}(N_{\rm mesh}/2+1)$ complex cells, local in $k_x$. The memory is
+\[
+[\text{extra slices left}]\;[\text{main grid}]\;[\text{extra slices right}],
+\]
+so a cell $k$ slices to the left is at \code{index - k * stride_x}, also into the extra slices. The grid records whether it
+holds real or Fourier data.
+
+\paragraph*{Conventions.} \code{fftw_r2c()} divides by $N_{\rm mesh}^D$, so the Fourier values are the amplitudes of the
+discrete Fourier series, $\delta(\bm x)=\sum_{\bm k}\delta_{\bm k}e^{i\bm k\cdot\bm x}$, and \code{fftw_c2r()} does not
+normalise (\cref{ch:conventions}). Wave-vectors are $\bm k=2\pi\bm n$ in box units (multiply by $1/B$ for physical units),
+with $n_i\in(-N/2,N/2]$ and $n_D\in[0,N/2]$. A mode with $0<n_D<N/2$ also stands for $-\bm k$ (weight 2 in sums over the
+grid; \code{fourier_mode_multiplicity}). The DC mode lives on the task whose slab starts at $x=0$ (\code{has_dc_mode}).
+The precision is double by default, float with \code{SINGLE_PRECISION_FFTW} and long double with
+\code{LONG_DOUBLE_PRECISION_FFTW}.
+
+\paragraph*{Access.} By local integer coordinates or by index (\code{get_real}, \code{set_real}, \code{add_real},
+\code{get_fourier}, \ldots, with \code{_from_index} variants), positions in $[0,1)^D$ (\code{get_real_position}),
+wave-vectors and their norms by index, filling from a function of position or wave-vector, and range iterators over the real
+or Fourier cells, optionally restricted to rows for OpenMP:
+
+\begin{cppcode}[Filtering a field in Fourier space]
+#include <FML/FFTWGrid/FFTWGrid.h>
+FML::GRID::FFTWGrid<3> grid(Nmesh, 1, 1);            // one extra slice on each side
+grid.fill_real_grid([](std::array<double, 3> & x) { return f(x); });
+grid.fftw_r2c();                                     // normalised by 1 / Nmesh^3
+#pragma omp parallel for
+for (IndexIntType irow = 0; irow < grid.get_local_nrows(); irow++)
+    for (auto && i : grid.get_fourier_range_of_rows(irow, irow + 1)) {
+        std::array<double, 3> kvec;  double kmag;
+        grid.get_fourier_wavevector_and_norm_by_index(i, kvec, kmag);
+        grid.set_fourier_from_index(i, grid.get_fourier_from_index(i) * W(kmag / Boxsize));
+    }
+grid.fftw_c2r();
+grid.communicate_boundaries();                       // fill the extra slices
+\end{cppcode}
+
+\paragraph*{Plans and wisdom.} FFTW plans are cached and reused by every grid with the same dimension, size, alignment, thread
+count and planner flag. The flag is \code{FFTW_ESTIMATE} by default; \code{set_fftw_planner_flag} (or the name
+\code{estimate}, \code{measure}, \code{patient}, \code{exhaustive}) selects slower planning for faster transforms, with the grid
+data preserved during planning. \code{save_fftw_wisdom} and \code{load_fftw_wisdom} store the plans so that a later run does not
+measure again (valid for the same FFTW version, precision, machine and threads; collective, with task 0 doing the file I/O). The
+cells of the right extra slices that FFTW may use as scratch space in an in-place transform are backed up and restored.
+
+\paragraph*{Checkpoints and memory.} \code{dump_to_file} and \code{load_from_file} write a raw copy per task (read back with the
+same decomposition; truncated files and mismatched decompositions abort with a clear message). The memory of a grid can be
+computed without allocating it, and with memory logging every grid carries a label.
+
+\paragraph*{Complex grids.} \cls{CFFTWGrid} is a complex field with complex-to-complex transforms (\code{fftw_forward},
+normalised by $N_{\rm mesh}^{-D}$, and \code{fftw_backward}) and the same constructor, slabs, ghosts, index functions and
+checkpoints, but no padding and all modes ($n_i\in(-N/2,N/2]$ on every axis, multiplicity 1). It holds the wave function of
+the Schrödinger--Poisson solver (\cref{ch:hydro-wavedm}) and the fine grids of the NUFFT (\cref{ch:mass-assignment}).
+\cls{CPencilGrid} is its pencil counterpart.
+
+\section{The grid interface}\label{sec:grids-interface}
+
+\file{GridInterface.h} defines the interface that generic code is written against, satisfied by \cls{FFTWGrid} and
+\cls{PencilGrid} (checked at compile time by \code{has_fourier_grid_interface}). The rules:
+\begin{itemize}
+\item loop over Fourier modes by rows (\code{get_local_nrows_fourier}, \code{get_fourier_range_of_rows}) or with
+      \code{for_each_nonzero_fourier_mode}, which passes the index, $\bm k$, $|\bm k|$ and the weight of the mode;
+\item never decode a Fourier index or read the raw Fourier coordinates (local $k_x$ for slabs, global $k_x$ and local $k_y$,
+      $k_z$ for pencils): use \code{get_fourier_integer_wavevector_from_index} or the wave-vector functions;
+\item make grids with \code{make_grid<Grid>(Nmesh, left, right, domain)} or \code{make_grid_like} on the particle domain,
+      not with a constructor; the local cells are \code{get_local_range(axis)}, and \code{CellOwners} gives the task of any cell;
+\item never reuse a real-space index between grids with different ghost layers (a pencil index depends on them).
+\end{itemize}
+Typical generic code is templated on the grid type with a fast path for \cls{FFTWGrid} behind \code{if constexpr
+(is_fftwgrid_v<...>)}.
+
+\section{Fourier resampling}\label{sec:grids-resampling}
+
+\code{resize_fourier_grid(input, nmesh)} copies the Fourier coefficients to a grid of another size, without interpolation or
+volume factors. A mode survives only if every signed component satisfies $2|n_i|<\min(N_{\rm in},N_{\rm out})$: the ambiguous
+Nyquist planes of even meshes are dropped, the highest modes of odd meshes kept, and all other output modes are zero. This is
+the zero padding of the de-aliased LPT (\cref{ch:lpt}), the coarse multigrid solves and the change of resolution of the
+initial conditions.
+
+For repeated resampling a \cls{FourierResamplingPlan} gathers both slab layouts once, determines the routing per retained
+x-slice as contiguous runs along the last axis (merged when both input and output indices are contiguous), and fixes the
+largest payload of every cyclic peer step; applications send only complex values in bounded \code{MPI_Sendrecv} messages
+(64\,MiB by default, the minimum over tasks). Invalid reuse or aliasing throws collectively before the output is touched.
+\file{CopyFourierModes.h} does the same between grids of any size, decomposition and type (e.g.\ pencils), sending each mode to
+the task that has it.
+
+\begin{validation}[Validation: Fourier resampling]
+Every owned output coefficient against an independent signed-wave oracle (excluded modes exactly zero, DC and non-zero Nyquist
+input) in 2D, 3D and 4D, up, down and same size, odd and even meshes, a reused plan with new values, messages of one value and
+not aligned with rows, task-dependent caps, and the preservation of the input and the halos.
+\end{validation}
+
+\section{Generic MPI grids}\label{sec:grids-mpigrid}
+
+\cls{MPIGrid} is a grid of any type $T$ in any dimension, split in x-slabs or, given a \cls{Domain}, in x--y pencils, with any
+number of ghost layers along the split axes. The main cells have the local index $((i_x N_{y,\rm loc}+i_y)N+i_z)$; the extra
+x-slices are before and after the main grid in memory, while the y-layers of pencils are stored after them (including the
+corners), so they are reached through \code{index_from_coord}, \code{get_neighbor_gridindex} or \code{get_shifted_index}.
+Axes that are not split wrap periodically in the local grid. The index helpers are inlined because they sit in the inner loops of
+the solvers. \cls{MPIMultiGrid} is the hierarchy of \cls{MPIGrid}s with half the cells per level, with restriction (the average of
+the $2^D$ fine cells; the fine cells of a coarse cell are on the same task) used by the multigrid solvers (\cref{ch:multigrid}).
+\file{ConvertMPIGridFFTWGrid.h} copies the main grid between an \cls{MPIGrid} and an \cls{FFTWGrid} (or any grid with the
+interface, on its own domain).
+
+\cls{GhostedCells} holds per-cell data of any trivially copyable type (labels, flags, indices) on the local cells of a slab or
+pencil grid with ghost layers filled periodically from the neighbours, corners included (the higher axes are exchanged first, then
+the lower ones carry their ghosts); tasks without cells take no part. It is what the cosmic-web, void and watershed codes use for
+their labels.
+
+\begin{validation}[Validation: grids]
+\file{tests/test_grids.cpp} on 1, 2 and 4 tasks: FFT round trips with extra slices (with \code{FFTW_MEASURE} and the 2D case
+where FFTW needs more memory than the local slices), move semantics, checkpoints (and aborts on truncated files, a different
+decomposition or an unwritable path), ghost communication on thin slabs and non-periodic grids, index arithmetic and operators.
+\file{tests/test_complex_grids.cpp}: the complex transforms against the exact coefficients of plane waves (both signs, Nyquist),
+slabs equal to pencils. \file{tests/test_grid_generic.cpp}: the power-spectrum functions give the same results on
+\cls{FFTWGrid} and \cls{PencilGrid}. \file{tests/test_ghosted_cells.cpp}: every ghost and corner holds the cell it wraps to.
+\end{validation}

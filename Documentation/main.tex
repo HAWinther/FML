@@ -1,0 +1,105 @@
+% =====================================================================================================================
+% FML: the book. Build with `make` (latexmk) or: pdflatex main; bibtex main; makeindex main; pdflatex main (x2)
+% One file per chapter in chapters/. See README.md for the conventions and the status of each chapter.
+% =====================================================================================================================
+\documentclass[11pt,a4paper,twoside,openright]{book}
+\input{preamble}
+
+\begin{document}
+\frontmatter
+\begin{titlepage}
+\centering
+\vspace*{3cm}
+{\Huge\bfseries FML\par}
+\vspace{0.6cm}
+{\LARGE A C++ library for cosmology and large-scale structure\par}
+\vspace{0.4cm}
+{\large Equations, algorithms, implementation and validation\par}
+\vspace{2.5cm}
+{\large Hans A.\ Winther\par}
+\vspace{0.3cm}
+{\normalsize Institute of Theoretical Astrophysics, University of Oslo\par}
+\vfill
+{\normalsize \github{HAWinther/FML}\par}
+\vspace{0.3cm}
+{\small Documentation version of \today\par}
+\end{titlepage}
+
+\cleardoublepage
+\input{chapters/00_preface}
+\tableofcontents
+
+\mainmatter
+% ---------------------------------------------------------------------------------------------------------------------
+\part{Introduction}\label{part:intro}
+\input{chapters/01_introduction}
+\input{chapters/02_conventions}
+\input{chapters/02b_getting_started}
+
+\part{Infrastructure}
+\input{chapters/03_parallelism}
+\input{chapters/04_grids_fft}
+\input{chapters/05_particles}
+\input{chapters/06_mass_assignment}
+\input{chapters/07_numerics}
+\input{chapters/08_multigrid}
+\input{chapters/09_io_utilities}
+
+\part{The homogeneous universe and linear theory}\label{part:linear}
+\input{chapters/10_background}
+\input{chapters/11_recombination}
+\input{chapters/12_linear_perturbations}
+\input{chapters/13_cmb_spectra}
+\input{chapters/14_extended_models}
+\input{chapters/15_growth_transfer}
+
+\part{Analytic models of nonlinear structure}
+\input{chapters/16_perturbation_theory}
+\input{chapters/17_spherical_collapse}
+\input{chapters/18_halo_model}
+\input{chapters/19_fitting_emulators}
+
+\part{Initial conditions}
+\input{chapters/20_random_fields}
+\input{chapters/21_lpt}
+
+\part{Simulations}
+\input{chapters/22_nbody_pm}
+\input{chapters/23_short_range}
+\input{chapters/24_simulation_code}
+\input{chapters/25_mg_simulations}
+\input{chapters/26_hydro_wavedm}
+\input{chapters/27_pgd_baryonification}
+
+\part{Identifying structures}
+\input{chapters/28_halo_finding}
+\input{chapters/29_cosmic_web}
+\input{chapters/30_voids_tessellation}
+
+\part{Clustering statistics}
+\input{chapters/31_power_spectra}
+\input{chapters/32_configuration_space}
+\input{chapters/33_higher_order_ensemble}
+\input{chapters/34_galaxy_mocks}
+
+\part{Surveys, lensing and inference}
+\input{chapters/35_surveys}
+\input{chapters/36_weak_lensing}
+\input{chapters/37_field_level}
+\input{chapters/38_sampling_fitting}
+
+\part{Applications}
+\input{chapters/39_snapshot_analyzer}
+
+\appendix
+\input{chapters/A_module_index}
+
+\backmatter
+\bibliographystyle{unsrtnat}
+\cleardoublepage
+\phantomsection
+\addcontentsline{toc}{chapter}{Bibliography}
+\bibliography{references}
+\cleardoublepage\phantomsection\addcontentsline{toc}{chapter}{\indexname}
+\printindex
+\end{document}

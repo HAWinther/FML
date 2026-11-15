@@ -1,0 +1,177 @@
+\chapter{SimulationCode}\label{ch:simulation-code}
+\chapterstatus{written}{2026-11-14}
+
+SimulationCode is the complete particle--mesh and COLA simulation program of \fml{}: one parameter file sets up the
+initial conditions, the evolution and the analysis during the run. It uses the slab decomposition, so it is not meant
+for very high resolution, but is well suited to fast approximate simulations and large suites of runs, to testing
+new models and methods, and to analysing snapshots. This chapter describes the workflow, the matter content
+(species, massive neutrinos, the $N$-body gauge), the outputs and on-the-fly analysis, and the validation. The physics
+of the steps is in \cref{ch:growth-transfer,ch:random-fields,ch:lpt,ch:nbody-pm,ch:short-range}, the cosmologies and
+gravity models in \cref{ch:mg-simulations}.
+
+\begin{modulebox}{SimulationCode}
+Program \code{nbody} (\file{src/Main.cpp}); the simulation \file{src/Simulation.h}, \file{SimulationInit.h},
+\file{SimulationStep.h}, \file{RunSimulation*.h/.cpp} (instantiations for the particle types), \file{KickDrift.h},
+\file{COLA.h}; models \file{Cosmology.h}, \file{GravityModel*.h}; matter \file{Species.h}, \file{Neutrinos.h},
+\file{NeutrinoParticles.h}, \file{NBodyGauge.h}, \file{SimulationIDE.h}; IC \file{InitialDensityField.h},
+\file{TransferInput.h/.cpp}, \file{ExternalIC.h}; analysis \file{AnalyzeOutput.h}, \file{HaloFinding.h},
+\file{SnapshotOutput.h}, \file{Lightcone/}; parameters \file{SimulationParameters.h}, \file{ParameterSchema.h}.\par
+Documentation: \file{SimulationCode/README.md}, \file{PARAMETERS.md}, \file{MODELS.md}, \file{INITIAL_CONDITIONS.md},
+\file{EVOLUTION.md}, \file{SPECIES.md}, \file{ANALYSIS.md}, \file{DEVELOPING.md}, \file{tests/README.md}; an
+annotated parameter file \file{parameterfile.lua}.
+\end{modulebox}
+
+\section{Workflow}\label{sec:sim-workflow}
+
+A run proceeds as follows.
+\begin{enumerate}
+\item \textbf{Parameters} are read from a Lua file and checked against a schema (\file{ParameterSchema.h}): types,
+      allowed values, dependencies (``used when''), incompatible combinations (an error) and unknown names (a warning
+      suggesting the intended name). \code{./nbody --parameters PARAMETERS.md} writes the reference of all parameters.
+\item \textbf{Cosmology and gravity model}: the background from the registry of \cref{ch:background}
+      (\param{cosmology_model}) and the gravity model (\param{gravity_model}), which provides
+      $G_{\rm eff}(k,a)/G$, the growth factors (\cref{ch:growth-transfer}) and the force.
+\item \textbf{Transfer input} (\param{ic_type_of_input}: a $P(k)$ or $T(k)$ file, \code{camb}, \code{class},
+      \code{internal}, \code{tables}; \cref{sec:transfer}), with optional $\sigma_8$ normalisation.
+\item \textbf{Initial conditions}: a Gaussian or non-Gaussian field (\cref{ch:random-fields}), LPT displacements to
+      order \param{ic_LPT_order} (\cref{ch:lpt}) for each species; or particles or phases from a GADGET snapshot.
+\item \textbf{Evolution}: fixed steps between the output redshifts (\param{timestep_nsteps},
+      \param{timestep_method}); in each step the density (and its $P(k)$, almost free since it is already in Fourier
+      space), the force of the gravity model, the kick and the drift, with COLA if enabled; particle migration between
+      slabs; the lightcone.
+\item \textbf{Outputs} at \param{output_redshifts}: snapshots and the analyses switched on.
+\end{enumerate}
+
+\begin{paramfile}[A minimal COLA run (excerpt of parameterfile.lua)]
+simulation_name      = "TestSim"
+simulation_boxsize   = 512.0           -- Mpc/h
+simulation_use_cola  = true
+cosmology_model      = "LCDM"
+cosmology_OmegaCDM   = 0.25;  cosmology_Omegab = 0.05;  cosmology_h = 0.7
+cosmology_As = 2.1e-9;  cosmology_ns = 0.966;  cosmology_kpivot_mpc = 0.05
+gravity_model        = "GR"
+particle_Npart_1D    = 128
+ic_type_of_input     = "internal";  ic_input_redshift = 20.0;  ic_initial_redshift = 20.0
+ic_LPT_order         = 2;  ic_random_seed = 1234;  ic_fix_amplitude = true
+timestep_method      = "Quinn";  timestep_nsteps = {30}
+force_nmesh          = 256
+output_redshifts     = {0.0};  output_folder = "output"
+pofk = true;  fof = true
+\end{paramfile}
+\begin{paramfile}[Running]
+mpirun -np 4 ./nbody parameterfile.lua
+./nbody --write-transfers parameterfile.lua tables.txt   # the solver's transfer tables, once per cosmology
+\end{paramfile}
+
+\paragraph*{Particle types.} By default one particle type that can run every configuration is compiled (120 bytes
+in 3D). With \code{USE_MINIMAL_PARTICLES} all types are compiled and the smallest one that a run needs is used
+(56--104 bytes; 120 with masses): position, velocity, ID, the stored LPT displacement fields for COLA, the Lagrangian
+coordinate, the mass and the neutrino weight are fields that a type has or not (compile-time reflection,
+\cref{ch:particles}).
+
+\section{Matter content}\label{sec:sim-species}
+
+\paragraph*{CDM and baryons.} By default CDM and baryons are one species with the CDM+baryon transfer function. With
+\param{particle_baryons} they are two sets of particles with masses in the ratio $\Om_b/\Om_{\rm cdm}$ that feel the
+total CDM+baryon density, with initial conditions from one random field and the transfer-function ratios
+(\cref{sec:linear-input}): each species displaced by its own linear field (\code{displacement}), or the relative mode
+carried by the particle masses (\code{mass}, recommended, or \code{mass_ini}; \param{particle_baryon_relative_mode}).
+Both species start from the same lattice (\param{particle_baryon_lattice} \code{= same}): interleaved lattices give a
+large spurious relative mode in a PM code (+8\% at $k=0.4\hMpc$ in linear theory). With the same lattice the
+two-species CDM+baryon $P(k)$ equals the one-species one, and the relative mode follows linear theory. In COLA both
+species share the frame of the total CDM+baryon field; Tassev's modified operators get the relative velocity wrong
+($+30\%$ in $P_{b-c}$ with 20 linear steps), so they are not allowed with two species.
+
+\paragraph*{Neutrino masses.} Three species of temperature $T_\nu=T_{\rm CMB}(N_{\rm eff}/3)^{1/4}(4/11)^{1/3}$:
+three equal masses from \param{cosmology_OmegaMNu}, or individual masses \param{cosmology_neutrino_masses_eV}. The
+background treats them exactly (\cref{sec:bg-ncdm}).
+
+\paragraph*{Linear massive neutrinos} (\param{force_linear_massive_neutrinos}). The neutrinos are a linearly evolved
+field: the force is sourced by
+\begin{equation}
+\delta_m(\vk,a)=\left[(1-f_\nu)+f_\nu\frac{T_\nu(k,a)}{T_{cb}(k,a)}\right]\delta_{cb}(\vk,a),\qquad f_\nu=\frac{\Om_\nu}{\Om_m},
+\end{equation}
+with the transfer functions of the provider, and the growth factors are scale dependent (scale-dependent COLA).
+
+\paragraph*{Neutrino particles: the $\delta f$ method} \cite{Elbers2021} (\param{particle_neutrinos}). The bulk part of
+the initial conditions is made like the CDM, $\delta_\nu=\delta_{cb}T_\nu/T_{cb}$ with the neutrino growth rate; each
+particle then gets a thermal momentum $q=y\,k_BT_{\nu0}/c$ in a random direction, with $y$ drawn from the relativistic
+Fermi--Dirac distribution $y^2/(e^y+1)$ (\cls{FermiDiracMomentumSampler}). The code velocity is the comoving
+momentum $q/(mH_0B)$, and with $u=q/(amc)$ the relativistic equations of motion in the Newtonian gauge are
+\begin{equation}
+\frac{\dd\vx}{\dd t_{\rm drift}}=\frac{\bm v}{\sqrt{1+u^2}},\qquad
+\frac{\dd\bm v}{\dd t_{\rm kick}}=-\bm F\,\frac{1+2u^2}{\sqrt{1+u^2}},
+\end{equation}
+with the same drift and kick factors as the CDM. The particles carry the $\delta f$ weights
+\begin{equation}
+w=1-\frac{f_0(y)}{f_i},\qquad f_i=f_0(y_{\rm ini})(1+\delta_{\rm ini}),
+\end{equation}
+($f_i$ is the phase-space density the particle carries, conserved along its path), so the weighted density
+$(N_{\rm grid}^3/N_\nu)\sum_iw_iW(\vx-\vx_i)$ is $\delta_\nu$: the particles carry only the perturbation, which removes
+most of the shot noise. The force uses $\delta_m=(1-f_\nu)\delta_{cb}+f_\nu\delta_\nu$. Different masses are one set of
+particles, each assigned one of the species by a hash of its ID. Validation ($1024\Mpch$, $128^3$ CDM and $128^3$
+neutrino particles): $P_\nu$ follows linear theory to 2\% (0.4\,eV) and 7\% (0.1\,eV) relative to the simulation's own
+$P_{cb}$, and $P_{cb}$ agrees with the linear-neutrino run to $<0.2\%$. Not yet with COLA, time stepping other than
+Quinn, interlacing, the $N$-body gauge or the lightcone.
+
+\paragraph*{The $N$-body gauge} (\param{force_nbody_gauge}). On very large scales a Newtonian simulation misses the
+effect of radiation and neutrinos on the growth, and the meaning of the positions is ambiguous. In the $N$-body gauge
+\cite{Fidler2015} the particles follow the Newtonian equations exactly to linear order in GR if the force is sourced
+by $\rho_{cb}(\delta_{cb}+\delta_{\rm extra})$ (\cref{sec:transfer-gauges}). The source is added to the density at every
+force calculation and the initial conditions use the $N$-body gauge transfer functions; with \code{internal} input
+the solver provides both (integrating the linear growth with the source reproduces the solver's $\delta_{cb}$ to
+$10^{-5}$), and for CAMB input \file{scripts/make_nbody_gauge_transfer.py} makes them with CLASS. For a start at $z=49$
+the effect on $P(k,z=0)$ is $\approx2\%$ at $k=10^{-3}\hMpc$ and $\ll0.1\%$ above $0.01\hMpc$.
+
+\paragraph*{Ultralight axions in the initial conditions.} With \param{ic_axion_fraction} the initial conditions come
+from the solver's mixed CDM + axion model (\param{ic_axion_log10_m}, \param{ic_axion_switch_mH}) with the particles
+all the dark matter (\code{axion_as_cdm}, \cref{sec:transfer}); the evolution is that of CDM.
+
+\section{On-the-fly analysis and output}\label{sec:sim-analysis}
+
+\begin{itemize}
+\item \textbf{Power spectra} of the CDM+baryons and the total matter at every step (\code{pofk_every_step}) with linear
+      theory and a nonlinear prediction (EuclidEmulator2, and the $f(R)$ fitting function of \cite{Winther2019};
+      \cref{ch:fitting-emulators}); at the outputs with a chosen assignment, interlacing and shot-noise subtraction
+      (\cref{ch:power-spectra}); per species with separate baryons or neutrino particles.
+\item \textbf{Redshift-space multipoles} (plane-parallel, averaged over the three axes) and \textbf{bispectra}.
+\item \textbf{Hybrid bias spectra} (\code{hybridbias}): the 15 cross spectra of the Lagrangian operators $1$,
+      $\delta_L$, $\delta_L^2-\langle\delta_L^2\rangle$, $s^2-\langle s^2\rangle$, $\nabla^2\delta_L$ advected with the
+      particles \cite{Modi2020,Kokron2021}, with Zel'dovich and one-loop predictions (\cref{ch:power-spectra}).
+\item \textbf{Haloes}: friends-of-friends, relaxed FoF \cite{Dai2019}, spherical-overdensity masses around FoF haloes
+      (\code{fof_so_definitions}, e.g.\ \code{200m}, \code{200c}, \code{vir}) and mass functions (\cref{ch:halo-finding}).
+      With PM forces haloes are smoothed on the scale of a force cell, so SO masses are biased low unless $R_\Delta$ is
+      several force cells (at $1\Mpch$ cells the 200m mass function is 0.56 of the Tinker fit), while FoF masses are much
+      less sensitive.
+\item \textbf{Baryonification} of a copy of the particles at each output (\cref{ch:pgd-baryonification}).
+\item \textbf{Snapshots}: GADGET binary or HDF5 (CDM type 1, baryons type 2, neutrinos type 3 with their weights).
+\item \textbf{Lightcones}: particles crossing the past lightcone of an observer (with box replicas), written in ascii,
+      GADGET or HDF5, in batches if needed, and HEALPix ``onion'' density maps; with \code{plc_relativistic_effects} the
+      potential $\Phi/c^2$, radial velocity and the observed redshift $1+z_{\rm obs}=(1+z)(1+v_r/c-\Phi/c^2)$ (Doppler and
+      gravitational redshift to first order; no ISW, Shapiro delay or lensing deflection).
+\end{itemize}
+The same analysis layer is available for snapshots of any simulation through SnapshotAnalyzer (\cref{ch:snapshot-analyzer}).
+
+\section{Performance}
+
+Every time-consuming step uses MPI (slabs) and OpenMP. With both, the threads of each task need their own cores (e.g.\
+\code{OMP_NUM_THREADS=4 mpirun --map-by slot:PE=4 -np 2 ./nbody params.lua}); the code warns when OpenMPI binds a task
+to one core. FFTW plans can be measured (\param{simulation_fftw_planner}) and stored as wisdom. At the end of a run the
+time spent in density assignment and FFTs, $P(k)$, force, kick and drift is printed; memory is logged when compiled
+with memory logging.
+
+\begin{validation}[Validation (\file{SimulationCode/tests})]
+\begin{itemize}
+\item \emph{MG-PICOLA}: $128^3$ runs with the same random numbers and time stepping as L-PICOLA/MG-PICOLA agree in
+      $P(k,z=0)$ to better than $0.08\%$ up to the Nyquist frequency (the test passes at $0.2\%$).
+\item \emph{Linear theory and convergence}: the force grid and gradient kernels (\file{check_force_grid.py}), time
+      stepping (\file{check_timestepping.py}), COLA (\file{check_cola.py}), early forces, initial conditions,
+      non-Gaussianity, the $N$-body gauge against CLASS, lightcone crossing, haloes.
+\item \emph{Transfer input}: CLASS in both gauges and CAMB for the same cosmology agree in $P_{cb}$ and $P_{\rm total}$
+      to $1.4\times10^{-3}$ at all outputs; runs from the internal solver agree with CAMB-input runs to $3\times10^{-4}$.
+\item \emph{Models}: each cosmology and gravity model against the Einstein--Boltzmann solver's linear growth
+      (\cref{ch:mg-simulations}); regression cases with bit-identical CMake and Make builds.
+\end{itemize}
+Not every combination of models and options has been tested; options that do not work together are listed at the end
+of \file{PARAMETERS.md} and give an error.
+\end{validation}

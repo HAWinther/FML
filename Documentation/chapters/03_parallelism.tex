@@ -1,0 +1,130 @@
+\chapter{Parallelism and domain decomposition}\label{ch:parallelism}
+\chapterstatus{written}{2026-11-14}
+
+\fml{} is written for distributed memory with MPI and shared memory with OpenMP, and every module also compiles and
+runs without either. This chapter describes the runtime that sets them up, how the box is decomposed over the tasks
+(slabs by default, pencils and Peano--Hilbert ranges as alternatives) and the communication helpers that the modules
+share.
+
+\begin{modulebox}{Global}
+\nsp{FML}: \file{Global/Global.h} (runtime, reductions, \code{assert_mpi}), \file{Global/Domain.h} (\cls{Domain},
+\cls{SlabDomain}, \cls{PencilDomain}, \cls{PeanoHilbertDomain}), \file{Global/DomainBuffer.h} (\cls{DomainBuffer}),
+\file{Global/PeriodicSlabExchange.h}, \file{Global/ChunkedExchange.h}, \file{Global/MPICounts.h},
+\file{Global/SystemMemory.h}.\par
+Documentation: \file{Global/MPICounts.md}. Tests: \file{tests/test_domain.cpp}, \file{tests/test_mpi_counts.cpp}.
+\end{modulebox}
+\begin{modulebox}{PencilDomain, PeanoHilbertDomain}
+\nsp{FML::GRID}: \file{PencilDomain/PencilGrid.h} (\cls{PencilGrid}), \file{PencilDomain/CPencilGrid.h}
+(\cls{CPencilGrid}).
+\nsp{FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT}: \file{PeanoHilbertDomain/HilbertCurve.h} (\cls{HilbertCurve}),
+\file{PeanoHilbertDomain/DistributedGrid3D.h} (\cls{DistributedGrid3D}).\par
+Documentation: \file{PencilDomain/README.md}, \file{PeanoHilbertDomain/README.md}. Tests: \file{PencilDomain/tests},
+\file{PeanoHilbertDomain/tests} and the \file{tests/test_*_pencil.cpp} suite.
+\end{modulebox}
+
+\section{The runtime}\label{sec:par-runtime}
+
+With the compile flags \code{USE_MPI}, \code{USE_OMP} and \code{USE_FFTW} the library sets itself up automatically: a
+singleton constructed at program start initialises MPI (with thread support), FFTW (with its MPI and threads interfaces)
+and the globals, and finalises them at exit. With \code{NO_AUTO_FML_SETUP} the user calls \code{MPI_Init}, may set
+\code{FML::communicator} to a sub-communicator (all communication of the library goes through it; default
+\code{MPI_COMM_WORLD}) and then calls \code{FML::init_fml()} (and \code{FML::GRID::init_fftw}).
+
+The globals are \code{FML::ThisTask} and \code{FML::NTasks}, the number of threads, whether MPI and threads can be combined
+with FFTW, the local x-range of the particle domain \code{xmin_domain}, \code{xmax_domain} and the domain itself
+(\cref{sec:par-domains}). On Linux the CPU affinity masks are checked: \code{NTasksThreadsShareCores} counts the tasks
+that have fewer cores than OpenMP threads, a common misconfiguration of \code{mpirun}.
+
+\paragraph*{Collectives and errors.} Inplace reductions of one value or an array (\code{SumOverTasks}, \code{MinOverTasks},
+\code{MaxOverTasks}, \code{SumArrayOverTasks}, \ldots; arithmetic types reduce with \code{MPI_Allreduce} in bounded
+chunks, others are gathered and reduced locally) and gathers (\code{GatherFromTasks}). Errors go through
+\code{assert_mpi(condition, message)}, which prints the message and calls \code{MPI_Abort} rather than \code{abort} so that
+the other tasks do not deadlock. Many modules can instead throw (e.g.\ \code{SPLINE_THROW_ON_ERROR},
+\code{ODESOLVER_THROW_ON_ERROR}) so that a caller such as an MCMC can recover. With \code{MEMORY_LOGGING} every large
+allocation of the standard containers is logged (\cref{ch:io-utilities}).
+
+\paragraph*{Threads.} Grid loops are parallelised over \emph{rows} (lines of cells along the last axis) rather than slices,
+because a task can have fewer slices than threads but not fewer rows. Particle loops use OpenMP with atomic or coloured
+updates where they write to shared grids (\cref{ch:mass-assignment}).
+
+\section{Domains}\label{sec:par-domains}
+
+The unit box $[0,1)^D$ is decomposed by a \cls{Domain}, a \code{std::variant} of three types whose ownership queries
+(\code{owner(pos)}, \code{owner_near(task, pos)}, \code{contains(task, pos)}) are inline switches without virtual calls:
+\begin{itemize}
+\item \cls{SlabDomain}: task $i$ owns $x\in[x_{\min,i},x_{\max,i})$, the ranges partitioning $[0,1)$ in rank order (empty
+      slabs allowed). The default, given by \code{xmin_domain} and \code{xmax_domain} of each task (equal slabs
+      $[i/N_{\rm tasks},(i+1)/N_{\rm tasks})$ from \code{init_fml}). Grids, particles and nearly all algorithms support it.
+      \code{owner} binary-searches the edges; \code{owner_near} checks the neighbours first, where most leaving particles go.
+\item \cls{PencilDomain}: a $P_0\times P_1$ process grid in $(x,y)$; the task with coordinates $(i_x,i_y)$ is rank
+      $i_xP_1+i_y$ and owns a box in $x$ and $y$ and all of $z$. The decomposition of \cls{PencilGrid}.
+\item \cls{PeanoHilbertDomain} (3D): contiguous ranges of the Peano--Hilbert key, built load-balanced from the particles.
+\end{itemize}
+The global instance \code{FML::domain} is set with \code{FML::set_domain} (collectively); \cls{MPIParticles} takes it when
+created, so particles live on the task of their grid cells (\cref{ch:particles}). Code that needs slabs asserts it
+(\code{require_slab}).
+
+\paragraph*{Slabs.} A slab grid and the particles share the x-ranges; each task stores extra slices to the left and right
+(ghosts) for the stencils of mass assignment, interpolation and finite differences. FFTW-MPI's slab transforms require
+$N_{\rm mesh}$ divisible by the number of tasks and can use at most $N_{\rm mesh}$ tasks (one slice each).
+
+\paragraph*{Pencils.} \cls{PencilGrid} splits two axes, so up to $N_{\rm mesh}^2$ tasks can be used and any $N_{\rm mesh}$ works
+(the process grid from \code{MPI_Dims_create}, the edges on cells as evenly as possible). In 3D the transform is r2c along
+$z$, a transpose within the row of tasks and an FFT along $y$, a transpose within the column and an FFT along $x$ (FFTW's
+guru interface; the transposes pack cache-blocked blocks and exchange them with \code{MPI_Alltoallv}). In Fourier space a
+task has all $k_x$ and parts of $k_y$ and $k_z$. On 2 tasks the forward and inverse FFTs take 0.9--1.3 times the slab time
+and a whole N-body run 1.05--1.2 times; pencils pay off when the number of tasks approaches $N_{\rm mesh}$ or does not divide
+it. The library, \file{SimulationCode} and the snapshot analyser are written against a common grid interface
+(\cref{sec:grids-interface}) and run on slabs or pencils:
+
+\begin{cppcode}[A run on pencils]
+FML::set_domain(FML::pencil_domain());          // or pencil_domain(px, py)
+auto grid = FML::GRID::make_grid<FML::GRID::PencilGrid<3>>(Nmesh, n_left, n_right);
+FML::PARTICLE::MPIParticles<Particle> part;     // takes FML::domain
+\end{cppcode}
+
+\paragraph*{Peano--Hilbert ranges.} \cls{HilbertCurve} maps integer coordinates to 64-bit Hilbert keys with Skilling's
+transpose algorithm \cite{Skilling2004} ($D=2$--6; in 3D up to 21 bits per coordinate). It is the one key implementation
+of the library, used by \cls{AdaptiveMPIGrid} (\cref{sec:mg-amr}) and the particle domain. \code{PeanoHilbertDomain::build}
+reduces a distributed prefix histogram of the keys ($2^{b_h}$ counters, $b_h\le20$) and cuts it into approximately
+equal-particle contiguous key ranges at bin edges; identical keys always have the same owner, and empty ranges are allowed.
+\cls{DistributedGrid3D} stores the cells of each task's key range in key order (not a rectangular block) with halo lists for
+face or full cube stencils and collective remote reads. This decomposition is not yet used by \file{SimulationCode}.
+
+\section{Communication patterns}\label{sec:par-communication}
+
+\begin{itemize}
+\item \emph{Ghost slices} of grids: \code{communicate_boundaries} sends the edge slices to the neighbours (forwarded from
+      tasks further away when there are more ghost slices than local slices); \code{add_contribution_from_extra_cells}
+      adds the ghosts back after mass assignment. \cls{GhostedCells} gives the same for per-cell data of any type
+      (\cref{sec:grids-mpigrid}).
+\item \emph{Particle migration} (\cref{ch:particles}): to the owner of the new position, with wide counters and bounded
+      message sizes.
+\item \emph{Buffer exchanges}: \cls{DomainBuffer} sends copies of the particles within a distance of a task's box to the
+      neighbours (2 for slabs, up to 8 for pencils, corners included), optionally shifted across the periodic box, and maps
+      values forward to the copies and back to the originals. It is used by the friends-of-friends, Delaunay and other particle
+      methods. \code{append_periodic_slab_ghosts} (and \code{append_periodic_domain_ghosts} for pencils) does the same for records, skipping peers whose box is beyond the buffer.
+\item \emph{Chunked exchange}: \code{exchange_records_chunked} delivers records to their destination task without a flattened send
+      buffer or a full receive buffer, in rounds of at most 8\,MiB by default, with all tasks executing the same number of
+      rounds.
+\end{itemize}
+
+\paragraph*{MPI counts.} MPI counts and displacements are \code{int}, so transfers above $2^{31}$ elements or bytes overflow
+silently in naive code. \file{MPICounts.h} provides checked addition and multiplication, layouts that are verified before
+any payload is sent (throwing \code{std::overflow_error} collectively), and gathers of fixed-size records. Particle
+migration exchanges its counters as \code{unsigned long long} and chunks the payload by a message cap (default
+\code{INT_MAX}); the other exchanges (sheets, FoF, ORIGAMI, Delaunay, void catalogues, MCMC summaries, \ldots) were audited
+for the same limits (\file{MPICounts.md}).
+
+\paragraph*{Memory.} \file{SystemMemory.h} reads the resident set size and its peak per task and prints their range over
+tasks; the allocation log of \code{MEMORY_LOGGING} is described in \cref{ch:io-utilities}.
+
+\begin{validation}[Validation: domains and communication]
+\file{tests/test_domain.cpp} on 1, 2 and 4 tasks: the global Slab and its ranges; \code{owner} and \code{owner_near} of
+slabs (with empty slabs), pencils and Peano--Hilbert ranges against brute force; \cls{MPIParticles} on every domain type
+(\code{communicate_particles}, distributed and replicated input, checkpoints). \file{tests/test_mpi_counts.cpp}: exact
+\code{INT_MAX} boundaries, overflow of aggregate layouts, one-rank failures handled collectively, empty ranks and a real
+64-bit count exchange above \code{INT_MAX}. The pencil suite (\file{tests/test_*_pencil.cpp}) checks that the grid-based
+modules (assignment, interpolation, LPT, spectra, cosmic web, voids, SPH, multigrid, \ldots) give the same results on slabs
+and pencils.
+\end{validation}

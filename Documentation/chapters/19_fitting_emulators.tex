@@ -1,0 +1,142 @@
+\chapter{Fitting functions and emulators}\label{ch:fitting-emulators}
+\chapterstatus{written}{2026-11-14}
+
+Beside the halo models of \cref{ch:halo-model}, \fml{} has the standard fitting functions and emulators of the nonlinear
+matter power spectrum: Halofit with the neutrino correction of Bird et al., EuclidEmulator2, the $f(R)$ and Brans--Dicke
+boosts, the Eisenstein--Hu transfer functions, and a general neural-network emulator that can be trained in C++ or loaded
+from PyTorch. The Einstein--Boltzmann solver gives all of them through one option (\cref{tab:nonlinear-options}).
+
+\begin{modulebox}{Cosmology/Spectra, Emulator}
+\nsp{FML::COSMOLOGY}: \file{Cosmology/Spectra/Halofit.h} (\cls{Halofit}, versions \code{Takahashi2012} and \code{Bird}),
+\file{EisensteinHu.h}, \file{PowerSpectrum.h} (the solver's nonlinear tables, \code{solve_jbd_boost}).\par
+\nsp{FML::EMULATOR}: \file{Emulator/EuclidEmulator2.h} (\nsp{EUCLIDEMULATOR2}, data file \file{EuclidEmulator2.dat}),
+\file{Emulator/FofrFittingFunction.h} (\nsp{FOFRFITTINGFUNCTION}), \file{Emulator/NeuralNetwork/NeuralNetwork.h}
+(\nsp{NEURALNETWORK}) with \file{export_lightning_emulator.py}; the training points from \file{LatinHyperCube}.\par
+Documentation: \file{Cosmology/Spectra/NONLINEAR.md}, \file{Cosmology/EinsteinBoltzmannSolver/OPTIONS.md},
+\file{Emulator/NeuralNetwork/README.md}. Tests: \file{tests/test_emulator.cpp}, the solver's \file{test_nonlinear},
+\file{test_brans_dicke}, \file{Emulator/NeuralNetwork/tests}.
+\end{modulebox}
+
+\begin{table}[ht]
+\centering\small
+\caption{The \param{nonlinear} option of the Einstein--Boltzmann solver. The nonlinear total-matter power is the fourth column
+of \file{matter_power*.txt}; with \code{lensing = true} the same ratio multiplies the Weyl power in the Limber part.}
+\label{tab:nonlinear-options}
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+\param{nonlinear} & Method \\
+\midrule
+\code{none} & linear (default) \\
+\code{halofit} & Takahashi et al.\ (2012) Halofit \cite{Takahashi2012} \\
+\code{halofit_bird} & Halofit with the Bird et al.\ neutrino correction as in CLASS \cite{Bird2012} \\
+\code{hmcode2016} & HMcode-2016 as CAMB \code{mead2016}, with neutrinos (\cref{sec:hm-hmcode2016}) \\
+\code{hmcode2020} & gravity-only HMcode-2020, with neutrinos (\cref{sec:hm-hmcode2020}) \\
+\code{react} & the halo-model reaction times HMcode-2020 of the pseudo cosmology (\cref{sec:hm-react}) \\
+\code{ee2} & EuclidEmulator2 (flat \code{lcdm}, \code{w0wa}, within its ranges) \\
+\code{jbd_boost} & Brans--Dicke: Sletmoen \& Winther (2024) from the mapped GR universe \\
+\code{axionhmcode} & mixed cold/ultralight-axion halo model for \code{model = axion} (\cref{sec:hm-axion}) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Halofit}\label{sec:fit-halofit}
+
+Halofit \cite{Smith2003,Takahashi2012} writes $\Delta^2_{\rm NL}=\Delta^2_Q+\Delta^2_H$ in terms of $y=k/k_\sigma$, where
+$k_\sigma$ is defined by a unit Gaussian-filtered variance, $\sigma^2(1/k_\sigma)=1$, and the effective slope and curvature
+$n_{\rm eff}=-3-\dd\ln\sigma^2/\dd\ln R$, $C=-\dd^2\ln\sigma^2/\dd\ln R^2$ at that scale:
+\begin{equation}
+\Delta^2_Q=\Delta^2_L\frac{(1+\Delta^2_L)^{\beta_n}}{1+\alpha_n\Delta^2_L}e^{-y/4-y^2/8},\qquad
+\Delta^2_H=\frac{a_ny^{3f_1}}{1+b_ny^{f_2}+(c_nf_3y)^{3-\gamma_n}}\,\frac{1}{1+\mu_ny^{-1}+\nu_ny^{-2}},
+\end{equation}
+with the coefficients $a_n,\ldots,\nu_n$ polynomial in $n_{\rm eff}$ and $C$ and with a $w$ dependence (Takahashi's
+revision), and $f_{1,2,3}$ powers of $\Om(z)$. \code{Version::Bird} adds the massive-neutrino terms of Bird et al.\
+\cite{Bird2012} in the form used by current CLASS (changes to $\beta_n$, the quasi-linear term and the one-halo amplitude;
+the obsolete $\Om$-dependent amplitude is left out), with $f_\nu=\Omega_\nu/\Om$ today; for $f_\nu=0$ it is exactly
+Takahashi. The class tabulates $\ln(P_{\rm NL}/P_L)$ in $(\ln a,\ln k)$ from $z=10$; the static \code{Halofit::nonlinear}
+works on one redshift. Bird agrees with CLASS (classy 3.2.0) to 0.051\% at $z=0$--2, $k=0.01$--$10\hMpc$, with identical
+linear input.
+
+\section{EuclidEmulator2}\label{sec:fit-ee2}
+
+EuclidEmulator2 \cite{Knabenhans2021} emulates the nonlinear boost $B(k,z)=P_{\rm NL}/P_L$ from a suite of
+\textsc{PKDGRAV3} simulations in eight parameters $(\Omega_b,\Om,\sum m_\nu,n_s,h,w_0,w_a,A_s)$: the boost is decomposed by
+principal components and each component expanded in a sparse polynomial chaos of Legendre polynomials (up to degree 16) of the
+parameters, mapped to $[-1,1]$. The port in \file{EuclidEmulator2.h} keeps the original algorithm and data file, with SI
+constants from \file{Units.h}, inline functions (several translation units), owned GSL objects, and errors (exceptions)
+instead of crashes: outside $\Omega_b\in[0.04,0.06]$, $\Om\in[0.24,0.40]$, $\sum m_\nu\in[0,0.15]$\,eV, $n_s\in[0.92,1]$,
+$h\in[0.61,0.73]$, $w_0\in[-1.3,-0.7]$, $w_a\in[-0.7,0.5]$, $A_s\in[1.7,2.5]\times10^{-9}$ it throws, as for more than 101
+redshifts or a missing data file. The $k$ range is $0.0087$--$9.4\hMpc$ (the boost is held above and 1 below in the
+solver); $z\le10$.
+
+\begin{cppcode}[EuclidEmulator2 boost]
+#include <FML/Emulator/EuclidEmulator2.h>
+using namespace FML::EMULATOR::EUCLIDEMULATOR2;
+EuclidEmulator ee2(0.049, 0.315, 0.06, 0.966, 0.674, -1.0, 0.0, 2.1e-9);
+auto [k, B] = ee2.compute_boost(1.0);      // k [h/Mpc], B = P_NL / P_L at z = 1
+\end{cppcode}
+
+\section{Modified-gravity boosts}\label{sec:fit-mg}
+
+\paragraph*{Hu--Sawicki $f(R)$.} \file{FofrFittingFunction.h} has the fits of Winther et al.\ \cite{Winther2019} to the
+enhancement $B=P_{f(R)}/P_{\Lambda\rm CDM}$ for $n=1$ with the same initial conditions: \code{nonlinear_boost(z, fR0, k)}
+(calibrated on the ELEPHANT simulations for $10^{-7}\le|f_{R0}|\le10^{-4}$, $0\le z\le3$, $0.01\le k\le10\hMpc$; three fits
+around $|f_{R0}|=5\times10^{-6}$, $10^{-5}$, $5\times10^{-5}$ interpolated in $|f_{R0}|$; $\lesssim1\%$ on most scales, 2--3\%
+at $k<10\hMpc$ out of sample) and \code{linear_boost} (one fit with the scaling $k\to k\sqrt{|f_{R0}|/10^{-5}}$). Outside the
+ranges the value at the closest point is returned and the boost is never below 1. Equal to the original codes to
+$10^{-13}$.
+
+\paragraph*{Brans--Dicke.} For \code{model = jbd} the prescription of Sletmoen and Winther \cite{Sletmoen2024} maps the
+Brans--Dicke universe to a GR universe with the same physical densities $\omega_b$, $\omega_c$, $n_s$ and $\sigma_8$ today
+and $h_{\rm GR}=h_{\rm BD}\sqrt{\phi_{\rm ini}}$, and
+\begin{equation}
+P_{\rm BD}(k)=P^{\rm lin}_{\rm BD}(k)\,\frac{P_{\rm GR}(k')}{P^{\rm lin}_{\rm GR}(k')},\qquad \frac{k'}{h_{\rm GR}}=\frac{k}{h_{\rm BD}},
+\end{equation}
+(the same $k$ in $\hMpc$ of each universe), with the GR boost from \param{jbd_boost_gr} (\code{ee2} as in the paper, or
+HMcode or Halofit). Accurate to 1\% against simulations for $\omega\ge100$, $z\le3$, $k\le1\hMpc$ \cite{Sletmoen2024}.
+Against the paper's \file{bd.py} (hi\_class + EuclidEmulator2): $h_{\rm GR}$ to $10^{-7}$, $A_{s,\rm GR}$ to $2\times10^{-4}$
+and the boost to $2\times10^{-4}$ for $z=0$--3 and $0.009\le k\le9\hMpc$.
+
+\section{Eisenstein--Hu transfer functions}\label{sec:fit-eh}
+
+\file{EisensteinHu.h} has the fitting formulae of Eisenstein and Hu \cite{EisensteinHu1998} for cold dark matter and baryons
+(no neutrinos), with the baryon oscillations (their eqs.~16--24) and the zero-baryon-oscillation shape (eqs.~26--31), and the
+shapes $k^{n_s}T^2(k)$. It is the one copy in the library, used for smooth shapes and extrapolations (the solver beyond
+\param{pert_k_max}, HMcode-2020, the no-wiggle spectra, the field-level code), and equal to colossus' \code{eisenstein98}
+and \code{eisenstein98_zb} to rounding.
+
+\section{Neural-network emulators}\label{sec:fit-nn}
+
+\file{NeuralNetwork.h} is a dependency-free fully connected network for emulators. It computes
+\begin{equation}
+\bm z=(\bm x-\bm\mu_x)/\bm s_x,\qquad \bm a_{\ell+1}=f(W_\ell\bm a_\ell+\bm b_\ell),\qquad
+\bm y=(W_L\bm a_L+\bm b_L)\odot\bm s_y+\bm\mu_y,
+\end{equation}
+with the activations identity, ReLU, tanh, sigmoid, GELU (exact erf), SiLU, ELU, leaky ReLU and softplus, and the losses MSE,
+L1 and Huber (as PyTorch). It does two things:
+\begin{itemize}
+\item \emph{Evaluate a network trained in PyTorch.} \file{export_lightning_emulator.py} exports a Lightning checkpoint of the
+      Sesame pipeline's \file{Emulator.py} to a plain-text file; the C++ evaluation agrees with torch in double precision to
+      $\sim10^{-16}$.
+\item \emph{Train in C++}, with the same recipe and defaults as \file{Emulator.py}: Adam \cite{KingmaBa2014} (L2 weight decay,
+      $\beta_1=0.9$, $\beta_2=0.999$), Glorot initialisation \cite{Glorot2010}, gradient clipping (norm 0.5), ReduceLROnPlateau
+      (patience 20, factor 0.1), early stopping (patience 30) and stochastic weight averaging \cite{Izmailov2018}.
+\end{itemize}
+\code{jacobian} gives $\partial y_k/\partial x_j$ by back-propagation, for Fisher matrices or Hamiltonian Monte Carlo
+(\cref{ch:sampling-fitting}); \code{evaluate} runs many points with OpenMP; \code{save} writes 17 significant digits so a
+file read back gives a bit-identical network. The training points are best chosen with a Latin hypercube
+\cite{McKay1979} (\file{LatinHyperCube}). The example emulates the linear power spectrum in $(\Om,\sigma_8,n_s)$: it trains in
+a few seconds and reaches a mean $|\Delta P/P|=7\times10^{-4}$ on 200 test cosmologies.
+
+\begin{cppcode}[Train, use and save an emulator]
+#include <FML/Emulator/NeuralNetwork/NeuralNetwork.h>
+using namespace FML::EMULATOR::NEURALNETWORK;
+TrainingOptions opt;
+opt.hidden_layers = {64, 64};
+opt.activation = Activation::gelu;
+TrainingHistory history;
+NeuralNetwork net = train(X_train, Y_train, X_val, Y_val, opt, &history);
+std::vector<double> y = net(x);              // one point
+Matrix J = net.jacobian(x);                  // dy_k / dx_j
+net.save("emulator.txt");
+auto net2 = NeuralNetwork::load("emulator.txt");   // also networks exported from PyTorch
+\end{cppcode}

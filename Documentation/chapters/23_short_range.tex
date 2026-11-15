@@ -1,0 +1,167 @@
+\chapter{Short-range forces: P$^3$M and TreePM}\label{ch:short-range}
+\chapterstatus{written}{2026-11-14}
+
+A PM force is accurate only on scales several cells above the mesh spacing. To resolve gravity below the mesh scale,
+\fml{} splits the force into a long-range part, computed on the mesh, and a short-range part, summed over particle
+pairs within a cutoff: the P$^3$M method with cell lists, or a TreePM method with a monopole octree. The same split
+supports Newtonian gravity plus a Yukawa fifth force, the linear force of chameleon-like theories. This chapter
+describes the kernels, the search structures, the MPI ghost exchange and the integration into SimulationCode.
+
+\begin{modulebox}{ShortRangeGravity}
+Namespace \nsp{FML::SHORT_RANGE_GRAVITY}, header-only: \file{ShortRangeGravity.h} (\cls{Options}, \cls{Kernel},
+\code{direct_sum}, \cls{CellList}), \file{Softening.h}, \file{Yukawa.h}, \file{Octree.h} (\cls{Octree}),
+\file{LongRangePM.h} (\code{apply_long_range_filter}), \file{SlabGhosts.h} (\code{exchange_slab_ghosts}).\par
+SimulationCode: \file{src/ShortRangeForce.h}, \file{src/ShortRangeInteraction.h}, \file{src/ShortRangeSettings.h}.\par
+Documentation: \file{ShortRangeGravity/README.md}, \file{ShortRangeGravity/tests/RESULTS.md},
+\file{SimulationCode/SHORT_RANGE.md}, \file{COLA_SHORT_RANGE.md}, \file{SHORT_RANGE_RESULTS.md},
+\file{CLUSTERED_FORCE.md}, \file{DYNAMICS.md}.
+\end{modulebox}
+
+\section{The force split}\label{sec:sr-split}
+
+With a Gaussian long-range filter of scale $r_s$ (the convention of GADGET-2 \cite{Springel2005}),
+\begin{equation}
+\phi_{\rm long}(\vk)=\phi(\vk)\,e^{-k^2r_s^2},
+\end{equation}
+the complementary pair acceleration of a point mass is
+\begin{equation}
+\bm a_{\rm short}=Gm\frac{\vx_j-\vx_i}{r^3}\left[\mathrm{erfc}(q)+\frac{2q}{\sqrt\pi}e^{-q^2}\right],\qquad q=\frac{r}{2r_s},
+\end{equation}
+which decays like a Gaussian beyond a few $r_s$. \code{apply_long_range_filter} multiplies a dedicated Fourier copy of
+the density by the filter (in box units, $r_s/B$) before the ordinary PM solve. The analytic split does not remove the
+mesh's anisotropy and aliasing: the long force must be resolved, i.e.\ $r_s$ of order one to two mesh cells or more.
+
+\paragraph*{Softening.} Particles have the compact cubic-spline density of support $h$
+(\param{force_short_range_softening_support}),
+\begin{equation}
+W(r)=\frac{8}{\pi h^3}\begin{cases}1-6u^2+6u^3, & u<\frac12,\\ 2(1-u)^3, & \frac12\le u<1,\end{cases}\qquad u=r/h,
+\end{equation}
+so the force is exactly Newtonian beyond $h$. $h$ is the support radius, not the Plummer-equivalent softening:
+$h=2.8\,\epsilon$. Inside $h$ the Gaussian long-range force is subtracted from the full spline-softened force
+(multiplying the softened force by the unsoftened short window would give a different total force); a small-$r$
+series avoids cancellation, and coincident particles give zero force.
+
+\paragraph*{Cutoff.} \param{force_short_range_cutoff_tolerance} sets the radius where the short-range pair force,
+relative to unsoftened Newtonian gravity, falls below the tolerance; the force is truncated there without tapering.
+This bounds a single pair's window, not the relative error of a net force near a cancellation. One requires
+$h\le r_{\rm cut}<B/2$. The pair coefficient is tabulated on $[h,r_{\rm cut}]$ with linear interpolation
+(\param{force_short_range_table_points} $=16384$; error $<10^{-8}$ of $G/r^3$, $3\times$ faster on clustered
+catalogues; 0 evaluates it exactly).
+
+\section{Newtonian plus Yukawa gravity}\label{sec:sr-yukawa}
+
+A light scalar of mass $m=1/\lambda$ coupled to matter adds a Yukawa term to the point-mass potential,
+\begin{equation}
+\Phi=-\frac{Gm}{r}\left[1+\alpha e^{-r/\lambda}\right],\qquad
+\text{force}\propto1+\alpha\left(1+\frac r\lambda\right)e^{-r/\lambda},
+\end{equation}
+(\code{Kernel(options, NewtonYukawa{alpha, lambda})}; $\alpha$ of either sign). The long-range Fourier kernel is
+\begin{equation}
+\frac{e^{-k^2r_s^2}}{k^2}+\alpha\frac{e^{-(k^2+\mu^2)r_s^2}}{k^2+\mu^2},\qquad \mu=1/\lambda,
+\end{equation}
+the Helmholtz-aware Ewald split of the Yukawa potential (Eqs.~30--32 of the reference in \file{REFERENCES.md},
+doi:10.1103/PhysRevE.103.043204), and the complementary short-range Green's function is
+\begin{equation}
+\frac{e^{-\mu r}\,\mathrm{erfc}(q-z)+e^{\mu r}\,\mathrm{erfc}(q+z)}{2r},\qquad q=\frac{r}{2r_s},\quad z=\mu r_s,
+\end{equation}
+evaluated with scaled erfc functions, series and heat-kernel integrals for the extreme limits, and stable differences
+for negative $\alpha$. Yukawa softening is a pair-potential prescription: with $s(r)=1/g_N(r)$ from the softened
+Newtonian Green's function, the softened Yukawa term is $e^{-s/\lambda}/s$, which is finite at the centre and exact
+outside the support. The cutoff conservatively solves $(1+|\alpha|)\times$ Newtonian window $=$ tolerance. All lengths
+are in the coordinate unit: for a fixed physical range in comoving coordinates pass $\lambda_{\rm com}=\lambda_{\rm phys}/a$.
+
+\section{Search structures and parallelism}\label{sec:sr-search}
+
+\begin{itemize}
+\item \code{direct_sum}: the reference $\mathcal O(N^2)$ sum.
+\item \cls{CellList} (P$^3$M): contiguous cells at least as wide as the cutoff; \code{max_cells} bounds the metadata
+      (coarser cells, more pair work, never missed neighbours). Pairwise momentum is conserved to summation precision.
+\item \cls{Octree} (TreePM): flat nodes with mass, centre of mass and bounds, monopole acceptance. A node is accepted if
+      it is entirely inside the cutoff, outside the softening, within one periodic image, does not contain the target,
+      and is small relative to both the distance and the split scale (\param{force_short_range_opening_angle}, $0.3$ a
+      starting value; $0$ gives exact leaf sums). With Yukawa forces the opening also resolves $\lambda$. One-sided
+      tree approximations need not conserve momentum exactly.
+\item OpenMP over targets with no shared writes; results are attractive accelerations with source mass and coupling
+      included; targets can be a subset of the sources; self-interactions are excluded by ID.
+\item \code{exchange_slab_ghosts}: each source is sent once to every remote slab within the cutoff (including periodic
+      and non-adjacent slabs), in bounded chunks with 64-bit counts; no all-gather of particles. Ghosts and search
+      structures are rebuilt after every drift.
+\end{itemize}
+
+\paragraph*{Units in \fml{}.} With box coordinates $x=r/L$, $\nabla_x^2\Phi=C\delta$ and total source mass $M$, the pair
+potential is $\Phi_{\rm pair}=-\frac{C}{4\pi}\frac mM\frac{L}{|r-r_j|}$, so the coupling of the short force is
+\code{fml_acceleration_coupling(C, M, L)} $=CL^2/(4\pi M)$, with $C=\frac32\Om_ma$ in SimulationCode's GR and $M$ the
+global source mass.
+
+\begin{cppcode}[P$^3$M and TreePM short-range forces]
+#include <FML/ShortRangeGravity/ShortRangeGravity.h>
+#include <FML/ShortRangeGravity/Octree.h>
+#include <FML/ShortRangeGravity/SlabGhosts.h>
+using namespace FML::SHORT_RANGE_GRAVITY;
+Options options;
+options.boxsize = 250; options.split_scale = 2; options.softening_support = 0.1;
+options.cutoff_tolerance = 1e-6; options.coupling = 1;
+Kernel kernel(options);                                  // or Kernel(options, NewtonYukawa{1.0/3, 10})
+auto sources = exchange_slab_ghosts(owned, xmin, xmax, kernel);
+auto p3m     = CellList(sources.particles, kernel).compute(owned);
+auto treepm  = Octree(sources.particles, kernel, TreeOptions{0.3, 16, 40}).compute(owned);
+\end{cppcode}
+
+\section{Short-range forces in SimulationCode}\label{sec:sr-simcode}
+
+With \param{force_short_range} \code{= true} the force of a step is the filtered PM force plus the short-range kick,
+at a common time step:
+\begin{equation}
+\bm v_{\rm new}=s\,\bm v_{\rm old}-\Delta_K\,\bm F_{\rm long}+\Delta_K\,\bm A_{\rm short},
+\end{equation}
+(the mesh returns $+\nabla\phi$, the pair code an acceleration), with the short kernel normalised by $C(a)/(4\pi M)$ times
+the model coupling. With force interlacing only the long force is averaged over the shifted copies; one unshifted
+short kick follows. The lightcone potential is computed from the unfiltered density. In COLA the residual velocity is
+updated as $\bm u'=s\bm u+\Delta_K(\bm A_{\rm long}+\bm A_{\rm short}-\bm A_{\rm LPT})$, with the frame potentials
+unfiltered.
+
+\paragraph*{Modified gravity.} A gravity model describes its pair potential outside the softening as
+\begin{equation}
+\Phi_{\rm pair}=-\frac{GM}{r}\left[\mu_0+(\mu_\infty-\mu_0)e^{-r/\lambda}\right],\qquad
+\mu_0=G_{\rm eff}(a,0)/G,\quad \mu_\infty=G_{\rm eff}(a,k\to\infty)/G,
+\end{equation}
+with the comoving range \code{short_range_comoving_range(a)} ($0$: infinite; $f(R)$, the symmetron and $(m,\beta)$ give
+their inverse mass divided by $a$). The mesh keeps the remainder
+$\mu_{\rm mesh}(k)=G_{\rm eff}(a,k)/G-\mu_{\rm pair}(k)+\mu_{\rm pair,long}(k)$, which vanishes for the analytic Yukawa
+models. Nonlinear screening has no density-independent pair kernel, so screened and exact solvers are rejected with
+short-range forces.
+
+\paragraph*{Scope.} Short-range forces support 3D unscreened gravity with one cold species, ordinary $N$-body with Quinn
+steps or 1LPT/2LPT COLA with Quinn or Tassev steps, the continuous Green's function and gradient, and assignment-based
+densities. Not yet: subcycling, massive neutrinos or separate species, the $N$-body gauge, FastPM/BullFrog, NUFFT/sheet
+or early-time forces, and an acceleration-based time-step controller (short-range forces can need many more steps).
+
+\begin{paramfile}[SimulationCode: PM + short-range forces]
+force_short_range                   = true
+force_short_range_backend           = "cell"   -- or "tree"
+force_short_range_split_scale       = 3.125    -- comoving Mpc/h: two cells of a 64^3 mesh in 100 Mpc/h
+force_short_range_softening_support = 0.2      -- spline support h = 2.8 epsilon, comoving Mpc/h
+force_short_range_cutoff_tolerance  = 1e-6
+force_greens_function_kernel        = "continuous"
+force_gradient_kernel               = "continuous"
+timestep_method                     = "Quinn"
+\end{paramfile}
+
+\begin{validation}
+\begin{itemize}
+\item Kernels: independent spline enclosed-mass quadrature; split and zero-separation limits; filtered PM plus short
+      force against independent periodic Ewald sums (worst relative error $\sim3\times10^{-6}$); Yukawa kernels against
+      100-digit Ewald references and image sums ($1.7\times10^{-13}$); unit invariance.
+\item Search: cell lists and exact octrees equal direct sums to summation precision (uniform, clustered, periodic,
+      coincident, zero-mass); ghost completeness for wide cutoffs, empty and non-adjacent slabs.
+\item SimulationCode: the actual PCS deposition, force and short correction against Ewald sums for an off-grid
+      clustered fixture: relative RMS force error 0.59 for unsplit PM on $16^3$, and $1.4\times10^{-3}$,
+      $6\times10^{-5}$, $2\times10^{-6}$ for the combined force on $16^3$, $32^3$, $64^3$ meshes; second-order time-step
+      convergence of a 512-particle run; tree and cell trajectories identical; identical states on 1, 2 and 4 ranks.
+\item Dynamics: two-body orbits and 16-particle clusters through the real simulation step against adaptive direct
+      Ewald evolution: errors $\sim10^{-3}$ of the initial radius and velocity dispersion with 256--1024 steps,
+      converging at second order (\file{DYNAMICS.md}); clustered static-force error distributions
+      (\file{CLUSTERED_FORCE.md}).
+\end{itemize}
+These are controlled verification cases, not a calibration of nonlinear cosmological statistics.
+\end{validation}

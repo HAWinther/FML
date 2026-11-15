@@ -1,0 +1,111 @@
+\chapter{Power spectra and polyspectra}\label{ch:power-spectra}
+\chapterstatus{written}{2026-11-14}
+
+Fourier-space statistics of particles and fields in periodic boxes: auto and cross power spectra, redshift-space
+multipoles, the bispectrum and higher polyspectra with the shell-product method, and the hybrid Lagrangian-bias basis
+spectra with their perturbation-theory predictions.
+
+\begin{modulebox}{ComputePowerSpectra}
+\nsp{FML::CORRELATIONFUNCTIONS}: \file{ComputePowerSpectra/ComputePowerSpectrum.h} (\code{compute_power_spectrum},
+\code{bin_up_power_spectrum}, \code{bin_up_cross_power_spectrum}, \code{compute_power_spectrum_multipoles},
+\code{compute_bispectrum}, \code{compute_polyspectrum}, \ldots), \file{PowerSpectrumBinning.h} (\cls{PowerSpectrumBinning}),
+\file{PolyspectrumBinning.h} (\cls{PolyspectrumBinning}, \cls{SparsePolyspectrumBinning}), \file{PolyspectrumWorkspace.h};
+\nsp{HYBRIDBIAS}: \file{HybridBiasSpectra.h}, \file{HybridBiasOperators.h}, \file{HybridBiasZeldovich.h},
+\file{HybridBiasOneLoop.h}, \file{HybridBiasOneLoopMG.h}, \file{HybridBiasLinearFieldIO.h}.\par
+Documentation: \file{ComputePowerSpectra/README.md}. Tests: \file{tests/test_pofk.cpp}, \file{tests/test_spectra_pencil.cpp},
+\file{tests/test_hybridbias.cpp}, \file{tests/test_hybridbias_pencil.cpp}.
+\end{modulebox}
+
+\section{The power spectrum estimator}\label{sec:pk-estimator}
+
+From particles, \code{compute_power_spectrum} assigns them to a grid (\cref{ch:mass-assignment}), Fourier transforms, deconvolves the
+window and bins
+\begin{equation}
+\hat P(k)=\frac{B^D}{N_k}\sum_{|\bm k|\in{\rm bin}}\frac{|\delta_{\bm k}|^2}{\tilde W^2(\bm k)}-P_{\rm shot},\qquad
+P_{\rm shot}=B^D\frac{\sum_im_i^2}{(\sum_im_i)^2},
+\end{equation}
+with $N_k$ the number of modes in the bin (each r2c mode counted with its multiplicity) and $P_{\rm shot}=B^D/N$ for equal masses ($\sum w_i^2/N^2$ for
+$\delta f$ particles). Interlacing (\cref{sec:ma-interlacing}) removes the leading aliasing, so with PCS or PQS the estimate is accurate close to the
+Nyquist frequency on a smaller grid \cite{Sefusatti2016}. On a Fourier grid, \code{bin_up_power_spectrum}, \code{bin_up_cross_power_spectrum} and
+\code{bin_up_deconvolved_power_spectrum} bin directly. \cls{PowerSpectrumBinning} holds linear or logarithmic bins between $k_{\min}$ and $k_{\max}$,
+the mean $k$, the counts and the power; results are in box units until \code{scale(boxsize)} ($k\to k/B$, $P\to B^DP$); binnings can be combined
+over realisations. A brute-force direct summation over particles and modes (no aliasing) is available for testing.
+
+\begin{cppcode}[P(k) of particles]
+#include <FML/ComputePowerSpectra/ComputePowerSpectrum.h>
+using namespace FML::CORRELATIONFUNCTIONS;
+PowerSpectrumBinning<3> pofk(kmin * Boxsize, kmax * Boxsize, nbins, PowerSpectrumBinning<3>::LINEAR_SPACING);
+compute_power_spectrum<3>(Nmesh, part.get_particles_ptr(), part.get_npart(), part.get_npart_total(),
+                          pofk, "PCS", /*interlacing*/ true);
+pofk.scale(Boxsize);                         // h/Mpc and (Mpc/h)^3
+\end{cppcode}
+
+\section{Multipoles}\label{sec:pk-multipoles}
+
+In the plane-parallel limit with line of sight $\hat{\bm n}$ and $\mu=\hat{\bm k}\cdot\hat{\bm n}$,
+\begin{equation}
+\hat P_\ell(k)=\frac{2\ell+1}{N_k}\sum_{|\bm k|\in{\rm bin}}|\delta_{\bm k}|^2\mathcal L_\ell(\mu),
+\end{equation}
+binned from the moments $\mu^{2n}|\delta_{\bm k}|^2$ (\code{compute_power_spectrum_multipoles_fourier}). From particles,
+\code{compute_power_spectrum_multipoles} moves them to redshift space along each coordinate axis in turn,
+$\bm x\to\bm x+\bm v\cdot\hat{\bm n}\,\hat{\bm n}/(aH)$ (the conversion factor depends on the velocity convention), and averages the three
+estimates; the shot noise is subtracted from the monopole. In \file{SimulationCode}: \param{pofk_multipole} and its options, up to
+\param{pofk_multipole_ellmax}.
+
+\section{Polyspectra}\label{sec:pk-polyspectra}
+
+The bispectrum and higher orders use the shell-product (FFT) method \cite{Scoccimarro2015}: for each $k$-shell $s$ the field
+$\delta_s(\bm x)=\mathcal F^{-1}[\delta_{\bm k}\Theta_s(\bm k)]$ and the indicator $I_s(\bm x)=\mathcal F^{-1}[\Theta_s(\bm k)]$ are made, and
+\begin{equation}
+\hat B(k_1,k_2,k_3)=\frac{\sum_{\bm x}\delta_{s_1}\delta_{s_2}\delta_{s_3}}{\sum_{\bm x}I_{s_1}I_{s_2}I_{s_3}},
+\end{equation}
+the denominator counting the closed triangles $\bm k_1+\bm k_2+\bm k_3=0$ in the bins (the same for any order). The constant shot-noise terms are
+subtracted for the power spectrum and bispectrum ($S_2$, $S_3=\sum m_i^3/(\sum m_i)^3$); the fourth order is the raw fourth moment, without the
+disconnected Gaussian part.
+\begin{itemize}
+\item \emph{De-aliasing} (default): configurations must close as integer wave-vectors, not modulo the mesh; when a product could wrap, the shell fields
+      are made on a padded mesh ($\times3.375$ cells for the bispectrum at the full Nyquist range, $\times8$ for the fourth order), and the ambiguous
+      even-mesh Nyquist planes are excluded. \code{dealias = false} gives the previous modulo-grid estimator.
+\item \emph{Caching}: the geometry counts are cached for reuse with the same mesh, edges and selection; shells are kept in a least-recently-used cache
+      bounded by a number of shells or a memory budget (rebuilding evicted shells on demand), with the same schedule on all tasks.
+\item \emph{Selected configurations} and \emph{sparse results} (\cls{SparseBispectrumBinning}, \ldots) store only the requested canonical
+      configurations instead of $n_{\rm bins}^{\rm ORDER}$ values (e.g.\ 1.5\,GiB per task for 100 fourth-order bins); permutation-aware lookup.
+\item A per-component report of the evaluation storage (input, results, shells, padding, remapping, reductions).
+\end{itemize}
+In \file{SimulationCode}: \param{bispectrum}, \param{bispectrum_nmesh}, \param{bispectrum_nbins} and the assignment options.
+
+\begin{validation}[Validation: spectra]
+\file{tests/test_pofk.cpp}: the shot noise for masses and $\delta f$ weights (exact, and Poisson particles give $P-P_{\rm shot}\approx0$), mass
+conservation with interlacing, the triangle counts against a brute-force count, closure of high-frequency triangles as integer vectors, even and odd
+meshes, the monopole equal to $P(k)$, and empty bins. \file{tests/test_spectra_pencil.cpp}: mono-, bi- and trispectra with and without padding equal on
+slabs and every pencil layout. Primordial non-Gaussianity tests use the bispectrum of $f_{\rm NL}$ fields (\cref{sec:rf-fnl}).
+\end{validation}
+
+\section{Hybrid bias spectra}\label{sec:pk-hybrid}
+
+In the hybrid Lagrangian bias model \cite{Modi2020,Kokron2021,Zennaro2023} the tracer field is a sum of Lagrangian operators advected with the
+simulation particles,
+\begin{equation}
+\delta_t(\bm k)=\sum_ab_a\mathcal O_a(\bm k),\qquad\mathcal O_a(\bm x)=\int\dd^3q\,\mathcal O_a(\bm q)\,\delta_D(\bm x-\bm q-\bm\Psi(\bm q)),
+\end{equation}
+with $\mathcal O\in\{1,\delta_L,\delta_L^2-\langle\delta_L^2\rangle,s^2-\langle s^2\rangle,\nabla^2\delta_L\}$, $\delta_L$ the linear field scaled to the
+snapshot and $s_{ij}=(k_ik_j/k^2-\delta_{ij}/3)\delta_L$. The 15 cross spectra $P_{ab}$ give the tracer auto and tracer--matter spectra for any bias,
+$P_{tt}=\sum_{ab}b_ab_bP_{ab}$, $P_{tm}=\sum_ab_aP_{1a}$. The operators are computed exactly at the lattice points (on a grid of the lattice size), each
+particle carries the weights $\mathcal O_a(\bm q_i)$ of its lattice point (from its ID, fetched from the owning task), and the advected fields are the
+weighted densities. The linear field comes from the initial conditions or from a file (\file{HybridBiasLinearFieldIO.h}, written by
+\file{SimulationCode} with \param{hybridbias_output_linear_field}); \param{hybridbias} computes them at every output.
+
+\paragraph*{Predictions.} \file{HybridBiasZeldovich.h} gives the resummed Zel'dovich prediction, $P_{ab}=\int\dd^3q\,e^{i\bm k\cdot\bm q}
+e^{-k_ik_jA_{ij}(q)/2}F_{ab}(\bm k,\bm q)$ with $F_{ab}$ polynomials in the correlators of the fields and the displacement; the angular structure is found by
+projecting kernel products on spherical harmonics, the part linear in the correlators is transformed analytically and the rest integrated numerically.
+\file{HybridBiasOneLoop.h} is one-loop CLEFT \cite{Carlson2013,Vlah2016,Chen2020} with the linear $A_{ij}$ resummed, following velocileptors term by term
+with Matsubara's $Q_n$, $R_n$ \cite{Matsubara2008} computed in $k$-space (so a sharp cut of $P(k)$ is handled exactly), extended to $\nabla^2\delta$.
+\file{HybridBiasOneLoopMG.h} solves the second- and third-order LPT kernels in time for $\mu(k,a)$ models, $f(R)$ and DGP with or without screening
+\cite{KoyamaTaruyaHiramatsu2009,Aviles2017}, including the transverse second-order displacement of scale-dependent growth.
+
+\begin{validation}[Validation: hybrid bias]
+\file{tests/test_hybridbias.cpp}: the MG loop functions with GR in Einstein--de Sitter reproduce the EdS ones; the scale-dependent kernels $c_2$, $c_3$ agree
+with an independent Eulerian computation for $f(R)$ with and without screening, DGP and a $\mu(k,a)$ model; separate operator and displacement filters scale
+correctly. The one-loop spectra reduce to velocileptors to $10^{-6}$ for $F=1$, and the $\nabla^2\delta$ corrections agree with the difference between 2LPT
+and Zel'dovich particles to a few per cent. \file{tests/test_hybridbias_pencil.cpp}: slabs equal pencils.
+\end{validation}

@@ -1,0 +1,109 @@
+\chapter{Particles}\label{ch:particles}
+\chapterstatus{written}{2026-11-14}
+
+Particles (N-body particles, galaxies, halos, tracers) are user-defined classes. The library finds out at compile time
+what a class provides, stores the particles distributed over the tasks in \cls{MPIParticles}, moves them to the task
+that owns their position, and offers cell lists and KD-trees for neighbour searches.
+
+\begin{modulebox}{ParticleTypes, MPIParticles}
+\nsp{FML::PARTICLE}: \file{ParticleTypes/ReflectOnParticleMethods.h} (the \code{has_get_*} tests and \code{Get*} /
+\code{Set*} accessors), \file{ParticleTypes/SimpleParticle.h}, \file{ParticleTypes/SimpleGalaxy.h},
+\file{MPIParticles/MPIParticles.h} (\cls{MPIParticles}).\par
+Documentation: \file{MPIParticles/Migration.md}. Tests: \file{tests/test_particles.cpp}, \file{tests/test_domain.cpp}.
+\end{modulebox}
+\begin{modulebox}{ParticlesInBoxes, KDTree}
+\file{ParticlesInBoxes/ParticlesInBoxes.h} (\cls{ParticlesInBoxes}), \nsp{FML::KDTREE}: \file{KDTree/KDTree.h}
+(\cls{KDTree}).\par
+Tests: \file{tests/test_particles.cpp}, \file{tests/test_kdtree.cpp}.
+\end{modulebox}
+
+\section{Particle types and reflection}\label{sec:part-reflection}
+
+A particle class needs only \code{get_pos()} (a pointer to the first coordinate, in box units $[0,1)$) and
+\code{get_ndim()}. Everything else is optional and detected by SFINAE: for every quantity the library has a compile-time
+test \code{FML::PARTICLE::has_get_vel<T>()} and an accessor \code{GetVel(p)} that returns the value or a fiducial one.
+Algorithms test first and use a quantity only if it is there, so the same code works for a bare position and for a
+particle with velocities, masses and IDs. A method counts as present if it can be taken by address or called with zero or
+one argument (so const/non-const overloads and templates are found). The quantities:
+\begin{itemize}
+\item position and velocity (pointers, so no setters are needed), ID, mass and volume (fiducial 1: equal-mass particles),
+      a $\delta f$ weight (the particle carries only the perturbation, \cref{ch:simulation-code}), the family/species;
+\item the Lagrangian coordinate and the LPT displacement fields and their growth factors (\code{GetD_1LPT},
+      \code{GetD_2LPT}, \code{GetD_3LPTa}, \ldots; \cref{ch:lpt}), with a swap of Eulerian and Lagrangian positions;
+\item halo finding (FoF ID), RAMSES (level, family, tag), galaxies and pair counting (RA, Dec, redshift, weight).
+\end{itemize}
+Using a quantity that a particle does not have stops with a clear error. For communication and checkpoints a particle is
+copied as raw bytes by default; a class that owns memory (e.g.\ a \code{std::vector} member) provides
+\code{get_particle_byte_size}, \code{append_to_buffer} and \code{assign_from_buffer}, and variable-size records are
+supported.
+
+\begin{cppcode}[A minimal particle and reflection]
+struct Particle {
+    double pos[3], vel[3];
+    double * get_pos() { return pos; }
+    double * get_vel() { return vel; }
+    constexpr int get_ndim() const { return 3; }
+};
+using namespace FML::PARTICLE;
+if constexpr (has_get_vel<Particle>()) { auto v = GetVel(p); /* ... */ }
+double m = GetMass(p);                      // 1.0: equal masses
+\end{cppcode}
+
+\section{MPIParticles}\label{sec:part-mpiparticles}
+
+\cls{MPIParticles} holds the local particles of a \cls{Domain} (\cref{sec:par-domains}): the one given to the constructor or
+the global \code{FML::domain}, a slab by default. Particles are created
+\begin{itemize}
+\item from a set of particles: \code{Input::Replicated} (every task has the same, e.g.\ read from one file, and keeps those it
+      owns), \code{Input::Distributed} (different particles anywhere, sent to their owners in batches, so one task can hold all
+      of them initially) or \code{Input::Local} (already on the right task), with an optional filter (e.g.\ one species);
+\item on a lattice: \code{create_particle_grid(Npart_1D, buffer_factor)} places $N_{\rm part,1D}^D$ particles on a regular grid,
+      each task those in its part of the domain, with room for particles moving in (also when $N_{\rm part,1D}$ is not divisible by
+      the number of tasks).
+\end{itemize}
+
+\paragraph*{Migration.} \code{communicate_particles()} moves every particle to the task owning its (wrapped) position.
+Particles in the local slab stay; leaving particles check the two neighbouring slabs first and otherwise binary-search the slab
+edges. All tasks then agree on a route: \code{NoTraffic} (nothing moves: no communication), \code{Neighbors} (all destinations
+are rank neighbours: counts and payloads only on those edges) or \code{General} (all-to-all counts and a cyclic all-peer
+exchange). Counters are 64-bit, receive capacity is checked before any payload moves, and payloads are chunked by a message cap
+(default \code{INT_MAX}, the minimum over tasks). A particle exactly at $x=1$ is moved to the largest representable coordinate
+below it. The last route is reported for diagnostics.
+
+\paragraph*{Other operations.} \code{dump_to_file} and \code{load_from_file} checkpoint the particles and the domain (through a
+bounded buffer); \code{set_domain} moves the particles to a new decomposition; \code{sort_by_position(nblocks)} reorders the local
+particles in place by a stable counting sort over blocks in the memory order of the grids, which makes assignment and
+interpolation about 4 times faster for shuffled particles (CIC). Memory is labelled for the memory log (\cref{ch:io-utilities}).
+
+\begin{cppcode}[Particles on a lattice]
+#include <FML/MPIParticles/MPIParticles.h>
+FML::PARTICLE::MPIParticles<Particle> part;
+part.create_particle_grid(Npart_1D, 1.5);          // 50% extra room
+for (auto & p : part) { /* displace, set velocities, ... */ }
+part.communicate_particles();                      // to the owner of the new position
+part.sort_by_position(Nmesh / 4);                  // optional: faster assignment
+\end{cppcode}
+
+\section{Cell lists and KD-trees}\label{sec:part-search}
+
+\paragraph*{Cell lists.} \cls{ParticlesInBoxes} bins objects with positions in $[0,1)^D$ into an $N_c^D$ grid of cells (index
+with the last coordinate fastest), for pair counting and other searches limited to neighbouring cells. It is serial; the pair
+counters parallelise by giving each task its own cells.
+
+\paragraph*{KD-trees.} \cls{KDTree} \cite{Bentley1975} answers nearest-neighbour, $k$-nearest-neighbour and fixed-radius queries in
+$D$ dimensions, optionally in a periodic box with minimum-image distances. The coordinates are stored in one flat array reordered so
+that every node is a contiguous range, and the nodes (bounding box, children) in another; a node is split at the median of its widest
+dimension, with up to \code{leaf_size} points per leaf. In a periodic box the search prunes with the minimum-image distance from the
+query to a node's bounding box, so no periodic copies of the query are needed, and every point is returned once for any radius.
+Memory: $(D+1)\times8$ bytes per point plus $\sim(2D+3)\times8$ bytes per node. The queries are const and thread safe. It replaced an
+adaptation of an external tree with one heap-allocated node per point (about 180 bytes per point) that was several times slower. The
+tree works on local catalogues; distributed searches first exchange buffers of particles (\cref{sec:par-communication}).
+
+\begin{validation}[Validation: particles]
+\file{tests/test_particles.cpp} on 1, 2 and 4 tasks: lattices with $N_{\rm part,1D}$ not divisible by (or smaller than) the number of
+tasks, creation with all particles on one task, positions at $x=1$ and $-10^{-17}$, checkpoints larger than the buffer, custom
+variable-size serialisation, the detection of overloaded \code{get_pos}, and migration on every route against forced general routing
+and an independent ownership scan (no traffic, neighbours, periodic seams, long jumps, empty and non-uniform slabs, small messages,
+long-double positions). \file{tests/test_kdtree.cpp}: nearest, $k$-nearest and radius queries against brute force in 2D and 3D,
+periodic queries near and outside the box, radii above half the box, duplicate points and the empty tree.
+\end{validation}

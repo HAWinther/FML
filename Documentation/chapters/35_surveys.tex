@@ -1,0 +1,96 @@
+\chapter{Survey analysis}\label{ch:surveys}
+\chapterstatus{written}{2026-11-14}
+
+From mock or observed galaxy catalogues to clustering measurements: survey mocks from periodic boxes, the conversion of
+sky coordinates to a Cartesian embedding, FKP power-spectrum multipoles with a local line of sight, the survey window and its
+convolution of model spectra, and BAO reconstruction.
+
+\begin{modulebox}{Survey}
+\nsp{FML::SURVEY}: \file{Survey/GalaxiesToBox.h}, \file{Survey/SurveyMesh.h} (\cls{Geometry}, \cls{CatalogPoint}),
+\file{Survey/SurveyPower.h} (\code{estimate_power}, \cls{PowerOptions}), \file{Survey/SurveyWindow.h} (\code{estimate_window},
+\code{make_binned_window_matrix}), \file{Survey/SurveyReconstruction.h} (\code{reconstruct}, \cls{ReconstructionOptions});
+\nsp{FML::SURVEY::MOCKS}: \file{Survey/SurveyMocks.h} (\code{make_survey}, \code{make_randoms}, \code{make_remapping}). The program
+\file{Survey/make_survey}.\par
+Documentation: \file{Survey/README.md}, \file{power_validation/}, \file{window_validation/}. Tests: \file{Survey/tests}; examples
+\file{workflow_example}, \file{mock_example}, \file{mock_clustering_example}.
+\end{modulebox}
+
+\section{Survey mocks}\label{sec:survey-mocks}
+
+\code{make_survey} turns objects in a periodic box (HOD galaxies, \cref{ch:galaxy-mocks}, or particles) into a survey seen from an observer:
+the box is tiled around the observer, each object gets RA/Dec in a survey frame and the observed redshift
+\begin{equation}
+z_{\rm obs}=z_{\rm cos}+(1+z_{\rm cos})\frac{v_r}{c},\qquad\bm x_{\rm obs}=\chi(z_{\rm obs})\hat{\bm r},
+\end{equation}
+with $\chi(z)=\int c\,\dd z/H$ from a user-supplied $H(z)/c$, and is kept with probability (target $\bar n(z)$ / parent density) $\times$ footprint
+completeness. Footprints are RA/Dec boxes, HEALPix maps \cite{Gorski2005} (the pixelisation is built in) or MANGLE polygons \cite{Swanson2008}.
+Each object stores the selection probability, completeness and the expected density $\bar n$ of the final catalogue, for FKP weights later;
+\code{make_randoms} makes randoms with the same selection. Random decisions use Philox streams keyed by object and replica, so the mock does not
+depend on the number of tasks. Repetition of structures when $\chi(z_{\max})>L/2$ is avoided with the volume-preserving cuboid remapping of Carlson
+and White \cite{CarlsonWhite2010} (\code{make_remapping} with an integer unimodular matrix). Evolving lightcones from \file{SimulationCode} are
+used directly (\code{make_survey_lightcone}). The program \file{make_survey} does all this from a Lua parameter file. \file{GalaxiesToBox.h}
+converts (RA, Dec, $z$) catalogues to Cartesian positions.
+
+\section{Power-spectrum multipoles}\label{sec:survey-power}
+
+With data and randoms (positions in physical units inside a padded FFT box, effective weights and $\bar n$), the FKP field \cite{Feldman1994} and
+its normalisation are
+\begin{equation}
+F(\bm x)=n_w^D(\bm x)-\alpha n_w^R(\bm x),\qquad\alpha=\frac{\sum_Dw}{\sum_Rw},\qquad I_2=\alpha\sum_R\bar n\,w^2,
+\end{equation}
+with FKP weights $w=1/(1+\bar nP_0)$ supplied by the user. The multipoles with a local first-point line of sight \cite{Yamamoto2006,Bianchi2015,
+Scoccimarro2015} are
+\begin{equation}
+A_\ell(\bm k)=\sum_{\bm x}F(\bm x)\mathcal L_\ell(\hat{\bm k}\cdot\hat{\bm x})e^{-i\bm k\cdot\bm x},\qquad
+\hat P_\ell(k)=\frac{2\ell+1}{I_2}\left\langle{\rm Re}\left[A_0(\bm k)A_\ell^*(\bm k)\right]\right\rangle_{\rm shell}-N_\ell,
+\end{equation}
+evaluated with the tensor (Cartesian-moment) FFTs of $\hat x_i\hat x_j\cdots F$; a fixed line of sight is an option. $\ell=0,2,4$. The weighted Poisson
+noise $N_\ell$ is computed from the catalogue's line-of-sight moments (data weights squared plus $\alpha^2$ random weights squared). CIC compensation
+divides by the window, and the shot noise includes the aliased images of the CIC-painted noise \cite{Jing2005}, $\prod_i[1-\frac23\sin^2(k_ih/2)]$
+(without it 5\% of the shot noise remains at $kh=1.6$--2.6); there is no interlacing, so scales well below the Nyquist frequency should be used.
+
+\section{The window and convolved models}\label{sec:survey-window}
+
+The window multipoles of the randoms' selection $W=\alpha n_w^R/V_{\rm cell}$ are
+\begin{equation}
+Q_L(s)=\frac{2L+1}{I_2}\left\langle\int\dd^3x\,W(\bm x)W(\bm x+\bm s)\mathcal L_L(\hat{\bm s}\cdot\hat{\bm x})\right\rangle_{\hat{\bm s}},
+\end{equation}
+up to $L=8$, from FFT cross-correlations of the line-of-sight tensors, with the CIC self-pairs of each random removed exactly. Because the lattice vectors
+of a separation shell are not isotropic, each shell uses $\langle GF\rangle-\langle G\rangle[\langle F\rangle-\langle F\rangle_{\rm sphere}]$, exact for a pair
+function isotropic on the shell (this reduced the leakage of the monopole into $Q_4$ from $\sim4$ to $\sim0.01$ in a test). The convolved model multipoles
+follow Wilson et al.\ \cite{Wilson2017}: model $P_\ell$ bandpowers are transformed to $\xi_\ell$, multiplied by $Q_L$ with the Legendre triple-product
+coefficients, and transformed back with spherical Bessel kernels; \code{make_binned_window_matrix} averages the output over the measured shells, giving a
+matrix from input to measured bandpowers. Input bins must extend well beyond the last measured bin. An optional global integral constraint makes the
+convolved monopole vanish at $k=0$. Wide-angle terms beyond the local plane-parallel convention are not included.
+
+\section{BAO reconstruction}\label{sec:survey-reconstruction}
+
+Reconstruction \cite{Eisenstein2007,Padmanabhan2012} solves for the Zel'dovich displacement of the smoothed tracer field
+$\delta_t=D_s/(\alpha R_s)-1$ (Gaussian smoothing, cells with too few randoms or outside a mask set to zero),
+\begin{equation}
+-\nabla\cdot\left[\left(\mathsf I+\frac fb\hat{\bm n}\hat{\bm n}\right)\nabla\phi\right]=\frac{\delta_t}{b},\qquad\bm\Psi=\nabla\phi,
+\end{equation}
+with the local radial or a fixed line of sight, by preconditioned conjugate gradients (a positive-definite finite-volume stencil, a Fourier Laplacian
+preconditioner). Data move by $-\bm\Psi-f(\bm\Psi\cdot\hat{\bm n})\hat{\bm n}$; randoms by the same (RecSym) or by $-\bm\Psi$ (RecIso). The shifted
+catalogues go back into the power estimator. A solver report gives the convergence and the removed source mean; non-convergence throws.
+
+\begin{cppcode}[Survey multipoles before and after reconstruction]
+#include <FML/Survey/SurveyPower.h>
+#include <FML/Survey/SurveyReconstruction.h>
+using namespace FML::SURVEY;
+Geometry geo;  geo.nmesh = 256;  geo.boxsize = 2000;  geo.minimum = {-1000, -1000, -1000};
+PowerOptions opt;  opt.edges = edges;  opt.ells = {0, 2, 4};
+auto pre = estimate_power(data, randoms, geo, opt);
+ReconstructionOptions rec;  rec.bias = 2.0;  rec.growth_rate = 0.8;  rec.smoothing_radius = 15;
+auto shifted = reconstruct(data, randoms, geo, rec);
+auto post = estimate_power(shifted.data, randoms, geo, opt, &shifted.randoms);
+\end{cppcode}
+
+\begin{validation}[Validation: surveys]
+FFT multipoles against a direct DFT; raw fixed and local line-of-sight multipoles against pypower with matched conventions to $10^{-15}$ of the monopole; mesh
+convergence against a catalogue DFT (0.02--0.07\% at $128^3$ for the test catalogue); window multipoles against explicit weighted random pairs and the window
+matrix against direct angular/Bessel integration and pypower; displacement solves against manufactured solutions (an independent spectral solution agreed to a
+correlation of 0.99995); RecIso/RecSym, masks, MPI ownership. Mocks: $\chi(z)$ against EdS to $4\times10^{-9}$, coordinate round trips, the footprint area and
+$n(z)$ of data and randoms, the remapping and HEALPix pixels against healpy. End to end (\file{mock_clustering_example}): a Zel'dovich box to a half-sky mock gives
+$P_0$ within a few per cent of the window-convolved Kaiser model for $0.015<k<0.1\hMpc$ (mean of 3 realisations).
+\end{validation}

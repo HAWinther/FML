@@ -1,0 +1,162 @@
+\chapter{Perturbation theory}\label{ch:perturbation-theory}
+\chapterstatus{written}{2026-11-14}
+
+On mildly nonlinear scales the clustering of matter and tracers is described by perturbation theory. \fml{} has
+one-loop standard perturbation theory (SPT) of the matter, with a fast FFTLog algorithm and a direct quadrature
+reference, kernels solved in time for modified gravity, wiggle/no-wiggle decompositions for IR resummation, and four
+models of biased tracers in redshift space: the TNS model, CLASS-PT-style EFTofLSS, and the resummed Lagrangian and
+Eulerian expansions of velocileptors. All return spectra that can also be turned into correlation-function
+multipoles. The hybrid Lagrangian bias predictions (CLEFT, Zel'dovich) are with the measured spectra in
+\cref{ch:power-spectra}.
+
+\begin{modulebox}{PerturbationTheory}
+Namespace \nsp{FML::PERTURBATION}: \file{OneLoop.h} (direct quadrature), \file{FastOneLoop.h} (FFTLog),
+\file{SPTKernels.h} ($F_n$, $G_n$, $Z_n$), \file{LoopIntegrals.h}, \file{MGOneLoop.h}, \file{NoWiggle.h}, \file{TNS.h},
+\file{EFTofLSS.h}, \file{LPTRedshiftSpace.h}, \file{LagrangianQFunctions.h}, \file{EPTRedshiftSpace.h},
+\file{CorrelationMultipoles.h}; FFTLog in \file{FFTLog/} (\cref{ch:numerics}).\par
+Documentation: \file{PerturbationTheory/README.md}, \file{CORRELATION_MULTIPOLES.md}, \file{CORRELATION_RESULTS.md}.
+Tests: \file{PerturbationTheory/tests}; reference fixtures from FAST-PT, CLASS-PT and velocileptors in \file{python/}.
+\end{modulebox}
+
+\section{One-loop standard perturbation theory}\label{sec:pt-spt}
+
+For a pressureless fluid in an Einstein--de Sitter universe the density and velocity divergence are expanded as
+$\delta(\vk)=\sum_n D^n\int F_n(\vq_1,\ldots,\vq_n)\delta_L(\vq_1)\cdots\delta_L(\vq_n)\,\delta_D(\vk-\textstyle\sum\vq_i)$,
+and similarly for $\theta$ with kernels $G_n$ \cite{Bernardeau2002}. With $\mu=\hat\vq\cdot\hat{\bm p}$,
+\begin{equation}
+F_2(\vq,\bm p)=\frac57+\frac\mu2\left(\frac qp+\frac pq\right)+\frac27\mu^2,
+\end{equation}
+and the one-loop power spectrum is $P=P_L+P_{22}+P_{13}$ with
+\begin{equation}
+P_{22}(k)=2\int\frac{\dd^3q}{(2\pi)^3}F_2^2(\vq,\vk-\vq)P_L(q)P_L(|\vk-\vq|),\qquad
+P_{13}(k)=6P_L(k)\int\frac{\dd^3q}{(2\pi)^3}F_3(\vk,\vq,-\vq)P_L(q),
+\end{equation}
+($P_{13}$ includes the full factor 6; no further factor 2). Time dependence enters through the supplied $P_L(k,z)$.
+
+\paragraph*{Fast algorithm} \cite{Schmittfull2016,McEwen2016}. With
+$X_\ell^n(r)=\int\dd q\,q^{n+2}P(q)j_\ell(qr)/(2\pi^2)$, the configuration-space $P_{22}$ integrand is a sum of
+products,
+\begin{multline}
+\xi_{22}=\tfrac{1219}{735}(X_0^0)^2+\tfrac13X_0^{-2}X_0^2-\tfrac{124}{35}X_1^{-1}X_1^1+\tfrac{1342}{1029}(X_2^0)^2
++\tfrac23X_2^{-2}X_2^2\\-\tfrac{16}{35}X_3^{-1}X_3^1+\tfrac{64}{1715}(X_4^0)^2,
+\end{multline}
+and $P_{22}=4\pi\int\dd r\,r^2j_0(kr)\xi_{22}(r)$, all by FFTLog on a common grid. $P_{13}$ is a logarithmic
+convolution with a bounded kernel $K(r)=r^2Z(r)$,
+$P_{13}(k)=\frac{k^2P(k)}{1008\pi^2}\int\dd\ln q\,qP(q)K(q/k)$, a Toeplitz product evaluated with FFTW
+($K(0)=-168$, $K(1)=-88$, $K(\infty)=-488/5$). The cost is $\mathcal O(N\log N)$. \code{FastEdS::evaluate} requires a
+uniformly log-spaced $k$ (at least 64 points), applies FAST-PT's taper $x-\sin(2\pi x)/2\pi$ to the ends for $P_{22}$,
+does no power-law extrapolation, and always spot-checks at least three output modes against the direct quadrature
+(the worst relative error is returned).
+
+\paragraph*{Direct quadrature and custom kernels.} \code{direct_one_loop} integrates $P_{22}$ over the triangle domain
+in $(q,|\vk-\vq|)$ and $P_{13}$ over $q$ with composite logarithmic Gauss--Legendre quadrature, without FFTW. Any
+scale-dependent kernels can be supplied as callbacks for $F_2(q,p,\mu)$ and the collapsed $F_3(k,q,\mu)$.
+\file{SPTKernels.h} generates $F_n$, $G_n$ ($n\le3$) from the recursion and the redshift-space kernels $Z_n$ of biased
+tracers mechanically from $\delta_s=\sum_m\frac{1}{m!}\mathcal F[(-ik_zu_z)^m(1+\delta_g)]$; \file{LoopIntegrals.h} is the
+quadrature engine (log Gauss--Legendre segments broken at the kinematic points, Gauss--Chebyshev in the azimuth,
+$\mu$-dependence recovered as polynomials in $\mu^2$).
+
+\begin{validation}[Validation: one loop]
+Direct quadrature against stored FAST-PT 4.1.1 \code{one_loop_dd} to $10^{-3}$ for an Eisenstein--Hu spectrum at
+$k=0.02$--$1\hMpc$; fast against direct; the analytic $P_{13}$ kernel limits.
+\end{validation}
+
+\section{Modified-gravity kernels}\label{sec:pt-mg}
+
+\file{MGOneLoop.h} solves the kernels $F_1$, $F_2$, $F_3$ numerically in time for every loop node
+\cite{KoyamaTaruyaHiramatsu2009,BoseKoyama2016}, for a background $E(a)$, a linear modification $\mu(k,a)$ and the
+screening sources $\gamma_2$, $\gamma_3$ of the scalar field equation: GR on any background (\code{mg_lcdm}), Hu--Sawicky
+$f(R)$ with $n=1$ (\code{mg_hu_sawicki}), normal-branch DGP (\code{mg_ndgp}) or any \cls{MGKernelModel}. The kernels are
+evolved with RK4 in $\ln a$ from $a=10^{-5}$, so $P_0=P_L/F_1^2$ uses the model's own linear growth. It provides $k_*$ of
+the halo-model reaction (\cref{sec:hm-react}). For $f(R)$ the third-order screening term $\gamma_3$ is the correct one;
+ReACT's is $1/3$ of it.
+
+\begin{validation}[Validation: modified-gravity loops]
+EdS reproduces \file{OneLoop.h} ($6\times10^{-4}$ of the loop); $|f_{R0}|=10^{-10}$ and $\Om_{rc}=10^{-8}$ give GR; the
+$f(R)$ $\gamma_2$, $\gamma_3$ match the exact expansion of the field perturbation; against ReACT's one-loop $P(k_0=0.06)$ to
+$4\times10^{-3}$ and the real--pseudo difference to 0.7\% (nDGP) and 3\% (f(R), with ReACT's $\gamma_3$).
+\end{validation}
+
+\section{Wiggle/no-wiggle decomposition}\label{sec:pt-nowiggle}
+
+IR resummation damps the BAO wiggles by the large-scale displacements, which requires splitting $P_L=P_{\rm nw}+P_{\rm w}$
+(\file{NoWiggle.h}):
+\begin{itemize}
+\item The discrete sine transform method, \code{nowiggle_dst}: the BAO bump in the DST of $\ln(kP)$ on a linear grid is
+      cut out and interpolated over. It follows Hamann et al.\ and Wallisch (\arxiv{1810.02800}) and ports velocileptors'
+      \code{pnw_dst}, with a more robust detection of the bump.
+\item \code{nowiggle_gaussian}: a reference shape (e.g.\ the Eisenstein--Hu no-wiggle spectrum \cite{EisensteinHu1998})
+      times the Gaussian-smoothed ratio $P/P_{\rm ref}$ in $\ln k$ (as HMcode-2020);
+\item \code{nowiggle_savgol}: a Savitzky--Golay filter (velocileptors' REPT default);
+\item \code{nowiggle_classpt}: CLASS-PT's DST split, for \file{EFTofLSS.h}.
+\end{itemize}
+The Gaussian-EH method is the cleanest when the cosmology is known (residual wiggles 0.05\% against 0.7\% for DST);
+DST needs only $P$; the Savitzky--Golay filter leaves $\sim2\%$ wiggles.
+
+\section{Redshift-space models of biased tracers}\label{sec:pt-rsd}
+
+\subsection{The TNS model}
+
+\file{TNS.h} implements the model of Taruya, Nishimichi and Saito \cite{Taruya2010} with one-loop SPT and the nonlinear
+bias of McDonald and Roy \cite{McDonaldRoy2009}:
+\begin{equation}
+P_s(k,\mu)=D_{\rm FoG}(k\mu f\sigma_v)\left[P_{g,\delta\delta}+2f\mu^2P_{g,\delta\theta}+f^2\mu^4P_{\theta\theta}+A(k,\mu)+B(k,\mu)\right]+N,
+\end{equation}
+with Lorentzian, Gaussian or no Fingers-of-God damping, and the correction terms $A$ and $B$ tabulated as coefficients of
+$f^nb_1^{m-n}\mu^{2j}$ so that $f$ and $b_1$ vary without recomputing loops. Validation against FAST-PT 4.1.1: $P_{\delta\delta}$
+to $7\times10^{-5}$, the bias terms to $3\times10^{-4}$, $A+B$ to $2\times10^{-3}$ of the largest coefficient.
+
+\subsection{EFTofLSS (CLASS-PT)}
+
+\file{EFTofLSS.h} computes the one-loop EFTofLSS multipoles $P_0$, $P_2$, $P_4$ of biased tracers with IR resummation in
+the model and conventions of CLASS-PT \cite{Ivanov2020,Chudaykin2020}: bias $b_1$, $b_2$, $b_{\mathcal G_2}$,
+$b_{\Gamma_3}$, counterterms $c_0$, $c_2$, $c_4$, $b_4$ and stochastic $P_{\rm shot}$, $a_0$, $a_2$. The 12 bias-monomial
+tables and counterterm templates are computed once, so the multipoles are a cheap linear combination. The IR
+resummation reproduces CLASS-PT's (its no-wiggle split, $\Sigma^2$ and $\delta\Sigma^2$ below $k_S=0.2\hMpc$, damping of the
+tree, loops and counterterms). Validation: every monomial in $\ell=0,2,4$ against CLASS-PT for $k=0.005$--$0.3\hMpc$ to
+$1.3\times10^{-3}$ of the column's maximum (mostly $10^{-4}$).
+
+\subsection{Resummed Lagrangian perturbation theory}
+
+\file{LPTRedshiftSpace.h} gives $P(k,\mu)$ and $P_{0,2,4}$ of biased tracers in one-loop LPT with the long-wavelength
+displacements resummed (Chen, Vlah, Castorina and White \cite{Chen2021}), a port of velocileptors'
+\code{lpt_rsd_fftw.py}. The Lagrangian bias expansion $\delta_t=1+b_1\delta+\frac{b_2}{2}\delta^2+b_ss^2+b_3\mathcal O_3$ comes
+with counterterms $(\alpha_0+\alpha_2\mu^2+\alpha_4\mu^4+\alpha_6\mu^6)k^2P_{\rm ct}$ and stochastic terms
+$s_n+s_{n2}k^2\mu^2+s_{n4}k^4\mu^4$; the 19 multipole columns (with Alcock--Paczynski parameters) are bias independent.
+velocileptors' defaults are not converged in the angular series (0.8\% in $P_0$, 4\% in $P_2$ at $k=0.2\hMpc$), so the
+defaults here are higher ($j_n=n_{\max}=10$, $N=1024$). Validation: velocileptors with its settings to $7\times10^{-9}$;
+the redshift-space Zel'dovich $P(k,\mu)$ against direct integration (0.02--0.12\%); $f=0$ against the real-space CLEFT of
+\cref{ch:power-spectra} ($2\times10^{-4}$); the Kaiser limit.
+
+\subsection{IR-resummed Eulerian perturbation theory}
+
+\file{EPTRedshiftSpace.h} is velocileptors' REPT \cite{Chen2020}: the one-loop $P(k,\mu)$ from the velocity moments, with
+the wiggle part of every term damped by $\exp[-k^2\Sigma^2(1+f(2+f)\mu^2)/2]$, $\Sigma^2=X(r_{\rm bao})+Y(r_{\rm bao})/3$ of
+the no-wiggle spectrum, and Eulerian bias. The default no-wiggle method is DST and the default grid wider than
+velocileptors', whose grid is not converged (0.5\% at $k=0.5\hMpc$). Validation: velocileptors to $10^{-8}$ on its grid;
+$f=0$, $b_1=1$ without wiggles against direct one-loop SPT ($6\times10^{-5}$).
+
+\begin{cppcode}[Redshift-space multipoles of biased tracers]
+#include <FML/PerturbationTheory/EFTofLSS.h>
+#include <FML/PerturbationTheory/LPTRedshiftSpace.h>
+using namespace FML::PERTURBATION;
+EFTofLSS::Options o;  o.h = 0.6736;  o.r_bao = o.h * r_drag;
+EFTofLSS eft(k_lin, P_lin, k_out, f, o);             // tables: bias independent
+EFTofLSS::Bias b;  b.b1 = 2.0;  b.b2 = -0.5;  b.bG2 = 0.3;  b.c0 = 5;  b.Pshot = 400;
+auto pell = eft.multipoles(b);                       // P_0, P_2, P_4
+
+LPTRedshiftSpace lpt(k_lin, P_lin);
+auto table = lpt.multipole_components(f, k_out, apar, aperp);
+LPTRedshiftSpace::Bias bl;  bl.b1 = 0.7;  bl.alpha0 = 10;  bl.sn = 1000;
+auto pell_lpt = LPTRedshiftSpace::combine(table, bl);
+\end{cppcode}
+
+\section{Correlation-function multipoles}\label{sec:pt-xi}
+
+\file{CorrelationMultipoles.h} converts power multipoles from any of the models to
+\begin{equation}
+\xi_\ell(r)=i^\ell\int\frac{k^2\dd k}{2\pi^2}P_\ell(k)j_\ell(kr),\qquad \ell=0,2,4,
+\end{equation}
+(signs $+,-,+$) on a common separation grid with reusable FFTLog plans, with signed interpolation, explicit finite $k$
+support, an endpoint taper and an optional Gaussian regulator; there is no high-$k$ extrapolation and no automatic removal
+of stochastic contact terms. The workspace is shared by the LPT, EPT, TNS and EFTofLSS results.

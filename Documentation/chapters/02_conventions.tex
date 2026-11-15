@@ -1,0 +1,111 @@
+\chapter{Conventions and notation}\label{ch:conventions}
+\chapterstatus{written}{2026-11-14}
+
+This chapter fixes the conventions used throughout the library and the book. Where a module deviates (for example
+the Einstein--Boltzmann solver, which works internally in SI units), the chapter on that module says so.
+
+\section{Units}
+
+\begin{itemize}
+\item \textbf{Simulation and grid units.} Particle positions and grid coordinates are in units of the box size,
+      $\vx\in[0,1)^N$ (a position equal to $1$ is allowed and wraps to $0$). A grid has $N_{\rm mesh}$ cells per
+      dimension, cell size $1/N_{\rm mesh}$, and the cell with integer coordinates $\bm i$ has its corner at
+      $\bm i/N_{\rm mesh}$ (cell-centred quantities are at $(\bm i+\tfrac12)/N_{\rm mesh}$ only where stated).
+      Physical lengths are recovered by multiplying with the box size $B$, usually in $\Mpch$.
+\item \textbf{Large-scale structure.} Lengths in $\Mpch$, wavenumbers in $\hMpc$, power spectra in $(\Mpch)^3$,
+      masses in $h^{-1}M_\odot$, velocities in km/s unless stated.
+\item \textbf{Cosmology.} $H_0=100h$\,km\,s$^{-1}$\,Mpc$^{-1}$; $E(a)=H(a)/H_0$; density parameters
+      $\Om_i=\rho_i/\rho_{c}$ with $\rho_c=3H^2/(8\pi G)$; today's critical density $\rho_{c0}=3H_0^2/(8\pi G)$.
+      The \code{Background} module (\cref{ch:background}) uses $E$ dimensionless, conformal time and distances in
+      $\Mpch$ and cosmic time in Gyr; the Einstein--Boltzmann solver uses SI units internally and Mpc$^{-1}$ for $k$
+      in its parameter files.
+\item \textbf{Constants.} All physical constants come from \file{Units/Units.h}: \nsp{FML::UTILS::SI} holds
+      compile-time SI values (the cosmology code aliases it as \nsp{FML::COSMOLOGY::Constants}), and
+      \cls{ConstantsAndUnits} gives them in another unit system (SI, Planck, ParticlePhysics, Cosmology or
+      user-defined). Energies such as the hydrogen binding energy \code{epsilon_0} are stored in joules.
+\end{itemize}
+
+\section{Time variables}
+
+The library uses several time variables, always with the same symbols:
+\begin{center}\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+Symbol & Definition & Used in \\
+\midrule
+$a$, $z$ & scale factor ($a_0=1$) and redshift $1+z=1/a$ & everywhere \\
+$x$ & $x=\ln a$ & background, Boltzmann code, growth factors \\
+$t$ & cosmic time, $\dd t=\dd x/H$ & ages, time stepping \\
+$\eta$ & conformal time, $c\,\dd t=a\,\dd\eta$ & line of sight, Boltzmann code \\
+$\chi$ & comoving distance, $\chi=c(\eta_0-\eta)$ & distances, lightcones, lensing \\
+$\Hp$ & conformal Hubble rate $\Hp=aH$ & perturbations \\
+\bottomrule
+\end{tabular}
+\end{center}
+A prime denotes $\dd/\dd x$ unless stated otherwise (in a few places, clearly marked, it is $\dd/\dd\eta$); a dot
+denotes $\dd/\dd t$.
+
+\section{Fourier transforms}
+
+\paragraph*{Continuous.} For a field in a periodic box of side $B$ (or in infinite space),
+\begin{equation}
+\delta(\vk)=\int\dd^3x\,\delta(\vx)\,e^{-i\vk\cdot\vx},\qquad
+\delta(\vx)=\int\frac{\dd^3k}{(2\pi)^3}\,\delta(\vk)\,e^{i\vk\cdot\vx},
+\end{equation}
+and the power spectrum is defined by
+$\langle\delta(\vk)\delta^*(\vk')\rangle=(2\pi)^3\delta_D(\vk-\vk')P(k)$. The dimensionless power spectrum is
+$\Delta^2(k)=k^3P(k)/(2\pi^2)$. For the primordial curvature perturbation $\mathcal{R}$ we write
+$\mathcal{P}_\mathcal{R}(k)=k^3P_\mathcal{R}(k)/(2\pi^2)=A_s(k/k_{\rm pivot})^{n_s-1+\frac12\alpha_s\ln(k/k_{\rm pivot})}$.
+
+\paragraph*{Discrete.} \cls{FFTWGrid} uses the sign convention of FFTW, forward transforms with $e^{-i\vk\cdot\vx}$,
+and normalises the \emph{forward} transform,
+\begin{equation}
+\delta_{\bm n}=\frac{1}{N_{\rm mesh}^N}\sum_{\bm i}\delta_{\bm i}\,e^{-2\pi i\,\bm n\cdot\bm i/N_{\rm mesh}},\qquad
+\delta_{\bm i}=\sum_{\bm n}\delta_{\bm n}\,e^{2\pi i\,\bm n\cdot\bm i/N_{\rm mesh}},
+\end{equation}
+so that the Fourier coefficients are the dimensionless amplitudes of the modes and a constant field has
+$\delta_{\bm 0}$ equal to its mean. The wave vector of mode $\bm n$ (with $n_j\in(-N_{\rm mesh}/2,N_{\rm mesh}/2]$) is
+$\vk=2\pi\bm n$ in box units, i.e.\ $\vk=2\pi\bm n/B$ physically. With this normalisation the power spectrum
+estimated from a grid is $P(k)=B^3\langle|\delta_{\bm n}|^2\rangle$ averaged over a shell
+(\cref{ch:power-spectra}). Real-to-complex transforms store the half space $n_N\ge0$ of the last dimension; modes with
+$n_N=0$ or $n_N=N_{\rm mesh}/2$ appear once but represent two complex-conjugate modes, which the binning routines take
+into account.
+
+\section{Parallel layout}
+
+With MPI, all communication goes through \code{FML::communicator} (normally \code{MPI_COMM_WORLD}). The task index is
+\code{FML::ThisTask} and the number of tasks \code{FML::NTasks}. The default decomposition is in \emph{slabs} along the
+first coordinate: task $t$ owns $x\in[x_{\min}^{(t)},x_{\max}^{(t)})$ (\code{FML::xmin_domain},
+\code{FML::xmax_domain}) for its particles, and the corresponding slices of every grid. Grids can allocate extra
+slices on the left and right (\emph{ghost} slices) that are filled from the neighbours when needed. Pencil and
+Peano--Hilbert decompositions exist as separate modules (\cref{ch:parallelism}). OpenMP is used inside a task.
+
+\section{Cosmological notation}
+
+\begin{center}\small
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+Symbol & Meaning \\
+\midrule
+$\Om_b,\Om_{\rm cdm},\Om_\gamma,\Om_\nu,\Om_k,\Om_\Lambda$ & density parameters today (baryons, CDM, photons,
+  massless neutrinos, curvature, cosmological constant) \\
+$\Om_m$ & total matter today: $\Om_b+\Om_{\rm cdm}+\Om_{\nu,\rm massive}$ \\
+$\omega_i$ & physical densities $\Om_ih^2$ \\
+$K$ & spatial curvature $K=-\Om_k(H_0/c)^2$ ($K>0$ closed) \\
+$\delta_i,\,\theta_i,\,v_i$ & density contrast, velocity divergence, velocity potential of species $i$ \\
+$\Phi,\Psi$ & metric potentials of the conformal Newtonian gauge (\cref{ch:linear-perturbations} for the sign
+  conventions) \\
+$D_1,D_2,\dots$; $f=\dd\ln D/\dd\ln a$ & LPT growth factors and growth rate \\
+$\mu(k,a),\Sigma(k,a)$ & modification of the Poisson and lensing equations \\
+$\sigma_R$, $\sigma_8$ & rms linear density in top-hat spheres of radius $R$ ($8\Mpch$) \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\section{Notation in this book}
+
+Class and function names are set in \code{typewriter}, and parameters of the programs (parameter files of the
+Boltzmann solver and of SimulationCode) also in \code{typewriter}; both are listed in the index. File paths are
+relative to the \file{FML/} directory of the repository. Each chapter starts with a module box listing the headers and
+documentation files that implement and describe what the chapter covers, and \emph{implementation} and
+\emph{validation} boxes summarise the numerical methods and the tests.

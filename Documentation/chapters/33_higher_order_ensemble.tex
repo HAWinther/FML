@@ -1,0 +1,82 @@
+\chapter{Connected four-point statistics and ensembles}\label{ch:ensembles}
+\chapterstatus{written}{2026-11-14}
+
+Two tools for ensembles of simulations: connected four-point statistics (the non-Gaussian part of the power-spectrum
+covariance) and control-variate estimation of ensemble means, in which cheap phase-matched surrogates (Zel'dovich, 2LPT,
+COLA) reduce the variance of expensive targets.
+
+\begin{modulebox}{ConnectedFourPoint, EnsembleStatistics}
+\nsp{FML::FOURPOINT}: \file{ConnectedFourPoint/ConnectedFourPoint.h} (\code{zero_mean_four_point}), \file{ConnectedFourPoint/Fourier.h}
+(\code{connected_shell_four_point}, \code{gaussian_covariance_disjoint_shells}, \code{connected_power_covariance}).
+\nsp{FML::ENSEMBLE}: \file{EnsembleStatistics/ControlVariates.h} (\cls{RunningCovariance}, \cls{PairedTraining}, \cls{ControlMean},
+\cls{ControlEvaluation}), \file{EnsembleStatistics/MatchedSpectra.h} (\code{matched_spectra}).\par
+Documentation: \file{ConnectedFourPoint/README.md} and \file{tests/RESULTS.md}, \file{EnsembleStatistics/README.md} and
+\file{matched_validation/}. Tests in each module's \file{tests/}.
+\end{modulebox}
+
+\section{Connected four-point statistics}\label{sec:ens-fourpoint}
+
+For four zero-mean variables the fourth moment splits into the connected part and the three Wick contractions,
+\begin{equation}
+\langle x_0x_1x_2x_3\rangle_c=\langle x_0x_1x_2x_3\rangle-\left(C_{01}C_{23}+C_{02}C_{13}+C_{03}C_{12}\right),
+\end{equation}
+with $C_{ab}$ measured from the same samples (a plug-in statistic, biased) or supplied from an independent reference (unbiased with the
+exact ensemble covariance).
+
+\paragraph*{Fourier shells.} \code{connected_shell_four_point} applies this to shell-filtered fields $f_b(\bm x)=\sum_{\bm k\in b}\delta_{\bm k}
+e^{i\bm k\cdot\bm x}$ of a Fourier density field: $\langle f_{b_0}f_{b_1}f_{b_2}f_{b_3}\rangle$ sums over all ordered closing quartets
+$\bm k_0+\bm k_1+\bm k_2+\bm k_3=0$ in the shells, and normalised by the number of quartets and $V^3$ it is the shell-averaged trispectrum
+(raw, disconnected and connected; units of length$^9$). As for the polyspectra (\cref{sec:pk-polyspectra}), quartets must close as integer
+vectors (padded meshes) and even-mesh Nyquist planes are excluded. For a Gaussian field the shell covariance is $C_{aa}=V^{-1}\sum_{\bm k\in a}P(k)$.
+
+\paragraph*{Power-spectrum covariance.} From an ensemble of independent boxes (\cls{RunningCovariance}, with $N-1$ normalisation) and a Gaussian
+reference for disjoint shells,
+\begin{equation}
+G_{ij}=\delta_{ij}\frac{2}{N_i^2}\sum_{\bm k\in i}P^2(k),\qquad
+C^{\rm conn}_{ij}=C_{ij}-G_{ij},\qquad \bar T(k_i,k_j)=V\,C^{\rm conn}_{ij},
+\end{equation}
+the connected covariance and the collapsed trispectrum \cite{Scoccimarro1999}. The Gaussian reference must come from a model or an independent
+ensemble, not $|\delta_{\bm k}|^4$ of the same realisation; super-sample, window and connected shot-noise terms are not included.
+
+\begin{validation}[Validation: four-point]
+A two-state Rademacher cumulant; correlated Gaussian moments satisfy Wick's theorem; $10^5$ synthetic Gaussian ensembles give a connected covariance
+consistent with zero; direct DFTs and integer enumeration of closing quartets for the shell moments, mode and quartet counts; even and odd meshes; an
+exact Gaussian ensemble gives zero with the exact covariance and the predicted $-3$ plug-in bias with the same-field one; on 1, 2 and 4 tasks, in single
+precision and under sanitizers (\file{ConnectedFourPoint/tests/RESULTS.md}).
+\end{validation}
+
+\section{Control variates}\label{sec:ens-cv}
+
+For a target observable $\bm y$ (e.g.\ $P(k)$ of an N-body run) and a cheap surrogate $\bm c$ from the same initial phases (Zel'dovich, 2LPT or COLA)
+with population mean $\bm\mu$, each held-out row is corrected as
+\begin{equation}
+\bm z=\bm y-B(\bm c-\bm\mu),\qquad\hat{\bm y}=\langle\bm z\rangle,\qquad
+{\rm Cov}(\hat{\bm y})=\frac{{\rm Cov}(\bm z)}{N_{\rm eval}}+B\,{\rm Cov}(\hat{\bm\mu})B^T,
+\end{equation}
+the idea of CARPool \cite{Chartier2021}. $B$ is fitted on an independent training set, either per bin (\code{Diagonal}) or as the full
+$B=C_{yc}C_{cc}^{-1}$ (\code{Full}, standardised controls with a small ridge), and $\bm\mu$ comes from an independent, larger ensemble of cheap runs
+(\cls{ControlMean}); its uncertainty is a floor that does not decrease with more evaluation rows. Training, mean and evaluation rows must come from
+disjoint phase blocks: every row carries a phase key (seed, stream, generator backend, fixed amplitude, sign) and metadata tags, and duplicates or
+mismatches are rejected, also across MPI tasks. Antithetic pairs must be averaged into one row. Moments are streamed with Welford/Chan updates and reduced
+over tasks without sending samples. \code{matched_spectra} measures the auto and cross spectra and the coherence of a target and a control field.
+
+\begin{cppcode}[A control-variate mean]
+#include <FML/EnsembleStatistics/ControlVariates.h>
+using namespace FML::ENSEMBLE;
+PairedTraining training(nbins, nbins, tags);
+for (...) training.add(P_nbody, P_2lpt, key_target, key_control);   // training phases
+ControlMean cheap(nbins, tags);
+for (...) cheap.add(P_2lpt_only, key);                              // independent cheap runs
+FitOptions opt;  opt.mode = FitMode::Diagonal;
+auto model = training.global().fit(cheap.global().estimate(), opt);
+ControlEvaluation eval(model);
+for (...) eval.add(P_nbody, P_2lpt, key_target, key_control);       // held-out phases
+auto result = eval.global().estimate();       // mean, covariance of the mean
+\end{cppcode}
+
+\begin{validation}[Validation: control variates]
+Hand-computed covariances, unequal-count reductions, exact affine coefficients, ridge/singular/constant controls, the analytic propagation of the cheap-mean
+uncertainty, held-out Gaussian variance reduction, and rejection of overlapping phases and inconsistent schemas. A matched experiment (\file{matched_validation/})
+evolves small Einstein--de Sitter PM ensembles with phase-matched ZA and 2LPT controls: residual variance reductions of up to $\sim100$--200 per bin, but the
+finite cheap-mean ensemble supplies 40--98\% of the variance of the mean in those cases, so the gain in the mean is much smaller.
+\end{validation}

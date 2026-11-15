@@ -1,0 +1,235 @@
+\chapter{Particle--mesh gravity, time stepping and COLA}\label{ch:nbody-pm}
+\chapterstatus{written}{2026-11-14}
+
+This chapter describes how \fml{} moves particles under their own gravity: the comoving equations of motion and their
+units, the particle--mesh (PM) force with its choices of Green's function, gradient, assignment and anti-aliasing,
+the four time integrators (Quinn, Tassev, FastPM and BullFrog), including velocity friction and several species, and
+the COLA method, in its scale-independent and scale-dependent forms. Short-range corrections to the PM force are in
+\cref{ch:short-range}; the complete simulation program in \cref{ch:simulation-code}.
+
+\begin{modulebox}{NBody}
+\file{NBody/NBody.h} (namespace \nsp{FML::NBODY}): density assignment, Poisson solve, forces, kick and drift;
+\file{NBody/ForceOptions.h} (\cls{ForceOptions}); \file{NBody/TimeStepping.h}, \file{NBody/TimeStepTypes.h}
+(\cls{TimeStepping}, \cls{TimestepOptions}); \file{LPT/GrowthHistory.h}.\par
+SimulationCode: \file{src/KickDrift.h}, \file{src/COLA.h}, \file{src/SimulationStep.h}, \file{src/SpeciesTimeStepping.h},
+\file{src/TimeStepping.h}.\par
+Documentation: \file{NBody/ForceOptions.md}, \file{NBody/TimeStepping.md}, \file{SimulationCode/EVOLUTION.md},
+\file{SimulationCode/DYNAMICS.md}.
+\end{modulebox}
+
+\section{Equations of motion}\label{sec:nbody-eom}
+
+Particles move in comoving coordinates $\vx$, in units of the box size $B$. With the canonical code velocity
+\begin{equation}
+\bm v\equiv a^3E(a)\frac{\dd\vx}{\dd a}=\frac{a^2}{H_0}\frac{\dd\vx}{\dd t},
+\end{equation}
+the equations of motion of a cold particle are
+\begin{equation}
+\frac{\dd\vx}{\dd a}=\frac{\bm v}{a^3E(a)},\qquad \frac{\dd\bm v}{\dd a}=-\frac{\nabla\phi}{a^3E(a)},\qquad
+\nabla^2\phi=\frac32\Om_m\,a\,\mu(k,a)\,\delta,
+\label{eq:nbody-eom}
+\end{equation}
+where $\phi$ is the peculiar potential in units of $(H_0B)^2$ and $\nabla$ is with respect to $\vx$ in box units. The
+\emph{force prefactor} $C(a)=\frac32\Om_ma\,\mu$ carries the time dependence of the force; in GR $\mu=1$. A velocity
+friction $\Gamma(a)$, $\dd\bm v/\dd\ln a=-\Gamma\bm v+\ldots$ (dark scattering, coupled quintessence), is optional.
+
+\section{The particle--mesh force}\label{sec:nbody-pm}
+
+A PM step computes $\delta$ on a grid of $N_{\rm mesh}^3$ cells (\param{force_nmesh}), solves the Poisson equation in
+Fourier space and interpolates the force back to the particles:
+\begin{equation}
+\bm F(\vk)=-i\bm D(\vk)\,G(\vk)\,C(a)\,\frac{\delta(\vk)}{W^{2}(\vk)}\quad(\text{deconvolved}),\qquad
+\bm F_p=\sum_{\rm cells}W(\vx_p-\vx_{\rm cell})\bm F(\vx_{\rm cell}),
+\end{equation}
+with the assignment window $W$ of order $p$ (NGP, CIC, TSC, PCS, PQS; \cref{ch:mass-assignment}),
+$W(\vk)=\prod_j[\mathrm{sinc}(k_j\Delta x/2)]^p$, used both to assign and to interpolate so that the self-force vanishes
+and momentum is conserved \cite{HockneyEastwood1988}. The kernels (\cls{ForceOptions}) are, with $\Delta x=1/N_{\rm mesh}$:
+\begin{center}\small
+\begin{tabularx}{\textwidth}{@{}lXX@{}}
+\toprule
+Kernel & Green's function $G=1/\nabla^2$ & Gradient $D_j$ ($\nabla\to iD$) \\
+\midrule
+continuous & $-1/k^2$ & $k_j$ \\
+two-point & $-\left[\frac{4}{\Delta x^2}\sum_j\sin^2\frac{k_j\Delta x}{2}\right]^{-1}$ & $\sin(k_j\Delta x)/\Delta x$ \\
+four-point & $-\left[\sum_jD_j^2\right]^{-1}$ with the four-point $D_j$ & $\frac{8\sin(k_j\Delta x)-\sin(2k_j\Delta x)}{6\Delta x}$ \\
+\bottomrule
+\end{tabularx}
+\end{center}
+For an even mesh every gradient kernel is zero for the Nyquist component $k_j=k_{\rm Ny}$ (the mode is its own mirror
+image, so its derivative is ambiguous; this keeps the force of a reflected density the reflected force); the
+discrete Green's functions set modes where $\sum_jD_j^2$ vanishes to zero. \code{laplace_kernel_from_name} and
+\code{gradient_kernel_from_name} map \code{continuous}, \code{discrete_2pt}, \code{discrete_4pt}. Finite-difference
+forces on the grid (with a stencil order) are an alternative to Fourier differentiation. There are no global defaults:
+each call takes its \cls{ForceOptions}.
+
+\begin{cppcode}[A PM force]
+#include <FML/NBody/NBody.h>
+FML::NBODY::ForceOptions options;
+options.laplace_kernel  = FML::NBODY::DISCRETE_GREENS_FUNCTION_FROM_TWO_POINT;
+options.gradient_kernel = FML::NBODY::DISCRETE_FOUR_POINT_GRADIENT;
+options.deconvolve      = false;
+double norm = 1.5 * OmegaM * a;                       // the Poisson prefactor C(a)
+FML::NBODY::compute_force_from_density_fourier<3>(density_fourier, force, "CIC", norm, options);
+\end{cppcode}
+
+\subsection{The force grid, the lattice and the gradient kernel}
+
+COLA and PM runs usually use a force grid 2--4 times finer than the particle grid. With an integer ratio
+$m=N_{\rm mesh}/N_p^{1/3}$ the particles of a lattice start exactly on grid nodes, where the CIC kernel has a kink, so
+the assigned density responds to the \emph{size} of the displacement: a rectified signal at the lattice frequency
+(the grid Nyquist frequency for $m=2$). With the continuous gradient, which is large near Nyquist, this gives spurious
+forces (the growth of single large-scale modes off by tens of per cent). SimulationCode's fiducial settings therefore
+offset the lattice by half a force cell (\param{ic_lattice_offset}) and use the four-point gradient for grids up to
+$3\times$ the particle grid and the two-point gradient for finer grids (\param{force_gradient_kernel}
+\code{= fiducial}). With these, $P(k)$ at $z=0$ agrees with a $6\times$ TSC reference to $\lesssim1\%$ for $k\le0.4\hMpc$
+on 2--4$\times$ grids, against $+10$--$14\%$ for the continuous kernel on a $2\times$ grid with particles on the nodes.
+
+\subsection{Accurate forces on a grid equal to the particle grid}
+
+With $N_{\rm mesh}^3$ equal to the number of particles, CIC smooths the force twice and aliases it, so $P(k)$ is low on
+all but the largest scales ($-13\%$ at $k=0.2\hMpc$ for $64^3$ particles in $256\Mpch$). Options for this case:
+\begin{itemize}
+\item \param{force_interlacing_order} $M>1$: the force is computed for $M$ copies of the particles shifted by fractions of
+      a cell (2: the half-cell diagonal; 4: face diagonals; 8: all half-cell corners; 64: quarter cells), interpolated
+      to the shifted particles and averaged, which cancels the leading aliasing of assignment and interpolation;
+\item \param{force_deconvolve_window}: divide by $W^2(\vk)$; unstable alone, but with interlacing TSC or PCS with $M=2$
+      plus deconvolution (as in the BullFrog work of List, Hahn and Rampf) gives $P(k)$ within $0.5\%$ of a converged
+      reference for $k\le0.4\hMpc$ at $\sim7\times$ the cost of the CIC force;
+\item \param{force_density_method} \code{= nufft}: the exact Fourier modes of the particles by a non-uniform FFT
+      (\cref{ch:mass-assignment}, accuracy \param{force_nufft_epsilon}, default $10^{-5}$) and the force evaluated
+      exactly at the particles; slightly better again at twice the cost;
+\item \code{sheet}/\code{sheet_nufft}: spectral sheet interpolation (mostly a library feature);
+\item \param{force_early_method} \code{= interlaced} or \code{nufft} until \param{force_early_until_redshift}: an
+      accurate force only at early times, when the particles are close to the lattice and CIC is worst.
+\end{itemize}
+These options are only meant for $N_{\rm mesh}=N_p^{1/3}$: on finer grids the modes between the particle and grid
+Nyquist frequencies are dominated by discreteness, and removing the smoothing there gives far too much power.
+
+\section{Time stepping}\label{sec:nbody-timestepping}
+
+The steps are fixed before the run: the scale factors of the steps are uniform in $a$ (\code{linear}, default),
+$\ln a$, $a^n$ (\code{powerlaw}) or the linear growth factor $D(a)$ (\code{growthfactor})
+(\param{timestep_scalefactor_spacing}). Each step of \cls{TimeStepping} is
+\begin{equation}
+\bm v\leftarrow s\,\bm v+\Delta_K\,\bm F(\vx,a_{\rm pos}),\qquad \vx\leftarrow\vx+\Delta_D\,\bm v,
+\end{equation}
+with a velocity factor $s$ (1 without friction), a kick factor $\Delta_K$ and a drift factor $\Delta_D$, from
+$(a_{\rm pos},a_{\rm vel})$ to $(a_{\rm pos}^{\rm new},a_{\rm vel}^{\rm new})$; $F$ is the force with the prefactor $C(a)$ of the
+caller. Quinn, Tassev and FastPM are kick--drift--kick sequences (a staggering kick first, a synchronising kick last);
+BullFrog is drift--kick--drift. A sequence has \code{nsteps + 1} entries.
+
+\paragraph*{Quinn} \cite{Quinn1997}: the standard leapfrog with
+\begin{equation}
+\Delta_D=\int_{a_{\rm pos}}^{a_{\rm pos}^{\rm new}}\frac{\dd a}{a^3E},\qquad
+\Delta_K=\int_{a_{\rm vel}}^{a_{\rm vel}^{\rm new}}\frac{\dd a}{a^3E}\frac{C(a)}{C(a_{\rm pos})}.
+\end{equation}
+
+\paragraph*{Tassev} \cite{Tassev2013}: the modified operators for COLA, which assume the residual velocity varies as
+$a^{n_{\rm LPT}}$ (\param{timestep_cola_nLPT}, default $-2.5$):
+\begin{equation}
+\Delta_D=\int\frac{\dd a}{a^3E}\left(\frac{a}{a_{\rm vel}}\right)^{n_{\rm LPT}},\qquad
+\Delta_K=\frac{(a_{\rm vel}^{\rm new})^{n_{\rm LPT}}-a_{\rm vel}^{n_{\rm LPT}}}{n_{\rm LPT}\,a_{\rm pos}^{n_{\rm LPT}-1}}\,
+\frac{1}{a_{\rm pos}^3E(a_{\rm pos})}.
+\end{equation}
+
+\paragraph*{FastPM} \cite{Feng2016}: the factors are chosen so that the linear growing mode, $\vx=\vq+D\bm\Psi$,
+$\bm v=G_p\bm\Psi$, $\bm F=G_f\bm\Psi$, is followed exactly for any step size:
+\begin{gather}
+\Delta_D=\frac{D(a_{\rm pos}^{\rm new})-D(a_{\rm pos})}{G_p(a_{\rm vel}^{\rm new})},\qquad
+\Delta_K=\frac{G_p(a_{\rm vel}^{\rm new})-s\,G_p(a_{\rm vel})}{G_f(a_{\rm pos})},\\
+G_p=a^3E\frac{\dd D}{\dd a},\qquad G_f=\tfrac32\Om_m\mu\,aD .
+\end{gather}
+
+\paragraph*{BullFrog} \cite{Rampf2025}: a drift--kick--drift step in growth-factor time that follows the 2LPT growing
+mode exactly after every step. With $\bm w=\dd\vx/\dd D=\bm v/G_p$ and $\bm g=\bm F/G_f$ (normalised so that
+$\nabla\cdot\bm g=-\delta/D$), a step from $D_n$ to $D_{n+1}$ is
+\begin{align}
+\vx_{n+1/2}&=\vx_n+\tfrac{\Delta D}{2}\bm w_n,\qquad
+\bm w_{n+1}=\alpha\,\bm w_n+(1-\alpha)\,\bm g(\vx_{n+1/2}),\qquad
+\vx_{n+1}=\vx_{n+1/2}+\tfrac{\Delta D}{2}\bm w_{n+1},\\
+\alpha&=\frac{E'_{n+1}-\mathcal F}{E'_n-\mathcal F},\qquad
+\mathcal F=\frac{E_n+E'_n\Delta D/2}{D_{n+1/2}}-D_{n+1/2},
+\end{align}
+where here $E(D)\simeq-\frac37D^2$ is the second-order growth factor and $E'=\dd E/\dd D$. Because one step is exact
+to second order, BullFrog can start from (almost) $a=0$ with the particles on the lattice and the Zel'dovich velocity:
+\param{timestep_method} \code{= BullFrog}, \param{ic_LPT_order} \code{= 1} and a very high initial redshift
+(e.g.\ $10^7$); the first step produces the 2LPT displacement itself. This needs an accurate force while the particles
+are close to the lattice: with \param{force_early_method} \code{= nufft} until $z\approx10$ the result equals that of
+2LPT initial conditions at $z=19$ with the same force; with CIC throughout it does not.
+
+\paragraph*{Velocity friction and several species.} With $\dd\bm v/\dd\ln a=-\Gamma\bm v+\bm F$, the steps are those
+of the friction-free $\bm u=e^{I}\bm v$, $I(a)=\int\Gamma\,\dd\ln a$, converted back: $s=e^{-[I(a_{\rm vel}^{\rm new})-
+I(a_{\rm vel})]}$ and the kick and drift integrands are weighted by the corresponding exponentials (FastPM: the kick that
+keeps the linear mode exact, with the growth history of the equations with the same friction). Species that feel the
+same force but different frictions (e.g.\ CDM and baryons with dark scattering) take the same scale factors with
+their own factors (\code{restep}); BullFrog, a one-fluid scheme, does not support this.
+
+\begin{cppcode}[Time-step coefficients]
+#include <FML/NBody/TimeStepping.h>
+using namespace FML::NBODY;
+TimestepOptions options;
+options.method  = TimestepMethod::FastPM;
+options.spacing = ScaleFactorSpacing::GrowthFactor;
+TimeStepping stepping(options, E_of_a, force_prefactor_of_a, growth_history);   // FML::COSMOLOGY::GrowthHistory
+for (auto & step : stepping.steps(0.02, 1.0, 10)) {
+    // force at step.apos; v = step.velocity_scale * v + step.delta_time_kick * F; x += step.delta_time_drift * v
+}
+\end{cppcode}
+
+\begin{validation}[Validation: time stepping (\file{SimulationCode/tests/check_timestepping.py})]
+Max $|P(k)/P_{\rm ref}-1|$ at $z=0$ ($64^3$ particles, $256\Mpch$, $1\times$ grid), for $k<0.1$ / $k<0.5\hMpc$:
+\begin{center}\small
+\begin{tabular}{@{}llccc@{}}
+\toprule
+Method, start & spacing & 5 steps & 10 steps & 20 steps \\
+\midrule
+FastPM, 2LPT $z=19$ & linear & 1.3\% / 4.9\% & 0.5\% / 2.0\% & 0.2\% / 0.7\% \\
+BullFrog, 2LPT $z=19$ & linear & 0.9\% / 2.4\% & 0.4\% / 1.3\% & 0.2\% / 0.6\% \\
+BullFrog, 2LPT $z=19$ & growth factor & 0.7\% / 2.5\% & 0.3\% / 1.1\% & 0.1\% / 0.4\% \\
+BullFrog, Zel'dovich $z=10^7$ & growth factor & 0.6\% / 2.6\% & 0.3\% / 1.8\% & 0.1\% / 1.0\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+Quinn with 10 steps from $z=19$ is off by 7--12\%. The coefficients reproduce EdS growth exactly for FastPM and
+BullFrog; Quinn with 20 logarithmic steps from $a=0.05$ has a linear-growth error of $-0.38\%$. Small-$N$ orbit tests
+through the actual simulation step converge at second order (\file{SimulationCode/DYNAMICS.md}).
+\end{validation}
+
+\section{COLA}\label{sec:nbody-cola}
+
+In the COmoving Lagrangian Acceleration method \cite{Tassev2013} the particles are evolved in the frame that moves
+with their LPT trajectory. Writing $\vx=\vx_{\rm LPT}+\vx_{\rm res}$ with
+$\vx_{\rm LPT}=\vq+D_1\bm\Psi^{(1)}+D_2\bm\Psi^{(2)}$, the equation of motion of the residual is
+\begin{equation}
+\frac{\dd^2\vx_{\rm res}}{\dd t^2}+2H\frac{\dd\vx_{\rm res}}{\dd t}=-\nabla\phi-\left(\frac{\dd^2}{\dd t^2}+
+2H\frac{\dd}{\dd t}\right)\vx_{\rm LPT},
+\end{equation}
+so the integrator only has to follow the nonlinear residual: the large scales are exact by construction even with
+very few steps. In practice, in each step
+\begin{itemize}
+\item the frame drifts the particles by $\sum_n[D_n(a)-D_n(a_{\rm old})]/D_n(a_{\rm ini})\,\bm\Psi^{(n)}_{\rm ini}$;
+\item the kick subtracts the LPT force of the frame, $C(a)\,S_n\,D_1/D_{1,\rm ini}$ for 1LPT and
+      $C(a)\,S_n\,(D_2-N D_1^2)/D_{2,\rm ini}$ for 2LPT (with the source factors $S_n$ and the second-order source $N$
+      of the growth equations, \cref{ch:growth-transfer}, so the frame follows the growth factors used for the drift);
+\item velocities are stored in the COLA frame (zero initially), and the LPT velocity
+      \[\bm v_{\rm LPT}=\frac{a^2H}{H_0}\sum_nf_n\frac{D_n}{D_{n,\rm ini}}\bm\Psi^{(n)}\]
+      is added back when the full velocity is needed (outputs).
+\end{itemize}
+The displacement fields $\bm\Psi^{(1)}$, $\bm\Psi^{(2)}$ are stored in the particles when the initial conditions are
+made (\param{simulation_cola_LPT_order} $\le$ \param{ic_LPT_order}). Tassev, Quinn or FastPM steps can be used; BullFrog
+already follows 2LPT and cannot be combined with COLA.
+
+\paragraph*{Scale-dependent COLA} \cite{Winther2017}. When growth depends on scale (massive neutrinos, $f(R)$, the
+symmetron, a $k$-dependent $\mu$) the LPT frame is $\sum_nD_n(k,a)/D_n(k,a_{\rm ini})\,\phi^{(n)}(\vk,a_{\rm ini})$. The
+initial LPT potentials are kept on grids, and in each step the frame drift and kick (with the $k$-dependent force
+prefactor) are computed in Fourier space, evaluated at the Lagrangian positions and stored in the particles. This
+is used when \param{simulation_use_scaledependent_cola} is true (default) and the growth is scale dependent; otherwise
+the cheaper scale-independent frame is used (they would agree but cost 4$\times$ the time).
+
+\begin{caveat}[Using COLA]
+Use as large a force grid as you can afford if you care about haloes, whose properties depend on the small-scale
+force resolution; use a slightly smaller FoF linking length and calibrate halo masses and velocities against
+high-resolution simulations. For $P(k)$ restrict to scales below about half the Nyquist frequency of grid and particles.
+The number and distribution of steps matter; see e.g.\ \cite{Izard2016}. COLA runs of SimulationCode agree with
+MG-PICOLA \cite{Winther2017} (based on L-PICOLA \cite{Howlett2015}) to better than $0.1\%$ (\file{SimulationCode/tests}).
+\end{caveat}

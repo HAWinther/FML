@@ -1,0 +1,73 @@
+\chapter{Weak lensing}\label{ch:weak-lensing}
+\chapterstatus{written}{2026-11-14}
+
+Projection operators for weak-lensing observables: Born-approximation convergence maps for source distributions from
+lightcone density shells, flat-sky shear, extended-Limber angular spectra, and projected galaxy--matter profiles. The density
+shells come from the HEALPix ``onion'' maps of the \file{SimulationCode} lightcone (\cref{ch:simulation-code}), stored sparsely
+with \cls{Chunkpix} (\cref{sec:io-other}); the CMB lensing of the Einstein--Boltzmann solver is in \cref{ch:cmb-spectra}.
+
+\begin{modulebox}{WeakLensing}
+\nsp{FML::WEAKLENSING}: \file{WeakLensing/WeakLensing.h} (\cls{Sources}, \cls{FlatGeometry}, \code{convergence_kernel}, \cls{BornPlan},
+\cls{BornAccumulator}, \code{limber_spectrum}, \cls{RadialSelection}, \code{projected_galaxy_matter}, \code{excess_surface_density},
+\code{inverse_sigma_critical_comoving}), \file{WeakLensing/FlatSky.h} (\code{shear_from_convergence}).\par
+Documentation: \file{WeakLensing/README.md}. Tests: \file{WeakLensing/tests} (with QUADPACK references in \file{Reference.h}).
+\end{modulebox}
+
+\section{Sources and the lensing kernel}\label{sec:wl-kernel}
+
+Sources are a set of planes $\chi_s$ with probabilities $p_s$, or a distribution $n(z)$ or $n(\chi)$ turned into quadrature masses in its own
+measure. In a flat universe with the Born approximation the convergence is a projection of the matter density contrast,
+\begin{gather}
+\kappa(\hat{\bm\theta})=\int_0^\infty\dd\chi\,W_\kappa(\chi)\,\delta_m(\chi\hat{\bm\theta},\chi),\\
+W_\kappa(\chi)=\frac{3\Om}{2}\frac{H_0^2}{c^2}\chi(1+z)\,g(\chi),\qquad g(\chi)=\sum_{\chi_s>\chi}p_s\left(1-\frac{\chi}{\chi_s}\right),
+\end{gather}
+with the lensing efficiency $g$ from cumulative tail sums. The total matter field and the standard GR relation between matter and the Weyl potential are
+assumed: no modified lensing response, post-Born terms, reduced shear, intrinsic alignments or source clustering.
+
+\paragraph*{Streaming Born maps.} \cls{BornPlan} integrates $W_\kappa$ exactly over each radial shell (split at the source planes, including sources inside a
+shell) for every source bin, and \cls{BornAccumulator} adds density-contrast shells one at a time, $\kappa_i\mathrel{+}=w_{ij}\delta_j$, so only the output maps
+persist. Pixels can be any common ordering (e.g.\ the local part of a HEALPix map); there are no collectives, each task adds its own pixels.
+
+\section{Flat-sky shear}\label{sec:wl-shear}
+
+On a periodic flat patch the shear follows from the convergence by the Kaiser--Squires relation \cite{KaiserSquires1993},
+\begin{equation}
+\gamma_1(\bm\ell)=\frac{\ell_x^2-\ell_y^2}{\ell^2}\kappa(\bm\ell),\qquad\gamma_2(\bm\ell)=\frac{2\ell_x\ell_y}{\ell^2}\kappa(\bm\ell),
+\end{equation}
+computed with distributed 2D FFTs (slab or pencil grids). The mean is removed (a mass sheet is not recoverable) and for even meshes both Nyquist lines are
+discarded so the field stays a real spin-2 field.
+
+\section{Angular spectra and projected profiles}\label{sec:wl-spectra}
+
+\paragraph*{Limber spectra.} For any two windows,
+\begin{equation}
+C_\ell^{ab}=\int\dd\chi\,\frac{W_a(\chi)W_b(\chi)}{\chi^2}\,P\!\left(\frac{\ell+1/2}{\chi},z(\chi)\right)
+\end{equation}
+(extended Limber \cite{Limber1953,LoVerde2008}), with Gauss--Legendre panels split at the source planes and window knots: $C_\ell^{\kappa\kappa}$ with the total
+matter power and $C_\ell^{g\kappa}$ with a normalised foreground $p(\chi)$ (\cls{RadialSelection}) and the galaxy--matter power. Queries outside the declared $k$
+and $z$ range of the power spectrum throw. In the flat-sky limit $C^{EE}=C^{\kappa\kappa}$ and $C^{BB}=0$.
+
+\paragraph*{Galaxy--galaxy lensing.} From an isotropic galaxy--matter correlation $\xi_{gm}$,
+\begin{gather}
+w_{gm}(R)=2\int_0^{\Pi_{\max}}\xi_{gm}\!\left(\sqrt{R^2+\Pi^2}\right)\dd\Pi,\qquad
+\Delta\Sigma(R)=\bar\rho_{m0}\left[\frac{2}{R^2}\int_0^RR'w_{gm}(R')\dd R'-w_{gm}(R)\right],\\
+\Sigma_{\rm crit}^{-1}=\frac{4\pi G}{c^2}(1+z_l)\chi_lg(\chi_l),\qquad\gamma_t=\Delta\Sigma\,\Sigma_{\rm crit}^{-1},
+\end{gather}
+in comoving units ($\Delta\Sigma_{\rm phys}=(1+z_l)^2\Delta\Sigma_{\rm com}$), with the finite projection length $\Pi_{\max}$ part of the definition; a constant
+projected sheet cancels exactly in the integral.
+
+\begin{cppcode}[Convergence spectra for a source distribution]
+#include <FML/WeakLensing/WeakLensing.h>
+using namespace FML::WEAKLENSING;
+auto sources = Sources::from_redshift_density(z_nodes, n_z, chi_of_z);
+FlatGeometry geo{OmegaM, 2997.92458, z_of_chi};        // Mpc/h
+auto W = convergence_kernel(sources, geo);
+PowerSpectrum mm{Pmm_of_k_z, kmin, kmax, zmin, zmax};
+auto Ckk = limber_spectrum(ells, W, W, mm, geo, radial_edges);
+\end{cppcode}
+
+\begin{validation}[Validation: weak lensing]
+Analytic source efficiencies and finite-shell integrals; streaming with local ownership and error cases; source measure conversion; radial refinement; analytic
+Limber auto, cross and foreground spectra; Gaussian finite-$\Pi$ profiles; physical/comoving consistency; FFT shear mode, sign, aspect ratio, B-mode, DC and Nyquist
+checks on slabs and pencils; twelve independent Einstein--de Sitter references computed with QUADPACK (SciPy).
+\end{validation}

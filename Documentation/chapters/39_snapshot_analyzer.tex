@@ -1,0 +1,77 @@
+\chapter{Snapshot analysis}\label{ch:snapshot-analyzer}
+\chapterstatus{written}{2026-11-14}
+
+The analyses of the previous chapters are collected in an analysis layer that takes N-body particles and a description of the
+cosmology and units, independent of any simulation code or file format. The standalone program \file{SnapshotAnalyzer} uses it to
+post-process GADGET snapshots of any code with the same parameters, algorithms and output files as \file{SimulationCode}.
+
+\begin{modulebox}{Analysis, SnapshotAnalyzer}
+\nsp{FML::ANALYSIS}: \file{Analysis/AnalysisContext.h} (\cls{AnalysisContext}, \cls{Background}), \file{DensityGrid.h}, \file{PowerSpectrum.h},
+\file{HybridBias.h}, \file{CosmicWeb.h}, \file{Minkowski.h}, \file{Halos.h}, \file{Baryonification.h}, \file{Voids.h}, \file{DTFE.h},
+\file{ParticleUtils.h}, \file{Output.h}; the program \file{SnapshotAnalyzer/src/Main.cpp}, \file{SnapshotAnalyzer.h}.\par
+Documentation: \file{Analysis/README.md}, \file{SnapshotAnalyzer/README.md}. Tests: \file{Analysis/tests}, \file{SnapshotAnalyzer/tests}.
+\end{modulebox}
+
+\section{The analysis layer}\label{sec:sa-layer}
+
+An analysis receives the particles (positions in $[0,1)$) and an \cls{AnalysisContext}: the box size, the scale factor, the expansion history
+(\code{Background::LCDM}, a table of $H/H_0$, or any function $E(a)$, with $\Omega_{m0}$) and the conversions of the particle mass and velocity units to
+$M_\odot/h$ and peculiar km/s. From these follow the redshift-space displacement factor $v_{\rm unit}/(100aE(a)B)$ and the density parameter of the
+particles (so \code{200c} masses are right whatever the particles represent, e.g.\ CDM and baryons only). Each analysis has a settings struct with the same
+keys and defaults as \file{SimulationCode}, described once by a \code{parameters(f)} visitor so that any parameter reader can fill it. All functions are
+collective, and an error on one task becomes an exception on every task.
+
+\begin{table}[ht]
+\centering\small
+\caption{The analyses of the analysis layer, with their chapters and output files.}
+\label{tab:analyses}
+\begin{tabularx}{\textwidth}{@{}lXl@{}}
+\toprule
+Analysis & Method & Output \\
+\midrule
+\code{measure_power_spectrum} & $P(k)$ (\cref{sec:pk-estimator}) & \file{pofk_z<z>.txt} \\
+\code{measure_power_spectrum_multipoles} & $P_\ell(k)$ in redshift space (\cref{sec:pk-multipoles}) & \file{pofk_multipole_z<z>.txt} \\
+\code{measure_bispectrum} & $B(k_1,k_2,k_3)$ and $Q$ (\cref{sec:pk-polyspectra}) & \file{bispectrum_z<z>.txt} \\
+\code{measure_hybrid_bias} & hybrid bias spectra (\cref{sec:pk-hybrid}) & \file{hybridbias_z<z>.txt} \\
+\code{measure_cosmic_web} & T-web fractions (\cref{sec:web-tweb}) & \file{cosmicweb_z<z>.txt} \\
+\code{measure_minkowski_functionals} & $V_0$--$V_3$ and Gaussian predictions (\cref{sec:web-minkowski}) & \file{minkowski_z<z>.txt} \\
+\code{find_halos} & FoF/relaxed FoF, SO masses, overlaps (\cref{ch:halo-finding}) & \file{halos_z<z>.txt}, \file{massfunc_*} \\
+\code{find_*_voids} & voxel, spherical, ZOBOV voids (\cref{sec:voids-finders}) & \file{voids_*z<z>.txt} \\
+\code{compute_dtfe_fields} & DTFE density and velocity fields and spectra (\cref{sec:voids-dtfe}) & \file{dtfe_spectra_z<z>.txt} \\
+\code{baryonify} & position-only baryonification (\cref{ch:pgd-baryonification}) & \file{baryonification_z<z>.txt} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+For the hybrid bias spectra the linear field comes from an initial-conditions snapshot of the same particles (the lattice and $\delta_L=-\nabla\cdot\bm\Psi$ of the
+displacements, matched by ID, with the second-order part removed for 2LPT initial conditions) or from the file written by \file{SimulationCode}, and is scaled by
+$D(z)/D(z_L)$ of the analysis cosmology.
+
+\section{SnapshotAnalyzer}\label{sec:sa-program}
+
+\file{SnapshotAnalyzer} reads GADGET binary or HDF5 snapshots (\cref{sec:io-snapshots}): each task reads every $N_{\rm tasks}$-th file and the particles are sent to
+their owners, optionally selecting particle types. The cosmology is $\Lambda$CDM from the header (plus radiation) or a table of $H/H_0$ (e.g.\ the one written by
+\file{SimulationCode}). It runs any of the analyses of \cref{tab:analyses} from a Lua parameter file with \file{SimulationCode}'s parameter names; unknown names give a
+warning and names of earlier versions an error with the replacement. ZOBOV and the DTFE need CGAL, HDF5 snapshots \code{USE_HDF5}.
+
+\begin{paramfile}[A SnapshotAnalyzer parameter file]
+snapshot_input  = "./output/gadget_z0.000"
+snapshot_format = "gadget"
+output_folder   = "./analysis"
+pofk = true
+pofk_nmesh = 256
+pofk_density_assignment_method = "PCS"
+pofk_interlacing = true
+fof = true
+fof_linking_length = 0.2
+fof_so_definitions = {"200m", "500c", "vir"}
+cosmicweb = true
+cosmicweb_smoothing_scale_mpch = 2.0
+\end{paramfile}
+
+\begin{validation}[Validation: analysis]
+\file{Analysis/tests} on 1, 2 and 4 tasks: units and SO thresholds, FoF/SO/overlaps on particles with known halos, mass functions, particle redistribution, baryonification
+(particles conserved, hosts, $P(k)$ unchanged on large scales), voids around a spherical hole, ZOBOV and DTFE velocity units, the growth ratio, exact hybrid-bias fields of a
+Zel'dovich lattice and ID matching, T-web fractions $(0.08,0.42,0.42,0.08)$ at $\lambda_{\rm th}=0$ for a Gaussian field. On a \file{SimulationCode} snapshot the bispectrum equals the
+in-run one to the float32 precision of the positions ($\sim2\times10^{-6}$) and the hybrid bias spectra from the linear-field file equal the in-run ones to $2\times10^{-5}$.
+\end{validation}

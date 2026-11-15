@@ -1,0 +1,260 @@
+\chapter{Lagrangian perturbation theory and initial conditions}\label{ch:lpt}
+\chapterstatus{written}{2026-11-14}
+
+Lagrangian perturbation theory (LPT) describes structure formation by the displacement of fluid elements from their
+initial positions. It is the standard way to set up particle initial conditions, the analytic backbone of the COLA
+method (\cref{ch:nbody-pm}), and a forward model for reconstruction and field-level inference. This chapter gives the
+LPT equations and their solutions to third order, the arbitrary-order recursion, the de-aliasing of the nonlinear
+terms, the augmented and spherical-collapse variants, redshift-space reconstruction, and glass particle loads.
+
+\begin{modulebox}{LPT}
+\file{LPT/DisplacementFields.h} (namespace \nsp{FML::COSMOLOGY::LPT}): 1LPT, 2LPT and 3LPT potentials and displacement
+fields, the scale-dependent displacement, ALPT and spherical collapse, \code{compute_LPT_growth_factors_LCDM},
+\code{_GeffGLCDM}; \file{LPT/Dealiasing.h}; \file{LPT/ArbitraryOrder.h}; \file{LPT/Reconstruction.h} (RSD removal);
+\file{LPT/GrowthHistory.h}.\par
+Documentation: \file{LPT/README.md}, \file{ARBITRARY_ORDER_DERIVATION.md}, \file{ARBITRARY_ORDER_API.md},
+\file{ARBITRARY_ORDER_PLAN.md}, \file{SCIENCE_RESULTS.md}. Tests: \file{tests/test_lpt.cpp}, \file{LPT/tests}.
+\end{modulebox}
+\begin{modulebox}{GlassIC}
+\file{GlassIC/GlassIC.h}, \file{GlassIC/LoadIO.h} (namespace \nsp{FML::GLASSIC}). Documentation:
+\file{GlassIC/README.md}, \file{GlassIC/tests/RESULTS.md}.
+\end{modulebox}
+
+\section{The Lagrangian equations of motion}\label{sec:lpt-equations}
+
+A fluid element that starts at the Lagrangian position $\vq$ is at the Eulerian position
+\begin{equation}
+\vx(\vq,a)=\vq+\bm\Psi(\vq,a).
+\end{equation}
+With the deformation tensor $F_{ij}=\delta_{ij}+A_{ij}$, $A_{ij}=\partial\Psi_i/\partial q_j$, and its determinant
+$J=\det F$, mass conservation is simply $1+\delta(\vx)=1/J(\vq)$. The Eulerian divergence of the equation of motion
+$\ddot\vx+2H\dot\vx=-\nabla_x\Phi/a^2$ (comoving coordinates, $\nabla^2_x\Phi=\frac32\Om_mH^2a^2\delta$ in GR) becomes,
+after multiplying by $J$ and with the cofactor matrix $C_{ij}=\partial J/\partial F_{ij}$,
+\begin{equation}
+\sum_{ij}C_{ij}\left(\partial_t^2+2H\partial_t\right)A_{ij}=\frac32\Om_m(a)H^2\,(J-1).
+\label{eq:lpt-longitudinal}
+\end{equation}
+The initial flow is irrotational, which in Lagrangian coordinates is the Cauchy invariant: $F^T\,\dd F/\dd t$ is
+symmetric. Expanding $\bm\Psi=\sum_n\bm\Psi^{(n)}$ order by order in the linear density gives, at each order, a
+Poisson-type equation for the longitudinal part $\nabla_q\cdot\bm\Psi^{(n)}$ and, from third order, an equation for
+the transverse part $\nabla_q\times\bm\Psi^{(n)}$, sourced by products of lower orders \cite{Bouchet1995,Matsubara2015}.
+
+\section{First, second and third order}\label{sec:lpt-123}
+
+Each order factorises into a growth factor (\cref{ch:growth-transfer}) and a spatial field, which \fml{} stores as
+potentials: $\bm\Psi^{(1)}=\nabla\phi^{(1)}$, $\bm\Psi^{(2)}=\nabla\phi^{(2)}$,
+$\bm\Psi^{(3)}=\nabla(\phi^{(3a)}+\phi^{(3b)})+\nabla\times\bm A^{(3)}$. With $H_{ij}=\partial_i\partial_j\phi^{(1)}$,
+\begin{equation}
+Q(A,B)=\Tr A\,\Tr B-\Tr(AB),\qquad K_i(A,B)=\epsilon_{ijk}\sum_lA_{lj}B_{lk},
+\end{equation}
+and $\nabla^2\chi=\frac12Q(H,H)=\sum_{i>j}(H_{ii}H_{jj}-H_{ij}^2)$, the potentials returned by
+\code{compute_3LPT_potential_fourier} are, at the time of the input density $\delta$ (in units of the box),
+\begin{align}
+\nabla^2\phi^{(1)}&=-\delta, & \phi^{(2)}&=-\tfrac37\chi,\label{eq:lpt-potentials}\\
+\nabla^2\phi^{(3a)}&=-\tfrac13\det H, & \nabla^2\phi^{(3b)}&=\tfrac{5}{21}Q\!\left(H,\nabla\nabla\chi\right),\qquad
+\nabla^2\bm A^{(3)}=\tfrac17\bm K\!\left(H,\nabla\nabla\chi\right),\nonumber
+\end{align}
+which include the Einstein--de Sitter amplitudes of the growing modes (the Zel'dovich approximation is the first
+order alone; $-3/7$ is the familiar 2LPT factor \cite{Scoccimarro1998,Crocce2006}). In EdS the $n$-th order grows as
+$D^n$, so at another time and its velocity
+\begin{equation}
+\bm\Psi=D\bm\Psi^{(1)}+D^2\bm\Psi^{(2)}+D^3\bm\Psi^{(3)},\qquad
+\frac{\dd\bm\Psi}{\dd t}=\frac{\dd\ln D}{\dd t}\left(D\bm\Psi^{(1)}+2D^2\bm\Psi^{(2)}+3D^3\bm\Psi^{(3)}\right),
+\label{eq:lpt-velocity}
+\end{equation}
+which is what \code{compute_3LPT_displacement_field} returns (with $D=1$ at the time of $\delta$ and the units of
+\code{dlogDdt} setting those of the velocity). In other cosmologies and theories of gravity the user, or
+SimulationCode, multiplies each order by its own growth factor $D_1$, $D_2$, $D_{3a}$, $D_{3b}$ relative to the EdS
+amplitude and uses the rates $f_i$; \cls{GrowthHistory} provides $D_1$, $D_2$ and their rates for this (and for the
+$N$-body time stepping), with the peculiar velocity $v=a^2E f_1D_1\Psi^{(1)}+\ldots$ in the code velocity
+$v=a^3E\,\dd x/\dd a$.
+
+\paragraph*{Scale-dependent growth.} When the linear growth depends on scale (massive neutrinos, $f(R)$)
+\code{from_LPT_potential_to_displacement_vector_scaledependent} applies a ratio $D(k,a)/D(k,a_{\rm ini})$ to the
+potential in Fourier space before taking the gradient. Higher-order kernels with scale-dependent growth are
+approximated by the EdS shape with the scale-dependent amplitude.
+
+\begin{implementation}[Implementation: low-order LPT on the grid]
+\begin{itemize}
+\item All derivatives are spectral: $\partial_i\to ik_i$, $\nabla^{-2}\to-1/k^2$, the DC mode set to zero.
+\item \emph{Nyquist convention}: for an even mesh the Nyquist mode $n_i=N_{\rm mesh}/2$ is its own mirror image, so
+      odd ($ik_i$) and mixed ($k_ik_j$, $i\ne j$) derivatives of it depend on a sign choice and break reflection
+      symmetry. They are set to zero (the derivative of the band-limited field there), while $k_i^2$ is kept; the
+      results are then covariant under $x_i\to-x_i$, as in \file{TidalTensor/Hessian.h}. The same kernel is the
+      continuous gradient of the PM force.
+\item \emph{Memory}: the 3LPT construction keeps the first-order Hessian and streams the second-order Hessian in two
+      batches through $N$ work grids: about 17 full grids at peak in 3D with all potentials and the curl, before the
+      caller's outputs and FFT workspace.
+\item 2D is supported (the vector potential then has only a $z$ component, $\nabla\times(A\hat z)=(\partial_yA,-\partial_xA)$).
+\end{itemize}
+\end{implementation}
+
+\begin{cppcode}[Displacement fields to third order]
+#include <FML/LPT/DisplacementFields.h>
+using namespace FML::COSMOLOGY::LPT;
+
+// delta_fourier: the linear density at the initial time (Fourier space, box units)
+std::array<FML::GRID::FFTWGrid<3>, 3> Psi, dPsidt;
+double dlogDdt = H_ini * f_ini;                          // sets the units of dPsidt
+compute_3LPT_displacement_field<3>(delta_fourier, Psi, dPsidt, dlogDdt,
+                                   /*ignore_curl=*/false, Dealiasing::Padding);
+// Or the potentials, to scale each order with its own growth factor:
+FML::GRID::FFTWGrid<3> phi1, phi2, phi3a, phi3b;  std::array<FML::GRID::FFTWGrid<3>, 3> A;
+compute_3LPT_potential_fourier<3>(delta_fourier, phi1, phi2, phi3a, phi3b, A, false, Dealiasing::Padding);
+\end{cppcode}
+
+\section{De-aliasing the nonlinear terms}\label{sec:lpt-dealiasing}
+
+The second- and third-order sources are products of fields evaluated in real space. On a grid the product of two
+band-limited fields has modes up to twice (three times for cubic terms) the original bandwidth, which fold back onto
+the resolved modes. With \code{Dealiasing::Padding} the normalised Fourier coefficients are embedded in a larger work
+grid, the sources and potentials are computed there, and the results are cropped to the original mesh
+\cite{Michaux2021}: at least $3/2$ of the width in every dimension for 2LPT (the quadratic rule) and at least twice
+for 3LPT. The intermediate 2LPT potential keeps its full bandwidth on the work mesh while the third-order products are
+formed; cropping it early would lose physical mode couplings. Work widths are rounded up to an even number divisible by
+the number of MPI tasks; the spectral remapping exchanges only retained coefficients with chunked messages and never
+replicates the grid. Only wave vectors with $2|n_i|<N_{\rm mesh}$ in every dimension are copied, so even-mesh
+Nyquist planes are zeroed (also in the returned 1LPT potential); there is no radial cutoff or smoothing of the
+sub-Nyquist modes. The cost is substantial: in 3D the work grids are $3.375\times$ (2LPT) and $8\times$ (3LPT) larger.
+The default is \code{Dealiasing::None}, which keeps the original calculation. SimulationCode, ALPT and the
+non-Gaussian generator do not enable it automatically.
+
+\section{Arbitrary order}\label{sec:lpt-arbitrary}
+
+\file{LPT/ArbitraryOrder.h} computes the growing-mode EdS solution to a user-selected order, with longitudinal and
+transverse parts. With $g=a/a_{\rm ref}$ and no factorials,
+$\bm\Psi(\vq,a)=\sum_{n\ge1}g^n\bm\Psi_n(\vq)$, $\nabla\cdot\bm\Psi_1=-\delta_{\rm ref}$. In EdS
+$(\partial_t^2+2H\partial_t)g^n=H^2\lambda_ng^n$ with $\lambda_n=n(n+\frac12)$, so at order $n\ge2$ the unknown appears
+in \cref{eq:lpt-longitudinal} only as $(\lambda_n-\frac32)\nabla\cdot\bm\Psi_n$. Matsubara's recursion
+\cite{Matsubara2015} (Sec.~IV, Eqs.~62--64, EdS limit) gives, with $A^{(r)}=\nabla\bm\Psi_r$ and
+$R(A,B,C)=\epsilon_{ijk}\epsilon_{pqr}A_{ip}B_{jq}C_{kr}$,
+\begin{align}
+d_n\equiv\nabla\cdot\bm\Psi_n&=-\frac12\sum_{\substack{r+s=n\\ r\le s}}M_{rs}
+\left[1-\frac{4rs}{(2n+3)(n-1)}\right]Q(A^{(r)},A^{(s)})\nonumber\\
+&\quad-\frac16\sum_{\substack{r+s+t=n\\ r\le s\le t}}M_{rst}\left[1-\frac{4(rs+st+tr)}{(2n+3)(n-1)}\right]
+R(A^{(r)},A^{(s)},A^{(t)}),\\
+\bm c_n\equiv\nabla\times\bm\Psi_n&=\sum_{\substack{r+s=n\\ r<s}}\frac{s-r}{n}\,\bm K(A^{(r)},A^{(s)}),
+\end{align}
+with multiplicities $M_{rs}=1$ for equal and 2 for different orders, and $M_{rst}=1$, 3 or 6 for three, two or no equal
+orders. The first coefficients are $d_2=-\frac3{14}Q_{11}$, $d_3=-\frac59Q_{12}-\frac1{18}R_{111}$,
+$\bm c_3=\frac13\bm K_{12}$, $d_4=-\frac7{11}Q_{13}-\frac{17}{66}Q_{22}-\frac{13}{66}R_{112}$, $\bm c_4=\frac12\bm K_{13}$.
+There is no transverse part at orders 1 and 2, and from order 4 the transverse displacements of lower orders feed the
+scalar sources through their full gradients. The vector is recovered by the Helmholtz inversion
+$\bm\Psi_n(\vk)=[-i\vk\,d_n(\vk)+i\vk\times\bm c_n(\vk)]/k^2$; the velocity follows from
+$\dd\bm\Psi/\dd\ln a=\sum_nng^n\bm\Psi_n$.
+
+\begin{implementation}[Implementation: arbitrary order]
+Products are formed with conservative full-bandwidth work meshes (widths exceed $2PK$ for order $P$ and input support
+$K$), so high orders on full-support fields are very expensive: \code{plan_eds_lpt} reports the owned memory first and
+\code{max_owned_bytes_per_rank} limits it. Outputs can be retained per order or streamed, and intermediate fields
+cached or recomputed. The cubic mixed determinant is summed as paired $2\times2$ minors so that exactly rank-one
+(plane-wave) deformations have exactly zero nonlinear sources. Empty MPI slabs are not supported; general cosmologies
+and automatic SimulationCode wiring are separate work.
+\begin{cppcode}
+EdSLPTOptions options;
+options.max_order = 6;
+options.input_mode_limit = {1, 1, 1};                 // the strictly sub-Nyquist support of the seed
+options.max_owned_bytes_per_rank = 512ULL << 20;
+auto plan   = plan_eds_lpt(delta_ref, options, EdSLPTOutput::RetainOrders);
+auto fields = compute_eds_lpt(delta_ref, options);
+auto sums   = fields.evaluate(0.5, options.max_owned_bytes_per_rank);   // Psi and dPsi/dln a at g = 0.5
+\end{cppcode}
+\end{implementation}
+
+\begin{validation}[Validation: LPT]
+\begin{itemize}
+\item The 1/2/3LPT fields (with and without padding, including the transverse third order) against independent sparse
+      integer-wave-vector convolutions without wrapping (\file{tests/test_lpt.cpp}, 84 checks).
+\item Arbitrary order: every Fourier coefficient against an independent Python oracle that extracts the coefficients
+      of the original determinant/cofactor equations and Cauchy invariants, through order 6 for a fixture of three
+      non-coplanar waves with unequal complex amplitudes (relative errors $2\times10^{-15}$ in double, $4\times10^{-7}$ in
+      float); Matsubara's explicit kernels through order 4; translations, reflections, permutations, plane-wave
+      exactness, and identical results serially, with OpenMP and on 1, 2 and 4 MPI ranks.
+\item The example \file{LPT/example} reports per-order norms and the minimum of $\det(I+\nabla\bm\Psi)$: a negative
+      Jacobian marks shell crossing, beyond which single-stream LPT is not valid.
+\end{itemize}
+\end{validation}
+
+\section{Augmented LPT and spherical collapse}\label{sec:lpt-alpt}
+
+On small scales LPT overshoots: particles stream through collapsed regions. The spherical-collapse approximation of
+Bernardeau \cite{Bernardeau1994} replaces the divergence of the displacement by that of a spherical top hat,
+\begin{equation}
+\nabla\cdot\bm\Psi_{\rm SC}=3\left(\sqrt{\max\left(1-\tfrac23\delta(\vq,a),0\right)}-1\right),\qquad
+\delta(\vq,a)=\frac{D(a)}{D(a_{\rm ini})}\delta_{\rm ini}(\vq),
+\end{equation}
+which equals the 1LPT divergence to linear order (\code{compute_spherical_collapse_potential}). Augmented LPT (ALPT)
+\cite{KitauraHess2013} combines 2LPT on large scales with spherical collapse on small scales,
+\begin{equation}
+\phi_{\rm ALPT}=\phi_{\rm SC}+\mathcal S_R*\left(\phi^{(1)}+\phi^{(2)}-\phi_{\rm SC}\right),
+\end{equation}
+with a smoothing filter $\mathcal S_R$ (Gaussian, top-hat or sharp-$k$) of scale $R$
+(\code{compute_ALPT_potential_fourier}).
+
+\section{Particle initial conditions}\label{sec:lpt-ic}
+
+Particle initial conditions combine the pieces of \cref{ch:growth-transfer,ch:random-fields} and this chapter:
+\begin{enumerate}
+\item a Gaussian (or non-Gaussian) realisation of the linear CDM+baryon density at the initial redshift, from the
+      transfer provider and the growth factors (back-scaled or not);
+\item the LPT potentials to order \param{ic_LPT_order} (1, 2 or 3), with each order scaled by its growth factor;
+\item particles on a regular lattice (or a glass, \cref{sec:lpt-glass}) displaced by $\bm\Psi(\vq)$, interpolated from
+      the grid, with velocities from \cref{eq:lpt-velocity} and the growth rates of each order.
+\end{enumerate}
+Two species, massive-neutrino particles and the $N$-body gauge are described in \cref{ch:growth-transfer,ch:simulation-code}.
+For COLA the LPT fields are kept for the whole run. SimulationCode can also start from an existing snapshot
+(\code{ic_random_field_type = read_particles} or \code{read_phases}), reconstructing the density by mass assignment
+and the LPT fields from it, or exactly from the particles' displacements and velocities
+(\param{ic_reconstruct_exact}).
+
+\section{Redshift-space reconstruction}\label{sec:lpt-reconstruction}
+
+\code{RSDReconstructionFourierMethod} removes redshift-space distortions from tracers in a periodic box with a fixed line
+of sight $\hat{\bm r}$. In linear theory the displacement $\bm\Psi$ of the tracers (bias $b$, $\beta=f/b$) satisfies
+\begin{equation}
+\nabla\cdot(b\bm\Psi)+\beta\nabla\cdot\left[(b\bm\Psi\cdot\hat{\bm r})\hat{\bm r}\right]=-\delta_{\rm tracer},
+\end{equation}
+which is solved in Fourier space assuming that the second term is curl free, after smoothing the density with a filter
+of scale $R$; the RSD shift $\bm\Psi_{\rm rsd}=\beta(b\bm\Psi\cdot\hat{\bm r})\hat{\bm r}$ is then subtracted. The
+iterative scheme of Burden et al.\ \cite{Burden2015} starts from the observed positions $\bm s$, computes $b\bm\Psi_n$
+from the density of the current estimate $\vx_{n-1}$ and sets $\vx_n=\bm s-\beta(b\bm\Psi_n(\bm s)\cdot\hat{\bm r})\hat{\bm r}$;
+it converges for $\beta<1$ in 3--5 iterations. The assignment and interpolation windows are not deconvolved. Only a
+periodic box with a fixed line of sight is supported here; BAO reconstruction of surveys is in \cref{ch:surveys}.
+\code{particles_to_redshiftspace} applies $\bm s=\vx+c_v(\bm v\cdot\hat{\bm r})\hat{\bm r}$, with
+$c_v=1/(100\,aH/H_0\,B)$ for peculiar velocities in km/s and the box $B$ in $\Mpch$ (a negative $c_v$ undoes it).
+
+\section{Glass loads}\label{sec:lpt-glass}
+
+A regular lattice imprints its symmetry on the early evolution; a \emph{glass}, a particle distribution with no
+preferred directions and very little power on large scales, is the usual alternative. \file{GlassIC/GlassIC.h}
+generates periodic equal-mass glasses by evolving a Poisson load (\code{poisson_load}, positions from Philox streams
+keyed by the seed and the particle ID, so independent of the task and thread counts) under \emph{repulsive} gravity
+with damping, until it settles:
+\begin{itemize}
+\item the force is softened periodic P$^3$M gravity with the sign reversed for both the long-range (CIC, Gaussian
+      split, continuous gradient, compensation of the assignment and interpolation windows) and the short-range part
+      (the spline kernel of \cref{ch:short-range}); reversing only the mesh force would leave close pairs unconstrained;
+\item each step holds the acceleration fixed for an exact damped kick,
+      $\bm v_{\rm next}=e^{-\gamma\Delta t}\bm v+\frac{1-e^{-\gamma\Delta t}}{\gamma}\bm a$, $\vx_{\rm next}=\vx+\Delta t\,\bm v_{\rm next}$,
+      with a global velocity factor limiting the largest step to \code{max_step_spacing} times the mean spacing;
+\item convergence requires the rms force and velocity below their tolerances for \code{stable_steps} consecutive steps;
+      the result reports \code{Converged}, \code{MaximumSteps} or \code{NonFinite} and the history.
+\end{itemize}
+A converged residual alone does not make a load suitable for science: its discreteness power, anisotropy and
+close-pair statistics should be checked at the intended particle number. Loads are saved in a versioned, sharded
+text format (\file{LoadIO.h}) that can be read back with a different number of tasks. Perturbations are applied with
+\code{apply_3lpt(load, delta_fourier, dlogDdt, dealiasing)} (EdS-factorised 3LPT sampled by CIC at the glass
+positions) or \code{apply_fields} (precombined displacement and velocity fields, e.g.\ with other growth
+prescriptions), and \code{density_from_provider} bridges a transfer provider to the Philox generator. Multi-species
+glasses and SimulationCode integration are future work.
+
+\begin{cppcode}[A glass load with 3LPT initial conditions]
+#include <FML/GlassIC/GlassIC.h>
+using namespace FML::GLASSIC;
+auto load = poisson_load(32768, 12345, 250.0);   // count, seed, box [Mpc/h]
+Options options;                                  // mesh = 0: smallest task multiple >= 3 N^(1/3)
+options.max_steps = 3000;
+auto result = relax(load, options);              // check result.status
+density_from_provider(delta, provider, Species::CDMBaryon, a_ini, 250.0, field_seed, /*fixed=*/false);
+apply_3lpt(load, delta, dlogDdt, FML::COSMOLOGY::LPT::Dealiasing::Padding);
+\end{cppcode}

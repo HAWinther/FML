@@ -1,0 +1,86 @@
+\chapter{Cosmic web, tidal fields and morphology}\label{ch:cosmic-web}
+\chapterstatus{written}{2026-11-14}
+
+The large-scale structure is classified into voids, sheets, filaments and knots from the eigenvalues of the tidal and
+velocity-shear tensors (T-web, V-web) or from the stream crossings of the particles (ORIGAMI), and its morphology is measured
+with Minkowski functionals of excursion sets.
+
+\begin{modulebox}{CosmicWeb, TidalTensor, Morphology}
+\nsp{FML::COSMICWEB}: \file{CosmicWeb/CosmicWeb.h} (\code{TWeb}, \code{VWeb}, \code{classify_tensor}, \cls{TWebOptions}),
+\file{CosmicWeb/ORIGAMI.h} (\code{ORIGAMI}), \file{CosmicWeb/ORIGAMIHalos.h} (\code{ORIGAMIHalos}); \file{TidalTensor/Hessian.h}
+(\code{ComputeHessianWithFT}, \code{SymmetricTensorEigensystem}); \nsp{FML::MORPHOLOGY}: \file{Morphology/VoxelMorphology.h}
+(\code{excursions}, \code{measure}).\par
+Documentation: \file{CosmicWeb/README.md}, \file{TidalTensor/Workspace.md}, \file{Morphology/README.md}. Tests:
+\file{tests/test_cosmicweb.cpp}, \file{tests/test_cosmicweb_pencil.cpp}, \file{tests/test_reconstruction.cpp}, \file{Morphology/tests},
+\file{tests/test_morphology_pencil.cpp}.
+\end{modulebox}
+
+\section{T-web and V-web}\label{sec:web-tweb}
+
+The T-web \cite{Hahn2007,ForeroRomero2009} uses the tidal tensor of the (Gaussian-smoothed) density contrast,
+\begin{equation}
+T_{ij}=\partial_i\partial_j\phi,\qquad\nabla^2\phi=\delta,\qquad T_{ij}(\bm k)=\frac{k_ik_j}{k^2}\delta(\bm k),
+\end{equation}
+whose trace is $\delta$; the V-web \cite{Hoffman2012} the normalised velocity shear
+\begin{equation}
+\Sigma_{ij}=-\frac{\partial_iv_j+\partial_jv_i}{2H},
+\end{equation}
+e.g.\ from the DTFE velocity field (\cref{sec:voids-dtfe}). A cell is a void, sheet, filament or knot if 0, 1, 2 or 3 eigenvalues exceed the
+threshold $\lambda_{\rm th}$ (positive values, $\sim0.1$--0.4, give visually better webs \cite{ForeroRomero2009,Hoffman2012}). The eigenvalues
+of the symmetric $3\times3$ matrices are computed by cyclic Jacobi rotations, accurate also for (nearly) degenerate eigenvalues, without GSL.
+The result holds the classification, optionally the eigenvalues, and the volume and mass fractions of each class; the labels can be stored as one
+byte per cell (\code{ClassificationStorage::Bytes}: 1\,GiB instead of 8\,GiB at $1024^3$). \code{TWeb} also takes particles and assigns them to a
+grid first. Slabs and pencils are supported.
+
+\begin{cppcode}[T-web classification]
+#include <FML/CosmicWeb/CosmicWeb.h>
+using namespace FML::COSMICWEB;
+TWebOptions opt;
+opt.smoothing_scale  = 2.0 / Boxsize;     // Gaussian, box units
+opt.lambda_threshold = 0.2;
+opt.classification_storage = ClassificationStorage::Bytes;
+CosmicWeb web;
+TWeb(delta_real, opt, web);               // or TWeb(particles, NumPart, Nmesh, opt, web)
+int type = web.get_classification({ix, iy, iz});   // 0 void, 1 sheet, 2 filament, 3 knot
+\end{cppcode}
+
+\file{TidalTensor/Hessian.h} computes Hessians of fields by FFT (all components from one retained Fourier copy) and their eigenvalues and
+eigenvectors with GSL, for the tidal field and the shear used elsewhere (e.g.\ LPT, \cref{ch:lpt}).
+
+\section{ORIGAMI}\label{sec:web-origami}
+
+ORIGAMI \cite{Falck2012} classifies particles by the number of orthogonal axes along which their stream has crossed. Particles that started on a
+lattice of $N^3$ points have crossed along a lattice row if their order along that direction is reversed; a particle is crossed along an axis if
+it has crossed with any particle within a quarter of the row. Nine axes are checked ($x$, $y$, $z$ and the two diagonals in each coordinate
+plane), grouped into four orthogonal triads, and the morphology is the largest number of crossed axes in one triad: 0 void, 1 wall, 2 filament,
+3 halo. The lattice coordinate comes from the particle ID (the numbering of \code{create_particle_grid} and the initial conditions); with MPI the
+rows are moved to the tasks as needed.
+
+\code{ORIGAMIHalos} groups the halo particles on the Delaunay tessellation of all particles (\cref{sec:voids-dtfe}): Voronoi densities of all
+particles, cores of Delaunay-connected halo particles above a density threshold, and the other halo particles attached in rounds to the halo of
+their densest neighbour already in a halo (independent of order and number of tasks); groups without a core can be kept; no unbinding is done.
+
+\section{Minkowski functionals}\label{sec:web-minkowski}
+
+The morphology of an excursion set $\{\bm x:\delta(\bm x)\ge\nu\}$ is described by the four Minkowski functionals in 3D: volume, surface area,
+integrated mean curvature and Euler characteristic \cite{SchmalzingBuchert1997}. \file{VoxelMorphology.h} computes them exactly for the union of
+closed cubic voxels above the threshold by counting the occupied cubes $C$ and the unique faces $F$, edges $E$ and vertices $V$ of their cell
+complex. With cell size $h$:
+\begin{gather}
+V_{\rm vol}=Ch^3,\qquad A=(2F-6C)h^2,\qquad\int H\,\dd A=\pi(3C-2F+E)h,\qquad\chi=V-E+F-C,
+\end{gather}
+and the conventional isotropic Crofton estimates of the underlying smooth field \cite{Schmalzing1999},
+\begin{equation}
+\left\{\frac{Ch^3}{L^3},\ \frac29\frac{(F-3C)h^2}{L^3},\ \frac29\frac{(E-2F+3C)h}{L^3},\ \frac{V-E+F-C}{L^3}\right\}.
+\end{equation}
+The two normalisations of area and curvature differ (the staircase area is $3/2$ of the Crofton one). Periodic or open boundaries are supported.
+Each entity is counted exactly once by vertex-anchored patterns of the incident voxels, so the integer counts are exact across tasks and threads;
+MPI exchanges one slice and reduces four counts.
+
+\begin{validation}[Validation: cosmic web and morphology]
+\file{tests/test_cosmicweb.cpp}: analytic tensors and thread-count consistency; \file{tests/test_cosmicweb_pencil.cpp}: slabs equal pencils.
+Morphology: the counts against an explicit set-union enumeration; empty and full boxes, isolated cubes, face/edge/corner contacts, a cavity, a
+periodic ring; uneven and empty slabs. For Gaussian random fields ($128^3$, smoothing of 4 cells, 4 realisations) the Crofton densities agree with
+the continuum predictions \cite{SchmalzingBuchert1997} to $\sim1\%$ for $V_0$, $V_1$, 1--4\% for $V_2$ and 2--7\% for $V_3$ at $\nu=-2$--2, within
+the statistical errors of 1--4\%.
+\end{validation}

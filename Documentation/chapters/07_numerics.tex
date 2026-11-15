@@ -1,0 +1,200 @@
+\chapter{Numerical methods}\label{ch:numerics}
+\chapterstatus{written}{2026-11-14}
+
+The numerical toolbox that the rest of the library builds on: grids, quadrature and root finding, special functions,
+ODE integration, splines, FFTLog and spherical Bessel transforms, random numbers and Latin hypercube designs. Most of it
+wraps the GNU Scientific Library (GSL) \cite{Galassi2009} and FFTW \cite{Frigo2005} with a uniform C++ interface and
+explicit error handling; the special-purpose quadratures of individual modules (Filon \cite{Filon1929} for oscillating
+integrals in \cref{ch:cmb-spectra}, the logarithmic Gauss--Legendre loop integrals of \cref{ch:perturbation-theory}) are
+described with those modules.
+
+\begin{modulebox}{Math, ODESolver, Spline}
+\nsp{FML::MATH}: \file{Math/Grids.h} (grids), \file{Math/NumericalMethods.h} (quadrature, Brent, spherical Bessel
+arrays), \file{Math/Math.h} (root finding, special functions).
+\nsp{FML::SOLVERS::ODESOLVER}: \file{ODESolver/ODESolver.h} (\cls{ODESolver}).
+\nsp{FML::INTERPOLATION::SPLINE}: \file{Spline/Spline.h} (\cls{Spline}, \cls{Spline2D}, \cls{UniformSpline}).\par
+Documentation: \file{Math/NumericalMethods.md}. Examples in each folder.
+\end{modulebox}
+\begin{modulebox}{FFTLog}
+\nsp{FML::SOLVERS::FFTLog}: \file{FFTLog/FFTLog.h} (\code{ComputeCorrelationFunction}, \code{ComputePowerSpectrum},
+\code{ComputeXiLM}, \code{DiscreteHankelTransform}, \cls{Workspace}), \file{FFTLog/SphericalBesselTransform.h}
+(\cls{SphericalBesselTransform}).\par
+Documentation: \file{FFTLog/README.md}. Tests: \file{tests/test_fftlog.cpp}.
+\end{modulebox}
+\begin{modulebox}{RandomGenerator, LatinHyperCube}
+\nsp{FML::RANDOM}: \file{RandomGenerator/RandomGenerator.h} (\cls{RandomGenerator}, \cls{GSLRandomGenerator}),
+\file{RandomGenerator/CounterBasedRandom.h} (Philox).
+\nsp{FML::SAMPLING}: \file{LatinHyperCube/LatinHyperCube.h} (\cls{LatinHyperCube}).\par
+Documentation: \file{LatinHyperCube/README.md}. Tests: \file{LatinHyperCube/tests}, \file{tests/test_random_fields.cpp}.
+\end{modulebox}
+
+\section{Grids, quadrature and root finding}\label{sec:num-quadrature}
+
+\paragraph*{Grids.} \code{linspace(a, b, n)} (inclusive ends; $n\le0$ gives an empty grid, $n=1$ gives $\{a\}$),
+\code{logspace(a, b, n, base)} (between $\mathrm{base}^a$ and $\mathrm{base}^b$) and \code{geomspace(a, b, n)} (between the
+positive physical end points, $n\ge2$).
+
+\paragraph*{Quadrature.} \code{trapz(x, y)} for tabulated data (no dependencies); \code{integrate(f, a, b, epsabs,
+epsrel)} is adaptive Gauss--Kronrod quadrature (GSL QAG with the 21-point rule and a workspace of 1000 intervals, default
+$\epsilon_{\rm rel}=10^{-8}$). On non-convergence it warns and returns the estimate. A spline can also be integrated
+exactly (\code{Spline::integral}).
+
+\paragraph*{Root finding.}
+\begin{itemize}
+\item \code{find_root(f, a, b)}: Brent's method \cite{Brent1971} (bisection safeguarding inverse quadratic interpolation;
+      GSL), either end-point order, default tolerances $10^{-12}$, at most 200 iterations;
+\item \code{find_root_bisection(f, {a, b}, eps)}: bisection to a bracket of $\epsilon$ times the range (or until it cannot
+      be split in floating point), returning the lower end; it throws if $f$ has the same sign at both ends or is NaN there.
+      A spline overload searches a coarse grid for a sign change when the end points do not bracket a root;
+\item \code{find_root_newton(f, df, x0)}: Newton's method, returning an empty \code{std::optional} on failure.
+\end{itemize}
+Root finders of this kind are used for the spherical collapse (\cref{ch:spherical-collapse}), the formation redshifts of
+the halo model and the initial conditions of the background (\cref{ch:background}).
+
+\section{Special functions}\label{sec:num-special}
+
+\paragraph*{Spherical Bessel functions.} The scalar \code{spherical_bessel_j(l, x)} (GSL, with the high-$\ell$ and
+underflow handling of the Einstein--Boltzmann solver) and the array \code{spherical_bessel_j_array(lmax, x, out)}, which
+fills $j_0,\ldots,j_{\ell_{\max}}$ by upward recurrence when it is stable ($x>\ell_{\max}$) and otherwise by Miller's
+downward recurrence, rescaled to the known $j_0$ and $j_1$; the older \code{j_ell} and \code{j_ell_array} have a different small-argument policy and
+are kept separately. For curved universes, \code{Hyperspherical_j_ell_array} gives the hyperspherical Bessel functions by
+recurrence and \code{HyperSphericalBesselWKB} their WKB approximation with the Airy function
+(\cref{ch:cmb-spectra}). Line-of-sight integrals tabulate $j_\ell$ on a uniform grid with \cls{UniformSpline}.
+
+\paragraph*{Others.} Legendre polynomials $P_0,\ldots,P_{\ell_{\max}}(\mu)$ by Bonnet's recurrence
+$(\ell+1)P_{\ell+1}=(2\ell+1)\mu P_\ell-\ell P_{\ell-1}$; the Airy function ${\rm Ai}(x)$ from a splined solution of $y''=xy$;
+continued fractions by the modified Lentz method.
+
+\section{Ordinary differential equations}\label{sec:num-ode}
+
+\cls{ODESolver} wraps GSL's \code{odeiv2} driver: the system $\dd y_i/\dd x=F_i(x,\bm y)$ is given as a C++ callable,
+integrated from the first to the last point of a monotonic array, and the solution (and its derivative) stored at every
+point. Explicit Runge--Kutta steppers (\code{rk2}, the default, \code{rk4}, \code{rkf45}, \code{rkck}, \code{rk8pd}
+\cite{Dormand1980}), implicit ones for stiff systems (\code{rk1imp}, \code{rk2imp}, \code{rk4imp}, \code{bsimp},
+\code{msbdf}) with a user Jacobian or a forward finite-difference one (\code{set_finite_difference_jacobian}), and the
+multistep Adams method. Defaults: first step $10^{-3}$, absolute and relative errors $10^{-7}$. The higher-order steppers are
+usually far cheaper: for $y''=-y$ on $[0,1000]$, \code{rk2} needs about $3.5\times10^5$ evaluations (error $2\times10^{-5}$) and
+\code{rk8pd} $1.5\times10^4$ (error $2\times10^{-7}$). Errors throw \code{std::runtime_error}, or call \code{MPI_Abort} under
+MPI unless \code{ODESOLVER_THROW_ON_ERROR} is defined (so that, e.g., an MCMC can reject a point). The solver is safe inside
+OpenMP threads.
+
+\begin{cppcode}[Solving an ODE system]
+#include <FML/ODESolver/ODESolver.h>
+using namespace FML::SOLVERS::ODESOLVER;
+ODEFunction dydx = [&](double x, const double * y, double * dy) {
+    dy[0] = y[1];  dy[1] = -y[0];
+    return GSL_SUCCESS;
+};
+ODESolver ode(1e-3, 1e-10, 1e-10);                 // hstart, abserr, relerr
+ode.solve(dydx, x_array, {2.0, -2.0}, gsl_odeiv2_step_rk8pd);
+auto y0 = ode.get_data_by_component(0);           // y_0 at every point of x_array
+\end{cppcode}
+
+\section{Splines}\label{sec:num-splines}
+
+\cls{Spline} (1D cubic) and \cls{Spline2D} (bicubic; bilinear if an axis has fewer than four points) wrap GSL's
+interpolation with natural boundary conditions ($f''=0$ at the ends), giving the value, the first and second derivatives
+(and the mixed one in 2D) and, in 1D, the integral. The behaviour is explicit:
+\begin{itemize}
+\item the abscissae must be strictly monotone (decreasing arrays are reversed) with at least 3 (cubic) or 4 (bicubic) points,
+      otherwise an error is raised;
+\item out of range the argument is clamped to the end point, also for the derivatives (the end-point slope is returned),
+      with optional warnings (\code{set_out_of_bounds_warning});
+\item the natural end conditions make the spline less accurate near the ends if $f''\neq0$ there (for $\sin x$ on $[0,10]$ with
+      101 points the error in $f'$ is $2\times10^{-2}$ at the ends and $8\times10^{-6}$ inside): extend the range if derivatives
+      at the ends matter;
+\item splines are thread safe (one GSL accelerator per thread) as long as they are not created inside a thread and used by others.
+\end{itemize}
+\cls{UniformSpline} is a dependency-free cubic spline on a uniform grid with $\order{1}$ evaluation (no search) and end-point
+second derivatives from one-sided four-point differences, for functions evaluated very many times.
+
+\section{FFTLog}\label{sec:num-fftlog}
+
+Many integrals in cosmology are Hankel transforms of functions sampled over many decades,
+\begin{equation}
+\xi_\ell^m(r)=\int_0^\infty\frac{\dd k}{2\pi^2}\,k^mj_\ell(kr)P(k),\qquad
+\tilde a(k)=\int_0^\infty a(r)(kr)^qJ_\mu(kr)\,k\,\dd r,
+\end{equation}
+($\xi(r)=\xi_0^2$, and $j_\ell(x)=\sqrt{\pi/2x}\,J_{\ell+1/2}(x)$). FFTLog \cite{Talman1978,Hamilton2000} samples the
+function at $N$ logarithmically spaced points over a period $L=N\Delta\ln r$, expands it in a discrete Fourier series in
+$\ln r$, i.e.\ in power laws $r^{-q+2\pi im/L}$, and transforms each power law analytically:
+\begin{equation}
+\tilde a_n=\sum_m c_m u_m\,e^{-2\pi imn/N},\qquad
+u_m=(k_cr_c)^{-2\pi im/L}\,U_\mu\!\left(q+\frac{2\pi im}{L}\right),\qquad
+U_\mu(x)=2^x\frac{\Gamma\!\left(\frac{\mu+1+x}{2}\right)}{\Gamma\!\left(\frac{\mu+1-x}{2}\right)},
+\end{equation}
+with $c_m$ the FFT of the input; the output is on the dual grid $k_j\approx1/r_{N-1-j}$. Two FFTs of length $N$ give the whole
+transform in $\order{N\log N}$. The bias $q$ (a power-law tilt of the integrand) controls the aliasing from the periodic
+extension: $q=0$ is adequate for $\ell=0$, and $q=-1$ is much more accurate at small $r$ for $\ell=2,4$ with $m=2$. With
+\code{noring} the product $k_cr_c$ is adjusted so that $u_m$ is real at the Nyquist frequency, which reduces ringing
+\cite{Hamilton2000}.
+
+The implementation is adapted from Slosar's FFTLog (itself from Copter and Hamilton's code). A \cls{Workspace} keeps two
+FFTW-aligned buffers, the plans and one cached coefficient set (keyed by length, $\mu$, $q$, $L$, $k_cr_c$ and \code{noring}),
+so repeated transforms with new amplitudes cost two FFTs; one workspace per thread, with FFTW planning serialised. The complex
+log-gamma of the coefficients is evaluated so that it does not overflow for many points (8192 over 8 decades). Inputs must be
+logarithmically spaced (lengths, sizes and end-point spans are checked).
+
+\cls{SphericalBesselTransform} computes $g_\ell(y)=C\int\dd x\,x^2j_\ell(xy)f(x)$ for all $\ell<L$ on one fixed logarithmic grid
+with precomputed kernels ($C=4\pi$, or $1/2\pi^2$ for $P\to\xi$). It is the mcfit-style FFTLog of velocileptors, reproduced to
+rounding: zero padding to $2^{\lceil\log_2N\rceil+1}$ points, the tilt $\max(0,3/2-\ell)$ and a low-ringing output grid.
+It is used by the Lagrangian perturbation theory of \cref{ch:perturbation-theory}, which also uses FFTLog for the fast one-loop
+integrals and the correlation multipoles.
+
+\begin{cppcode}[Correlation functions and multipoles with FFTLog]
+#include <FML/FFTLog/FFTLog.h>
+using namespace FML::SOLVERS::FFTLog;
+Workspace ws;                                          // reuse plans and coefficients
+auto [r, xi]  = ComputeCorrelationFunction(k, pk, ws); // k log-spaced
+auto [r2, x2] = ComputeXiLM(2, 2, k, pk, ws, -1.0);    // xi_2^2(r) with the bias q = -1
+auto [kk, pk2] = ComputePowerSpectrum(r, xi, ws);      // and back
+\end{cppcode}
+
+\begin{validation}[Validation: FFTLog]
+Against the analytic transform of $P(k)=e^{-k^2}$ with $m=\ell+2$,
+$\xi_\ell^{\ell+2}(r)=\sqrt\pi\,r^\ell e^{-r^2/4}/[2^{\ell+2}\,2\pi^2]$, for $\ell=0,2,4$ (with $q=-1$ for $\ell=2,4$) on the
+returned $r$-grid; $N=8192$ over 8 decades; the round trip $P\to\xi\to P$; the Hankel transform with precomputed coefficients.
+These tests found and fixed an $r$-grid that was one logarithmic step off and wrong results for $q\neq0$.
+\end{validation}
+
+\section{Random numbers}\label{sec:num-random}
+
+\cls{RandomGenerator} is the common interface (uniform in $[0,1)$, normal with a set $\sigma$, seeding, cloning the state)
+with two back ends: the C++ \code{std::mt19937} Mersenne twister \cite{Matsumoto1998} (default) and GSL's RANLUX
+(\code{ranlxd1}) \cite{Luscher1994}. \code{std::normal_distribution} is implementation defined, so normal deviates from the C++
+generator differ between standard libraries for the same seed; the GSL generator gives the same numbers everywhere (its seed 0
+equals seed 1). Setting the seed also resets the cached normal deviate.
+
+For results independent of the parallel layout, the counter-based Philox4x32-10 generator \cite{Salmon2011}
+(\file{CounterBasedRandom.h}; an independent implementation checked against the Random123 known-answer vectors) maps a key
+(seed, object, purpose, stream) and a counter to random bits, so every Fourier mode or particle gets the same numbers on any
+number of tasks and threads. Uniform deviates are midpoints of a 52-bit grid, strictly inside $(0,1)$. Its use for initial
+conditions, and the N-GenIC-compatible generator, are in \cref{sec:rf-backends}.
+
+\section{Latin hypercube designs}\label{sec:num-lhs}
+
+\cls{LatinHyperCube} samples $[0,1)^d$ for the design of experiments (e.g.\ the training cosmologies of an emulator,
+\cref{sec:fit-nn}), following \code{scipy.stats.qmc.LatinHypercube}:
+\begin{itemize}
+\item \emph{strength 1} \cite{McKay1979}: an independent random permutation of the $n$ strata in every dimension, so each stratum
+      of each dimension holds one point, uniform in its cell (\code{scramble}) or at its centre;
+\item \emph{strength 2} \cite{Tang1993}: from the Bose orthogonal array $OA(p^2,p+1,p,2)$ with rows $(a,b,a+b,\ldots,a+(p-1)b)
+      \bmod p$, randomly relabelled, every 2D projection also has one point in each of the $p\times p$ cells ($n=p^2$, $p$ prime,
+      $d\le p+1$);
+\item \emph{random-CD} optimisation: random swaps of two coordinates in one dimension, kept if they lower the centred
+      discrepancy \cite{Hickernell1998} (each proposal evaluated by an exact $\order{nd}$ update), with scipy's stopping rules;
+      it keeps the Latin property;
+\item \emph{Lloyd} optimisation: damped iterations towards a centroidal Voronoi tessellation, with the clipped cell centroids
+      estimated by Monte Carlo points and a KD-tree (no Qhull, any $d$). The points spread more evenly but are no longer a Latin
+      hypercube.
+\end{itemize}
+The random numbers come from \code{std::mt19937_64} with portable conversions, so a seed gives the same design on every
+platform (not numpy's points); \code{scale} maps to parameter bounds and \code{centered_discrepancy} equals scipy's.
+
+\begin{cppcode}[An emulator design]
+#include <FML/LatinHyperCube/LatinHyperCube.h>
+using namespace FML::SAMPLING;
+LatinHyperCube lhs(3, true, 1, LHSOptimization::random_cd, 1234);   // d = 3, seeded
+Sample params = scale(lhs.random(100), {0.1, 0.6, 0.55}, {0.5, 1.0, 0.85});
+double cd = centered_discrepancy(params);
+\end{cppcode}

@@ -1,0 +1,120 @@
+\chapter{Getting started}\label{ch:getting-started}
+\chapterstatus{written}{2026-11-14}
+
+How to configure and build \fml{}, write and compile a first program, run the tests, and use the four programs that come with the
+library. \file{FML/BUILDING.md} is the reference for all build options and \file{FML/CAPABILITIES.md} lists the modules with their
+scope and examples.
+
+\begin{modulebox}{Build system}
+\file{Makefile.config} (compilers, feature flags, dependency paths, rules), \file{Makefile.local} (machine-specific settings, not under
+version control), the module and example \file{Makefile}s, \file{SimulationCode/CMakeLists.txt}; \file{tests/TestHelpers.h} for tests.\par
+Documentation: \file{BUILDING.md}, \file{CAPABILITIES.md}.
+\end{modulebox}
+
+\section{Requirements and configuration}\label{sec:gs-config}
+
+\fml{} needs a C++17 compiler. Everything else is optional and switched on per build:
+
+\begin{center}\small
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+Make variable & Enables \\
+\midrule
+\code{USE_MPI=true} & MPI (\code{mpicxx}); all communication through \code{FML::communicator} \\
+\code{USE_OMP=true} & OpenMP loops (\code{OMP_NUM_THREADS}) \\
+\code{USE_FFTW=true} & FFTW grids and transforms (with MPI an MPI-enabled FFTW) \\
+\code{USE_FFTW_THREADS=true} & threaded FFTs (the FFTW threads library; separate from OpenMP loops) \\
+\code{USE_GSL=true} & GSL splines, ODEs and quadrature (the cosmology code needs it) \\
+\code{USE_LUA=true} & Lua parameter files (\file{SimulationCode}, \file{SnapshotAnalyzer}) \\
+\code{USE_CGAL=true} & Delaunay tessellations (DTFE, ZOBOV, ORIGAMI halos) \\
+\code{USE_HDF5=true} & GADGET HDF5 snapshots and HDF5 catalogues \\
+\code{USE_PYTHON=true} & Python embedding for plotting and the SWIG wrappers \\
+\code{USE_MEMORYLOG=true}, \code{USE_DEBUG=true}, \code{USE_SANITIZER=true} & memory logging, debug checks, address sanitizer \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Machine-specific settings (compilers and dependency paths) go in \file{FML/Makefile.local}; variables on the command line take precedence:
+
+\begin{paramfile}[Makefile.local]
+CXX_SERIAL   = c++
+CXX_MPI      = mpicxx
+LOCAL_PREFIX = /path/to/dependencies    # or FFTW_INCLUDE, FFTW_LIB, GSL_INCLUDE, ...
+\end{paramfile}
+
+Object files do not record the flags they were built with: clean (\code{make clean}) before switching between serial and MPI, precision
+or compilers, or use separate build directories. Single and long-double FFT precision (\code{SINGLE_PRECISION_FFTW},
+\code{LONG_DOUBLE_PRECISION_FFTW}) need the matching FFTW libraries (e.g.\ \code{FFTW_LINK=-lfftw3f}).
+
+\section{A first program}\label{sec:gs-first}
+
+Include the directory that \emph{contains} \file{FML}, and link \file{FML/Global/Global.cpp} (plus the implementation files of the modules used,
+e.g.\ \file{Spline.cpp}, \file{ODESolver.cpp}, \file{FFTLog.cpp}; the Makefile of a related example lists them). The runtime sets up MPI, FFTW and
+OpenMP automatically (\cref{sec:par-runtime}).
+
+\begin{cppcode}[particles.cpp: particles on a lattice and their power spectrum]
+#include <FML/MPIParticles/MPIParticles.h>
+#include <FML/ComputePowerSpectra/ComputePowerSpectrum.h>
+struct Particle {
+    double pos[3]{};
+    double * get_pos() { return pos; }
+    constexpr int get_ndim() const { return 3; }
+};
+int main() {
+    FML::PARTICLE::MPIParticles<Particle> part;
+    part.create_particle_grid(64, 1.5);                      // 64^3 particles in [0,1)^3
+    FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning<3> pofk(32);
+    FML::CORRELATIONFUNCTIONS::compute_power_spectrum<3>(
+        64, part.get_particles_ptr(), part.get_npart(), part.get_npart_total(), pofk, "CIC", false);
+    if (FML::ThisTask == 0) pofk.info();
+}
+\end{cppcode}
+
+\begin{paramfile}[Compiling and running]
+# serial, from the folder containing FML
+c++ -std=c++17 -O3 -I. -DUSE_FFTW particles.cpp FML/Global/Global.cpp -lfftw3 -o particles
+# MPI + OpenMP
+mpicxx -std=c++17 -O3 -fopenmp -I. -DUSE_MPI -DUSE_OMP -DUSE_FFTW -DUSE_FFTW_THREADS \
+       particles.cpp FML/Global/Global.cpp -lfftw3_mpi -lfftw3_threads -lfftw3 -o particles
+OMP_NUM_THREADS=4 mpirun -np 2 ./particles
+\end{paramfile}
+
+Every module has an \file{example/} folder with a Makefile that uses the shared configuration (\code{make -C FML examples}). The examples need
+no data files: those that read particles, a survey or a snapshot make a small synthetic data set with
+\file{ExampleData/ExampleData.h}.
+
+\section{Tests}\label{sec:gs-tests}
+
+The regression tests are in \file{FML/tests} and in the \file{tests/} folders of the modules, with references from other codes stored as fixtures:
+
+\begin{paramfile}[Running the tests]
+make -C FML test MPIRUN=mpirun NP_LIST="1 2 4"     # the standard suite on 1, 2 and 4 tasks
+make -C FML/tests test_core USE_MPI=false USE_FFTW=false USE_GSL=false   # dependency-free core
+make -C FML/Cosmology/EinsteinBoltzmannSolver test # the Einstein-Boltzmann solver
+make -C FML/CountsInCells/tests run USE_MPI=false  # one module
+\end{paramfile}
+
+Tests use \file{tests/TestHelpers.h}: \code{check} is collective (it fails on every task if it fails on any), \code{check_local} is not, and
+\code{summary} sets the exit code. The validation boxes in this book cite the test files.
+
+\section{The programs}\label{sec:gs-programs}
+
+\begin{itemize}
+\item \file{Cosmology/EinsteinBoltzmannSolver/cmb}: background, recombination, perturbations, CMB and matter spectra, nonlinear spectra
+      (\cref{ch:background,ch:recombination,ch:linear-perturbations,ch:cmb-spectra}): \code{./cmb params/planck2018.ini}, parameters on the
+      command line override the file, \code{./cmb --write-defaults my.ini} writes every parameter with its default.
+\item \file{SimulationCode/nbody}: PM/COLA/TreePM simulations with modified gravity, neutrinos, gas and on-the-fly analysis
+      (\cref{ch:simulation-code}): \code{mpirun -np 4 ./nbody parameterfile.lua}; \code{./nbody --parameters PARAMETERS.md} writes the parameter reference.
+      Also a CMake build.
+\item \file{SnapshotAnalyzer}: the same analyses on GADGET snapshots of any code (\cref{ch:snapshot-analyzer}).
+\item \file{CosmologyFitting/mcmc}: MCMC and best fits to supernova, BAO and CMB data (\cref{ch:sampling-fitting}).
+\end{itemize}
+The parameter files of all four reject unknown or mistyped parameters. Python users can install the catalogue-statistics package with
+\code{python -m pip install ./FML/PythonAnalysis} (\cref{sec:io-python}).
+
+\section{Where to go next}\label{sec:gs-next}
+
+\Cref{ch:conventions} fixes the units and conventions used throughout. For a given task: initial conditions, \cref{ch:random-fields,ch:lpt};
+running a simulation, \cref{ch:nbody-pm,ch:simulation-code}; analysing one, \cref{ch:power-spectra,ch:halo-finding,ch:snapshot-analyzer}; linear
+theory and fitting, \cref{ch:background,ch:sampling-fitting}; the analytic nonlinear models, \cref{ch:perturbation-theory,ch:halo-model}. The module
+index (\cref{app:module-index}) maps every folder to its chapters.

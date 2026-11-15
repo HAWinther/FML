@@ -1,0 +1,207 @@
+\chapter{The halo model}\label{ch:halo-model}
+\chapterstatus{written}{2026-11-14}
+
+The halo model writes the nonlinear matter field as a sum over halos with universal profiles, so the power spectrum is a
+two-halo term (correlated halos) plus a one-halo term (pairs in one halo) \cite{CooraySheth2002}. \fml{} has a general
+halo model with customisable ingredients and HMcode-2016 as a prescription, a separate HMcode-2020, the halo-model
+reaction of ReACT for modified gravity, dark energy and massive neutrinos, and the mixed cold/axion halo model of
+AxionHMcode. All of them are also options of the Einstein--Boltzmann solver's nonlinear spectra (\cref{tab:nonlinear-options}
+in \cref{ch:fitting-emulators}).
+
+\begin{modulebox}{HaloModel, AxionHMcode}
+\nsp{FML::COSMOLOGY::HALOMODEL}: \file{Halomodel.h} (\cls{HaloModel}, \cls{HaloModelOptions}, \code{Prescription::Standard},
+\code{Prescription::HMcode2016}), \file{HMcode2016.h} and \file{HMcode2020.h} (tables of $P_{\rm NL}/P_L$ for the solver),
+\file{HaloModelTools.h} (variance, profiles, Sheth--Tormen, the fits of Mead 2017 and HMcode-2016),
+\file{MassFunctionFits.h} (Tinker 2008, Watson 2013), \file{HaloModelBackground.h}, \file{HaloModelReaction.h}
+(\cls{HaloModelReaction}, \cls{ReactionTable}).\par
+\nsp{FML::COSMOLOGY}: \file{AxionHMcode/AxionHMcode.h} (\cls{AxionHMcode}).\par
+Documentation: \file{HaloModel/README.md}, \file{AxionHMcode/README.md}, \file{Cosmology/Spectra/NONLINEAR.md}.
+Tests: \file{tests/test_halomodel.cpp}, \file{tests/test_halomodel_reaction.cpp}, the solver's
+\file{test_hmcode2016}/\file{test_hmcode2020}, \file{AxionHMcode/tests}.
+\end{modulebox}
+
+\section{Building blocks}\label{sec:hm-blocks}
+
+\paragraph*{Variance and peak height.} With $M=\frac{4\pi}3\bar\rho R^3$,
+\begin{equation}
+\sigma^2(R)=\int\frac{k^2\dd k}{2\pi^2}P_L(k)W^2(kR),\qquad W(x)=\frac{3(\sin x-x\cos x)}{x^3},\qquad\nu=\frac{\delta_c}{\sigma(M)},
+\end{equation}
+where $\delta_c$ comes from the spherical collapse in the model (\cref{ch:spherical-collapse}) or from a fit. With massive
+neutrinos $\sigma$, $\nu$ and the concentrations use the cold spectrum $P_{cb}$, the masses the total matter density and
+the two-halo term the total $P_L$.
+
+\paragraph*{Mass function and bias.} The default is Sheth--Tormen \cite{ShethTormen1999} in the peak-height form,
+\begin{equation}
+f(\nu)=A\left[1+\frac{1}{(a\nu^2)^p}\right]e^{-a\nu^2/2},\qquad
+b(\nu)=1+\frac{a\nu^2-1}{\delta_c}+\frac{2p}{\delta_c[1+(a\nu^2)^p]},
+\end{equation}
+($a=0.707$, $p=0.3$; $A$ normalises $\int f\dd\nu=1$, and the halo integrals are normalised so the result does not
+depend on it). Press--Schechter \cite{PressSchechter1974} is $a=1$, $p=0$; Tinker et al.\ \cite{Tinker2008} (for
+$200\le\Delta\le3200$) and Watson et al.\ \cite{Watson2013} (FoF) are in \file{MassFunctionFits.h}; any $f(\nu)$ and $b(\nu)$
+can be passed as callbacks.
+
+\paragraph*{Profiles.} NFW \cite{NFW1997} truncated at the virial radius of $\Delta_{\rm vir}$, with the analytic Fourier
+transform
+\begin{equation}
+u(k,M)=\frac{\sin(kr_s)\left[\mathrm{Si}((1+c)kr_s)-\mathrm{Si}(kr_s)\right]+\cos(kr_s)\left[\mathrm{Ci}((1+c)kr_s)-\mathrm{Ci}(kr_s)\right]-\frac{\sin(ckr_s)}{(1+c)kr_s}}{\ln(1+c)-c/(1+c)},
+\end{equation}
+$r_s=r_{\rm vir}/c$, and concentrations of Bullock et al.\ \cite{Bullock2001}, $c=A(1+z_f)/(1+z)$ with the formation
+redshift where $D(z_f)/D(z)\,\sigma(0.01M)=\delta_c$, or a power law $c_0(M/M_0)^{-\beta}/(1+z)$. Any profile
+$4\pi r^3\rho(r,M)/M$ is transformed numerically.
+
+\paragraph*{Power spectrum.} With $n(M)\dd M=\frac{\bar\rho}{M}f(\nu)\dd\nu$,
+\begin{equation}
+P_{2h}=P_L(k)\left[\int\dd\nu\,f(\nu)b(\nu)u(k,M)\right]^2,\qquad
+P_{1h}=\int\dd\nu\,f(\nu)\frac{M}{\bar\rho}\,u^2(k,M),
+\end{equation}
+and the HMcode-like modifications \cite{Mead2015}, available in the standard model through options:
+\begin{gather}
+P_{1h}\to\left[1-e^{-(k/k_*)^2}\right]P_{1h},\qquad P_{2h}\to\left[1-f\tanh^2\!\left(k\sigma_v/\sqrt f\right)\right]P_{2h},\\
+u(k,M)\to u(\nu^\eta k,M),\qquad P=\left(P_{1h}^\alpha+P_{2h}^\alpha\right)^{1/\alpha}.
+\end{gather}
+The one-halo damping with $k_*=0.01\hMpc$ (default) removes the constant $P_{1h}$ at small $k$.
+
+\section{HMcode-2016}\label{sec:hm-hmcode2016}
+
+\code{Prescription::HMcode2016} is HMcode as in CAMB's \code{mead2016} \cite{Mead2015,Mead2016}: the fitted
+\begin{align}
+\delta_c&=\left[1.59+0.0314\ln\sigma_8(z)\right]\left[1+0.0123\log_{10}\Om(z)\right](1+0.262f_\nu),\\
+\Delta_{\rm vir}&=418\,\Om(z)^{-0.352}(1+0.916f_\nu),
+\end{align}
+$\eta=0.603-0.3\sigma_8(z)$, $f=0.0095\,\sigma_v(100)^{1.37}$, $k_*=0.584/\sigma_v$, $\alpha=3.24\times1.85^{n_{\rm eff}}$
+(clamped to $[0.5,2]$), and the concentration amplitude $A=3.13$ with the correction of Dolag et al.\ \cite{Dolag2004},
+\begin{equation}
+A\to A\left[\frac{D(z=10)}{D_{\Lambda\rm CDM}(z=10)}\right]^{1.5},
+\end{equation}
+where $\sigma_v^2=\frac13\int\frac{\dd k}{2\pi^2}P_L$ and
+$n_{\rm eff}=-3-\dd\ln\sigma^2/\dd\ln R$ at $\sigma=1$. With neutrinos, as CAMB, $\sigma_8$ and $\sigma_v$ are of the total
+matter, $n_{\rm eff}$ of the cold matter, and there is no $(1-f_\nu)^2$ in the one-halo term (the standard model has it).
+\file{HMcode2016.h} tabulates $P_{\rm NL}/P_L$ on $n_z=60$ redshifts by running the general model ($\sim0.1$\,s each).
+
+\begin{cppcode}[The general halo model]
+#include <FML/HaloModel/Halomodel.h>
+using namespace FML::COSMOLOGY::HALOMODEL;
+auto cosmology = cosmology_from_pofk_file(collapse_model, "pofk_lin.txt");
+HaloModelOptions opt;
+opt.prescription = Prescription::HMcode2016;     // or Standard (+ kstar, alpha, eta, f_damp)
+HaloModel hm(cosmology, opt);
+hm.compute_at_redshift(0.0);
+double P   = hm.pofk(1.0);                       // also pofk_onehalo, pofk_twohalo
+double dn  = hm.dndlogM(1e14), b = hm.bias_of_M(1e14), c = hm.concentration(1e14);
+\end{cppcode}
+
+\section{HMcode-2020}\label{sec:hm-hmcode2020}
+
+\file{HMcode2020.h} is the gravity-only HMcode-2020 \cite{Mead2021} with massive neutrinos:
+\begin{itemize}
+\item $\delta_c$ and $\Delta_{\rm vir}$ from the Einstein--de Sitter values times the growth-history fits of Mead (2017)
+      \cite{Mead2017}, with the neutrino factors $(1-0.041f_\nu)$ and $(1+0.763f_\nu)$;
+\item Sheth--Tormen, NFW with Bullock concentrations ($B=5.196$) and the redshift-dependent Dolag correction; the variances
+      of the cold matter; the neutrino mass removed from the one-halo term, $(1-f_\nu)^2$;
+\item a dewiggled two-halo term $P_{\rm dw}=P_L+(1-e^{-k^2\sigma_v^2})(P_{\rm smooth}-P_L)$, where $P_{\rm smooth}$ is
+      $P_L/P_{\rm EH}$ smoothed by a Gaussian of width 0.25 in $\ln k$ times $P_{\rm EH}$ \cite{EisensteinHu1998}, and the
+      damping $P_{2h}=P_{\rm dw}\left[1-f_d\frac{(k/k_d)^{n_d}}{1+(k/k_d)^{n_d}}\right]$;
+\item the one-halo term $P_{1h}\,(k/k_*)^4/[1+(k/k_*)^4]$, bloating $\nu^\eta$ and the transition $\alpha$, with the fits
+      ($\sigma_8$ of the cold matter)
+      \begin{gather}
+      k_*=0.05618\,\sigma_8^{-1.013},\quad k_d=0.05699\,\sigma_8^{-1.089},\quad f_d=0.2696\,\sigma_8^{0.9403},\quad n_d=2.853,\\
+      \eta=0.1281\,\sigma_8^{-0.3644},\quad \alpha=1.875\times1.603^{n_{\rm eff}}.
+      \end{gather}
+\end{itemize}
+Supported backgrounds are $\Lambda$CDM and smooth $w_0w_a$ (with curvature); other models are rejected, since a linear
+spectrum does not specify screening or other nonlinear physics. The baryonic-feedback variant is not included. The defaults
+are 256 masses ($1$--$10^{18}\,M_\odot/h$), variance integrals over $10^{-5}$--$10^7\hMpc$ with $\dd\ln k=0.015$, and
+a table of $512\times60$ in $(k,z)$; the ratio is 1 above $z_{\max}$ and below $k_{\min}$ and held at the endpoint above
+$k_{\max}$.
+
+\begin{cppcode}[HMcode-2020 from the solver's background]
+#include <FML/HaloModel/HMcode2020.h>
+using FML::COSMOLOGY::HALOMODEL::HMcode2020;
+HMcode2020 hm(bg, P_total, P_cb);          // callbacks (ln a, k [1/m]) -> P [m^3]
+double P_nl = P_total(x, k) * hm.ratio(x, k);
+auto terms = HMcode2020::spectrum(bg, P_total, P_cb, x, {0.1, 1.0, 10.0});  // h/Mpc
+// terms.linear, one_halo, two_halo, nonlinear, delta_c, Delta_v, sigma8_cb, n_eff
+\end{cppcode}
+
+\begin{validation}[Validation: HMcode]
+With identical linear spectra, for $\Lambda$CDM, $\sum m_\nu=0.3$\,eV and $w_0=-0.8$, $w_a=0.2$, $\Omega_K=0.02$ at
+$z=0,1,2$ and 31 $k$ between 0.01 and $10\hMpc$: HMcode-2016 against CAMB 2.0.5 \code{mead2016} to at most 0.060\%,
+HMcode-2020 against CAMB 1.5.4 \code{mead2020} to at most 0.075\% (doubling the resolutions changes the result by
+0.036\%). These are agreements with the reference codes; the physical accuracy of HMcode-2020 is 2.5\% RMS against
+simulations for $k<10\hMpc$, $z<2$ \cite{Mead2021}.
+\end{validation}
+
+\section{The halo-model reaction}\label{sec:hm-react}
+
+For a target cosmology with modified gravity, dark energy or massive neutrinos, the nonlinear spectrum is written
+$P_{\rm NL}=\mathcal R(k)P_{\rm NL,pseudo}$, where the \emph{pseudo} cosmology has a $\Lambda$CDM background and GR but the
+target's linear spectrum, so that $P_{\rm NL,pseudo}$ can come from HMcode or an emulator, and the reaction from the halo
+model \cite{Cataneo2019,Bose2020,Bose2021}:
+\begin{gather}
+\mathcal R(k)=\frac{(1-f_\nu)^2P_h+2f_\nu(1-f_\nu)\sqrt{P_hP_\nu}+f_\nu^2P_\nu}{P_L+P_{1h,\rm pseudo}},\\
+P_h=\left[(1-\mathcal E)e^{-k/k_*}+\mathcal E\right]P_{L,cb}+P_{1h,\rm real}.
+\end{gather}
+\begin{itemize}
+\item The \emph{real} halos collapse in the target background with the screened fifth force (\cref{sec:sc-screened}),
+      depending on the mass and the most probable environment; $\delta_c(M)$ is extrapolated with the $\Lambda$CDM growth
+      and $\nu$ uses the $\Lambda$CDM cold spectrum; concentrations $c=g\,c_0(M/M_*)^{-\alpha}$ ($c_0=9$, $\alpha=0.13$) with
+      $g=D_{\Lambda\rm CDM}/D_{\rm target}$ today. The \emph{pseudo} halos are GR halos of the target spectrum in a
+      $\Lambda$CDM background. Both use Sheth--Tormen with $a=0.75$, $p=0.3$.
+\item $\mathcal E=(1-f_\nu)^2P_{1h,\rm real}/P_{1h,\rm pseudo}$ at $k_E=0.01\hMpc$, and $k_*$ is set so that $\mathcal R$
+      reproduces one-loop perturbation theory at $k_0=0.06\hMpc$ (\code{set_one_loop}, with the one-loop spectra from
+      \file{MGOneLoop.h}, \cref{sec:pt-mg}); both only for modified gravity.
+\end{itemize}
+In the solver (\code{nonlinear = react}) the reaction multiplies HMcode-2020 of the pseudo cosmology for $\Lambda$CDM,
+Hu--Sawicki $f(R)$, $w_0w_a$ and nDGP, with neutrinos, up to \param{react_z_max} (default 2.5). The third-order screening
+term of $f(R)$ is the correct one, three times ReACT's; \param{react_compat_gamma3} reproduces ACTio-ReACTio.
+
+\begin{cppcode}[The reaction in f(R)]
+#include <FML/HaloModel/HaloModelReaction.h>
+using namespace FML::COSMOLOGY::HALOMODEL;
+HaloModelReaction::Cosmology c;  c.OmegaM = 0.317;
+HaloModelReaction::LinearSpectra S;  S.P = P;  S.Pcb = Pcb;  S.Pcb_lcdm = Pcb_lcdm;
+auto F = [](double R) { return SPHERICALCOLLAPSE::fifth_force_hu_sawicki(1e-5, 1.0, 0.317, R); };
+HaloModelReaction hm(c, a, S, F);              // no F: GR / dark energy
+hm.set_one_loop(P_spt_cb_k0, P_spt_pseudo_k0); // k* from one-loop P at k0 = 0.06 h/Mpc
+double R = hm.reaction(k);                     // P_NL = R * P_NL,pseudo
+\end{cppcode}
+
+\begin{validation}[Validation: reaction]
+Against ReACT (ACTio-ReACTio) for GR, $f(R)$ ($|f_{R0}|=10^{-5}$), nDGP ($\Omega_{rc}=0.1$) and CPL with 0.3\,eV neutrinos at
+$z=0$--2: $\delta_c(M)$ and $\sigma(M)$ to $5\times10^{-5}$, $\mathcal E$ to $3\times10^{-5}$, $k_*$ to $3\times10^{-3}$, the
+one-halo terms to $2\times10^{-3}$ and $\mathcal R$ to $10^{-3}$ for $k=0.01$--$10\hMpc$. Fully native ($k_*$ from
+\file{MGOneLoop.h} with ReACT's $\gamma_3$): $\mathcal R$ to $2\times10^{-4}$ ($f(R)$) and $6\times10^{-4}$ (nDGP). The
+correct $\gamma_3$ changes $\mathcal R$ by up to $3\times10^{-3}$. Identical real and pseudo cosmologies give $\mathcal R=1$
+exactly. About 1\,s per redshift for $f(R)$, 0.1\,s for GR or dark energy.
+\end{validation}
+
+\section{Ultralight axions: AxionHMcode}\label{sec:hm-axion}
+
+For a mixed dark matter of cold matter and an ultralight axion of mass $m_a$ and fraction $f=\Omega_a/\Om$,
+\file{AxionHMcode.h} is a native port of the halo model of Vogt et al.\ \cite{Vogt2023} with the calibration of Dome et
+al.\ \cite{Dome2024}:
+\begin{equation}
+P_{\rm total}=(1-f)^2P_{\rm cold}+2f(1-f)P_{\rm cold,axion}+f^2P_{\rm axion},
+\end{equation}
+where the cold matter follows the halo model with HMcode-like modifications and the axions have a clustered part in halos
+above the Jeans cutoff mass and a linear, unclustered part. The axion halo profile is a soliton core joined to an NFW
+envelope, the core--halo mass relation fixing the core radius, with the central density solved so the profile carries the
+axion mass. The \code{Dome2024} version (default) adds the calibrated mass relation and the smoothed transition;
+\code{Basic} is Vogt et al. The input is the linear cold and axion auto-spectra at the redshift (from the solver with
+\code{model = axion}, or axionCAMB); in the solver \code{nonlinear = axionhmcode} tabulates the ratio in $(z,k)$.
+
+\begin{cppcode}[Mixed cold/axion nonlinear spectrum]
+#include <FML/AxionHMcode/AxionHMcode.h>
+using A = FML::COSMOLOGY::AxionHMcode;
+A::Cosmology c;  c.h = 0.67;  c.Omega_b = 0.05;  c.Omega_cdm = 0.2353;
+c.Omega_axion = 0.0317;  c.mass_eV = 3.16e-25;  c.z = 2;
+A::Input lin;                                 // k [h/Mpc], P_cold, P_axion [(Mpc/h)^3]
+auto s = A::spectrum(c, lin, k_out);          // s.total, s.cold, s.cold_axion, s.axion, s.haloes, ...
+\end{cppcode}
+
+\begin{validation}[Validation: AxionHMcode]
+All four component spectra against axionHMcode (with axionCAMB spectra) for Basic and Dome over $k=10^{-3}$--$10\hMpc$:
+largest difference $1.4\times10^{-6}$ (tolerance $10^{-4}$); the cutoff mass, clustered fraction, transition fits,
+profile normalisation and the exact zero-axion limit separately. Doubling the mass and radius resolutions changes the total
+power by $4\times10^{-5}$. This is a validation against the reference code at one cosmology, not an N-body accuracy claim.
+\end{validation}

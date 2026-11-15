@@ -1,0 +1,68 @@
+\chapter{Voids and tessellations}\label{ch:voids}
+\chapterstatus{written}{2026-11-14}
+
+The Delaunay tessellation of the particles gives density and velocity fields without a grid (DTFE) and the Voronoi densities of
+watershed void finders. \fml{} has four void finders sharing one catalogue format: spherical, voxel watershed (Revolver-like) and
+ZOBOV, with optional zone merging.
+
+\begin{modulebox}{Triangulation, VoidFinders}
+\nsp{FML::TRIANGULATION}: \file{Triangulation/PeriodicDelaunay.h} (\cls{MPIPeriodicDelaunay}), \file{Triangulation/DTFE.h}
+(\cls{DTFE}), \file{Triangulation/WatershedBinning.h}. \file{VoidFinders/Void.h} (\cls{Void}), \file{SphericalVoidFinder.h},
+\file{VoxelVoidFinder.h} (also \code{VoxelWatershed}), \file{ZobovVoidFinder.h}, \file{ZoneMerging.h}.\par
+Documentation: \file{VoidFinders/README.md}. Tests: \file{VoidFinders/tests} (\file{test_spherical.cpp}),
+\file{tests/test_delaunay_domain.cpp}, \file{tests/test_dtfe_pencil.cpp}, \file{tests/test_voids_pencil.cpp}. CGAL \cite{CGAL} is needed for
+the tessellations (\code{USE_CGAL}).
+\end{modulebox}
+
+\section{Periodic Delaunay tessellation and the DTFE}\label{sec:voids-dtfe}
+
+\cls{MPIPeriodicDelaunay} builds the 3D Delaunay tessellation of particles spread over the tasks with CGAL: each task triangulates its
+particles plus a buffer from the neighbours (slabs or pencils, \cref{sec:par-communication}), and cells whose tetrahedra might be affected by the
+buffer edge are flagged as unreliable. Voronoi volumes are the volumes of the contiguous Voronoi cells.
+
+The Delaunay tessellation field estimator \cite{Schaap2000,Cautun2011} assigns each particle the density
+\begin{equation}
+\rho_i=\frac{(D+1)\,m_i}{W_i},
+\end{equation}
+with $W_i$ the volume of all tetrahedra sharing the particle, and interpolates any quantity known at the particles linearly inside each
+tetrahedron, so gradients are constant per tetrahedron and the density integrates exactly to the total mass. Grid values are the field at the grid
+point or the average over the cell ($n_{\rm sub}^3$ samples, volume- or mass-weighted). For velocities the DTFE gives the velocity, divergence,
+vorticity and shear grids, the input of the V-web (\cref{sec:web-tweb}). Densities are in units of the mean; positions in $[0,1)$.
+
+\begin{cppcode}[DTFE density and velocity fields]
+#include <FML/Triangulation/DTFE.h>
+FML::TRIANGULATION::DTFE<Particle> dtfe;
+dtfe.create(part.get_particles_ptr(), part.get_npart());
+FML::GRID::FFTWGrid<3> density;
+dtfe.density_to_grid(Nmesh, density);                    // 1 + delta
+FML::TRIANGULATION::DTFEVelocityGrids vel;
+dtfe.velocity_to_grid(part.get_particles_ptr(), Nmesh, vel);   // divergence, vorticity, shear
+\end{cppcode}
+
+\section{Void finders}\label{sec:voids-finders}
+
+All finders take particles with wrapped positions owned by their slab and return a catalogue of \cls{Void}s that is the same on every task: centre
+(circumcentre of the minimum and its three lowest-density mutually adjacent neighbours for ZOBOV, the minimum for voxels), barycentre, volume,
+effective radius $R=(3V/4\pi)^{1/3}$, minimum and mean density, the significance (the density at which the void links to a neighbour divided by its
+minimum, ZOBOV's density ratio), membership counts, the merging hierarchy, and $\lambda=\delta_{\rm avg}R^{1.2}$ \cite{Nadathur2019}. Each can also
+find overdense ``clusters'' by running on $1/\rho$.
+\begin{itemize}
+\item \emph{Spherical} \cite{Padilla2005}: underdense candidates on a density grid are grown to the largest sphere with mean density below
+      $(1+\Delta)\bar\rho$, optionally recentred, and overlapping spheres removed in descending radius (\code{max_overlap}). Each task gets the
+      particles within the search radius from every slab that needs them.
+\item \emph{Voxel} (Revolver \cite{Nadathur2019}): a watershed of a smoothed CIC density grid; \code{VoxelWatershed} works on any density grid, e.g.\
+      the DTFE's.
+\item \emph{ZOBOV} \cite{Neyrinck2008}: the watershed of the Voronoi densities of the particles; zones are the basins of local minima.
+\item \emph{Zone merging}: \code{None} (every zone is a void, as Revolver), \code{Threshold} (merge through links below $0.2\bar\rho$, as VIDE
+      \cite{Sutter2015}) or \code{Full} (the ZOBOV hierarchy with parents).
+\end{itemize}
+The default grid (\code{Nmesh = 0}) is Revolver's, $\lfloor2(4\pi N/3)^{1/3}\rfloor$ rounded to a multiple of 8 (32 above 256), independent of the
+number of tasks; for a given grid the spherical and voxel catalogues are identical for any number of tasks, and ZOBOV's does not depend on a grid.
+
+\begin{validation}[Validation: tessellations and voids]
+\file{tests/test_delaunay_domain.cpp}: on slabs and every pencil layout the same Voronoi volumes, no unreliable cells, and the same watershed basins;
+\file{tests/test_dtfe_pencil.cpp}: DTFE densities, gradients and velocity fields on pencils equal those on slabs. \file{test_spherical.cpp}: exact ghost
+IDs with tiny messages, periodic and slab boundaries, buffers wider than a slab, empty and non-uniform slabs, and a brute-force catalogue reference (radii,
+centres, masses, members, overlap removal); \file{tests/test_voids_pencil.cpp}: voxel and spherical catalogues on pencils equal those on slabs. The voxel,
+ZOBOV and merging code has no unit test of its own; it was checked against an independent watershed implementation.
+\end{validation}

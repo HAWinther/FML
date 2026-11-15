@@ -1,0 +1,148 @@
+\chapter{Halo finding and merger histories}\label{ch:halo-finding}
+\chapterstatus{written}{2026-11-14}
+
+Halos are found with friends-of-friends (standard and relaxed), their spherical-overdensity properties measured around
+the FoF centres, substructure resolved with a phase-space finder, and halos followed between snapshots by particle
+overlap. All of them run in \file{SimulationCode} on the fly and in the snapshot analyser (\cref{ch:snapshot-analyzer})
+through the analysis layer.
+
+\begin{modulebox}{FriendsOfFriends, PhaseSpaceHaloFinder, HaloHistory}
+\nsp{FML::FOF}: \file{FriendsOfFriends/FoF.h} (\code{FriendsOfFriends}), \file{FriendsOfFriends/FoFBinning.h}
+(\cls{FoFHalo}), \file{FriendsOfFriends/FoFDomain.h}, \file{FriendsOfFriends/RelaxedFoF.h}
+(\code{RelaxedFriendsOfFriends}), \file{FriendsOfFriends/SphericalOverdensity.h} (\code{SphericalOverdensity}).
+\nsp{FML::PHASE_SPACE_HALOS}: \file{PhaseSpaceHaloFinder/PhaseSpaceHaloFinder.h} (\code{find}), \file{Distributed.h}
+(\code{find_distributed}), \file{BindingPotential.h}, \file{Adapters.h}.
+\nsp{FML::HALO_HISTORY}: \file{HaloHistory/HaloHistory.h} (\code{match}, \code{build}), \file{HaloHistory/CatalogueIO.h}.\par
+Documentation: \file{FriendsOfFriends/RelaxedFoF.md}, \file{FriendsOfFriends/SphericalOverdensity.md},
+\file{PhaseSpaceHaloFinder/README.md} and \file{tests/RESULTS.md}, \file{HaloHistory/README.md}.
+Tests: \file{tests/test_fof.cpp}, \file{tests/test_fof_domain.cpp}, \file{tests/test_so.cpp}, \file{tests/test_so_multislab.cpp},
+\file{FriendsOfFriends/tests}, \file{PhaseSpaceHaloFinder/tests}, \file{HaloHistory/tests}.
+\end{modulebox}
+
+\section{Friends-of-friends}\label{sec:halo-fof}
+
+Two particles are friends if they are closer than $b\,\bar n^{-1/3}$, $b$ the linking length in units of the mean particle
+separation (typically 0.2), and a group is a connected set of friends \cite{Davis1985}. The particles are binned to a grid of
+cells larger than two linking lengths (at most about one particle per cell; the result does not depend on the grid), so only
+$2^D$ neighbouring cells need to be searched, and groups are grown by recursively tagging the friends of friends. The particles
+are sorted by one coordinate first (20--30\% faster).
+
+\paragraph*{MPI.} Each task receives copies of the particles within a buffer of its slab (or pencil, \file{FoFDomain.h}, with up to 8
+neighbours) from the neighbouring tasks, links its particles and the copies, and keeps the groups whose centre it owns; the FoF IDs of the
+copies are sent back to their owners, and IDs are unique across tasks. The buffer must exceed the largest halo
+(\param{fof_buffer_length_mpch}, default $3\Mpch$); groups that reach its edge are counted and reported, as they might be cut and found
+twice. Tasks without particles take part normally.
+
+\paragraph*{Halo properties.} The halo class is a template parameter: \cls{FoFHalo} accumulates the number of particles, the mass (sum
+of \code{get_mass}), the centre of mass with periodic unwrapping, the mean velocity and the velocity dispersion; a derived class can bin
+anything else. FoF IDs are stored in the particles if they have \code{set_fofid}.
+
+\begin{cppcode}[FoF halos]
+#include <FML/FriendsOfFriends/FoF.h>
+std::vector<FML::FOF::FoFHalo<Particle, 3>> halos;
+FML::FOF::FriendsOfFriends<Particle, 3>(part.get_particles_ptr(), part.get_npart(),
+                                        0.2,      // linking length b
+                                        20,       // minimum particles per halo
+                                        true,     // periodic
+                                        3.0 / Boxsize, halos);
+\end{cppcode}
+
+In \file{SimulationCode}: \param{fof}, \param{fof_linking_length}, \param{fof_nmin_per_halo}, \param{fof_buffer_length_mpch}, the
+output format and the mass function binning. With separate CDM and baryon particles, linking lengths and particle counts refer to one
+species.
+
+\section{Relaxed FoF}\label{sec:halo-rfof}
+
+In low-resolution (PM/COLA) simulations small halos are too diffuse for $b=0.2$ and fragment, so the mass function is too low and the
+bias of small halos too high. The relaxed FoF of Dai et al.\ \cite{Dai2019} (as in FastPM \cite{Feng2016}) uses a longer linking length
+for small halos and rejects unbound clumps joined by it through their velocity dispersion:
+\begin{enumerate}
+\item halos are binned by particle number with edges $N_i=20,40,80,160,320,\infty$;
+\item the linking length of bin $i$ interpolates linearly between $\ell_1(z)=l_1-a_1/(1+z)$ for the smallest and
+      $\ell_n(z)=\max[l_6-a_2/(1+z),\ell_{\min}]$ for the largest halos;
+\item a halo is fake if $\sigma_v\ge r_0(z)V_{\rm std}(M,z)$, with the 3D dispersion $\sigma_v$, $r_0=b_1-b_2\ln(1+z)$ and
+      $V_{\rm std}=V_0[E(z)M/10^{15}M_\odot h^{-1}]^{1/3}$, $V_0=1100$\,km/s \cite{Evrard2008};
+\item pass $i$ runs FoF with $\ell_i$ on the remaining particles, saves the genuine groups smaller than $N_i$ (with at least
+      \code{nmin} particles) and removes their particles and all ungrouped ones; the rest go to the next pass.
+\end{enumerate}
+The \code{fastpm} mode (default) stops after the $n$ passes; the \code{paper} mode continues with linking lengths shrinking by 0.9 per
+pass and saves every group that passes the velocity cut (Algorithm 1 of the paper). The defaults are FastPM's
+($l_1=0.25$, $a_1=0.012$, $l_6=0.24$, $a_2=0.06$, $\ell_{\min}=0.2$, $b_1=7.02$, $b_2=6.025$, $n_{\min}=8$), fitted to TNG300-2-Dark for
+FastPM with a $0.3\Mpch$ mean separation and 40 steps; for other set-ups they should be refitted. $r_0(z)\le0$ for $z>2.2$, where every halo
+would be rejected: the code warns and \code{r0_min} sets a floor. In \file{SimulationCode}: \param{fof_relaxed} and the
+\code{fof_relaxed_*} parameters; the catalogue then has the pass, bin, linking length and $\sigma_v/V_{\rm std}$ of each halo.
+
+\begin{validation}[Validation: FoF]
+\file{tests/test_fof.cpp}: groups, centres and stored IDs equal a serial FoF for any number of tasks; buffer-edge groups are reported; custom
+halo classes; the linking length in 2D. \file{tests/test_relaxed_fof.cpp} on 1, 2 and 4 tasks: members, pass, bin and size of every halo
+equal an independent SciPy KD-tree implementation on a catalogue with compact, diffuse and fake clumps and cold cores in hot envelopes, in both
+modes and at several redshifts; one bin without the velocity cut is standard FoF; tasks without particles.
+\end{validation}
+
+\section{Spherical overdensity}\label{sec:halo-so}
+
+\code{SphericalOverdensity} measures halos around given centres (e.g.\ the FoF centres) using all particles, not only the group members:
+\begin{enumerate}
+\item the centre is refined by a shrinking sphere \cite{Power2003}: move to the centre of mass of the particles inside and shrink the radius by
+      10\% until fewer than $\max(n_{\min},10\%)$ of the starting particles remain (at most 200 iterations);
+\item for each threshold $\Delta$ (in units of the mean density) the radius is the \emph{outermost} radius where the mean enclosed density is
+      still above $\Delta\bar\rho$: with the particles sorted by distance, the largest $i$ with $M_i/(\frac43\pi r_i^3)\ge\Delta\bar\rho$, and
+      $R_\Delta$ from $M_i/(\frac43\pi R_\Delta^3)=\Delta\bar\rho$. Growing from the centre and stopping at the first crossing is not well
+      defined at simulation resolution: the innermost particles are Poisson noise around a centre that is not on a particle;
+\item mass-weighted mean velocity and dispersion inside the first radius.
+\end{enumerate}
+The definitions in \file{SimulationCode} (\param{fof_so_definitions}) are $\Delta$ times the mean (\code{200m}), the critical density
+(\code{500c}) or the virial overdensity of Bryan and Norman (\code{vir}) \cite{BryanNorman1998}. The search radius is the same on all tasks
+so results do not depend on the decomposition; particles come from every slab that intersects the search spheres, the buffer is refreshed
+collectively if a centre moves, and halos whose sphere did not reach the threshold are flagged as truncated.
+
+\begin{validation}[Validation: spherical overdensity]
+Singular isothermal spheres on a uniform background (also on task boundaries) give the analytic radius, mass and centre for any number of
+tasks; spheres beyond the search radius are flagged; cored halos of $\sim100$ particles (as in PM simulations) do not collapse to a few
+particles. \file{tests/test_so_multislab.cpp}: exact ghost membership from non-adjacent slabs, variable-size records, bounded messages, empty
+and non-uniform slabs, and a direct full-catalogue reference for centres, radii, masses, velocities and truncation.
+\end{validation}
+
+\section{Phase-space halos}\label{sec:halo-phasespace}
+
+\file{PhaseSpaceHaloFinder} is an independent implementation of a hierarchical phase-space halo finder inspired by ROCKSTAR
+\cite{Behroozi2013}:
+\begin{itemize}
+\item spatial FoF parents with linking parameter 0.28;
+\item in each parent, positions and velocities normalised by the mass-weighted dispersions, a 6D FoF radius from the 70\% quantile of the
+      nearest-neighbour distances, and recursive refinement into children down to a minimum core size;
+\item the leaf groups seed halos; seeds consistent within the Poisson errors of their core positions and velocities are merged, and a sampled
+      6D density-saddle test removes weaker peaks without a resolved dip towards a denser one;
+\item particles are assigned on the way back up with a dynamical position scale from the seed's circular velocity and a reference density
+      (200 times the mean by default);
+\item unbinding with the full isolated Newtonian potential of the assigned halo (a monopole tree with opening angle 0.7, the spline-softened
+      Green function of \cref{ch:short-range}, an optional Hubble-flow term), iterated until stable.
+\end{itemize}
+The output has exclusive bound memberships by particle ID, bound and inclusive masses, core position and velocity, dispersions,
+$V_{\max}$ and $R_{\max}$, the bound extent (not an SO radius) and the host. It runs serially, with OpenMP and on MPI slabs: FoF chains across
+any number of slabs are stitched by propagating minimum IDs to a fixed point, and complete parents are routed to a hash owner, without
+gathering the catalogue. Adapters give seeds for the SO measurement, HOD halos and history snapshots. This is a first implementation, not a
+calibrated ROCKSTAR replacement.
+
+\begin{validation}[Validation: phase-space finder]
+Exact potentials against direct sums; two overlapping populations separated in velocity are recovered; invariance under permutation, rotation,
+boosts, translation and unit rescaling; Plummer spheres give one object with $V_{\max}$ within 1--4\% of the analytic value; identical serial
+and distributed memberships. Planted subhalos on circular orbits in a Plummer host were recovered in 40 of 48 realisations (misses within
+1.5--2.5 scale radii of the host centre). An isolated 4000-particle Plummer sphere gives $V_{\max}=97.10$\,km/s against ROCKSTAR's 97.05\,km/s and
+a bound mass within 0.3\% of ROCKSTAR's $M_{200b}$ (\file{tests/RESULTS.md}).
+\end{validation}
+
+\section{Merger histories}\label{sec:halo-history}
+
+\file{HaloHistory.h} links halo catalogues of successive snapshots by shared particle IDs \cite{Srisawat2013,Elahi2019}. For halos $a$ and $b$
+with $N_a$, $N_b$ members of which $N_{ab}$ are shared, the merit is
+\begin{equation}
+\mathcal M_{ab}=\frac{N_{ab}^2}{N_aN_b}=\frac{N_{ab}}{N_a}\frac{N_{ab}}{N_b},
+\end{equation}
+and each halo's descendant is the candidate with the largest merit (then the most shared particles, then the smallest ID), above optional
+thresholds; all candidates are kept for inspection. Sorted particle-ID indices are merge-joined, so only pairs that share a particle get a
+counter. A target's main progenitor is chosen among the sources whose descendant it is. With a gap allowance a halo without a descendant is
+matched to the earliest later snapshot where it reappears. Catalogues carry required metadata (mass definition, ID namespace, units) that must
+agree, exclusive or inclusive membership, and an acyclic host forest; \file{CatalogueIO.h} reads and writes a versioned ASCII format and
+converts to HOD halos. Matching two snapshots of $10^7$ halo particles in $10^5$ halos takes about 7\,s on one core. It is a baseline, not a
+reproduction of TreeFrog, SubLink or Consistent Trees.

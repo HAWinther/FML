@@ -1,0 +1,113 @@
+\chapter{Input, output and utilities}\label{ch:io-utilities}
+\chapterstatus{written}{2026-11-14}
+
+Snapshot readers and writers, plain-text tables, parameter files, physical units, timing and memory instrumentation,
+the performance suite, the Python interfaces and a few smaller utilities.
+
+\begin{modulebox}{I/O}
+\nsp{FML::FILEUTILS}: \file{GadgetUtils/GadgetUtils.h} (\cls{GadgetReader}, \cls{GadgetWriter}),
+\file{GadgetUtils/GadgetUtilsHDF5.h}, \file{RamsesUtils/RamsesUtils.h} (\cls{RamsesReader}), \file{FileUtils/FileUtils.h}
+(\code{loadtxt}, \ldots), \file{FileUtils/DataPath.h} (\code{fml_file}); the program \file{RamsesUtils/ramses2pk}.\par
+Tests: \file{tests/test_gadget.cpp}, \file{tests/test_ramses.cpp}, \file{tests/test_utils.cpp}.
+\end{modulebox}
+\begin{modulebox}{Parameters and units}
+\file{ParameterMap/ParameterMap.h} (\cls{ParameterMap}), \file{LuaFileParser/LuaFileParser.h} (\cls{LuaFileParser}),
+\nsp{FML::UTILS}: \file{Units/Units.h} (\nsp{SI}, \cls{ConstantsAndUnits}).\par
+Documentation: \file{Units/README.md}. Tests: \file{tests/test_lua.cpp}, \file{tests/test_utils.cpp}, \file{tests/test_units_odr.cpp}.
+\end{modulebox}
+\begin{modulebox}{Instrumentation and interfaces}
+\file{Timing/Timer.h}, \file{Timing/Timings.h}, \file{MemoryLogging/MemoryLogging.h}, \file{Performance/} (counters and the
+benchmark runner), \file{Plotting/Matplotlibcpp.h}, \file{Chunkpix/Chunkpix.h}, \file{PythonAnalysis/} (\code{fml_analysis}),
+\file{MakePythonWrapper/}, \file{HaloModel/PythonWrapper/}.\par
+Documentation: \file{Performance/README.md}, \file{PythonAnalysis/README.md}.
+\end{modulebox}
+
+\section{Snapshot formats}\label{sec:io-snapshots}
+
+\paragraph*{GADGET binary} \cite{Springel2005}. \cls{GadgetReader} reads format 1 and format 2 (blocks preceded by a label block)
+files of either endianness (detected and swapped), positions and velocities in float or double, 4- or 8-byte IDs (from the block
+size) and the MASS block (types with zero \code{MassTable} entry, stored with \code{set_mass}); empty files are skipped and unknown
+format-2 blocks ignored. Positions are returned in $[0,1)$ (scaled by the box, with a factor for files in kpc/$h$), velocities as
+peculiar velocities in km/s (the file holds $v/\sqrt a$), the family/type is set if the particle has it (otherwise all are dark
+matter), and with MPI each task can keep only the particles in its domain while reading all files. \cls{GadgetWriter} writes one file
+per task with 4-byte IDs unless an ID or the total does not fit, several species per file with their \code{MassTable} masses
+($\Omega_{\rm type}\rho_{\rm crit}B^3/N_{\rm type}$) or per-particle masses; blocks above $2^{31}$ bytes (the limit of the format) are an
+error.
+
+\paragraph*{GADGET HDF5.} \file{GadgetUtilsHDF5.h} (with \code{USE_HDF5}) reads and writes the HDF5 layout of GADGET-2/3/4, AREPO,
+GIZMO and SWIFT (\code{/Header} attributes and \code{/PartTypeN/Coordinates}, \code{Velocities}, \code{ParticleIDs}, \code{Masses}), in
+one or several files, with the same interface and conventions; velocity units in the file are converted to km/s.
+
+\paragraph*{RAMSES} \cite{Teyssier2002}. \cls{RamsesReader} reads dark-matter particle files (positions, velocities in km/s from
+\code{unit_l}/\code{unit_t}, masses, IDs, levels, families and tags as the particle provides them) from the header or the
+\file{part_file_descriptor.txt}, keeping only the local domain if asked, and writes the \file{ic_deltab} initial-condition file.
+\file{ramses2pk} computes power spectra directly from a RAMSES output.
+
+\paragraph*{Plain text.} \code{loadtxt} and its variants read whitespace-separated numbers (comments with \#, ! or /; \code{nan},
+\code{inf} and denormals), with a fixed or variable number of columns, a subsample fraction, or two extracted columns; malformed lines
+are errors with the line number. \code{fml_file} resolves data files of the library from \code{FML_DIR}, the compiled
+\code{FML_ROOT_DIR} or a relative path.
+
+Grids and particle containers have raw checkpoints (\code{dump_to_file}, \code{load_from_file}; \cref{ch:grids-fft,ch:particles}).
+
+\section{Parameters}\label{sec:io-parameters}
+
+\cls{ParameterMap} is a map from names to typed values (string, int, bool, double and vectors of int and double, a
+\code{std::variant}): \code{get<T>(name)} throws if the parameter is missing or of another type, and \code{get<T>(name, fiducial)}
+returns the fiducial value only if the parameter is missing (a wrong type is still an error). \cls{LuaFileParser} reads Lua scripts as
+parameter files (the format of \file{SimulationCode}, \cref{ch:simulation-code}): \code{read_int}, \code{read_double},
+\code{read_string}, \code{read_bool} and arrays, each \code{required} or \code{optional} with a default. A parameter that is set with the
+wrong type (1 for a boolean, 2.5 for an integer, a string in an array of numbers) is always an error, and reading many unset optional
+parameters no longer corrupts the Lua stack. Being Lua, parameter files can compute values and use loops and conditions.
+
+\section{Units and constants}\label{sec:io-units}
+
+\file{Units.h} is the single source of physical constants: \nsp{FML::UTILS::SI} holds compile-time SI values (units, derived and
+astronomical units, fundamental constants, recombination energies and rates, $H_0/h$ in s$^{-1}$; the ionisation energies are in joules),
+and \cls{ConstantsAndUnits} gives all constants in a chosen system (\code{"SI"}, \code{"Planck"}, \code{"ParticlePhysics"},
+\code{"Cosmology"}: Mpc, Hubble time, solar masses and kelvin, or user factors), derived from the same table. The Einstein--Boltzmann
+solver's \code{Constants} namespace is an alias to it (\cref{ch:conventions}). The year is the 365.25-day Julian year.
+
+\section{Instrumentation}\label{sec:io-instrumentation}
+
+\paragraph*{Timing.} \cls{Timer} is a stopwatch; \cls{Timings} accumulates labelled timings over restarts (a repeated end does not count
+twice) and prints a summary; \file{SimulationCode} reports the time of every part of a step with it.
+
+\paragraph*{Memory.} With \code{MEMORY_LOGGING} the containers of the library use a logging allocator that records every allocation above a
+minimum size with its label (grids and particle containers label themselves), keeps the current and peak memory and their history, and
+prints the range over tasks; it is thread safe and bounded in the number of tracked allocations. \file{SystemMemory.h} gives the resident
+set size (\cref{sec:par-communication}).
+
+\paragraph*{Performance suite.} \file{Performance/} measures representative operations with full provenance, separately from the
+correctness tests: an FFT round trip, grid copies and empty clones, Fourier resampling, particle migration and selected bispectrum
+configurations, each validated outside the timed region. The runner (\file{run.py}) runs every case, rank and thread count in a fresh
+process and stores JSON reports, raw logs, the argument vectors and a manifest (host, CPU affinity, OpenMP settings, the executable's
+SHA-256). Opt-in counters (\code{FML_ENABLE_PERFORMANCE_COUNTERS}) count FFTW plan creations, transforms, grid allocations and copies, and
+the payload bytes and messages of the transports.
+
+\section{Python}\label{sec:io-python}
+
+\begin{itemize}
+\item \code{fml_analysis} (\file{PythonAnalysis/}, pybind11): a serial catalogue interface to the spatial statistics of
+      \cref{ch:configuration-space}: \code{Catalogue(positions, boxsize)} with $k$-nearest-neighbour distances and CDFs, sphere counts and
+      counts-in-cells summaries for query points, on a KD-tree, with NumPy arrays in and out, copies of all inputs and the GIL released during
+      the C++ work. It does not initialise MPI or FFTW.
+\item The halo-model wrapper (\file{HaloModel/PythonWrapper/}, pybind11) exposes \cls{HaloModel} (\cref{ch:halo-model}).
+\item \file{MakePythonWrapper/} shows how to wrap any FML function with SWIG and NumPy arrays.
+\end{itemize}
+
+\section{Other utilities}\label{sec:io-other}
+
+\code{Matplotlibcpp} (adapted from matplotlib-cpp) makes matplotlib plots from C++. \cls{Chunkpix} (by Albert Izard) stores sparse HEALPix
+\cite{Gorski2005} maps: the $12N_{\rm side}^2$ pixels are split into $12N_{\rm side,chunk}^2$ chunks and only the chunks that are written to are
+allocated; with NEST ordering a chunk is a compact patch, so a partial-sky map allocates about that fraction. It holds the lightcone maps of
+\file{SimulationCode} (\cref{ch:weak-lensing}).
+
+\begin{validation}[Validation: I/O and utilities]
+\file{tests/test_gadget.cpp}: write and read back on several tasks (positions, peculiar velocities, IDs, header), several species and their
+masses, 8-byte IDs, small and empty files, per-particle masses, big- and little-endian files and format 2 with an extra block, HDF5 (including
+SWIFT's three-element box size and snapshots with different numbers of files). \file{tests/test_ramses.cpp}: synthetic RAMSES snapshots
+(domain reading, units for both Mpc conventions of RAMSES, empty CPU files, a particle at $x=1$, the descriptor file). \file{tests/test_lua.cpp}:
+many unset parameters, defaults, arrays and the wrong-type errors. \file{tests/test_utils.cpp}: \code{loadtxt} edge cases, the random generators,
+the memory log with many allocations and threads, timings, \cls{ParameterMap} types and the unit systems.
+\end{validation}

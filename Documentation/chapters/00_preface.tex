@@ -1,0 +1,33 @@
+\chapter*{Preface}
+\addcontentsline{toc}{chapter}{Preface}
+
+\fml{} is a C++17 library for cosmology and the large-scale structure of the Universe. It started as a collection of
+the tools needed for fast approximate simulations (particle--mesh gravity, Lagrangian perturbation theory, the COLA
+method and modified-gravity solvers) and has grown into a library that covers the whole chain from the expansion
+history and the linear Einstein--Boltzmann equations, through initial conditions and $N$-body, hydrodynamical and
+wave dark matter simulations, to halo and void finding, clustering statistics, survey estimators, analytic nonlinear
+models and statistical inference.
+
+This book documents all of it. For every feature it gives
+\begin{itemize}
+\item the equations that are solved, derived to the extent needed to state the conventions unambiguously;
+\item the algorithms used to solve them, with the numerical choices that matter for accuracy and cost;
+\item how the feature is used from code (the main classes and functions, a short example and the important options);
+\item how it is validated, and against which external codes and papers;
+\item references to the literature and to the codes the methods come from or are compared with.
+\end{itemize}
+The module guides in the repository (\file{README.md} files next to the code) remain the authoritative description of
+interfaces and test procedures; this book collects the physics and numerics behind them in one place, with a common
+notation. \Cref{app:module-index} maps every module directory of the repository to the chapters that describe it.
+
+\paragraph*{How to read this book.} \Cref{part:intro} (\cref{ch:introduction,ch:conventions,ch:getting-started}) gives an overview, shows how to build and run the code and
+fixes the conventions (units, Fourier transforms, grids, parallel layout, cosmological notation) used everywhere
+else. The remaining parts follow the flow of a typical calculation: the numerical infrastructure, the homogeneous
+universe and linear theory, analytic models of nonlinear structure, initial conditions, simulations, structure
+identification, clustering statistics, and finally surveys, lensing and inference. Each chapter starts with a summary
+of the modules it covers and can be read on its own.
+
+\paragraph*{Status.} The book is written alongside the code and describes the library as of the date under each
+chapter title. Facts, defaults and validation numbers are taken from the source, the module documentation and the
+tests; where a result is a one-off measurement or an experiment rather than a regression test, the text says so. When
+the code changes, the module's own documentation is the authority until the chapter is updated.

@@ -1,0 +1,136 @@
+\chapter{Particle--mesh interpolation, smoothing and NUFFT}\label{ch:mass-assignment}
+\chapterstatus{written}{2026-11-14}
+
+The link between particles and grids: density assignment with B-spline kernels, window deconvolution and interlacing,
+interpolation of grids to particles, deposits for particles on any domain, Fourier-space filters and shifts, non-uniform FFTs,
+and the sheet interpolation that uses the particles' Lagrangian lattice.
+
+\begin{modulebox}{Interpolation, Smoothing}
+\nsp{FML::INTERPOLATION}: \file{Interpolation/ParticleGridInterpolation.h} (\code{particles_to_grid},
+\code{interpolate_grid_to_particle_positions}, \code{particles_to_fourier_grid_interlaced},
+\code{deconvolve_window_function_fourier}), \file{Interpolation/ParticleGridInterpolationGeneric.h} (any grid with the interface),
+\file{Interpolation/DistributedDeposit.h} (\code{particles_to_grid_any_domain}), \file{Interpolation/SheetInterpolation.h}.
+\nsp{FML::GRID}: \file{Smoothing/SmoothingFourier.h} (\code{smoothing_filter_fourier_space}, \code{shift_grid_fourier}, \ldots).\par
+Tests: \file{tests/test_interpolation.cpp}, \file{tests/test_interp_pencil.cpp}, \file{tests/test_distributed_deposit.cpp},
+\file{tests/test_sheet_pencil.cpp}.
+\end{modulebox}
+\begin{modulebox}{NUFFT}
+\nsp{FML::NUFFT}: \file{NUFFT/NUFFT.h} (\code{particles_to_fourier_grid_nufft}, \code{nufft_type1}, \code{nufft_type2},
+\code{compute_force_nufft_with_kernel}, \cls{PSWFKernel}, \cls{ESKernel}), \file{NUFFT/Core.h} (the standalone core, in
+development).\par
+Documentation: \file{NUFFT/README.md}. Tests: \file{tests/test_nufft_domain.cpp}.
+\end{modulebox}
+
+\section{Assignment kernels}\label{sec:ma-kernels}
+
+A particle at $\bm x_p$ is spread over the cells with the B-spline kernel of order $p$, the $p$-fold convolution of the top-hat
+of one cell \cite{HockneyEastwood1988}:
+\begin{equation}
+1+\delta(\bm x_i)=\frac{N_{\rm mesh}^D}{N_{\rm part}}\sum_p\frac{m_p}{\bar m}\prod_{j=1}^DW_p\!\left(\frac{x_{i,j}-x_{p,j}}{H}\right),\qquad
+\tilde W(\bm k)=\prod_{j=1}^D\left[\mathrm{sinc}\left(\frac{\pi k_j}{2k_{\rm Ny}}\right)\right]^p,
+\end{equation}
+with $H$ the cell size and $k_{\rm Ny}=\pi N_{\rm mesh}/B$; $p=1,2,3,4,5$ are NGP, CIC, TSC, PCS and PQS. Masses are used if the
+particle has them (relative to the mean, so their units do not matter); with a $\delta f$ weight the particles carry only the
+perturbation, $\delta=N_{\rm mesh}^D/N_{\rm part}\sum_pw_pW$, and no mean is subtracted. The result has zero mean.
+\code{deconvolve_window_function_fourier} divides the Fourier modes by $\tilde W$.
+
+The kernel of order $p$ reaches \code{get_extra_slices(method)} slices to the left and right (CIC: 0 and 1, TSC: 1 and 2, \ldots;
+with \code{CELLCENTERSHIFTED} the shift of the cell centres changes which side needs one). Contributions to the extra slices are
+added to their owners afterwards; a task with fewer slices than the kernel needs stops with a clear error, and particles on a slab
+edge are assigned correctly for any number of tasks.
+
+\paragraph*{Threads and determinism.} With one thread the particles are added in order. With several threads the local x-range is
+split into chunks of at least $2p+2$ slices so that chunks $c$ and $c+2$ never write to the same cells: the even chunks are added in
+parallel, then the odd ones, each chunk in particle order (the particle indices are grouped by a counting sort; the particles are not
+moved). Every cell then receives its contributions in the same order for any number of threads above one, so results are
+bit-reproducible. With too few slices per task (e.g.\ $N_{\rm mesh}=512$ on 32 tasks) the code falls back to atomic additions.
+
+\paragraph*{Particles on another domain.} \code{particles_to_grid_any_domain} deposits particles whose decomposition differs from the
+grid's, e.g.\ on a Peano--Hilbert domain, as GADGET's PM step does \cite{Springel2005}: each task deposits into a dense patch covering
+the cells its particles touch (in several passes if the patch would exceed a cell budget), and the overlap with each task's part of the
+grid is sent to it (all-zero blocks skipped) through the chunked exchange. It gives the same field as \code{particles_to_grid} up to the
+order of the sums, deterministically for any number of threads, for slab and pencil grids.
+
+\section{Aliasing and interlacing}\label{sec:ma-interlacing}
+
+Sampling on a grid aliases the power at $\bm k+2k_{\rm Ny}\bm n$ onto $\bm k$. Averaging the density of copies of the particles
+shifted by fractions of a cell,
+\begin{equation}
+\delta(\bm k)=\frac1M\sum_{j=1}^Me^{i\bm k\cdot\bm s_j}\delta_{\bm s_j}(\bm k),
+\end{equation}
+cancels the images whose phases add to zero \cite{Jing2005,Sefusatti2016}. \code{particles_to_fourier_grid_interlaced} supports:
+$M=2$ with shifts $0$ and $(\frac12,\ldots,\frac12)H$, the usual interlacing, which cancels the images with odd $\sum_in_i$;
+$M=2^{D-1}$ (4 in 3D) with the half-cell corners with an even number of halves, which cancels all images except those with all $n_i$
+odd; $M=n^D$ sub-lattices; and $2^m\ge2^D$ by recursive refinement along the diagonal. The window is not deconvolved and the particle
+positions are never modified. Combined with a PCS kernel, interlacing makes the measured power accurate up to close to the Nyquist
+frequency (\cref{ch:power-spectra}).
+
+\section{Interpolating grids to particles}\label{sec:ma-interpolation}
+
+\code{interpolate_grid_to_particle_positions} evaluates a grid (or a vector of grids, e.g.\ the force components) at the particle
+positions with the same kernel as the assignment. Using the same kernel for both makes the force interpolation the transpose of the
+assignment, which removes the self-force and conserves momentum \cite{HockneyEastwood1988}. The forces of the PM solvers are computed
+in Fourier space, $\bm F(\bm k)=-i\bm k\Phi(\bm k)$, one inverse FFT per component (\cref{ch:nbody-pm}); interpolation of a linear field
+is exact for CIC and higher orders. \code{convolve_grid_with_kernel} convolves a grid with a general kernel in real space.
+
+\section{Fourier-space filters and shifts}\label{sec:ma-smoothing}
+
+\file{SmoothingFourier.h} works on any grid type in Fourier space:
+\begin{itemize}
+\item low-pass filters of scale $R$: sharp-$k$ ($kR<1$), Gaussian $e^{-(kR)^2/2}$ and top-hat (the transform of a ball in 3D,
+      $3(\sin x-x\cos x)/x^3$, or of a disk in 2D, $2J_1(x)/x$), or a custom $W(k)$;
+\item multiplication by a function of $k$, linear combinations of grids, whitening ($\delta_{\bm k}\to\delta_{\bm k}/|\delta_{\bm k}|$),
+      convolutions of two fields (via real space, three FFTs);
+\item spectral shifts $f(\bm x)\to f(\bm x\pm\bm s)$ by the phase $e^{\pm i\bm k\cdot\bm s}$, exact for band-limited fields. For even
+      $N_{\rm mesh}$ the Nyquist modes are multiplied by $\cos(k_{\rm Ny}s)$ so the field stays real, so a shift followed by its inverse is
+      the identity for them only when $s$ is a whole number of cells.
+\end{itemize}
+
+\section{Non-uniform FFT}\label{sec:ma-nufft}
+
+The NUFFT computes the Fourier modes of point sources exactly to a requested tolerance $\epsilon$, without window or aliasing:
+\begin{equation}
+\text{type 1:}\quad F(\bm k)=\mathcal N\sum_pc_pe^{-i\bm k\cdot\bm x_p},\qquad
+\text{type 2:}\quad f(\bm x_p)=\sum_{\bm k}F(\bm k)e^{i\bm k\cdot\bm x_p},
+\end{equation}
+for all modes with $|m_i|<N_{\rm mesh}/2$ ($\bm k=2\pi\bm m$). The algorithm follows FINUFFT \cite{Barnett2019}: spread the sources with a
+compact kernel of width $w$ fine cells onto a grid $\sigma$ times finer, FFT, divide by the kernel's Fourier transform and keep the modes
+of the output grid (type 2 is the reverse). For $\sigma=2$, $w\approx\log_{10}(1/\epsilon)+1$, so a particle costs $w^D$ operations (343
+for $\epsilon=10^{-6}$ in 3D) and the fine grid has $\sigma^D$ times more cells than the output.
+
+Two kernels: the default prolate spheroidal wave function of order zero (\cls{PSWFKernel}), computed natively by solving the angular
+PSWF eigenproblem in an even Legendre basis \cite{Osipov2013} with the width rules of FINUFFT 2.5, and the exponential of semicircle
+$e^{\beta(\sqrt{1-x^2}-1)}$ (\cls{ESKernel}). A reusable spatial ordering of the particles (32 blocks per dimension, a stable counting sort)
+improves cache locality for repeated transforms while the results stay in the caller's order. \code{particles_to_fourier_grid_nufft}
+gives the same normalisation as \code{particles_to_grid} followed by \code{fftw_r2c}, and \code{compute_force_nufft_with_kernel} the PM
+force without window or aliasing. MPI (particles in the slab or pencil of the fine grid) and OpenMP are supported. A standalone,
+general complex NUFFT core of types 1--3 independent of the particle classes is in development (\file{Core.h}).
+
+\begin{validation}[Validation: NUFFT]
+In 3D with $3\times10^5$ random particles, $64^3$ modes, $\epsilon=10^{-6}$ and $\sigma=2$, the PSWF kernel agrees with FINUFFT 2.5.1 to
+about $10^{-9}$ (relative maximum error) for both types; ordered PSWF was a few per cent faster than ordered ES and 10--15\% slower than
+FINUFFT (a local measurement). \file{tests/test_nufft_domain.cpp}: on pencils the type 1 modes, type 2 values (both kernels) and forces
+equal those on slabs.
+\end{validation}
+
+\section{Sheet interpolation}\label{sec:ma-sheet}
+
+Particles that started on a lattice $\bm q_i$ sample the dark-matter sheet $\bm x(\bm q)=\bm q+\bm\Psi(\bm q)$, and before shell crossing
+$\bm\Psi$ is smooth, so it can be Fourier-interpolated between the particles \cite{Hahn2013,Stucker2020,List2024}. The sheet interpolation
+creates tracers at
+\begin{equation}
+\bm x=\bm q_i+\bm s+\bm\Psi(\bm q_i+\bm s),\qquad \bm s=\frac{(j_1,\ldots,j_D)}{RN_{\rm part,1D}},\quad j_d=0,\ldots,R-1,
+\end{equation}
+and assigns all $R^D$ of them to the grid. This removes the shot noise and the lattice pattern of the particles (with $R$ equal to the ratio of
+the force grid to the particle grid there is one tracer per cell) at the cost of $R^D$ assignments. $\bm\Psi$ comes from the particles'
+Lagrangian coordinates (\code{get_q}) or is supplied (e.g.\ the 1LPT field). After shell crossing $\bm\Psi$ has kinks and the interpolation
+rings, so the method is best on large scales and at early times. It is implemented for slabs and pencils.
+
+\begin{validation}[Validation: assignment and interpolation]
+\file{tests/test_interpolation.cpp}: NGP interpolation of a constant gives the constant for every particle; lattice particles on slab
+edges are all assigned ($\sum\delta=0$ for NGP--PQS, also with 10 tasks); interpolation of a linear field is exact for CIC--PQS; unknown
+methods and too-thin slabs stop with a clear message. \file{tests/test_interp_pencil.cpp}: interlacing of every order, offset deposits and
+deconvolution give the same modes on pencils and slabs. \file{tests/test_distributed_deposit.cpp}: particles on a Peano--Hilbert domain,
+scattered randomly or all on one task, NGP--PQS with masses and offsets, several passes and tiny messages, pencil grids, OpenMP
+determinism, against \code{particles_to_grid}. \file{tests/test_sheet_pencil.cpp}: sheet densities on pencils equal those on slabs.
+\end{validation}

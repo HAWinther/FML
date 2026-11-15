@@ -1,0 +1,100 @@
+\chapter{Introduction}\label{ch:introduction}
+\chapterstatus{written}{2026-11-14}
+
+\section{What FML is}
+
+\fml{} is a library of building blocks, together with a few complete programs built from them. The building blocks
+are templated C++ classes and functions in the namespace \nsp{FML}, one directory (\emph{module}) per topic. Most
+modules are header-only; the ones with substantial compiled code (the Einstein--Boltzmann solver, recombination,
+parts of the cosmology) have their own \file{Makefile}. Almost everything works both serially and in parallel with
+MPI and OpenMP, with the same code: the parallel layout (\cref{ch:parallelism}) is part of the data structures, not
+of the user code.
+
+The complete programs are
+\begin{itemize}
+\item \textbf{SimulationCode} (\cref{ch:simulation-code}), a configurable particle--mesh / COLA / P$^3$M simulation code
+      with a large library of cosmologies and theories of gravity, multiple particle species, on-the-fly analysis and
+      initial conditions from a transfer-function file, from tabulated transfer tables or from the built-in
+      Einstein--Boltzmann solver;
+\item the \textbf{Einstein--Boltzmann solver} (\cref{ch:background,ch:recombination,ch:linear-perturbations,ch:cmb-spectra,ch:extended-models}),
+      a line-of-sight code for the CMB and matter spectra in $\Lambda$CDM and some twenty extended models;
+\item \textbf{SnapshotAnalyzer} (\cref{ch:snapshot-analyzer}), a standalone analysis program for simulation snapshots
+      from any code;
+\item \textbf{CosmologyFitting} (\cref{ch:sampling-fitting}), likelihoods and samplers built on the solver.
+\end{itemize}
+
+\section{Design principles}
+
+A few principles recur throughout the library and explain many of the interfaces described in this book.
+
+\paragraph*{One implementation of each physical quantity.} The expansion history, the quasi-static limits of
+modified-gravity theories, the growth factors, the halo-model ingredients and the perturbation-theory kernels are each
+implemented once and reused: the same \cls{Background} drives the Einstein--Boltzmann solver, the simulation time
+stepping, the growth factors, spherical collapse and the halo model; the same \cls{QuasiStaticGravity} gives
+$\mu(k,a)$ to the Boltzmann solver, to the LPT growth factors, to the one-loop hybrid bias spectra and to the
+simulation code.
+
+\paragraph*{Ownership is explicit.} Distributed data (particles in slabs, grids with local slices) and replicated data
+(catalogues that every task holds in full) obey different rules, and each API states which it expects. Collective
+functions must be called by all tasks.
+
+\paragraph*{Units are explicit.} Box-unit positions in $[0,1)$ for particles and grids, $\hMpc$ and $\Mpch$ for
+large-scale structure, SI or Mpc units in the Boltzmann code; \cref{ch:conventions} lists them and every chapter
+states its own.
+
+\paragraph*{Validation is part of a feature.} Every module has regression tests (analytic limits, manufactured
+solutions, conservation laws, comparisons with external codes such as CLASS, CAMB, hi\_class, FAST-PT, velocileptors,
+ReACT, ROCKSTAR or FINUFFT). The validation boxes in this book summarise them; the scope statements of the module
+guides say what a passed test does and does not establish.
+
+\section{Building}
+
+\fml{} needs a C++17 compiler. The optional dependencies are switched on with make variables: \code{USE_MPI},
+\code{USE_OMP}, \code{USE_FFTW} (FFTW3, with its MPI build for MPI runs), \code{USE_FFTW_THREADS}, \code{USE_GSL},
+\code{USE_LUA} (parameter files), \code{USE_CGAL} (triangulations), \code{USE_HDF5} and \code{USE_PYTHON}. Machine
+specific paths go in \file{FML/Makefile.local}; the shared rules are in \file{FML/Makefile.config}.
+\begin{paramfile}[Makefile.local]
+CXX_SERIAL   = c++
+CXX_MPI      = mpicxx
+LOCAL_PREFIX = /opt/homebrew      # where FFTW, GSL, Lua, ... are installed
+\end{paramfile}
+The test suite is built and run with \code{make -C FML test} (optionally with \code{MPIRUN=mpirun NP_LIST="1 2 4"}),
+the examples with \code{make -C FML examples}, the simulation code with \code{make -C FML/SimulationCode} (or its CMake
+build) and the Einstein--Boltzmann solver with \code{make} in \file{Cosmology/EinsteinBoltzmannSolver}. The file
+\file{FML/BUILDING.md} is the reference for all build options.
+
+\section{Map of the library}
+
+\Cref{tab:module-map} groups the modules by the parts of this book. The full mapping of directories to sections is in
+\cref{app:module-index}.
+
+\begin{table}[htbp]
+\centering\small
+\caption{The modules of \fml{} grouped by the parts of this book.}\label{tab:module-map}
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+Part & Modules \\
+\midrule
+Infrastructure & \file{Global}, \file{PencilDomain}, \file{PeanoHilbertDomain}, \file{FFTWGrid}, \file{MPIGrid},
+  \file{AdaptiveMPIGrid}, \file{MPIParticles}, \file{ParticleTypes}, \file{ParticlesInBoxes}, \file{KDTree},
+  \file{Interpolation}, \file{Smoothing}, \file{NUFFT}, \file{Math}, \file{ODESolver}, \file{Spline}, \file{FFTLog},
+  \file{RandomGenerator}, \file{LatinHyperCube}, \file{MultigridSolver}, \file{GadgetUtils}, \file{RamsesUtils},
+  \file{FileUtils}, \file{ParameterMap}, \file{LuaFileParser}, \file{Units}, \file{Timing}, \file{MemoryLogging},
+  \file{Performance}, \file{Plotting}, \file{Chunkpix}, \file{MakePythonWrapper}, \file{PythonAnalysis} \\
+Linear theory & \file{Cosmology/Background}, \file{Cosmology/Recombination}, \file{Cosmology/Perturbations},
+  \file{Cosmology/Spectra}, \file{Cosmology/EinsteinBoltzmannSolver}, \file{Cosmology/Growth},
+  \file{TransferProviders}, \file{InitialConditions} \\
+Nonlinear models & \file{PerturbationTheory}, \file{SphericalCollapse}, \file{HaloModel}, \file{AxionHMcode},
+  \file{Emulator} \\
+Initial conditions & \file{RandomFields}, \file{LPT}, \file{GlassIC} \\
+Simulations & \file{NBody}, \file{ShortRangeGravity}, \file{SimulationCode}, \file{Hydrodynamics}, \file{SPH},
+  \file{WaveDarkMatter}, \file{PGD}, \file{Baryonification} \\
+Structures & \file{FriendsOfFriends}, \file{PhaseSpaceHaloFinder}, \file{HaloHistory}, \file{CosmicWeb},
+  \file{TidalTensor}, \file{Morphology}, \file{VoidFinders}, \file{Triangulation} \\
+Statistics & \file{ComputePowerSpectra}, \file{PairCounting}, \file{ThreePointCorrelation}, \file{CountsInCells},
+  \file{Environment}, \file{ConnectedFourPoint}, \file{EnsembleStatistics}, \file{HOD} \\
+Surveys and inference & \file{Survey}, \file{WeakLensing}, \file{FieldLevel}, \file{MCMC}, \file{CosmologyFitting} \\
+Applications & \file{Analysis}, \file{SnapshotAnalyzer} \\
+\bottomrule
+\end{tabularx}
+\end{table}

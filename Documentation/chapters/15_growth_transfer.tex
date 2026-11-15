@@ -1,0 +1,341 @@
+\chapter{Growth factors, transfer functions and linear input}\label{ch:growth-transfer}
+\chapterstatus{written}{2026-11-14}
+
+Initial conditions for simulations, the time stepping of COLA and LPT, and many analytic predictions need two things
+from linear theory: the growth factors of Lagrangian perturbation theory as functions of time (and of scale when
+gravity or the matter content makes growth scale dependent), and the transfer functions of each species at the
+initial time, in the right gauge. This chapter describes the one growth solver of the library and the transfer
+providers that read CAMB and CLASS output or run the Einstein--Boltzmann solver of
+\cref{ch:background,ch:recombination,ch:linear-perturbations}.
+
+\begin{modulebox}{Cosmology/Growth}
+\file{Cosmology/Growth/LPTGrowthFactors.h} (namespace \nsp{FML::COSMOLOGY::GROWTH}; header-only): \cls{LPTGrowthEquations},
+\cls{LPTGrowthSettings}, \cls{LPTGrowthFactors}, \code{radiation_matter_growing_mode}. Used by SimulationCode's
+\code{GravityModel} and by \code{LPT::compute_LPT_growth_factors_LCDM}/\code{_GeffGLCDM}; \code{history()} gives a
+\cls{GrowthHistory} (\file{LPT/GrowthHistory.h}) for the $N$-body time stepping.\par
+Documentation: \file{Cosmology/Growth/README.md}. Tests: \file{Cosmology/Growth/tests/test_growth.cpp}.
+\end{modulebox}
+\begin{modulebox}{TransferProviders and InitialConditions}
+\file{InitialConditions/TransferProvider.h} (the interface: species, gauges, units, coverage),
+\file{InitialConditions/InternalTransferProvider.h}, \file{LinearInput.h}, \file{SpeciesIC.h};
+\file{TransferProviders/MakeTransferProvider.h}, \file{TabulatedTransferProvider.h},
+\file{CAMBFileTransferProvider.h}, \file{CLASSTransferProvider.h}, \file{GaugeView.h}, \file{TransferTablesFile.h};
+scripts \file{TransferProviders/scripts/make_class_transfer_tables.py},
+\file{SimulationCode/scripts/make_camb_transfer_tables.py}.\par
+Documentation: \file{TransferProviders/README.md}, \file{InitialConditions/README.md},
+\file{SimulationCode/INITIAL_CONDITIONS.md}. Tests: \file{TransferProviders/tests}, \file{tests/test_transfers.cpp},
+\file{tests/test_camb.cpp}, \file{Cosmology/EinsteinBoltzmannSolver/tests/test_transfer_provider.cpp}.
+\end{modulebox}
+
+\section{Linear growth of structure}\label{sec:growth-linear}
+
+Inside the horizon and after the radiation era, the clustering matter (CDM and baryons, or all matter) behaves as a
+pressureless fluid with
+\begin{equation}
+\dot\delta+\frac1a\nabla\cdot[(1+\delta)\bm v]=0,\qquad
+\dot{\bm v}+H\bm v+\frac1a(\bm v\cdot\nabla)\bm v=-\frac1a\nabla\Psi,\qquad
+\nabla^2\Psi=4\pi Ga^2\mu\,\bar\rho_m\delta,
+\end{equation}
+with a possibly scale- and time-dependent effective gravitational constant $\mu=G_{\rm eff}/G$
+(\cref{sec:ext-quasistatic}). Linearising and changing to $x=\ln a$ with $'=\dd/\dd x$ gives the linear growth
+equation for $\delta(\vk,a)=D_1(k,a)\delta(\vk,a_{\rm ini})/D_1(k,a_{\rm ini})$,
+\begin{equation}
+D_1''+\left(2+\frac{\dd\ln E}{\dd x}\right)D_1'=\frac32\Om_m(x)\,\mu(k,x)\,D_1,
+\label{eq:growth-D1}
+\end{equation}
+where $\Om_m(x)=\rho_m(x)/(\rho_{c0}E^2)$. In Einstein--de Sitter ($\Om_m=1$, $\dd\ln E/\dd x=-3/2$, $\mu=1$) the
+growing mode is $D_1\propto a$; in $\Lambda$CDM the growth slows when $\Lambda$ dominates and
+$f\equiv\dd\ln D_1/\dd x\simeq\Om_m(x)^{0.55}$.
+
+\subsection{Higher orders in Lagrangian perturbation theory}
+
+In LPT the particle positions are $\vx=\vq+\bm\Psi(\vq,t)$, expanded as
+$\bm\Psi=\bm\Psi^{(1)}+\bm\Psi^{(2)}+\bm\Psi^{(3)}+\ldots$ with each order a product of a growth factor and a spatial
+field \cite{Bouchet1995}: $\nabla_q\cdot\bm\Psi^{(1)}=-D_1\delta_{\rm ini}$, $\nabla_q\cdot\bm\Psi^{(2)}=
+\frac{D_2}{2}\sum_{i\ne j}(\phi^{(1)}_{,ii}\phi^{(1)}_{,jj}-\phi^{(1)2}_{,ij})$, and the third-order terms $D_{3a}$ (the
+determinant of the Hessian of $\phi^{(1)}$) and $D_{3b}$ (the mixed first--second-order term); the spatial
+kernels are described in \cref{ch:lpt}. The growth factors obey (with $S\equiv\frac32\Om_m(x)\mu(k,x)$)
+\begin{align}
+D_1''+\left(2+\tfrac{\dd\ln E}{\dd x}\right)D_1'&=S\,s_1\,D_1,\label{eq:growth-orders}\\
+D_2''+\left(2+\tfrac{\dd\ln E}{\dd x}\right)D_2'&=S\,s_2\,(D_2-N\,D_1^2),\nonumber\\
+D_{3a}''+\left(2+\tfrac{\dd\ln E}{\dd x}\right)D_{3a}'&=S\,s_{3a}\,(D_{3a}-2D_1^3),\nonumber\\
+D_{3b}''+\left(2+\tfrac{\dd\ln E}{\dd x}\right)D_{3b}'&=S\,s_{3b}\,(D_{3b}+D_1^3-D_2D_1).\nonumber
+\end{align}
+In EdS the growing solutions are
+\begin{equation}
+D_2=-\tfrac37D_1^2,\qquad D_{3a}=-\tfrac13D_1^3,\qquad D_{3b}=\tfrac{5}{21}D_1^3 .
+\end{equation}
+The factors in \cref{eq:growth-orders} generalise GR:
+\begin{itemize}
+\item $N(x,k)$ is the \emph{second-order source} of the theory of gravity (\code{second_order_source} of
+      \cls{QuasiStaticGravity}): 1 in GR and in theories whose scalar field equation has no nonlinear term; smaller
+      than 1 for DGP and the cubic Galileon, whose Vainshtein term already acts at second order.
+\item $s_i(x,k)$ are per-order source factors (default 1). With massive neutrinos the CDM+baryon fluid feels the
+      gravity of only the clustering part of the matter; with $\rho_m$ including the neutrinos one uses e.g.\
+      $s_1=1-f_\nu$ above the free-streaming scale, or the source computed from the neutrino transfer functions
+      (as SimulationCode does).
+\item A velocity friction $\Gamma(x)$ (\code{friction}, default 0) adds $\Gamma D_i'$ to the damping term at every
+      order. It describes a drag in the equation of motion $\dd\bm v/\dd x=-\Gamma\bm v+\text{force}$, for example
+      dark scattering (\cref{sec:ext-fluids}). In EdS with constant $\Gamma$ the growing mode is $D_1\propto a^p$ with
+      $p=\frac12\left(-b+\sqrt{b^2+6}\right)$, $b=\frac12+\Gamma$, and $D_2=c_2D_1^2$ with
+      $c_2=-\frac32/(Q_2-\frac32)$, $Q_2=4p^2+2bp$; these are among the tests.
+\end{itemize}
+
+\subsection{Initial conditions in a matter + radiation universe}
+
+At early times radiation cannot be neglected in $E$ but does not cluster. With $y=a/a_{\rm eq}$, a universe of matter
+and smooth radiation has the linear equation
+\begin{equation}
+(1+y)\frac{\dd^2D}{\dd\ln y^2}+\frac y2\frac{\dd D}{\dd\ln y}-\frac32y\,D=0,
+\end{equation}
+whose growing mode is the M\'esz\'aros solution $D_1=1+\frac32y$ \cite{Meszaros1974}: no growth deep in the radiation
+era, $D_1\propto a$ in matter domination. The higher orders obey the same operator with sources, and
+\code{radiation_matter_growing_mode} solves them as power series $D=\sum_nc_ny^n$ ($c_0=0$, convergent for $y<1$),
+which tend to the EdS values for $y\to\infty$. The growth solver starts at \code{a_min} with these series, with
+$y=r/(1-r)$ and $r=\rho_m/E^2$ evaluated on the actual background (so the start is consistent with whatever species
+the background has), and with the EdS values once $y\ge0.5$ (or with \code{eds_initial_conditions}). With
+\code{start_in_radiation_era} (default) \code{a_min} is moved to $a_{\rm eq}/10$ when radiation matters at
+\code{a_min} but it is not deep in the radiation era ($0.1<a_{\min}/a_{\rm eq}<10^4$). An \code{initial_rate_1(x,k)}
+can replace $\dd\ln D_1/\dd x$ at the start (e.g.\ the CDM+baryon growth rate from transfer functions with massive
+neutrinos).
+
+\begin{implementation}[Implementation: \code{LPTGrowthFactors}]
+\begin{itemize}
+\item \cls{LPTGrowthEquations} is a set of functions: $E$, $\dd\ln E/\dd x$, the clustering matter density
+      $\rho_m(x)$ (defaults from a \cls{Background}: $\Om_m(x)E^2$, all matter including massive neutrinos), $\mu$ and
+      $N$ (from a \cls{QuasiStaticGravity} or user functions), the source factors $s_i$, the friction and the initial
+      rate. They are called only while solving, in parallel over $k$, so they must be thread safe.
+\item The four second-order ODEs are integrated on \code{n_a} $=1000$ points in $a\in[\code{a_min},\code{a_max}]=
+      [10^{-4},10]$ and normalised so that $D_1=1$ at \code{a_normalize} ($D_2$ by $D_1^2$ and $D_3$ by $D_1^3$ at the same
+      time); the results and the rates $f_i=\dd\ln D_i/\dd x$ are splined in $x$.
+\item With \code{scale_dependent} the equations are solved on \code{n_k} $=200$ log-spaced wavenumbers
+      $k\in[10^{-4},100]\hMpc$ (in units of $H_0/c$, \code{koverH0}) and stored as 2D splines; outside the grid $k$ is
+      clamped, and \code{D1_k0} etc.\ give the large-scale solution. $E$, $\dd\ln E/\dd x$ and $\rho_m$ are then
+      tabulated once on \code{n_tabulate} $=4000$ points (relative error $\sim10^{-9}$), since with $n_k$ solves the
+      background evaluations would otherwise dominate.
+\end{itemize}
+\end{implementation}
+
+\begin{cppcode}[Growth factors in GR and in $f(R)$]
+#include <FML/Cosmology/Growth/LPTGrowthFactors.h>
+#include <FML/Cosmology/Perturbations/QuasiStaticGravity_HuSawicky.h>
+using namespace FML::COSMOLOGY;
+
+auto bg = BACKGROUND::make_background("lcdm", params);
+GROWTH::LPTGrowthSettings s;
+s.a_normalize = 1.0 / 50.0;                         // D1 = 1 at z = 49
+GROWTH::LPTGrowthFactors gr(*bg, s);                // GR
+double D2 = gr.D2(std::log(0.5));                   // ~ -3/7 D1^2
+
+s.scale_dependent = true;                           // mu(k, a): solve on a grid in k
+auto fr = std::make_shared<PERTURBATIONS::QuasiStaticGravity_HuSawicky>(*bg, 1e-5, 1.0);
+GROWTH::LPTGrowthFactors grfr(*bg, s, fr);
+double koverH0 = 1.0 * FML::UTILS::SI::c_over_H0_mpch;   // k = 1 h/Mpc
+double boost = grfr.D1(0.0, koverH0) / gr.D1(0.0);
+\end{cppcode}
+
+\begin{validation}[Validation: growth factors]
+\begin{itemize}
+\item EdS: $D_1=a/a_{\rm norm}$, $D_2/D_1^2=-3/7$, $D_{3a}/D_1^3=-1/3$, $D_{3b}/D_1^3=5/21$ to $10^{-6}$, rates
+      $f_1=1$, $f_2=2$, $f_{3a}=3$ to $10^{-5}$; with constant friction $\Gamma=0.7,-0.3$ the analytic $a^p$ solutions
+      above to $10^{-6}$.
+\item Matter + radiation: \code{a_min} moved to $a_{\rm eq}/10$, the M\'esz\'aros mode $1+\frac32y$ to $10^{-6}$, and
+      $D_2\to-\frac37D_1^2$ for $a\gg a_{\rm eq}$.
+\item A \cls{QuasiStaticGravity} with $\mu=1$ reproduces GR to $10^{-14}$; $f(R)$ at $k=10^{-4}\hMpc$ is GR to
+      $\order{|f_{R0}|}$ and grows 30--70\% more at $100\hMpc$; for DGP $D_1$ does not depend on $N$ while $|D_2|$ is
+      reduced by the second-order source.
+\end{itemize}
+\end{validation}
+
+\section{Transfer functions}\label{sec:transfer}
+
+A \cls{TransferProvider} gives the linear transfer functions of a set of species,
+\code{Species} $\in$ \{\code{CDM}, \code{Baryon}, \code{CDMBaryon}, \code{MassiveNeutrino}, \code{TotalMatter}\}, as
+functions of $k$ (in $\hMpc$) and the scale factor $a$:
+\begin{equation}
+T_s(k,a)\equiv\frac{\delta_s(k,a)}{\mathcal R(k)},\qquad
+T^\theta_s(k,a)\equiv\frac{\theta_s(k,a)}{aH\,\mathcal R(k)},\qquad
+f_s(k,a)=\frac{\dd\ln\delta_s}{\dd\ln a},
+\end{equation}
+per unit primordial adiabatic curvature in the CAMB sign convention, with $\theta=\nabla\cdot\bm u$, $\bm u=a\,\dd\vx/\dd t$
+(\code{density_transfer}, \code{velocity_divergence_transfer}, \code{density_growth_rate}). The matter power
+spectrum follows as
+\begin{equation}
+P_s(k,a)=\frac{2\pi^2}{k^3}\mathcal P_\mathcal R(k)\,T_s^2(k,a),\qquad
+\mathcal P_\mathcal R=A_s\left(\frac{k}{k_{\rm pivot}}\right)^{n_s-1},
+\end{equation}
+in $(\Mpch)^3$. \code{density_over_k_mpc2} returns the CAMB representation $T/k^2$ in Mpc$^2$ (with the physical $k$ in
+Mpc$^{-1}$). Composite species are weighted by the background densities $\rho_i(a)$ of the model (densities) and
+$\rho_i+p_i$ (velocities). A density growth rate is never silently substituted for a velocity transfer: the direct
+velocities are Newtonian-gauge quantities, while the growth rate is a derivative of the density in the provider's
+gauge.
+
+\subsection{Gauges}\label{sec:transfer-gauges}
+
+Particle initial conditions with the Zel'dovich displacement need the density in the \emph{CDM-synchronous} gauge,
+the frame comoving with the dark matter, where $\delta$ is what the particles' Lagrangian displacements produce.
+\code{Gauge} $\in$ \{\code{Newtonian}, \code{SynchronousCDM}, \code{NBody}\}.
+
+\paragraph*{Newtonian $\to$ CDM-synchronous} is the time shift that brings the CDM to rest
+\cite{Ma1995}, applied with the same shift to every species $s$ (equation of state $w_s=p_s/\rho_s$):
+\begin{equation}
+\delta_s^{\rm sync}=\delta_s^N+3(1+w_s)\left(\frac{\Hp}{ck}\right)^2\frac{\theta_{\rm cdm}^N}{\Hp},\qquad
+\frac{\Hp}{ck}=\frac{aE(a)}{2997.92458\,k[\hMpc]},
+\end{equation}
+which requires the Newtonian CDM velocity. The velocities are passed through unchanged, so a converted provider has
+CDM-synchronous densities and Newtonian velocities. The opposite direction, synchronous $\to$ Newtonian, needs the
+metric combination $(h'+6\eta')/2k^2$ and is not supported. On the largest scales the conversion cancels terms $10^5$
+times the result, so the converted density is accurate to $3\times10^{-3}$ at $k=10^{-4}\hMpc$ and to $7\times10^{-4}$
+above $10^{-3}\hMpc$.
+
+\paragraph*{The $N$-body gauge.} In this gauge \cite{Fidler2015} the CDM+baryon particles follow the Newtonian
+equations of motion to linear order in GR, with an extra source $\delta_{\rm extra}$ in the Poisson equation,
+\begin{equation}
+\delta_{cb}''+\Hp\delta_{cb}'=4\pi Ga^2\rho_{cb}\,(\delta_{cb}+\delta_{\rm extra})\qquad(\text{conformal time}),
+\end{equation}
+which carries the effect of radiation and of the relativistic terms on large scales. The internal provider computes
+the $N$-body gauge densities $\delta_s=\delta_s^N+(1+w_s)S$, with the shift to the comoving density
+$S=3\Hp\theta_{\rm tot}/(ck)^2=3(\Psi-\Phi')/D$, $D=1-\dd\ln\Hp/\dd x-\Om_K(x)$, and the source
+$\delta_{\rm extra}=-(\Theta'+\Hp\Theta)/(4\pi Ga^2\rho_{cb})-\delta_{cb}$, where $\Theta=\theta^N_{cb}+H_T'$ is the
+$N$-body gauge velocity and $H_T'=(3\Phi-S)'$. To avoid the cancellation of two large terms on small scales, $(ck)^2\Psi$
+is rewritten with the comoving Poisson equation so that $\delta_{\rm extra}$ becomes a sum of small terms (photons,
+neutrinos and dark energy), and the $x$-derivatives of $3\Phi-S$ and of the baryon--CDM velocity difference are local
+least-squares fits on the solver's grid. SimulationCode uses these tables with \code{force_nbody_gauge}.
+
+\subsection{The providers}
+
+\code{make_transfer_provider(settings)} (\file{TransferProviders/MakeTransferProvider.h}) builds a provider from one of
+three sources; the user declares the gauge of the input and asks for the gauge of the output:
+
+\begin{center}\small
+\begin{tabularx}{\textwidth}{@{}lXX@{}}
+\toprule
+\code{source} & Input & Gauge handling \\
+\midrule
+\code{camb} & A CAMB transfer info file (\cls{CAMBFileTransferProvider}): \code{<folder> <n>}, then
+  \code{<file> <z>} per line; columns by name from the header (or by position: 13 CAMB, 9 AxionCAMB, 7 old CAMB) &
+  densities are CDM-synchronous; CDM and baryon velocities Newtonian; no neutrino velocity \\
+\code{class} & Native CLASS output (\code{format = class}, \code{output = mTk[,vTk]}, \code{write_background = yes});
+  \cls{CLASSTransferProvider} reads columns by name and the redshift from the header & declared
+  \code{synchronous} or \code{newtonian}; Newtonian is converted at the tabulated redshifts (needs \code{vTk}) \\
+\code{internal} & FML's Einstein--Boltzmann solver through \cls{InternalTransferProvider}: any model of the registry,
+  curvature, massive neutrinos & both gauges (and the $N$-body gauge) from one solve \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\paragraph*{Sign and unit conventions.} All providers return $\delta/\mathcal R$ and $\theta/(aH\mathcal R)$ in the CAMB
+sign convention. CLASS normalises to unit initial curvature with the opposite sign, so the CLASS provider returns
+$-d_i$ and $-t_i/(aH)$; CAMB's columns are $T=\delta/k^2$ in Mpc$^2$ and $-\theta/(aHk^2)$, so the CAMB provider
+returns $Tk^2$ and $-T_vk^2$. \code{TotalMatter} is the $\rho$-weighted sum of CDM, baryons and massive neutrinos in the
+provider's gauge (CLASS's \code{d_m}, the comoving matter density, is not used). The declared gauge is checked as far
+as the columns allow: a synchronous CLASS run never has \code{t_cdm}, a Newtonian run with \code{vTk} has it.
+
+\paragraph*{Interpolation and extrapolation.} The tabulated providers share \cls{TabulatedTransferProvider}:
+bicubic interpolation in $(\ln a,\ln k)$ with four or more redshifts (bilinear with two or three), growth rates from
+the derivative of a 4-point Lagrange polynomial in $\ln a$ through the tables (so CAMB and CLASS give the same growth
+rates from the same redshift sampling), and a \code{RangePolicy}: \code{Reject} (outside the tables is an error) or
+\code{SourceExtrapolation} (default; a power law in $k$ above $k_{\max}$ through the last $0.1$ in $\ln k$, and the end
+values elsewhere). The tables must be finely sampled in redshift and extend past the redshifts where growth rates are
+used: with 7 redshifts between $z=49$ and 0 the growth rate was off by up to 29\% at the top of the table; with 40
+redshifts up to $z=60$ CAMB and CLASS agree to $2\times10^{-4}$. The scripts' default (60 redshifts uniform in
+$\ln(1+z)$ up to $z=200$) is safe.
+
+\paragraph*{The internal provider.} It runs the solver when it is made (a few minutes with $k\in[10^{-5},10]\hMpc$ and
+400 modes) and owns the solution. The perturbations are solved to $a=1.1$, because a table ending at $a=1$ distorted
+the growth rate at $z=0$ by $2.6\times10^{-3}$ through the spline end; growth rates are centred differences
+($\pm10^{-3}$ in $\ln a$). Massive neutrinos are \code{deg_ncdm} degenerate species whose mass gives
+$\Om_{\rm ncdm}=$ \code{OmegaMNu}, or any masses with \code{m_nu_list}; the other gauge views share the solution
+(\code{with_density_gauge}). With \code{axion_as_cdm} (\code{model = axion}) the CDM species is CDM plus the
+ultralight axion, for simulations whose particles are all the dark matter. Isocurvature modes and running are
+rejected. Near the solver's massive-neutrino fluid switch ($k\tau=31$) the neutrino velocities differ from CLASS at
+high redshift (40\% at $k=0.03\hMpc$, $z=49$; $10^{-3}$ at $z\le2$); for neutrino particles started early, raise
+\code{ncdm_fluid_trigger}.
+
+\paragraph*{Transfer tables.} \code{tabulate_transfers(provider, a, k, A_s, n_s, k_pivot, policy)} tabulates any
+provider, and \cls{TransferTablesProvider} makes a provider of the tables (cheap to evaluate, and extrapolated like
+CAMB and CLASS tables). \file{TransferTablesFile.h} writes and reads them as one self-describing text file: \code{\#
+key = value} header lines (cosmology, primordial spectrum, gauges, solver settings) and one row per $(a,k)$ with
+\code{d_<s>} $=\delta/\mathcal R$ and \code{t_<s>} $=\theta/(aH\mathcal R)$ for $s=$ \code{cdm}, \code{b}, \code{cb},
+\code{ncdm}, \code{m}, and the $N$-body gauge source. SimulationCode writes them with
+\code{./nbody --write-transfers params.lua tables.txt} and reads them with \code{ic_type_of_input = "tables"}, checking
+the cosmology and gauge against the simulation, so the solver runs once per cosmology.
+
+\paragraph*{Gauge views.} \cls{GaugeView} wraps any provider that has the Newtonian CDM velocity and applies the
+Newtonian$\to$CDM-synchronous conversion, for sources that cannot convert at their own tabulated redshifts.
+
+\begin{cppcode}[A transfer provider from CLASS output in the Newtonian gauge]
+#include <FML/TransferProviders/MakeTransferProvider.h>
+using namespace FML::INITIALCONDITIONS;
+
+TransferSourceSettings s;
+s.source       = "class";
+s.class_root   = "output/run_00_";        // run_00_z1_tk.dat, ..., run_00_background.dat
+s.input_gauge  = Gauge::Newtonian;        // what CLASS was run with
+s.output_gauge = Gauge::SynchronousCDM;   // what particle ICs need (the default)
+s.A_s = 2.1e-9; s.n_s = 0.965;            // k_pivot_mpc = 0.05 by default
+auto provider = make_transfer_provider(s);
+double T = provider->density_transfer(Species::CDMBaryon, 0.1, 1.0 / 50.0);     // k [h/Mpc], a
+double f = provider->density_growth_rate(Species::CDMBaryon, 0.1, 1.0 / 50.0);
+\end{cppcode}
+
+\begin{validation}[Validation: transfer providers (CLASS 3.4.1, CAMB 2.0.5, 0.1\,eV neutrino, 40 redshifts to $z=60$)]
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}Xr@{}}
+\toprule
+Check & Agreement \\
+\midrule
+Newtonian CLASS run converted vs synchronous run, CDM/b/cb/total, $10^{-3}\le k\le1\hMpc$ & $7\times10^{-4}$ \\
+The same at $k=10^{-4}\hMpc$ (unconverted: $5\times10^2$) & $3\times10^{-3}$ \\
+CLASS vs CAMB, CDM/b/cb/total; $P_{cb}(z=0)$; $f_{cb}$ & $5\times10^{-4}$; $8\times10^{-4}$; $2\times10^{-4}$ \\
+Internal vs CLASS, both gauges, massless $\nu$ ($0.1\,$eV $\nu$), $10^{-3}\le k\le1$ & $7\times10^{-4}$ ($9\times10^{-4}$) \\
+Internal vs CLASS: $f_{cb}$; Newtonian CDM velocity & $8\times10^{-4}$; $6\times10^{-4}$ \\
+Internal: \code{GaugeView} on its Newtonian view vs its own synchronous view & $10^{-5}$ \\
+CAMB reader vs the former \code{LinearTransferData} on the same files & $2\times10^{-5}$ \\
+\bottomrule
+\end{tabularx}
+\end{center}
+Massive neutrinos below the free-streaming scale depend on the codes' approximations: with the scripts' defaults
+(CLASS without its neutrino fluid approximation, CAMB \code{AccuracyBoost = 3}) $\delta_\nu$ agrees to 1.4\% at $z=0$ for
+$k\le1\hMpc$, but differs by tens of per cent at $z=49$ where it is tiny.
+\end{validation}
+
+\section{Preparing the linear input of initial conditions}\label{sec:linear-input}
+
+\paragraph*{Simple inputs.} \file{LinearInput.h} prepares the CDM+baryon $P(k)$, the primordial spectrum and
+$T(k)$ at the initial redshift from a two-column $P(k)$ file ($k$ in $\hMpc$, $P$ in $(\Mpch)^3$), a single transfer
+function ($T$ in Mpc$^2$) or a provider, without a Boltzmann solve. The arrays are generated at the input redshift
+and brought to the initial time with the growth factors of the simulation's gravity model, so choosing
+\code{ic_input_redshift} selects between \emph{back-scaling} (input at $z=0$, scaled back with $D_1$: the initial
+conditions reproduce the linear $P(k)$ of the target model today in the simulation's own dynamics) and forward
+initial conditions (input at $z_{\rm ini}$: the actual linear state at that time, including e.g.\ radiation effects).
+
+\paragraph*{Two species.} For separate CDM and baryon particles (\file{SpeciesIC.h}) the two fields share one random
+realisation, $\delta_i(\vk)=\delta_{cb}(\vk)R_i(k,z_{\rm ini})$ with $R_i=T_i/T_{cb}$ ($w_cR_c+w_bR_b=1$). The 1LPT
+velocity uses $f_i=f_{cb}+\dd\ln R_i/\dd\ln a$, where $f_{cb}$ is the growth rate of the gravity model, so that the
+total CDM+baryon velocity is exactly the growing mode and the relative velocity comes from the transfer functions.
+With \code{particle_baryon_relative_mode = mass} the relative mode is instead put in the particle masses,
+$\epsilon_i(k)=[T_i(k,0)-T_{cb}(k,0)]/T_{cb}(k,z_{\rm ini})$ ($w_c\epsilon_c+w_b\epsilon_b=0$), following Hahn, Rampf and
+Uhlemann (\arxiv{2008.09124}): both species then follow the total CDM+baryon flow, and the relative mode, constant
+in linear theory, is exact today. \code{mass_ini} uses $\epsilon_i=T_i/T_{cb}-1$ at $z_{\rm ini}$ with separate
+velocities, so the relative mode grows from $z_{\rm ini}$; the default \code{displacement} displaces each species
+by its own linear field.
+
+\paragraph*{Glass loads.} Initial conditions on a glass instead of a lattice (GlassIC, \cref{ch:lpt}) sample the
+same provider-based Fourier fields at the irregular particle positions.
+
+\begin{paramfile}[SimulationCode: initial conditions from the internal solver or from tables]
+ic_type_of_input  = "internal"            -- or "camb", "class", "tables"
+ic_input_filename = ""                    -- optional solver .ini (precision, recombination)
+ic_internal_solver_parameters = {"Yp=0.245", "precision=fast"}
+ic_input_redshift = ic_initial_redshift   -- transfers at zini, no back-scaling
+-- once per cosmology:  ./nbody --write-transfers parameterfile.lua transfers_lcdm.txt
+-- then:                ic_type_of_input = "tables"; ic_input_filename = "transfers_lcdm.txt"
+\end{paramfile}
+With \code{internal}, the solver runs on task 0 with the simulation's cosmology and model (background, massive
+neutrinos as three degenerate species of mass $M_\nu/3$, \code{cosmology_model}, primordial spectrum) and sends its
+tables to the other tasks; $k$ is sampled with 15 points per decade from $10^{-4}\hMpc$ and 50 per decade in
+$[0.01,0.6]\hMpc$ (the BAO) up to $\max(5\hMpc,1.5\times$ the largest mode of the IC grid), and the tables cover 128
+scale factors from $a_{\rm ini}/2$ to $1.1$ ($\sim30$\,s on two cores). Simulations started from these tables agree
+with CAMB-input runs to $3\times10^{-4}$ in $P(k)$ at $z=0,1$ for $k<0.5\hMpc$ without neutrinos and to $0.4\%$ with
+0.4\,eV. The details of the initial-condition generation are in \cref{ch:lpt,ch:simulation-code}.

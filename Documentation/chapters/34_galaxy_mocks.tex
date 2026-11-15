@@ -1,0 +1,66 @@
+\chapter{Galaxy mocks}\label{ch:galaxy-mocks}
+\chapterstatus{written}{2026-11-14}
+
+Galaxy catalogues are made from halo catalogues with a halo occupation distribution (HOD): occupation numbers from the halo
+mass, positions and velocities from an NFW profile or from member particles, and optionally assembly bias from a secondary halo
+property. Survey geometry is added afterwards (\cref{ch:surveys}).
+
+\begin{modulebox}{HOD}
+\nsp{FML::HOD}: \file{HOD/HOD.h} (\cls{Halo}, \cls{PreparedCatalog}, \cls{Zheng07}, \code{populate}, \code{sample_occupation},
+\cls{OccupationMeans}, \cls{MarginalOccupationMeans}), \file{HOD/AssemblyBias.h} (\cls{HeavisideAssemblyBias}).\par
+Documentation: \file{HOD/README.md}, \file{HOD/ASSEMBLY_RESULTS.md}. Tests: \file{HOD/tests}.
+\end{modulebox}
+
+\section{Occupations}\label{sec:hod-occupation}
+
+The built-in model is that of Zheng et al.\ \cite{Zheng2007}:
+\begin{equation}
+p_c(M)=\frac12\left[1+\mathrm{erf}\left(\frac{\log_{10}M-\log_{10}M_{\min}}{\sigma_{\log M}}\right)\right],\qquad
+\lambda_s(M)=\left(\frac{M-M_0}{M_1}\right)^\alpha\ (M>M_0).
+\end{equation}
+By default a central is drawn with probability $p_c$ and satellites are Poisson with mean $\lambda_s$ only if there is a central, so the mean number
+of satellites is $p_c\lambda_s$ (Halotools' \code{modulate_with_cenocc=True}); with \code{require_central = false} satellites are independent
+Poisson$(p_c\lambda_s)$. Any callable can replace the model, returning either the conditional means $\{p_c,\lambda\}$ or the marginal ones
+$\{p,\mu\}$ (\cls{MarginalOccupationMeans}: $E[N_c]=p$, $E[N_s]=\mu$, satellites Poisson$(\mu/p)$ given a central). Poisson variates use a product
+method below mean 10 and transformed rejection above; occupations are never clipped (an explicit cap throws).
+
+\section{Positions, velocities and reproducibility}\label{sec:hod-phase-space}
+
+Centrals sit at the halo centre with the bulk velocity plus an optional Gaussian (\code{central_velocity_bias}). Satellites are placed either
+isotropically on an NFW profile truncated at the halo radius (inverse mass CDF in $\log r$, concentration times \code{satellite_concentration_factor},
+Gaussian velocities with dispersion \code{satellite_velocity_bias} times the halo's), or on member particles drawn without replacement (with their
+velocities relative to the halo scaled by the velocity bias). Halo masses, radii, concentrations and dispersions are inputs: the API infers no mass
+definition or concentration relation.
+
+Each halo has independent Philox streams (\cref{sec:num-random}) for the central, the satellite count, the positions, member choices and velocities, keyed by
+the halo ID, so a mock is identical for any halo order, MPI decomposition or number of threads (within one floating-point build). Galaxies are identified by
+(halo ID, ordinal). \cls{PreparedCatalog} validates and sorts the halos once, for repeated populations with different seeds and parameters. Halos from
+FoF/SO or the phase-space finder are converted with explicit adapters (\cref{ch:halo-finding}).
+
+\begin{cppcode}[An HOD mock]
+#include <FML/HOD/HOD.h>
+using namespace FML::HOD;
+PreparedCatalog prepared(std::move(halos));   // ID, mass, radius, concentration, pos, vel, sigma_v
+Zheng07 occ;  occ.log10_mmin = 13.0;  occ.sigma_log_mass = 0.4;
+occ.m0 = 1e12;  occ.m1 = 1e14;  occ.alpha = 1.0;
+Options opt;  opt.seed = 1234;  opt.boxsize = 1000.0;
+auto galaxies = populate(prepared, occ, opt);
+\end{cppcode}
+
+\section{Assembly bias}\label{sec:hod-assembly}
+
+The decorated HOD of Hearin et al.\ \cite{Hearin2016} lets the occupation depend on a secondary property (concentration, formation time, environment) at fixed
+mass while conserving the mean occupation. Given the percentile $q$ of the property at fixed mass, a split $f$ (the low fraction, $h=1-f$) and strengths
+$A_c,A_s\in[-1,1]$, the populations above and below the split get
+\begin{equation}
+f\,p_{\rm low}+h\,p_{\rm high}=p,\qquad f\,\mu_{\rm low}+h\,\mu_{\rm high}=\mu,
+\end{equation}
+interpolating linearly in $|A|$ between the baseline and the extremal allocation (for $A>0$ centrals fill the high population first, $(p_{\rm low},p_{\rm high})=(0,p/h)$
+if $p\le h$, else $((p-h)/f,1)$; satellites $(0,\mu/h)$). Satellites are decorated as marginal means so their mean is kept when the central probability
+changes. Conservation holds for the population first moments if the percentiles are calibrated at fixed mass; the percentile calibration is the user's.
+
+\begin{validation}[Validation: HOD]
+16\,000 decorated-HOD cases against an independent 80-digit Decimal implementation to $10^{-16}$, and against the original Halotools \code{HeavisideAssembias}
+perturbation kernel; occupations, NFW sampling, member sampling and replay under reordering and decomposition (\file{HOD/tests},
+\file{HOD/ASSEMBLY_RESULTS.md}).
+\end{validation}

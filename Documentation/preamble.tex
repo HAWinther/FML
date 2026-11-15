@@ -1,0 +1,121 @@
+% =====================================================================================================================
+% Preamble of the FML book. Packages are restricted to a standard TeX Live installation.
+% =====================================================================================================================
+\PassOptionsToPackage{obeyspaces,spaces}{url}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{mathpazo}
+\usepackage[a4paper,inner=2.6cm,outer=2.2cm,top=2.6cm,bottom=2.8cm,headheight=14pt]{geometry}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb,mathtools,bm}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{booktabs,tabularx,longtable,multirow}
+\usepackage{enumitem}
+\usepackage{caption,subcaption}
+\usepackage{listings}
+\usepackage{upquote}
+\usepackage{xurl}
+\usepackage[most]{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{makeidx}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage[colorlinks=true,linkcolor=blue!55!black,citecolor=green!40!black,urlcolor=blue!65!black,
+            bookmarksnumbered=true]{hyperref}
+\usepackage[nameinlink,capitalise,noabbrev]{cleveref}
+
+\makeindex
+\renewcommand{\indexname}{Index of classes, functions and parameters}
+\setlist{itemsep=1pt,topsep=3pt}
+\setcounter{tocdepth}{1}
+\setcounter{secnumdepth}{3}
+\captionsetup{font=small,labelfont=bf}
+
+% Figures of the Einstein-Boltzmann solver report are used in place (no copies in this folder)
+\graphicspath{{figures/}{../FML/Cosmology/EinsteinBoltzmannSolver/report/figures/}}
+
+% ---- Headers ---------------------------------------------------------------------------------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LE]{\small\thepage\quad\leftmark}
+\fancyhead[RO]{\small\rightmark\quad\thepage}
+\renewcommand{\headrulewidth}{0.3pt}
+\fancypagestyle{plain}{\fancyhf{}\fancyfoot[C]{\small\thepage}\renewcommand{\headrulewidth}{0pt}}
+
+% ---- Colours ---------------------------------------------------------------------------------------------------------
+\definecolor{fmlblue}{RGB}{30,70,140}
+\definecolor{fmlgreen}{RGB}{30,110,60}
+\definecolor{fmlorange}{RGB}{190,100,20}
+\definecolor{fmlgrey}{RGB}{245,245,248}
+\definecolor{codekw}{RGB}{120,30,120}
+\definecolor{codecomment}{RGB}{90,110,90}
+
+% ---- Code listings ---------------------------------------------------------------------------------------------------
+\lstdefinestyle{fmlcpp}{
+  language=C++, basicstyle=\ttfamily\footnotesize, keywordstyle=\color{codekw}\bfseries,
+  commentstyle=\color{codecomment}\itshape, stringstyle=\color{fmlorange}, showstringspaces=false,
+  columns=fullflexible, keepspaces=true, breaklines=true, tabsize=4,
+  morekeywords={auto,constexpr,nullptr,override,using,namespace,template,typename}}
+\lstdefinestyle{fmlini}{basicstyle=\ttfamily\footnotesize, commentstyle=\color{codecomment}\itshape,
+  morecomment=[l]{\#}, morecomment=[l]{--}, columns=fullflexible, keepspaces=true, breaklines=true}
+\lstset{style=fmlcpp}
+
+\newtcblisting{cppcode}[1][]{listing only, breakable, colback=fmlgrey, colframe=fmlblue!40, boxrule=0.4pt,
+  arc=1pt, left=4pt, right=4pt, top=2pt, bottom=2pt, title={#1}, fonttitle=\small\bfseries,
+  coltitle=white, colbacktitle=fmlblue!70, listing options={style=fmlcpp}}
+\newtcblisting{paramfile}[1][]{listing only, breakable, colback=fmlgrey, colframe=fmlgreen!50, boxrule=0.4pt,
+  arc=1pt, left=4pt, right=4pt, top=2pt, bottom=2pt, title={#1}, fonttitle=\small\bfseries,
+  coltitle=white, colbacktitle=fmlgreen!70, listing options={style=fmlini}}
+
+% ---- Boxes -----------------------------------------------------------------------------------------------------------
+% Module summary at the start of a chapter or section: \begin{modulebox}{Cosmology/Background} ... \end{modulebox}
+\newtcolorbox{modulebox}[1]{breakable, colback=fmlblue!4, colframe=fmlblue!60, boxrule=0.5pt, arc=1pt,
+  title={Module: \texttt{#1}}, fonttitle=\small\bfseries, fontupper=\small}
+% Algorithm / implementation notes
+\newtcolorbox{implementation}[1][Implementation]{breakable, colback=fmlgreen!3, colframe=fmlgreen!55,
+  boxrule=0.5pt, arc=1pt, title={#1}, fonttitle=\small\bfseries, fontupper=\small}
+% Validation summary
+\newtcolorbox{validation}[1][Validation]{breakable, colback=fmlorange!4, colframe=fmlorange!70, boxrule=0.5pt,
+  arc=1pt, title={#1}, fonttitle=\small\bfseries, fontupper=\small}
+% Planned content of a chapter that is not yet written (removed when the chapter is written)
+\newtcolorbox{planned}[1][Planned content]{breakable, colback=red!2, colframe=red!45!black, boxrule=0.5pt,
+  arc=1pt, title={#1}, fonttitle=\small\bfseries, fontupper=\small}
+% Pitfalls / scope limits
+\newtcolorbox{caveat}[1][Scope and limitations]{breakable, colback=yellow!5, colframe=yellow!50!black,
+  boxrule=0.5pt, arc=1pt, title={#1}, fonttitle=\small\bfseries, fontupper=\small}
+
+% Chapter status line: \chapterstatus{written}{2026-11-14}
+\newcommand{\chapterstatus}[2]{\noindent{\footnotesize\color{black!55}\textsf{Status: #1 \;---\; last updated #2}}\par\medskip}
+
+% ---- Code-related markup ---------------------------------------------------------------------------------------------
+\newcommand{\fml}{\textsf{FML}}
+\urlstyle{tt}
+\newcommand{\file}[1]{\nolinkurl{#1}}                                  % a file path in the repository (breaks at / _ .)
+\DeclareRobustCommand{\idxtt}[1]{\nolinkurl{#1}}          % used inside index entries
+\newcommand{\cls}[1]{\texttt{\detokenize{#1}}\index{#1@\idxtt{#1}}}  % a class/function (indexed)
+\newcommand{\code}[1]{\ifmmode\text{\nolinkurl{#1}}\else\nolinkurl{#1}\fi}                                  % inline code (breaks at _ ::)
+\newcommand{\param}[1]{\code{#1}\index{#1@\idxtt{#1} (parameter)}}   % parameter
+\newcommand{\nsp}[1]{\texttt{\detokenize{#1}}}                          % a namespace
+\newcommand{\arxiv}[1]{\href{https://arxiv.org/abs/#1}{arXiv:#1}}
+\newcommand{\eprint}[2][]{\href{https://arxiv.org/abs/#2}{arXiv:#2}}
+\newcommand{\github}[1]{\href{https://github.com/#1}{\texttt{github.com/#1}}}
+
+% ---- Physics notation ------------------------------------------------------------------------------------------------
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\Hp}{\mathcal{H}}
+\newcommand{\Om}{\Omega}
+\newcommand{\gt}{\tilde g}
+\newcommand{\Mpc}{\,\mathrm{Mpc}}
+\newcommand{\hMpc}{\,h\,\mathrm{Mpc}^{-1}}
+\newcommand{\Mpch}{\,h^{-1}\mathrm{Mpc}}
+\newcommand{\muK}{\,\mu\mathrm{K}^2}
+\newcommand{\eV}{\,\mathrm{eV}}
+\newcommand{\Mpl}{M_{\rm pl}}
+\newcommand{\vk}{\bm{k}}
+\newcommand{\vx}{\bm{x}}
+\newcommand{\vq}{\bm{q}}
+\newcommand{\Tr}{\operatorname{Tr}}
+\newcommand{\order}[1]{\mathcal{O}(#1)}
+\renewcommand{\vec}[1]{\bm{#1}}
+\setlength{\emergencystretch}{2.5em}

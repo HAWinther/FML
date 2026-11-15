@@ -1,0 +1,164 @@
+\chapter{Modified gravity and dark-sector simulations}\label{ch:mg-simulations}
+\chapterstatus{written}{2026-11-14}
+
+SimulationCode separates the \emph{cosmology} (the background, \param{cosmology_model}) from the \emph{gravity model}
+(the growth of perturbations and the force, \param{gravity_model}), so that one can be changed while the other is
+fixed. This chapter describes the models, how the fifth forces of modified gravity are computed with and without
+screening, and how dark-sector interactions enter the particle dynamics. The linear theory of the same models is in
+\cref{ch:extended-models}; the quasi-static limits (\cls{QuasiStaticGravity}) are shared.
+
+\begin{modulebox}{SimulationCode models}
+\file{src/Cosmology.h} (maps \param{cosmology_model} to the background registry), \file{src/GravityModel.h} (base:
+$G_{\rm eff}(k,a)/G$, growth factors, force), \file{GravityModel_Screened.h} (fifth force: linear, screening,
+exact), \file{GravityModel_GR.h}, \file{_fofr.h}, \file{_DGP.h}, \file{_CubicGalileon.h}, \file{_Horndeski.h},
+\file{_JBD.h}, \file{_symmetron.h}, \file{_dilaton.h}, \file{_mbeta.h}, \file{_mu.h}, \file{_CoupledQuintessence.h},
+\file{GravityModelSettings.h}, \file{SimulationIDE.h}, \file{SpeciesTimeStepping.h}; the frontend
+\file{SimulationCode/scripts/horndeski_frontend.py}; the multigrid solvers of \cref{ch:multigrid}.\par
+Documentation: \file{SimulationCode/MODELS.md}, \file{SPECIES.md}.
+\end{modulebox}
+
+\section{Cosmologies and gravity models}\label{sec:mgsim-models}
+
+\begin{table}[htbp]
+\centering\small
+\caption{Cosmologies (\param{cosmology_model}). All have CDM, baryons, photons, massless and massive neutrinos,
+curvature, $\Lambda$ and the primordial parameters; the backgrounds are those of \cref{ch:background}.}
+\label{tab:mgsim-cosmologies}
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+\code{LCDM}, \code{w0waCDM} & $\Lambda$CDM; CPL dark energy \\
+\code{JBD} & Jordan--Brans--Dicke ($\omega_{\rm BD}$, $G_{\rm eff}/G$ today) \\
+\code{DGP} & self-accelerating DGP (with $\Lambda$CDM: the normal branch is a gravity model) \\
+\code{Quintessence}, \code{EDE} & scalar-field dark energy (exponential, inverse power law, PNGB, hilltop); early dark energy \\
+\code{Tabulated} & $H(z)$ from a file (\code{H}, a CLASS/hi\_class \code{background.dat}, or $w(a)$) \\
+\code{DarkScattering}, \code{CovariantDarkScattering} & $w$CDM with dark matter--dark energy momentum exchange \\
+\code{CoupledQuintessence} & field coupled to CDM, $m\propto e^{-\beta\phi}$ \\
+\code{IDE} & energy exchange $Q=\xi H\rho_{\rm DE}$ \\
+\code{Horndeski} & reduced Horndeski theory from the frontend table \\
+\code{CubicGalileon} & the tracker (no free parameter) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table}[htbp]
+\centering\small
+\caption{Gravity models (\param{gravity_model}).}
+\label{tab:mgsim-gravity}
+\begin{tabularx}{\textwidth}{@{}lXl@{}}
+\toprule
+Model & $G_{\rm eff}/G$ and nonlinear physics & Screening \\
+\midrule
+\code{GR} & 1 & --- \\
+\code{f(R)} & Hu--Sawicky \cite{HuSawicki2007}, $\frac{1}{1+f_R}\left[1+\frac13\frac{k^2}{k^2+a^2m^2}\right]$ & chameleon \cite{KhouryWeltman2004} \\
+\code{DGP} & $1+1/(3\beta)$, brane-bending mode \cite{KoyamaMaartens2006} & Vainshtein \cite{Vainshtein1972} \\
+\code{CubicGalileon} & DGP form with $r_c(a)$, $\beta(a)$ on the tracker \cite{Barreira2013} & Vainshtein \\
+\code{Horndeski} & $\frac{1}{2G_4}+\frac{1}{3\beta}$ from the table \cite{Kimura2012,Wright2023} & Vainshtein ($G_{3X}\neq0$) \\
+\code{JBD} & $G\phi_*/\phi$ & --- \\
+\code{Symmetron} & $1+\frac{2\beta^2(a)k^2}{k^2+a^2m^2}$ after $a_{\rm ssb}$ \cite{HinterbichlerKhoury2010,Brax2012} & potential \\
+\code{Dilaton} & as symmetron, $m=m_0a^{-r}$ \cite{Brax2012} & potential \\
+\code{mbeta} & as symmetron, power laws $\beta_0a^{n}$, $m_0a^{m}$ & potential \\
+\code{mu} & $\mu(a,k)$: DE form, Bertschinger--Zukin \cite{BertschingerZukin2008} or a table & none \\
+\code{CoupledQuintessence} & CDM feels $G(1+2\beta^2)$ from CDM, friction $\beta\phi'$ & --- \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The base \cls{GravityModel} solves the LPT growth equations to third order for a general $G_{\rm eff}(k,a)/G$
+(\cref{ch:growth-transfer}) and computes the force $\nabla^2\phi=\frac32\Om_ma(\delta+\delta_{\rm FF})$, where the
+\emph{fifth-force density} $\delta_{\rm FF}$ carries all modifications; a new model normally only provides
+$G_{\rm eff}$, its quasi-static theory and optionally an exact solver. The $\mu$ model with the Bertschinger--Zukin form
+$\mu=(1+\beta_1\lambda_1^2k^2a^s)/(1+\lambda_1^2k^2a^s)$ or a table $\mu(a)$ or $\mu(a,k)$ (e.g.\ from hi\_class)
+modifies only the potential that moves the particles (not the lensing potential); a $k$-dependent $\mu$ gives
+scale-dependent growth.
+
+\section{Fifth forces and screening}\label{sec:mgsim-screening}
+
+Screened theories suppress the fifth force in dense regions, which is essential for their nonlinear predictions. The
+fifth-force density is computed in one of four ways:
+\begin{enumerate}
+\item \textbf{Linear}: $\delta_{\rm FF}(\vk)=\left[G_{\rm eff}(a,k)/G-1\right]\delta(\vk)$. Fast, exact on large scales,
+      too much force in haloes.
+\item \textbf{Approximate screening} \cite{WintherFerreira2014,Brando2023} (\param{gravity_model_screening}): the
+      linear fifth force multiplied, in real space, by a screening factor $0\le f\le1$ of the local field:
+      \begin{itemize}
+      \item \emph{potential (chameleon-like)}: $f=\min\!\left(1,\ \epsilon\,\Phi_{\rm crit}(a)/|\Phi_N(\vx)|\right)$, with
+            the Newtonian potential $\Phi_N$ and the thin-shell threshold $\Phi_{\rm crit}=\frac32|f_R(a)|$ for $f(R)$,
+            $\phi(a)/(2\beta\Mpl)$ for the symmetron and $(m,\beta)$, $1/(2A_2)$ for the dilaton (\cref{sec:ext-quasistatic});
+      \item \emph{density (Vainshtein)}: for a spherical top hat the field equation of the brane-bending mode gives
+            $f=2(\sqrt{1+e}-1)/e$ with $e\propto(r_cH_0/c)^2\Om_m\,\delta/\beta^2$, evaluated on the density smoothed with a
+            filter (\code{gravity_model_dgp_smoothing_filter}, scale \code{_smoothing_scale_over_boxsize}); for DGP the
+            form with $\Om_m$ today and $1+\delta$ is used, which reproduces the exact solution best (0.5\% rms in $P(k)$
+            at $z=0$);
+      \end{itemize}
+      with the efficiency $\epsilon$ (\param{gravity_model_screening_efficiency}) as a tuning parameter.
+\item \textbf{Screening plus the linear large scales}:
+      $\delta_{\rm FF}\to\delta_{\rm FF}^{\rm lin}\,F+\delta_{\rm FF}^{\rm screened}(1-F)$ with the low-pass filter
+      $F=e^{-k^2/2k_*^2}$ (\param{gravity_model_screening_linear_scale_hmpc}), so that the linear evolution on large
+      scales is exact (switch: \param{gravity_model_screening_enforce_largescale_linear}). Usually the best choice.
+\item \textbf{Exact}: the nonlinear field equation is solved with the multigrid solvers of \cref{ch:multigrid}
+      (\code{gravity_model_<model>_exact_solution}), as in high-resolution codes such as ECOSMOG \cite{Li2012ECOSMOG}.
+      For $f(R)$ the field is $u=\sqrt{|f_R|}$ by default, which converges for any $f_{R0}$, $n$ and redshift (the
+      original $\ln|f_R|$ can give NaN for small $|f_{R0}|$ at high redshift). The solution of the previous step is the
+      starting point of the next solve. The field can be solved on a grid coarser than the force grid (the density
+      restricted by a sharp-$k$ cut or CIC, the solution zero above the coarse Nyquist frequency), the uniform-grid
+      analogue of Barreira, Bose and Li \cite{BarreiraBoseLi2015}, and only below a chosen redshift (linear or no fifth
+      force before). Slow; mostly for testing the approximations.
+\end{enumerate}
+For the cubic Galileon the Vainshtein equation has no real solution in deep voids ($\delta<-0.6$ today; also found by
+Barreira et al.\ \cite{Barreira2013}); the screening factor and the multigrid solver use the zero-discriminant limit
+there. With COLA the screened fifth force acts on the residual like the rest of the PM force; the frame uses the linear
+(and, for DGP, second-order source) growth.
+
+\paragraph*{Generic Horndeski.} \file{scripts/horndeski_frontend.py} takes $K(\phi,X)$, $G_3(\phi,X)$ and $G_4(\phi)$ as
+sympy expressions, derives the background equations from the minisuperspace action, solves them (from today with
+$\dd\phi/\dd\ln a$ from the Friedmann constraint, or from early times shooting for $E(1)=1$ for attractors) and writes
+$H(a)$, the quasi-static force and the $\alpha$ functions \cite{Bellini2014}. The force (Kimura, Kobayashi and Yamamoto
+\cite{Kimura2012}) is the Newtonian force rescaled by $1/(2G_4)$ (running Planck mass) plus a fifth force with the DGP
+equation for time-dependent $r_c(a)$ and $\beta(a)$, with Vainshtein screening when $G_{3X}\neq0$, as in Hi-COLA
+\cite{Wright2023}; unlike Hi-COLA the 2LPT growth has the theory's second-order source and the initial conditions
+are those of the model (\code{horndeski_table} in the solver). K-mouflage is run as in Hi-COLA in the Jordan frame,
+with a linear fifth force $G_{\rm eff}/G=A^2(1+2\beta^2/K_X)$ and no kinetic screening.
+
+\begin{validation}[Validation: modified gravity]
+\begin{itemize}
+\item $\mu$ model: $P_\mu/P_{\rm GR}$ at linear amplitude agrees with $(D_\mu/D_{\rm GR})^2$ from an independent growth
+      solution to $0.05\%$ for $k\le0.1\hMpc$ and 0.2--1.2\% up to $0.6\hMpc$ (\file{check_mu_gravity.py}).
+\item Symmetron, dilaton, $(m,\beta)$, $f(R)$: the scale-dependent growth of the force agrees with the solver's
+      quasi-static growth to $2\times10^{-4}$ (\file{test_quasistatic_models}).
+\item Cubic Galileon: linear growth $z=49\to0$ over GR $+2.03\%$ (linear, screening and multigrid alike) against $+2.07\%$
+      from the quasi-static equation; at normal amplitude $P/P_{\rm GR}=1.04$--$1.065$ with the exact equation and
+      1.03--1.06 with screening, consistent with $\lesssim8\%$ in Barreira et al.
+\item Horndeski frontend: reproduces the cubic Galileon ($P(k)$ to $10^{-5}$ in the simulations) and Brans--Dicke's
+      $G_{\rm eff}$, $\Sigma$ and $\alpha$'s; K-mouflage background against an independent Einstein-frame integration
+      ($2\times10^{-7}$).
+\item DGP screening approximation against the multigrid solution: 0.5\% (z = 0) and 1.3\% ($z=1$) rms in $P(k)$ for
+      $k<1.5\hMpc$.
+\end{itemize}
+\end{validation}
+
+\section{Dark-sector interactions}\label{sec:mgsim-darksector}
+
+\paragraph*{Velocity friction (dark scattering).} Elastic scattering off a smooth dark energy (at rest on $N$-body
+scales) is a friction of the dark matter, $\dd\bm v/\dd\ln a=-\Gamma\bm v+\bm F$, with
+$\Gamma=(1+w)c\,\xi\rho_{\rm DE}/H$ (\code{DarkScattering}) or $\alpha a^3/(\Om_{c0}E)$
+(\code{CovariantDarkScattering}) \cite{Simpson2010,BaldiSimpson2015}. It enters the growth equations at all orders,
+the COLA frame, the initial velocities and the kick and drift factors of every time-stepping method
+(\cref{sec:nbody-timestepping}). Baryons do not scatter: with one CDM+baryon species the fluid feels
+$f_c=\Om_{\rm cdm}/\Om_{cb}$ of the drag; with separate baryons the CDM feels the full drag and the baryons none, at the
+same steps with their own factors (FastPM from the two-fluid linear growth). Validation (w=$-0.9$, $\xi=50$\,b/GeV,
+linear amplitude): the CDM, baryon and CDM+baryon growth suppressions of $-6.16\%$, $-1.31\%$, $-5.42\%$ of the
+two-fluid equations are reproduced to $\le0.05\%$ by Quinn, FastPM and COLA. The solver, where the dark energy moves
+with the dark matter on large scales, has less suppression for $k\lesssim0.07\hMpc$.
+
+\paragraph*{Coupled quintessence.} In the sub-horizon limit the CDM feels $G(1+2\beta^2)$ from the CDM and $G$ from the
+baryons and has the velocity term $+\beta\phi'\bm v$; the baryons feel gravity only. For one CDM+baryon species this is
+a momentum-weighted fluid with $G_{\rm eff}/G=1+2\beta^2f_c^2$ and friction $-f_c\beta\phi'$; with separate baryons the
+CDM gets its fifth force from the CDM density in a second kick. The CDM density follows the field-dependent mass,
+$\rho_ca^3=\Om_{\rm cdm}m(a)/m(1)$. Agreement with the solver's growth: $6\times10^{-4}$ ($\lambda=0.5$, $\beta=0.15$).
+
+\paragraph*{Interacting dark energy.} The exchange is perturbed by the local expansion of the dark matter, so a CDM
+particle gains $\frac{\xi}{3}\rho_{\rm DE}$ times the change of its volume and keeps its momentum: particles carry
+individual masses updated before each force (the volume from the particle number density, CIC on the particle grid),
+and the growth factors include the mass perturbation so the COLA frame follows. This dilution term is most of the
+effect (10\% more growth from $z=49$ to 0 for $\xi=-0.1$, $w=-0.9$). Against the solver the extra growth agrees to
+$6\times10^{-4}$ for $k<0.02\hMpc$.

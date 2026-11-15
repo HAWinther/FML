@@ -1,0 +1,125 @@
+\chapter{Spherical collapse}\label{ch:spherical-collapse}
+\chapterstatus{written}{2026-11-14}
+
+The collapse of a spherical top-hat overdensity gives the linear threshold $\delta_c$ of halo formation and the virial
+overdensity $\Delta_{\rm vir}$, the two numbers that connect the linear field to halos in the mass function and the halo
+model (\cref{ch:halo-model}) and in excursion-set and peak-patch methods. \fml{} solves the collapse for any background
+and any scale-independent $G_{\rm eff}/G$, and for screened modified gravity, where the fifth force depends on the mass
+of the halo and its environment so that $\delta_c=\delta_c(M,z)$.
+
+\begin{modulebox}{SphericalCollapse}
+Namespace \nsp{FML::COSMOLOGY::SPHERICALCOLLAPSE}: \file{SphericalCollapseModel.h} (the model: $E(x)$, $\Om(x)$,
+$\dd\ln E/\dd x$, $\mu(x)$, $w(x)$ as callables), \file{SphericalCollapse.h} (\cls{SphericalCollapse}: one collapse
+redshift or splines over all redshifts; the growth factor), \file{ScreenedSphericalCollapse.h} (mass- and
+environment-dependent collapse with a general fifth force).\par
+Tests: \file{tests/test_sphericalcollapse.cpp}, \file{tests/test_screened_collapse.cpp}; example in \file{example/}.
+\end{modulebox}
+
+\section{The collapse equation}\label{sec:sc-equation}
+
+A top-hat of comoving Lagrangian radius $R$ and mass $M$ has physical radius $r=a\,y\,R$, with $1+\delta=y^{-3}$ by mass
+conservation. With $x=\ln a$ and primes for $\dd/\dd x$, the radius obeys
+\begin{equation}
+y''+\left(2+\frac{\dd\ln E}{\dd x}\right)y'+\frac{\Om(x)}{2}\,(1+F)\,(y^{-3}-1)\,y=0,
+\end{equation}
+in which the background acceleration cancels and the fifth force $F=G_{\rm eff}/G-1$ acts on the mass excess only
+\cite{Schmidt2010,Lombriser2014,Cataneo2019}. In terms of the density contrast it is
+\begin{equation}\label{eq:sc-delta}
+\delta''=-\left(2+\frac{\dd\ln E}{\dd x}\right)\delta'+\frac43\frac{\delta'^2}{1+\delta}+\frac32\Om(x)(1+F)\,\delta(1+\delta),
+\end{equation}
+which is integrated together with its linearisation $\delta_{\rm lin}''=-(2+\dd\ln E/\dd x)\delta_{\rm lin}'+\frac32\Om\mu\delta_{\rm lin}$.
+For a scale-independent modification $1+F=\mu(x)$. The initial conditions at $a_{\rm ini}=10^{-5}$ are in the growing
+mode with the second-order correction for the nonlinear solution. The initial overdensity is found by bisection such that
+$\delta\to\infty$ (in practice $\delta>10^{16}$) at the requested collapse time; $\delta_c=\delta_{\rm lin}(a_c)$.
+
+From the solution:
+\begin{itemize}
+\item the \emph{turnaround} $x_{\rm ta}$: $r'=0$, i.e.\ $1-\delta'/[3(1+\delta)]=0$;
+\item the \emph{virialization} $x_{\rm vir}$: the earliest time after turnaround at which $2E_{\rm kin}+E_{\rm pot}=0$ with
+      \begin{align}
+      E_{\rm kin}/M&=\tfrac3{10}(E\,r/R)^2\left(1-\frac{\delta'}{3(1+\delta)}\right)^2,\\
+      E_{\rm pot}/M&=-\tfrac3{10}(E\,r/R)^2\left[\textstyle\sum_i\Omega_i(1+3w_i)+\Om\left(1+(\mu-1)\frac{\delta}{1+\delta}\right)(1+\delta)\right],
+      \end{align}
+      where the term of the smooth components is computed from the background as
+      $\sum_i\Omega_i(1+3w_i)=-2(1+\dd\ln E/\dd x)-\Om$, so curvature does not count as dark energy;
+\item the \emph{virial overdensity} with respect to the mean matter density at the collapse,
+      $\Delta_{\rm vir}=(1+\delta(x_{\rm vir}))\,(a_c/a_{\rm vir})^3$;
+\item the \emph{nonlinear time} where $\delta=1$, and the time where $r=r_{\rm ta}/2$.
+\end{itemize}
+In Einstein--de Sitter $\delta_c=\frac3{20}(12\pi)^{2/3}=1.68647$, $\Delta_{\rm vir}=18\pi^2$,
+$a_{\rm ta}/a_c=2^{-2/3}$ and $1+\delta_{\rm ta}=9\pi^2/16$; in $\Lambda$CDM $\delta_c$ depends only weakly on $\Om$ while
+$\Delta_{\rm vir}$ grows strongly as $\Om(z)$ falls \cite{CooraySheth2002}.
+
+\begin{cppcode}[Collapse threshold and virial overdensity]
+#include <FML/SphericalCollapse/SphericalCollapse.h>
+using namespace FML::COSMOLOGY::SPHERICALCOLLAPSE;
+SphericalCollapseModel model(Eofx, OmegaMofx, dlogEdx, muofx, wofx);   // or the default LCDM
+SphericalCollapse sc(model);
+Spline dofx, dpofx, dlinofx;
+double deltac, DeltaVir, xnl, xta, xvir, delta_ini;
+sc.run_single_redshift(0.0, dofx, dpofx, dlinofx,
+                       deltac, DeltaVir, xnl, xta, xvir, delta_ini, false);
+// or: sc.run_at_all_redshifts(...) for splines of delta_c(x), Delta_vir(x), D(x), f(x), ...
+\end{cppcode}
+
+\begin{validation}[Validation: spherical collapse]
+Einstein--de Sitter $\delta_c=1.686470$ to $2\times10^{-6}$ and $\Delta_{\rm vir}=18\pi^2$ to $2\times10^{-5}$ for
+$z=0,1,10$, with the turnaround values, also when starting at $a=10^{-3}$; $\Lambda$CDM ($\Om=0.3$, $0.1$), an open model
+and $w_0w_a$ with constant $\mu$ against an independent integration of $R(t)$ in cosmic time ($\delta_c$ to
+$2\times10^{-6}$, $\Delta_{\rm vir}$ to $2\times10^{-4}$); the splines over redshift against single runs; errors
+($\mu\le0$, no collapse) are thrown, also from inside the OpenMP loop.
+\end{validation}
+
+\section{Screened spherical collapse}\label{sec:sc-screened}
+
+In chameleon and Vainshtein models the fifth force on a halo depends on the halo itself and on its environment. The
+function \code{screened_spherical_collapse} takes any fifth force $F(x,\delta,\delta_{\rm env})$ and an environment of
+linear overdensity $\delta_{\rm env,lin}$ (extrapolated to the collapse with the model's growth). The environment is a
+larger top-hat evolved with the same equation without screening from the same initial time, and the halo is evolved in it.
+The result carries $\delta_c$, turnaround, virialization (with the fifth force in the potential energy), $\Delta_{\rm vir}$,
+the force at virialization and the histories.
+
+\paragraph*{Hu--Sawicki $f(R)$: the thin shell.} The chameleon field is screened except in a shell of thickness $\Delta R$
+\cite{Schmidt2010,Lombriser2014},
+\begin{equation}
+\frac{\Delta R}{R}=\frac{|f_R(\rho_{\rm env})|-|f_R(\rho_{\rm halo})|}{2\Phi_N},\qquad
+\Phi_N=\frac{GM}{r}=\frac{(H_0R)^2\Om}{2ay},
+\end{equation}
+\begin{equation}
+F=\frac13\left[1-\left(1-\frac{\Delta R}{R}\right)^3\right]\quad\left(\frac{\Delta R}{R}<1\right),\qquad F=\frac13\ \text{otherwise},
+\end{equation}
+the force enhancement $1/3$ acting on the mass fraction in the shell, with the large-curvature field
+$|f_R(\rho)|=|f_{R0}|\left[(\Om+4\Omega_\Lambda)/(\Om a^{-3}(1+\delta)+4\Omega_\Lambda)\right]^{n+1}$ on a $\Lambda$CDM
+background \cite{HuSawicki2007}.
+
+\paragraph*{nDGP: Vainshtein screening.} For a top-hat the Galileon equation has a closed solution \cite{Schmidt2010},
+\begin{equation}
+F=\frac{2}{3\beta}\,\frac{\sqrt{1+\varepsilon}-1}{\varepsilon},\qquad
+\varepsilon=\frac{8(r_cH)^2\Om(x)\,\delta}{9\beta^2},\qquad
+\beta=1+2Hr_c\left(1+\frac{\dd\ln E/\dd x}{3}\right),
+\end{equation}
+with $H_0r_c=1/(2\sqrt{\Omega_{rc}})$; $F\to1/(3\beta)$ (linear theory) for small $\varepsilon$ and $F\to0$ deep inside the
+Vainshtein radius.
+
+\paragraph*{The environment.} \code{environment_most_probable} gives the most probable environment of a Lagrangian sphere of
+$8\Mpch$ from the excursion-set distribution of Lombriser et al.\ \cite{Lombriser2014}, given $\sigma^2(8)$ and its
+derivative; \code{environment_collapse_threshold} and \code{lagrangian_radius} are the helpers. For $\delta_c$ as used with
+the $\Lambda$CDM $\sigma(M)$ (as in ReACT), the model's linear growth $\mu(x)$ is set to 1.
+
+\begin{cppcode}[Mass-dependent collapse threshold in f(R)]
+#include <FML/SphericalCollapse/ScreenedSphericalCollapse.h>
+using namespace FML::COSMOLOGY::SPHERICALCOLLAPSE;
+const double R  = lagrangian_radius(M, OmegaM);                 // Mpc/h
+auto F          = fifth_force_hu_sawicki(1e-5, 1.0, OmegaM, R); // |fR0|, n
+const double de = environment_most_probable(s2_8, ds2dR_8, OmegaM, z);
+auto res = screened_spherical_collapse(model, F, std::log(1/(1+z)), de);
+// res.deltac, res.DeltaVir, res.xvir, res.F_vir, res.delta_of_x, ...
+\end{cppcode}
+
+\begin{validation}[Validation: screened collapse]
+Against ReACT's \file{SCOL.cpp} (ACTio-ReACTio) for $f(R)$ and nDGP at $z\le1$: the most probable environment to
+$2\times10^{-6}$, $\delta_c$ to $8\times10^{-5}$, $a_{\rm vir}$ to $2\times10^{-4}$ and $\delta(a_{\rm vir})$ to
+$1.4\times10^{-3}$. ReACT brackets the initial overdensity by $[1.1,4.4]\,\zeta_i/a$ in modified gravity, so at high
+redshift its $\delta_c$ sits on the bracket edge (5\% low at $z=2.3$); \fml{} brackets by $[0,1]$. One collapse takes
+$\sim0.05$\,s.
+\end{validation}

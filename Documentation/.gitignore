@@ -1,0 +1,17 @@
+# LaTeX build products (make clean removes most of them) and the built book
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.idx
+*.ilg
+*.ind
+*.listing
+*.log
+*.out
+*.toc
+*.tmp
+main.pdf
+build.log
+_preview/

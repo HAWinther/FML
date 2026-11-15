@@ -1,0 +1,75 @@
+\chapter{Potential gradient descent and baryonification}\label{ch:pgd-baryonification}
+\chapterstatus{written}{2026-11-14}
+
+Two post-processing methods move the particles of a gravity-only simulation to mimic physics it does not resolve or
+contain: potential gradient descent (PGD) sharpens the haloes of low-resolution PM simulations, and baryonification
+displaces particles around haloes to mimic the effect of gas, stars and feedback on the matter distribution.
+
+\begin{modulebox}{PGD and Baryonification}
+\file{PGD/PotentialGradientDecent.h} (example \file{PGD/example}); \file{Baryonification/Baryonification.h},
+\file{Baryonification/Profiles.h} (namespace \nsp{FML::BARYONIFICATION}); SimulationCode integration
+\file{src/BaryonificationOutput.h/.cpp}.\par
+Documentation: \file{Baryonification/README.md}, \file{SimulationCode/ANALYSIS.md}.
+\end{modulebox}
+
+\section{Potential gradient descent}\label{sec:pgd}
+
+PM simulations with few steps and coarse force grids produce haloes that are too extended. Dai, Feng and Seljak
+\cite{Dai2018PGD} move the particles a little further down the gradient of a band-pass filtered potential:
+\begin{equation}
+\bm S=-\alpha\,\mathcal N\,\nabla\,\hat O_l\hat O_s\nabla^{-2}\delta,\qquad
+\hat O_l=e^{-k_l^2/k^2},\qquad \hat O_s=e^{-k^4/k_s^4},
+\end{equation}
+where $\hat O_l$ removes the large scales (which the PM simulation gets right) and $\hat O_s$ the scales below the
+resolution. With the paper's definition of the fitted, dimensionless $\alpha(a)$ the prefactor is
+$\mathcal N=4\pi G\bar\rho/H_0^2=\frac32\Om_m$ (with $\bar\rho$ the comoving mean density); a positive $\alpha$ moves
+particles towards overdensities. The density is assigned to a grid, filtered and differentiated in Fourier space, and
+the displacement interpolated back to the particles. The function is collective; the \cls{MPIParticles} overload
+communicates the moved particles. Parameters: $k_l$, $k_s$ (in box units) and $\alpha$, calibrated by the paper's
+fitting formulae (\code{pgd_fitting_formula_*}).
+
+\section{Baryonification}\label{sec:baryonification}
+
+\paragraph*{Model.} Following Schneider and Teyssier \cite{SchneiderTeyssier2015} and the profile family of
+Schneider et al.\ \cite{Schneider2019}, each halo's gravity-only (reference) profile is replaced by a profile of
+collisionless matter, gas and a central galaxy, and particles are displaced so that enclosed masses match. With
+$x=r/R_{200}$:
+\begin{itemize}
+\item reference: a truncated NFW profile $\propto[cx(1+cx)^2(1+(x/\epsilon)^2)^2]^{-1}$, normalised to $M_{200}$;
+\item gas: $\propto(1+x/\theta_{\rm co})^{-\beta}[1+(x/\theta_{\rm ej})^2]^{-(7-\beta)/2}$ with $\beta=3-(M_c/M_{200})^\mu$;
+\item central galaxy: $\rho\propto r^{-2}\exp[-(r/2R_h)^2]$ (cumulative mass analytic with erf);
+\item collisionless matter (dark matter and satellite stars), optionally relaxed by
+      $r_f/r_i-1=A[(M_i/M_f)^n-1]$, $M_f=f_{\rm clm}M_i+M_{\rm gas}(r_f)+M_{\rm cga}(r_f)$ (bisection);
+\item stellar fractions $f_\star=A_\star(M_1/M_{200})^{\eta}$, gas $f_b-f_\star$.
+\end{itemize}
+\paragraph*{Displacement.} With the cumulative masses $M_{\rm ref}(r)$ and $M_{\rm bar}(r)$, a particle at $r$ moves
+radially to $r'$ with $M_{\rm bar}(r')=M_{\rm ref}(r)$ (\cls{RadialMapping} of monotone piecewise-linear tables). All
+components are normalised at a finite support (default $30R_{200}$) with a uniform background, so the displacement
+vanishes outside it; overlapping haloes add their displacement vectors, evaluated at the original positions. This is a
+finite-support implementation of the profile family, not a reproduction of the paper's calibrated predictions; there is
+no correlated two-halo term. Velocities, masses and IDs are unchanged.
+
+\paragraph*{In SimulationCode.} \code{baryonification = true} runs the method at each output on a copy of the particles
+(the live simulation is unchanged): FoF seeds, spherical-overdensity $M_{200c}$ and $R_{200c}$ with shrinking-sphere
+centres, rejection of truncated, nested or unresolved hosts, a power-law concentration (illustrative, not fitted from PM
+cores), and outputs of the corrected and original $P(k)$ and their ratio, the host catalogue and optionally the
+displaced particles. Requires 3D GR, one CDM+baryon species and no massive neutrinos.
+
+\begin{cppcode}[Baryonifying a catalogue]
+#include <FML/Baryonification/Baryonification.h>
+using namespace FML::BARYONIFICATION;
+HaloProperties halo{1e14, 0.7, 5.0};               // M200 [Msun/h], R200 [Mpc/h], concentration
+ModelParameters model;
+model.gas_mass_scale = 1e14;  model.gas_ejection_radius = 4.0;
+auto profiles = make_halo_profiles(halo, model, /*mean_density=*/8.3e10);
+std::vector<HaloDisplacement> halos{{{50.0, 50.0, 50.0}, profiles.mapping()}};
+Baryonifier correction(std::move(halos), /*boxsize=*/100.0);
+correction.apply(particles.data(), particles.size());   // positions only
+\end{cppcode}
+
+\begin{caveat}
+Validate against a chosen hydrodynamical calibration, halo completeness, halo mass and concentration errors, snapshot
+resolution, the support and the radial tables; no percent-level accuracy is claimed. The halo catalogue and prepared
+mappings are replicated on every rank. With PM resolution, SO masses are biased low unless $R_{200}$ spans several force
+cells (\cref{ch:simulation-code}).
+\end{caveat}
