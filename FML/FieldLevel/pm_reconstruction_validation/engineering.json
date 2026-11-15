@@ -1,0 +1,52 @@
+{
+  "passed": true,
+  "native_invocations": 22,
+  "science": [
+    {
+      "label": "reference",
+      "exit_code": 0,
+      "seconds": 53.2768884509569
+    },
+    {
+      "label": "fit-1",
+      "exit_code": 0,
+      "seconds": 19.0620321019087
+    },
+    {
+      "label": "fit-4",
+      "exit_code": 0,
+      "seconds": 61.730026072007604
+    },
+    {
+      "label": "fit-12",
+      "exit_code": 0,
+      "seconds": 162.39893242099788
+    },
+    {
+      "label": "fit-24",
+      "exit_code": 0,
+      "seconds": 284.2470541850198
+    }
+  ],
+  "builds": [
+    {
+      "variant": "serial",
+      "exit_code": 0
+    },
+    {
+      "variant": "mpi",
+      "exit_code": 0
+    },
+    {
+      "variant": "pencil",
+      "exit_code": 0
+    },
+    {
+      "variant": "sanitizer",
+      "exit_code": 0
+    }
+  ],
+  "source_snapshot": {
+    "native_source_matches_tested_builds": true
+  }
+}

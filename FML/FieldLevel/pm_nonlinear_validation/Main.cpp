@@ -134,7 +134,7 @@ static double value(const Model & model,const FF::BasicPosterior<Model> & poster
 static void forward_only(const Controls & c,Model & model) {
     const auto truth=coefficients(c.seed);const auto white=expand(model,truth);
     const auto p=model.initial_parameters();auto work=model.workspace();
-    const auto data=load_data(model,c);
+    const auto data=c.data=="-"?model.mock(white,p,92,work):load_data(model,c);
     FF::BasicPosterior<Model> posterior(model,data);
     const auto & predicted=model.predict(white,p,work);
     FF::Modes unused;double unused_noise;
@@ -191,6 +191,7 @@ static void run(const Controls & c,Model & model) {
     if(c.fit) {
         auto initial=coefficients(300);for(auto & x:initial)x*=.05;
         const auto start=expand(model,initial);const double initial_u=value(model,posterior,start,p,work);
+        f=output(c.prefix+".fit_start_modes.csv");row(f,global_modes(model,model.predict(start,p,work)));
         const auto fit=FF::map(posterior,start,p,false,c.fit,2e-5);
         Field g;std::vector<double> scalar;posterior.evaluate(fit.white,p,work,g,scalar);
         const auto fitted=project(model,fit.white),pg=project(model,g);
@@ -213,7 +214,7 @@ int main(int argc,char ** argv) {try {
     },"PM nonlinear controls");
     require(c.n>=16&&c.n<=(c.forward==1?128:64)&&c.n%2==0&&c.m>=16&&c.m<=64&&c.m%2==0&&c.steps>=2&&c.steps<=64&&c.seed>=0&&c.seed<=1000000&&c.power>0&&c.power<=.01&&c.final>.2&&c.final<=1&&
             (c.fd==0||c.fd==1)&&c.fit>=0&&c.fit<=200&&(c.forward==0||c.forward==1)&&(c.window==0||c.window==1)&&c.reference>=0&&c.reference<=64&&
-            (!c.forward||(c.fd==0&&c.fit==0&&c.data!="-")),"Invalid bounded PM controls");
+            (!c.forward||(c.fd==0&&c.fit==0)),"Invalid bounded PM controls");
     std::ostringstream controls;controls<<std::setprecision(17)<<c.n<<','<<c.m<<','<<c.steps<<','<<c.seed<<','<<c.power<<','<<c.final<<','<<c.fd<<','<<c.fit<<','<<c.forward<<','<<c.window<<','<<c.reference;
     FF::CHECKPOINT::same_string(controls.str());FF::CHECKPOINT::same_string(c.prefix);FF::CHECKPOINT::same_string(c.data);
     FML::FIELDLEVEL::FRONTEND::initialize(c.n,c.m);auto model=make_model(c);auto window_file=output(c.prefix+".window.csv");if(FML::ThisTask==0)window_file<<"force_window\n"<<c.window<<'\n';auto observation_file=output(c.prefix+".observation.csv");if(FML::ThisTask==0)observation_file<<"reference_cic_mesh\n"<<c.reference<<'\n';if(c.forward)forward_only(c,model);else run(c,model);return 0;

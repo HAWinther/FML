@@ -91,7 +91,8 @@ MPI controls and output paths are checked collectively before model construction
 
 A separate [particle-sampled force-reference study](../pm_force_reference_validation/README.md)
 uses `FORWARD_ONLY=1`, permitting N<=128 with FD=FIT_ITERATIONS=0 and external
-compatible data. It computes one forward trajectory and a value-only posterior
+compatible data, or `DATA_PATH=-` to generate a new mock without an adjoint. It
+computes forward predictions and a value-only posterior
 without requesting a pullback. It emits `.forward_meta.csv` and no gradient file;
 the original default-mode output schema and N<=64 bound are unchanged. This
 extension does not change or overwrite the original measurements above.
@@ -109,3 +110,11 @@ The final optional CLI argument after `FORWARD_ONLY` and `FORCE_WINDOW` is
 window; data headers must explicitly match `observation_cic,REFERENCE`, and
 `.observation.csv` records it. Legacy raw data and output bytes remain unchanged
 when the reference is zero. See [the response study](../pm_observation_validation/README.md).
+
+### Refined-data compensated reconstruction
+
+[The fixed-observation reconstruction study](../pm_reconstruction_validation/README.md)
+generates a compensated N128/M64 mock in forward-only mode and fits it on a
+coarser discretization with the same declared observation window. Fits also emit
+`.fit_start_modes.csv`, the starting prediction before optimization, for residual
+comparisons. Existing numerical outputs and the public MAP algorithm are unchanged.

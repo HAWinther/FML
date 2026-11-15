@@ -365,3 +365,16 @@ joint-gradient baseline still fails at 41.6%. Custom real coefficients, noise af
 response, both distributed backends and legacy bitwise compatibility are tested.
 This is one finite-reference realization; adequate broader gradient sampling,
 posterior calibration, MAP conditioning and PM survey/tracer/RSD work remain open.
+
+## Refined-data compensated PM reconstruction (15 November 2026)
+
+The [new reconstruction study](pm_reconstruction_validation/RESULTS.md) generates
+a compensated N128/M64/32-step mock and fits at N32/M16/16 steps with a common
+M16 observation window and fixed nuisance parameters. At 24 accepted iterations,
+initial coefficient error is 0.2696 of the zero-field baseline,
+correlation 0.9643, and residual 0.7881 noise SD. Optimizer
+status is MaximumIterations; raw and projected gradients are retained with the plots.
+Serial/MPI slab/pencil/sanitizer replay and legacy bitwise comparisons pass.
+A costlier N64/M32 attempt is retained; the public optimizer is unchanged.
+Broader seed/amplitude/refinement checks remain explicitly deferred by request;
+this is reconstruction validation, not posterior calibration. Item 52 remains open.
