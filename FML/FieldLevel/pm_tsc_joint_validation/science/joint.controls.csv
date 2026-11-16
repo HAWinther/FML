@@ -1,0 +1,2 @@
+n,m,steps,max_iterations,vary,fd,amplitude_lower,amplitude_upper,amplitude_mean,amplitude_sigma,noise_mean,noise_sigma,tolerance
+32,16,16,128,1,1,-4,4,0,.5,-9.2103403719761818,.5,2e-5

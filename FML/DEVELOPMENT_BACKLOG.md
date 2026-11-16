@@ -506,3 +506,16 @@ remain compatible. Targeted serial/MPI/pencil/sanitizer and checkpoint checks pa
 The matched TSC reference changes the discrete target; this is one finite
 realization, not general convergence or posterior calibration. Broader refinement
 remains deferred. Stable objective comparisons remain opt-in.
+
+### Item 52: joint TSC MAP validation (16 November 2026)
+
+[Initial field, amplitude and noise](FieldLevel/pm_tsc_joint_validation/RESULTS.md) converge
+jointly in 54 iterations with joint norm 9.84911e-06
+at tolerance 2e-5. Scalar gradient identities and six refined directional gates
+pass; serial/slab/pencil/sanitizer checks agree and fixed mode reproduces the
+committed TSC driver bitwise. No library or optimizer code changed. This study
+explicitly widens amplitude support to [-4,4]; Gaussian mean/scale remain fixed.
+The high joint-MAP amplitude follows the whitened-coordinate density mode and
+must not be interpreted as an unbiased or marginalized amplitude estimate.
+Physical initial-field correlation is 0.964540. General scalar
+posterior inference, coverage and broader refinement remain deferred.

@@ -1,0 +1,43 @@
+{
+  "passed": true,
+  "checks": [
+    {
+      "check": "serial0 joint updates, scalar identities, work counts and canonical outputs",
+      "passed": true
+    },
+    {
+      "check": "mpi1 joint updates, scalar identities, work counts and canonical outputs",
+      "passed": true
+    },
+    {
+      "check": "mpi2 joint updates, scalar identities, work counts and canonical outputs",
+      "passed": true
+    },
+    {
+      "check": "mpi4 joint updates, scalar identities, work counts and canonical outputs",
+      "passed": true
+    },
+    {
+      "check": "pencil1 joint updates, scalar identities, work counts and canonical outputs",
+      "passed": true
+    },
+    {
+      "check": "pencil2 joint updates, scalar identities, work counts and canonical outputs",
+      "passed": true
+    },
+    {
+      "check": "pencil4 joint updates, scalar identities, work counts and canonical outputs",
+      "passed": true
+    },
+    {
+      "check": "sanitizer0 joint updates, scalar identities, work counts and canonical outputs",
+      "passed": true
+    },
+    {
+      "check": "fixed-mode coefficients reproduce committed driver bitwise",
+      "passed": true
+    }
+  ],
+  "invalid_controls": true,
+  "mpi_inconsistent_controls": true
+}

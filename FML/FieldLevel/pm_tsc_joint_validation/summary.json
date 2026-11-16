@@ -1,0 +1,410 @@
+{
+  "passed": true,
+  "consistency_passed": true,
+  "checks": [
+    {
+      "check": "frozen matched TSC data unchanged",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "declared joint protocol",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "declared Gaussian priors and widened amplitude support",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite iteration",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite potential",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite gradient_norm",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite field_gradient_l2",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite step",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite log_amplitude",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite log_noise_power",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite value_evaluations",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite gradient_evaluations",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite reference_evaluations",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite accepted_change",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite armijo_bound",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite potential",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite field_max",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite scalar_scaled_max",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite white_norm2",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite white_dot_gradient",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite amplitude_gradient",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite amplitude_expected",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite amplitude_error",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite noise_gradient",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite noise_expected",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite noise_error",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite chi2",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite dof",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite direction",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite h",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite analytic",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite numeric",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "complete analytic identity states",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "independent amplitude and normalized-noise gradient identities",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "work counts include support rejections without forward predictions",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "bounded trials/history",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "accepted parameter trace matches endpoint",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "all accepted stable changes satisfy Armijo",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "field and both scalar parameters updated",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "fresh endpoint reproduces joint stopping norm",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "joint MAP converges at unchanged numerical tolerance",
+      "passed": true,
+      "kind": "convergence"
+    },
+    {
+      "check": "solution stays inside declared support",
+      "passed": true,
+      "kind": "convergence"
+    },
+    {
+      "check": "finite physical and white initial coefficients",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "physical field uses the fitted spectrum amplitude",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "physical initial-field recovery",
+      "passed": true,
+      "kind": "recovery"
+    },
+    {
+      "check": "complete two-state three-direction derivative scan",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "start direction 0 refined derivative",
+      "passed": true,
+      "kind": "derivative"
+    },
+    {
+      "check": "start direction 1 refined derivative",
+      "passed": true,
+      "kind": "derivative"
+    },
+    {
+      "check": "start direction 2 refined derivative",
+      "passed": true,
+      "kind": "derivative"
+    },
+    {
+      "check": "endpoint direction 0 refined derivative",
+      "passed": true,
+      "kind": "derivative"
+    },
+    {
+      "check": "endpoint direction 1 refined derivative",
+      "passed": true,
+      "kind": "derivative"
+    },
+    {
+      "check": "endpoint direction 2 refined derivative",
+      "passed": true,
+      "kind": "derivative"
+    }
+  ],
+  "fit": {
+    "initial_potential": -63.68895509607469,
+    "potential": -1102.0386891923267,
+    "iterations": 54.0,
+    "status": 0.0,
+    "joint_gradient_norm": 9.849114699811423e-06,
+    "log_amplitude": 1.952848910933148,
+    "log_noise_power": -9.718447363012016,
+    "seconds": 256.001470275,
+    "forwards": 171.0,
+    "pullbacks": 55.0,
+    "value_evaluations": 69.0,
+    "gradient_evaluations": 55.0,
+    "reference_evaluations": 54.0,
+    "peak_history_pairs": 5.0,
+    "unsupported_trials": 7.0
+  },
+  "physical_recovery": {
+    "relative_error": 0.2833860988197815,
+    "correlation": 0.9645397415496703,
+    "residual_true_noise_units": 0.7694677054779522
+  },
+  "identities": [
+    {
+      "point": "truth",
+      "potential": -989.2711114533847,
+      "field_max": 1.1331015503242994,
+      "scalar_scaled_max": 19.86944772741541,
+      "white_norm2": 96.59657523825244,
+      "white_dot_gradient": 17.118784328590998,
+      "amplitude_gradient": -39.73889545483082,
+      "amplitude_expected": -39.738895454830725,
+      "amplitude_error": -9.237055564881302e-14,
+      "noise_gradient": -13.354168540446189,
+      "noise_expected": -13.35416854044621,
+      "noise_error": 2.1316282072803006e-14,
+      "chi2": 282.7083370808924,
+      "dof": 256.0
+    },
+    {
+      "point": "start",
+      "potential": -63.68895509607469,
+      "field_max": 4.275432402846775,
+      "scalar_scaled_max": 493.5310676448708,
+      "white_norm2": 0.34495445427034976,
+      "white_dot_gradient": 6.20479140178149,
+      "amplitude_gradient": 2.929918473755559,
+      "amplitude_expected": 2.92991847375557,
+      "amplitude_error": -1.1102230246251565e-14,
+      "noise_gradient": -987.0621352897416,
+      "noise_expected": -987.0621352897417,
+      "noise_error": 1.1368683772161603e-13,
+      "chi2": 2230.1242705794834,
+      "dof": 256.0
+    },
+    {
+      "point": "endpoint",
+      "potential": -1102.0386891923267,
+      "field_max": 3.1102102621763383e-06,
+      "scalar_scaled_max": 9.849114699811423e-06,
+      "white_norm2": 15.62279674515882,
+      "white_dot_gradient": -3.201002115111927e-05,
+      "amplitude_gradient": -1.8733857388042452e-05,
+      "amplitude_expected": -1.8733857393371522e-05,
+      "amplitude_error": 5.329070518200751e-15,
+      "noise_gradient": -1.9698229399622846e-05,
+      "noise_expected": -1.9698229365872066e-05,
+      "noise_error": -3.375077994860476e-14,
+      "chi2": 251.93518346817206,
+      "dof": 256.0
+    }
+  ],
+  "derivatives": [
+    {
+      "point": "start",
+      "direction": 0,
+      "best_error": 5.291531416943136e-10
+    },
+    {
+      "point": "start",
+      "direction": 1,
+      "best_error": 1.445506343987299e-10
+    },
+    {
+      "point": "start",
+      "direction": 2,
+      "best_error": 1.2945883930147786e-10
+    },
+    {
+      "point": "endpoint",
+      "direction": 0,
+      "best_error": 6.972130383830875e-11
+    },
+    {
+      "point": "endpoint",
+      "direction": 1,
+      "best_error": 1.5727152301305225e-09
+    },
+    {
+      "point": "endpoint",
+      "direction": 2,
+      "best_error": 4.051560715305911e-09
+    }
+  ],
+  "parameterization": {
+    "amplitude_multiplier": 7.048740236035217,
+    "noise_power": 6.016333989379688e-05,
+    "noise_power_ratio": 0.6016333989379687,
+    "amplitude_stationary_rhs": 1.9528495931448524,
+    "noise_chi2": 251.93518346817206
+  },
+  "fixed_baseline": {
+    "budget": 128,
+    "iterations": 16,
+    "status": 0,
+    "potential": -1050.5692655941932,
+    "initial_potential": -63.68895509607442,
+    "raw_gradient": 5.6502016432813384e-06,
+    "projected_gradient": 0.0002879035352225869,
+    "relative_initial_error": 0.26839013306907206,
+    "correlation": 0.9646395706693298,
+    "residual_noise_units": 0.7834737210046542,
+    "initial_residual_noise_units": 2.9515119738790005,
+    "signal_error_noise_units": 0.6719839482497739,
+    "truth_discretization_noise_units": 0.006609213314056789,
+    "optimizer": 2.0,
+    "history": 5.0,
+    "seconds": 85.400533881,
+    "forwards": 54.0,
+    "pullbacks": 17.0,
+    "value_evaluations": 21.0,
+    "gradient_evaluations": 17.0,
+    "peak_history_pairs": 5.0,
+    "total_history_bytes": 2622080.0,
+    "sum_rank_peak_rss_bytes": 71487488.0,
+    "curvature_skips": 0.0,
+    "history_resets": 0.0,
+    "reference_evaluations": 16.0
+  },
+  "limits": [
+    "Joint MAP is a density mode in whitened coordinates, not a marginalized parameter estimate.",
+    "Gaussian amplitude mean/scale are unchanged, but support is explicitly widened from [-1,1] to [-4,4].",
+    "One fixed realization; broader refinement, posterior sampling and coverage remain deferred."
+  ]
+}
