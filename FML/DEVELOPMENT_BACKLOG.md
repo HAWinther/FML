@@ -519,3 +519,17 @@ The high joint-MAP amplitude follows the whitened-coordinate density mode and
 must not be interpreted as an unbiased or marginalized amplitude estimate.
 Physical initial-field correlation is 0.964540. General scalar
 posterior inference, coverage and broader refinement remain deferred.
+
+### Item 52: bounded TSC posterior pilot (16 November 2026)
+
+[Active-field/amplitude/noise HMC](FieldLevel/pm_tsc_posterior_validation/RESULTS.md) completes
+four N16 particle chains on the frozen data, M16 force mesh and 16 time steps,
+as selected by the user. Exact inactive-Gaussian marginalization and physical
+coordinates include the 122*A/2 Jacobian; direct target/gradient checks pass.
+All Rhat values are <1.05 and there are no retained divergences, but bulk/tail ESS
+criteria remain failed (minima 93.3/180.9); the report
+keeps passed=false. Scalar intervals and predictions are exploratory. N32 mixing
+and coverage remain unvalidated. A <=16-mesh bounded dense lookup reduces a short
+case's CPU time about 21% with bitwise-identical outputs; larger meshes stay sparse.
+PM/LPT, MPI/pencil, sanitizer and old-checkpoint checks pass. Broader refinement
+remains deferred; more effective draws are needed before calibrated inference.

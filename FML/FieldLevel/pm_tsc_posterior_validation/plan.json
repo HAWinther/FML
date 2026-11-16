@@ -1,0 +1,26 @@
+{
+  "n": 16,
+  "m": 16,
+  "steps": 16,
+  "active": 122,
+  "chains": 4,
+  "warmup": 64,
+  "draws": 128,
+  "leapfrog": 8,
+  "epsilon": 0.25,
+  "adapt_step_size": true,
+  "adapt_mass": false,
+  "predictive_stride": 8,
+  "target_acceptance": 0.85,
+  "divergence_threshold": 10,
+  "seed0": 12000,
+  "timeout_seconds": 1800,
+  "data_sha256": "7860337364a02c8d111903141ab479e4fc3887aea62a289dfbdd8197e76ad849",
+  "map_seed_sha256": "882b16ef7bd9d6c4f9ee48f97c937f1a690a29e9266848e6ad673e368c962d26",
+  "gates": {
+    "rhat": 1.05,
+    "ess_bulk": 400,
+    "ess_tail": 200
+  },
+  "note": "User-selected N16 bounded pilot; same data/force/time, different particle discretization from N32 MAP. No diagnostic thinning."
+}

@@ -1,0 +1,343 @@
+{
+  "map_baseline": {
+    "initial_potential": -64.21639969226409,
+    "potential": -1101.353257893825,
+    "iterations": 49.0,
+    "status": 0.0,
+    "joint_gradient_norm": 1.3500843624170145e-05,
+    "log_amplitude": 1.9683642083016124,
+    "log_noise_power": -9.714587247931556,
+    "seconds": 73.178019952,
+    "forwards": 157.0,
+    "pullbacks": 50.0,
+    "value_evaluations": 64.0,
+    "gradient_evaluations": 50.0,
+    "reference_evaluations": 49.0,
+    "peak_history_pairs": 5.0,
+    "unsupported_trials": 6.0
+  },
+  "passed": false,
+  "consistency_passed": true,
+  "mixing_passed": false,
+  "checks": [
+    {
+      "check": "unchanged frozen TSC data",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "recorded physical initialization seed",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "user-selected N16 pilot discretization",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "full pilot-target density, Jacobian, basis and gradient checks",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "chain 0 complete retained draws",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "chain 0 finite states",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "chain 0 protocol and seed",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "chain 0 prior support",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "chain 0 mean acceptance",
+      "passed": true,
+      "kind": "mixing"
+    },
+    {
+      "check": "chain 0 no retained divergences",
+      "passed": true,
+      "kind": "mixing"
+    },
+    {
+      "check": "chain 0 predictive stride",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "chain 1 complete retained draws",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "chain 1 finite states",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "chain 1 protocol and seed",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "chain 1 prior support",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "chain 1 mean acceptance",
+      "passed": true,
+      "kind": "mixing"
+    },
+    {
+      "check": "chain 1 no retained divergences",
+      "passed": true,
+      "kind": "mixing"
+    },
+    {
+      "check": "chain 1 predictive stride",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "chain 2 complete retained draws",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "chain 2 finite states",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "chain 2 protocol and seed",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "chain 2 prior support",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "chain 2 mean acceptance",
+      "passed": true,
+      "kind": "mixing"
+    },
+    {
+      "check": "chain 2 no retained divergences",
+      "passed": true,
+      "kind": "mixing"
+    },
+    {
+      "check": "chain 2 predictive stride",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "chain 3 complete retained draws",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "chain 3 finite states",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "chain 3 protocol and seed",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "chain 3 prior support",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "chain 3 mean acceptance",
+      "passed": true,
+      "kind": "mixing"
+    },
+    {
+      "check": "chain 3 no retained divergences",
+      "passed": true,
+      "kind": "mixing"
+    },
+    {
+      "check": "chain 3 predictive stride",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "all active coordinates/squares/scalars/energy/norm monitored",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "finite valid rank diagnostics",
+      "passed": true,
+      "kind": "mixing"
+    },
+    {
+      "check": "all rank split/folded Rhat < 1.05",
+      "passed": true,
+      "kind": "mixing"
+    },
+    {
+      "check": "all bulk ESS > 400",
+      "passed": false,
+      "kind": "mixing"
+    },
+    {
+      "check": "all tail ESS > 200",
+      "passed": false,
+      "kind": "mixing"
+    },
+    {
+      "check": "finite latent and noisy predictions",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "same-target N16 MAP baseline",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "MAP and chains use identical data",
+      "passed": true,
+      "kind": "consistency"
+    }
+  ],
+  "posterior": {
+    "A": {
+      "mean": -0.1355866919767677,
+      "sd": 0.13814020032105195,
+      "quantile_025": -0.39487486168756186,
+      "median": -0.1378732680457318,
+      "quantile_975": 0.14625896803731522,
+      "rhat": 1.0109684949770779,
+      "ess_bulk": 358.36527681848463,
+      "ess_tail": 288.3886508003721
+    },
+    "N": {
+      "mean": -9.067069796017162,
+      "sd": 0.1117411369815514,
+      "quantile_025": -9.2723575329665,
+      "median": -9.065514340622535,
+      "quantile_975": -8.834572909793408,
+      "rhat": 1.021421380363472,
+      "ess_bulk": 183.9430376285136,
+      "ess_tail": 257.952742034746
+    },
+    "noise_power": {
+      "mean": 0.00011612820207441328,
+      "quantile_025": 9.398668666373801e-05,
+      "median": 0.000115583848352286,
+      "quantile_975": 0.00014561087152399515
+    }
+  },
+  "metadata": [
+    {
+      "id": 0.0,
+      "warmup": 64.0,
+      "draws": 128.0,
+      "leapfrog": 8.0,
+      "adapt": 1.0,
+      "epsilon": 0.32210629606002755,
+      "acceptance": 0.9040108219172117,
+      "divergences": 0.0,
+      "seed": 12000.0,
+      "seconds": 1548.740861899,
+      "evaluations": 1178.0,
+      "n": 16.0,
+      "m": 16.0,
+      "steps": 16.0,
+      "active": 122.0
+    },
+    {
+      "id": 1.0,
+      "warmup": 64.0,
+      "draws": 128.0,
+      "leapfrog": 8.0,
+      "adapt": 1.0,
+      "epsilon": 0.2977063137291108,
+      "acceptance": 0.9149939055601441,
+      "divergences": 0.0,
+      "seed": 12001.0,
+      "seconds": 1518.034753159,
+      "evaluations": 1154.0,
+      "n": 16.0,
+      "m": 16.0,
+      "steps": 16.0,
+      "active": 122.0
+    },
+    {
+      "id": 2.0,
+      "warmup": 64.0,
+      "draws": 128.0,
+      "leapfrog": 8.0,
+      "adapt": 1.0,
+      "epsilon": 0.31375132494477204,
+      "acceptance": 0.9025605632338493,
+      "divergences": 0.0,
+      "seed": 12002.0,
+      "seconds": 1501.372249781,
+      "evaluations": 1141.0,
+      "n": 16.0,
+      "m": 16.0,
+      "steps": 16.0,
+      "active": 122.0
+    },
+    {
+      "id": 3.0,
+      "warmup": 64.0,
+      "draws": 128.0,
+      "leapfrog": 8.0,
+      "adapt": 1.0,
+      "epsilon": 0.29200217262199624,
+      "acceptance": 0.9173212833406337,
+      "divergences": 0.0,
+      "seed": 12003.0,
+      "seconds": 1535.170222486,
+      "evaluations": 1167.0,
+      "n": 16.0,
+      "m": 16.0,
+      "steps": 16.0,
+      "active": 122.0
+    }
+  ],
+  "diagnostic_extrema": {
+    "max_rhat": 1.0381020849471028,
+    "min_bulk_ess": 93.29085165218245,
+    "min_tail_ess": 180.85888599621757
+  },
+  "mean_physical_field": {
+    "relative_error": 0.2681119834343356,
+    "correlation": 0.9642474896327321
+  },
+  "predictive": {
+    "draws": 64,
+    "observed_chi2_mean": 256.44364252144214,
+    "replicated_chi2_mean": 257.8066422097357,
+    "tail_fraction": 0.46875
+  },
+  "limits": [
+    "N16 particle pilot changes the N32 MAP discretization; N32 posterior mixing remains unvalidated.",
+    "Active posterior sampled in physical coordinates with the 122*A/2 Jacobian; inactive Gaussian white directions integrated exactly.",
+    "One finite reference and realization; posterior intervals are exploratory if mixing gates fail, not repeated-mock coverage.",
+    "No post-warmup thinning; predictive saves only use a stride."
+  ]
+}

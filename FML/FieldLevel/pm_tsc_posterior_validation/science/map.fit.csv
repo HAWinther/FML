@@ -1,0 +1,2 @@
+initial_potential,potential,iterations,status,joint_gradient_norm,log_amplitude,log_noise_power,seconds,forwards,pullbacks,value_evaluations,gradient_evaluations,reference_evaluations,peak_history_pairs,unsupported_trials
+-64.216399692264091,-1101.353257893825,49,0,1.3500843624170145e-05,1.9683642083016124,-9.714587247931556,73.178019952,157,50,64,50,49,5,6

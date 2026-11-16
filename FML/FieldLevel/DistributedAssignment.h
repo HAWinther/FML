@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <climits>
 #include <numeric>
+#include <limits>
 
 namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL {
     // Sparse scatter of global mesh-node contributions to their owning FFT slab.
@@ -22,6 +23,10 @@ namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL {
         std::vector<std::uint64_t> sent, received;
         std::unordered_map<std::uint64_t, size_t> slot;
         int mesh, tasks, rank;
+        // Small global meshes fit in bounded dense scratch. Preserve visit and
+        // sorted packet order, including zero-weight keys; only the lookup changes.
+        bool dense_small{false};
+        std::vector<size_t> dense_slot;
         bool ready{false};
         void check(const Grid & grid) const {
             FML::COMMUNICATION::require_count(
@@ -62,6 +67,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL {
             : owners(grid), mesh(grid.get_nmesh()), tasks(FML::NTasks), rank(FML::ThisTask) {
             FML::COMMUNICATION::require_count(mesh > 0 && tasks > 0 && rank >= 0 && rank < tasks,
                                               "[Distributed assignment] Unallocated grid or invalid task metadata");
+            dense_small = mesh <= 16;
             for (int d = 0; d < 3; d++) {
                 local_start[d] = int(grid.get_local_range(d)[0]);
                 local_count[d] = int(grid.get_local_range(d)[1]);
@@ -76,11 +82,24 @@ namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL {
             collective_try(
                 [&] {
                     std::unordered_map<std::uint64_t, double> sum;
-                    visit([&](std::uint64_t key, double value) { sum[key] += value; });
+                    std::vector<double> dense_sum;
+                    std::vector<unsigned char> seen;
                     sent.clear();
                     slot.clear();
-                    for (const auto & entry : sum)
-                        sent.push_back(entry.first);
+                    if (dense_small) {
+                        const size_t nodes = size_t(mesh) * mesh * mesh;
+                        dense_sum.assign(nodes, 0.);
+                        seen.assign(nodes, 0);
+                        dense_slot.assign(nodes, std::numeric_limits<size_t>::max());
+                        visit([&](std::uint64_t key, double value) {
+                            if (key >= nodes) throw std::invalid_argument("[Distributed assignment] Node outside mesh");
+                            if (!seen[key]) { seen[key] = 1; sent.push_back(key); }
+                            dense_sum[key] += value;
+                        });
+                    } else {
+                        visit([&](std::uint64_t key, double value) { sum[key] += value; });
+                        for (const auto & entry : sum) sent.push_back(entry.first);
+                    }
                     std::sort(sent.begin(), sent.end(), [&](auto a, auto b) {
                         const int pa = owner(a), pb = owner(b);
                         return pa == pb ? a < b : pa < pb;
@@ -93,8 +112,9 @@ namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL {
                         if (send_count[peer] == INT_MAX)
                             throw std::overflow_error("[Distributed assignment] MPI count overflow");
                         ++send_count[peer];
-                        values[j] = sum.at(sent[j]);
-                        slot.emplace(sent[j], j);
+                        values[j] = dense_small ? dense_sum[sent[j]] : sum.at(sent[j]);
+                        if (dense_small) dense_slot[sent[j]] = j;
+                        else slot.emplace(sent[j], j);
                     }
                     offsets(send_count, send_offset);
                 },
@@ -168,7 +188,14 @@ namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL {
 #endif
             return result;
         }
-        double at(const std::vector<double> & reversed, std::uint64_t node) const { return reversed[slot.at(node)]; }
+        double at(const std::vector<double> & reversed, std::uint64_t node) const {
+            if (dense_small) {
+                if (node >= dense_slot.size() || dense_slot[node] == std::numeric_limits<size_t>::max())
+                    throw std::out_of_range("[Distributed assignment] Node was not deposited");
+                return reversed[dense_slot[node]];
+            }
+            return reversed[slot.at(node)];
+        }
     };
     using DistributedAssignment = DistributedAssignmentT<>;
 } // namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL

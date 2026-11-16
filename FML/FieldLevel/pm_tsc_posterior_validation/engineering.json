@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "native_invocations": 24,
+  "density_gradient_jacobian": true,
+  "fft_basis": true,
+  "full_field_adapter": true,
+  "slab_pencil_replay": true,
+  "regression_invocations": 23,
+  "old_checkpoint_replay": true,
+  "factory_replay": true,
+  "full_library_ci": false,
+  "full_pilot_target_check": true,
+  "max_target_value_error": 8.86757334228605e-12,
+  "max_target_gradient_error": 1.9895196601282805e-13,
+  "max_target_fd_error": 6.4199720698096596e-09
+}
