@@ -59,6 +59,58 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 if(maximum(m,v)!=lo)throw std::invalid_argument("inconsistent controls");}}
     };
 }
+struct GaussianQuadratic : Quadratic {
+    struct Mode {int n[3];double k,weight;};
+    std::vector<Mode> modes()const {std::vector<Mode> r;for(size_t i=0;i<cells();++i)r.push_back({{first+int(i)+1,0,1},1.,2.});if(FML::ThisTask==0)r.push_back({{100,0,1},1.,2.});return r;}
+    const FF::Modes & predict(const Field & s,const std::vector<double>&p,Workspace&w)const {
+        Quadratic::predict(s,p,w);if(FML::ThisTask==0)w.prediction.push_back(0.);return w.prediction;
+    }
+    void pullback(const std::vector<double>&p,const FF::Modes&g,Workspace&w,Field&gs,std::vector<double>&gp)const {
+        Quadratic::pullback(p,g,w,gs,gp);for(auto & x:gs)x*=2;gp[0]*=2;
+    }
+};
+namespace FML::FIELDLEVEL::FRAMEWORK {template<>struct Execution<::GaussianQuadratic>:Execution<::Quadratic>{};}
+static void stable_changes() {
+    GaussianQuadratic m;auto modes=m.modes();FF::Modes data;for(size_t i=0;i<m.cells();++i)data.push_back(m.D(i));if(FML::ThisTask==0)data.push_back(1e12);
+    FF::BasicPosterior<GaussianQuadratic> post(m,FF::GaussianFieldLikelihood(modes,2.,1.,data));
+    Field base(m.cells(),.1);std::vector<double> p{.2,0.};auto w=m.workspace();Field g;std::vector<double> gp;const double u=post.evaluate(base,p,w,g,gp);
+    const auto reference=post.value_reference(base,p,w);auto trial=base;for(auto & x:trial)x+=1e-9;
+    const auto delta=post.value_change(trial,p,w,base,reference);long double expected=0;
+    for(size_t i=0;i<base.size();++i){long double dx=(long double)trial[i]-base[i];long double r=m.A(i)*base[i]+m.B(i)*p[0]-m.D(i),dr=m.A(i)*dx;expected+=2*r*dr+dr*dr+(long double)base[i]*dx+.5L*dx*dx;}
+    const double exact=FF::Execution<GaussianQuadratic>::sum(m,double(expected));
+    check(delta.value==u && delta.change!=0 && std::abs(delta.change-exact)<1e-10,"stable posterior change resolves changes hidden by a 1e24 constant");
+    check(post.value_change(base,p,w,base,reference).change==0,"zero displacement has exactly zero change");
+    auto outside=p;outside[1]=11;check(std::isinf(post.value_change(trial,outside,w,base,reference).change),"stable change rejects unsupported proposals");
+    FF::BasicPosterior<GaussianQuadratic> other(m,FF::GaussianFieldLikelihood(modes,2.,1.,data));bool rejected=false;
+    try{other.value_change(trial,p,w,base,reference);}catch(const std::invalid_argument&){rejected=true;}check(rejected,"value reference rejects a foreign posterior");
+    FF::MAPOptions o;o.vary_parameters=false;o.stable_objective_changes=true;o.max_iterations=150;o.tolerance=1e-7;
+    m.forwards=m.pullbacks=0;const auto fit=FF::map(post,base,p,o);double err=0;
+    for(size_t i=0;i<base.size();++i)err=std::max(err,std::abs(fit.fit.white[i]-2*m.A(i)*(m.D(i)-m.B(i)*p[0])/(1+2*m.A(i)*m.A(i))));
+    check(fit.fit.status==FF::MAPStatus::Converged && FF::Execution<GaussianQuadratic>::maximum(m,err)<2e-7,"stable Armijo reaches analytic optimum despite huge constant target");
+    check(m.forwards==fit.value_evaluations+fit.gradient_evaluations+fit.reference_evaluations && m.pullbacks==fit.gradient_evaluations,"stable reference prediction work is accounted for");
+    bool sufficient=true;for(size_t i=1;i<fit.trace.size();++i)sufficient &= fit.trace[i].accepted_change<=fit.trace[i].armijo_bound;
+    check(sufficient,"every stable accepted iterate satisfies change-form Armijo");
+    // Noise-only differences, including tiny changes and large valid log variances.
+    std::vector<GaussianQuadratic::Mode> local_modes{{{0,0,1},1.,2.}};FF::Modes zero{0.},signal{.7};FF::GaussianFieldLikelihood like(local_modes,2.,3.,zero);
+    for(double dn:{1e-12,-1e-12,.2,-.2,2.,-2.}){const long double expected=.49L*3*std::expm1(-(long double)dn)+(long double)dn;
+        check(std::abs(like.difference(signal,dn,signal,0.)-expected)<1e-14,"stable Gaussian difference includes noise normalization and variance");}
+    check(std::abs(like.difference(zero,700,zero,-700)-1400.L)<1e-12,"large valid noise changes avoid overflow ratios");
+    rejected=false;try{like.difference(zero,710,zero,0);}catch(const FF::UnrepresentableState&){rejected=true;}check(rejected,"unrepresentable stable noise variance rejects");
+    // Joint white/parameter changes check scalar priors once across ranks. Use
+    // moderate data so ordinary target differences remain an independent check.
+    FF::Modes ordinary=data;if(FML::ThisTask==0)ordinary.back()=.3;FF::BasicPosterior<GaussianQuadratic> normal(m,FF::GaussianFieldLikelihood(modes,2.,1.,ordinary));
+    const auto ref=normal.value_reference(base,p,w);auto p2=p;p2[0]+=.001;p2[1]+=.002;const auto joint=normal.value_change(trial,p2,w,base,ref);
+    check(std::abs(joint.change-(normal.value(trial,p2,w)-normal.value(base,p,w)))<1e-10,"joint stable change includes replicated scalar priors exactly once");
+    const auto reverse=normal.value_reference(trial,p2,w);
+    check(std::abs(joint.change+normal.value_change(base,p,w,trial,reverse).change)<1e-12,"joint stable change is antisymmetric");
+    GaussianQuadratic uniform;uniform.spec[0].prior=FF::Prior::Uniform;
+    FF::BasicPosterior<GaussianQuadratic> uniform_post(uniform,FF::GaussianFieldLikelihood(uniform.modes(),2.,1.,ordinary));auto uw=uniform.workspace();
+    const auto ur=uniform_post.value_reference(base,p,uw);const auto uc=uniform_post.value_change(trial,p2,uw,base,ur);
+    check(std::abs(uc.change-(uniform_post.value(trial,p2,uw)-uniform_post.value(base,p,uw)))<1e-10,"uniform scalar prior contributes zero change");
+#ifdef USE_MPI
+    if(FML::NTasks>1){o.stable_objective_changes=FML::ThisTask!=0;rejected=false;try{FF::map(normal,base,p,o);}catch(const std::invalid_argument&){rejected=true;}check(rejected,"inconsistent stable comparison options reject collectively");}
+#endif
+}
 static void quadratic() {
     Quadratic m;FF::BasicPosterior<Quadratic,QuadraticLikelihood> p(m,QuadraticLikelihood{&m});
     Field s(m.cells(),.1);std::vector<double> theta{.2,-.1};auto w=m.workspace();Field g;std::vector<double> gp;
@@ -91,6 +143,9 @@ static void quadratic() {
     options.algorithm=FF::MAPAlgorithm::LBFGS;options.max_line_search=40;options.max_iterations=8;options.history=3;m.nonconvex=true;
     const auto nonconvex=FF::map(p,s,theta,options);check(nonconvex.curvature_skips>0 && nonconvex.fit.potential<u,"negative curvature is skipped safely");
     options.history=0;bool rejected=false;try{FF::map(p,s,theta,options);}catch(const std::invalid_argument&){rejected=true;}check(rejected,"invalid L-BFGS history rejects collectively");
+    {auto unsupported=FF::MAPOptions{};unsupported.stable_objective_changes=true;bool caught=false;
+     try{FF::map(p,s,theta,unsupported);}catch(const std::invalid_argument&){caught=true;}
+     check(caught,"unsupported likelihood rejects explicit stable comparisons");}
 #ifdef USE_MPI
     if(FML::NTasks>1){options.history=FML::ThisTask==0?2:3;rejected=false;try{FF::map(p,s,theta,options);}catch(const std::invalid_argument&){rejected=true;}check(rejected,"inconsistent rank options reject collectively");}
 #endif
@@ -113,7 +168,7 @@ template<class Grid> static void particle_mesh(const FML::Domain & domain) {
     const auto exact=FF::map(prior,s,theta,o);
     check(exact.fit.status==FF::MAPStatus::Converged && exact.fit.gradient_norm<o.tolerance,"real PM null response reaches the exact prior optimum");
 }
-int main(int argc,char **argv){FML::FMLSetup::init(&argc,&argv);quadratic();
+int main(int argc,char **argv){FML::FMLSetup::init(&argc,&argv);quadratic();stable_changes();
     auto slab=FML::Domain::uniform_slab(FML::NTasks);FML::set_domain(slab);particle_mesh<FML::GRID::FFTWGrid<3>>(slab);
 #ifdef USE_MPI
     auto pencil=FML::Domain::uniform_pencil(FML::NTasks==4?2:FML::NTasks,FML::NTasks==4?2:1);FML::set_domain(pencil);particle_mesh<FML::GRID::PencilGrid<3>>(pencil);

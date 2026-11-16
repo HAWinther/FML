@@ -192,3 +192,58 @@ in companion headers. Bounded HMC and same-layout restart are implemented;
 forward/adjoint/posterior/restart checks. Broader calibration and full cosmological
 derivatives, 2LPT starts, COLA, RSD/tracer bias,
 changed-rank restarts and survey integration remain separate extensions.
+
+## Read-only trajectory observer
+
+`evolve_observed(white, parameters, workspace, callback)` invokes a local callback
+`callback(node_index, const Result&)` before deposition at each force/position
+node. Use `settings().scale_factors[node_index]` for its time; `Result::a` remains
+final-output metadata. Positions are current at the callback; momentum can be
+staggered, and density/diagnostics are not completed node outputs. All ranks participate; callbacks must not call collectives.
+Exceptions propagate collectively and invalidate the workspace. The default
+`evolve()` compiles out the observer and preserves its communication/arithmetic.
+See [stationarity diagnostics](pm_stationarity_validation/README.md).
+
+## Optional TSC assignment
+
+`PMSettings::assignment` defaults to `PMAssignment::CIC`. Select the quadratic
+B-spline for both force deposition/gather and the final matter density with:
+
+```cpp
+PMSettings settings;
+settings.assignment = PMAssignment::TSC;
+settings.force_window = PMForceWindow::TSCCompensated; // or None
+```
+
+In one mesh coordinate, let `j=floor(u+1/2)`, `t=u-j`. The weights on
+`j-1,j,j+1` are `(1/2)(1/2-t)^2`, `3/4-t^2`, `(1/2)(1/2+t)^2`.
+Their derivatives with respect to box-fraction positions are mesh size times
+`t-1/2`, `-2t`, `t+1/2`. The 3D stencil is their tensor product over 27 periodic
+nodes. Weight and first derivative remain continuous across half-cell support
+changes, including periodic wrapping. Second derivatives need not be continuous.
+All nodes, including zero-weight nodes, participate in sparse routing.
+
+The discrete adjoint uses the same stencil derivatives in source deposition,
+force gathering and final-density pullbacks. It retains checkpoint-budget replay
+and the original initial-field generator, time integrals and Fourier force law.
+`TSCCompensated` removes both TSC force windows: the product of `sinc^3` per
+assignment, squared for deposit plus gather. `CICCompensated` and TSC assignment
+are rejected together, as is the opposite mismatch. `None` is valid with either
+assignment. Compensation does not remove particle/grid aliasing.
+
+The reported density retains its selected assignment window. If
+`PMObservationSettings::reference_cic_mesh` is set, a TSC model uses the fixed
+coarse-CIC/fine-TSC Fourier response. With equal reference and force meshes this
+can amplify the raw TSC signal. Noise is added after that response; raw
+reconstruction fields remain unchanged by the response. A reference mesh is a
+window convention, not a new data layout or exact regridding/alias correction.
+
+TSC has a distinct PM checkpoint target identity, even at an indistinguishable
+zero saved state. Default CIC checkpoint identities and numerical paths remain
+unchanged. Assignment choices must agree across MPI ranks. Slab and pencil
+backends share the same sparse routing, with constant-size local stencil work;
+TSC visits 27 nodes rather than CIC's eight and costs more per force evaluation.
+
+See the [bounded matched-assignment experiment](pm_tsc_validation/README.md).
+This changes the discretized forward model and requires matched data/likelihood
+conventions; it is not a transparent optimization of a fixed CIC target.

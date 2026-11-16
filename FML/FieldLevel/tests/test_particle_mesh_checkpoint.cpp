@@ -56,9 +56,9 @@ static FML::MCMC::HMCOptions options(bool joint, bool dense=false) {
     o.adapt_step_size=joint;o.adapt_mass=joint && !dense;return o;
 }
 template<class Grid>
-void exercise(const FS::path & root,const std::string & phase,const FML::Domain & domain,bool dense=false, int force_window=0, int reference=0) {
+void exercise(const FS::path & root,const std::string & phase,const FML::Domain & domain,bool dense=false, int force_window=0, int reference=0, int assignment=2) {
     using Model=FF::PeriodicPMModelT<Grid>;
-    auto c=configuration();if(dense){c.mesh=8;c.density_mesh=4;c.likelihood_cutoff=9.;}if(dense&&reference)c.density_mesh=8;FF::PMObservationSettings observed;observed.reference_cic_mesh=reference;auto pm=settings();pm.force_window=static_cast<FF::PMForceWindow>(force_window);const auto prior=noise();
+    auto c=configuration();if(dense){c.mesh=8;c.density_mesh=4;c.likelihood_cutoff=9.;}if(dense&&reference)c.density_mesh=8;FF::PMObservationSettings observed;observed.reference_cic_mesh=reference;auto pm=settings();pm.assignment=static_cast<FF::PMAssignment>(assignment);pm.force_window=static_cast<FF::PMForceWindow>(force_window);const auto prior=noise();
     Model model(c,spectrum(),pm,prior,{2},domain,observed);auto work=model.workspace();const auto parameters=model.initial_parameters();
     const auto data=model.mock(model.white_noise(91),parameters,92,work);FF::BasicPosterior<Model> posterior(model,data);
     for(bool joint:{true,false}) {
@@ -109,8 +109,10 @@ void exercise(const FS::path & root,const std::string & phase,const FML::Domain 
             Model changed(config,std::move(power),std::move(physics),std::move(n),reverse,domain,observed);
             FF::BasicPosterior<Model> target(changed,data);reject(target,reason);
         };
-        auto window_pm=pm;window_pm.force_window=pm.force_window==FF::PMForceWindow::None?FF::PMForceWindow::CICCompensated:FF::PMForceWindow::None;
+        auto window_pm=pm;window_pm.force_window=pm.force_window==FF::PMForceWindow::None?(pm.assignment==FF::PMAssignment::TSC?FF::PMForceWindow::TSCCompensated:FF::PMForceWindow::CICCompensated):FF::PMForceWindow::None;
         fingerprint_reject(c,spectrum(),window_pm,prior,{2},"force-window convention");
+        auto assignment_pm=pm;assignment_pm.assignment=pm.assignment==FF::PMAssignment::CIC?FF::PMAssignment::TSC:FF::PMAssignment::CIC;assignment_pm.force_window=pm.force_window==FF::PMForceWindow::None?FF::PMForceWindow::None:(assignment_pm.assignment==FF::PMAssignment::TSC?FF::PMForceWindow::TSCCompensated:FF::PMForceWindow::CICCompensated);
+        fingerprint_reject(c,spectrum(),assignment_pm,prior,{2},"assignment convention");
         auto changed_pm=pm;changed_pm.background.omega_m=.31;fingerprint_reject(c,spectrum(),changed_pm,prior,{2},"background");
         changed_pm=pm;changed_pm.scale_factors[1]=.41;fingerprint_reject(c,spectrum(),changed_pm,prior,{2},"interior time node at fixed endpoints");
         changed_pm=pm;changed_pm.scale_factors={.2,.3,.4,.6};fingerprint_reject(c,spectrum(),changed_pm,prior,{2},"time-step count");
@@ -151,7 +153,7 @@ void exercise(const FS::path & root,const std::string & phase,const FML::Domain 
         const double u1=zero.evaluate(Field(model.cells(),0.),parameters,w1,g1,p1),u2=target.evaluate(Field(model.cells(),0.),parameters,w2,g2,p2);
         check(u1==u2 && g1==g2 && p1==p2,"zero-state background change is invisible to force/potential check");
         io.resume=true;check(FML::TESTS::throws([&]{FF::sample_checkpointed(target,{}, {},o,io,false);}),"explicit PM identity rejects background change at indistinguishable saved state");
-        auto window_pm=pm;window_pm.force_window=pm.force_window==FF::PMForceWindow::None?FF::PMForceWindow::CICCompensated:FF::PMForceWindow::None;
+        auto window_pm=pm;window_pm.force_window=pm.force_window==FF::PMForceWindow::None?(pm.assignment==FF::PMAssignment::TSC?FF::PMForceWindow::TSCCompensated:FF::PMForceWindow::CICCompensated):FF::PMForceWindow::None;
         Model window_model(c,spectrum(),window_pm,prior,{2},domain,observed);
         FF::BasicPosterior<Model> window_target(window_model,FF::Modes(window_model.modes().size(),0.));
         auto window_work=window_model.workspace();Field wg;std::vector<double> wp;
@@ -159,6 +161,15 @@ void exercise(const FS::path & root,const std::string & phase,const FML::Domain 
         check(wu==u1 && wg==g1 && wp==p1,"force window is invisible at zero saved state");
         check(CP::identity(window_target,io.problem_id)!=CP::identity(zero,io.problem_id),"force window changes identity at indistinguishable saved state");
         check(FML::TESTS::throws([&]{FF::sample_checkpointed(window_target,{}, {},o,io,false);}),"force window rejects zero-state checkpoint");
+        auto other_assignment=pm;other_assignment.assignment=pm.assignment==FF::PMAssignment::CIC?FF::PMAssignment::TSC:FF::PMAssignment::CIC;
+        other_assignment.force_window=pm.force_window==FF::PMForceWindow::None?FF::PMForceWindow::None:(other_assignment.assignment==FF::PMAssignment::TSC?FF::PMForceWindow::TSCCompensated:FF::PMForceWindow::CICCompensated);
+        Model assignment_model(c,spectrum(),other_assignment,prior,{2},domain,observed);
+        FF::BasicPosterior<Model> assignment_target(assignment_model,FF::Modes(assignment_model.modes().size(),0.));
+        auto assignment_work=assignment_model.workspace();Field ag;std::vector<double> ap;
+        const double au=assignment_target.evaluate(Field(model.cells(),0.),parameters,assignment_work,ag,ap);
+        check(au==u1 && ag==g1 && ap==p1,"assignment change is invisible at zero saved state");
+        check(CP::identity(assignment_target,io.problem_id)!=CP::identity(zero,io.problem_id),"assignment changes explicit identity at indistinguishable saved state");
+        check(FML::TESTS::throws([&]{FF::sample_checkpointed(assignment_target,{}, {},o,io,false);}),"assignment rejects zero-state checkpoint");
         auto altered_response=observed;
         altered_response.response.multiplier.assign(model.modes().size(),.8);
         Model response_model(c,spectrum(),pm,prior,{2},domain,altered_response);
@@ -193,16 +204,16 @@ static std::vector<double> edges(int parts,bool alternate) {
 int main(int argc,char ** argv) {
     FML::FMLSetup::init(&argc,&argv);
     try {
-        std::string directory,phase,backend;int alternate=0,dense=0,force_window=0,reference=0;
-        FML::COMMUNICATION::collective_try([&]{if(argc<4 || argc>8)throw std::invalid_argument("test_particle_mesh_checkpoint DIRECTORY prepare|resume|reject slab|pencil [alternate] [dense] [force_window] [reference_cic_mesh]");directory=argv[1];phase=argv[2];backend=argv[3];if(argc>=5)alternate=std::stoi(argv[4]);if(argc>=6)dense=std::stoi(argv[5]);if(argc>=7)force_window=std::stoi(argv[6]);if(argc==8)reference=std::stoi(argv[7]);},"PM checkpoint test input");
-        CP::same_string(directory);CP::same_string(phase);CP::same_string(backend);CP::same_string(std::to_string(alternate));CP::same_string(std::to_string(dense));CP::same_string(std::to_string(force_window));CP::same_string(std::to_string(reference));
+        std::string directory,phase,backend;int alternate=0,dense=0,force_window=0,reference=0,assignment=2;
+        FML::COMMUNICATION::collective_try([&]{if(argc<4 || argc>9)throw std::invalid_argument("test_particle_mesh_checkpoint DIRECTORY prepare|resume|reject slab|pencil [alternate] [dense] [force_window] [reference_cic_mesh] [assignment]");directory=argv[1];phase=argv[2];backend=argv[3];if(argc>=5)alternate=std::stoi(argv[4]);if(argc>=6)dense=std::stoi(argv[5]);if(argc>=7)force_window=std::stoi(argv[6]);if(argc>=8)reference=std::stoi(argv[7]);if(argc==9)assignment=std::stoi(argv[8]);},"PM checkpoint test input");
+        CP::same_string(directory);CP::same_string(phase);CP::same_string(backend);CP::same_string(std::to_string(alternate));CP::same_string(std::to_string(dense));CP::same_string(std::to_string(force_window));CP::same_string(std::to_string(reference));CP::same_string(std::to_string(assignment));
         FML::COMMUNICATION::collective_try([&]{if(FML::ThisTask==0)FS::create_directories(directory);},"PM test directory");
-        if(backend=="slab")exercise<FML::GRID::FFTWGrid<3>>(directory,phase,FML::domain,dense!=0,force_window,reference);
+        if(backend=="slab")exercise<FML::GRID::FFTWGrid<3>>(directory,phase,FML::domain,dense!=0,force_window,reference,assignment);
 #ifdef USE_MPI
         else if(backend=="pencil") {
             int dims[2]={0,0};MPI_Dims_create(FML::NTasks,2,dims);if(alternate==2){dims[0]=FML::NTasks;dims[1]=1;}
             const auto domain=FML::Domain::pencil(edges(dims[0],alternate!=0),edges(dims[1],alternate!=0));
-            exercise<FML::GRID::PencilGrid<3>>(directory,phase,domain,dense!=0,force_window,reference);
+            exercise<FML::GRID::PencilGrid<3>>(directory,phase,domain,dense!=0,force_window,reference,assignment);
         }
 #endif
         else throw std::invalid_argument("Unsupported backend");

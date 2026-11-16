@@ -1,0 +1,2 @@
+n,m,steps,seed,power,final,active,potential,density_rms,checkpoint_bytes,force_evaluations
+32,16,16,91,0.002,1,122,-989.27111145338472,0.43111117674835464,1966080,128

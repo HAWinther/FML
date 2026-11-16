@@ -49,9 +49,9 @@ static Field global_modes(const Model & m, const FF::Modes & local) {
 struct Summary { Field prediction, data, gradient, scalar, fit, reconstruction; double potential{}, fit_potential{}; int status{}; };
 template <class Grid>
 static Summary exercise(const FML::Domain & domain, const std::string & label, bool recovery,
-                        int n = 4, int force = 8, std::ostream * table = nullptr, std::ostream * fields = nullptr, FF::PMForceWindow window = FF::PMForceWindow::None) {
+                        int n = 4, int force = 8, std::ostream * table = nullptr, std::ostream * fields = nullptr, FF::PMForceWindow window = FF::PMForceWindow::None, FF::PMAssignment assignment = FF::PMAssignment::CIC) {
     using Model = FF::PeriodicPMModelT<Grid>;
-    auto options = settings(); options.force_window = window;
+    auto options = settings(); options.force_window = window; options.assignment = assignment;
     Model m(configuration(n, force), spectrum(), options, noise(), {3}, domain);
     auto w = m.workspace(); auto p = m.initial_parameters(); auto truth = m.white_noise(91);
     auto white = m.white_noise(93); for (auto & x : white) x *= .2;
@@ -187,6 +187,7 @@ int main(int argc, char ** argv) {
     const auto baseline = exercise<FML::GRID::FFTWGrid<3>>(slab, "slab", true, 4, 8, &table, &fields);
     const auto dense = exercise<FML::GRID::FFTWGrid<3>>(slab, "dense-slab", false, 8, 4, &table);
     const auto compensated = exercise<FML::GRID::FFTWGrid<3>>(slab, "compensated-slab", false, 8, 4, &table, nullptr, FF::PMForceWindow::CICCompensated);
+    const auto tsc = exercise<FML::GRID::FFTWGrid<3>>(slab, "TSC-compensated", false, 8, 4, &table, nullptr, FF::PMForceWindow::TSCCompensated, FF::PMAssignment::TSC);
     check(FML::TESTS::throws([&] { auto bad = noise(); bad.sigma = 0; FF::PeriodicPMModel invalid(configuration(), spectrum(), settings(), bad); }),
           "invalid noise prior rejected");
 #ifdef USE_MPI
@@ -195,6 +196,7 @@ int main(int argc, char ** argv) {
     compare(baseline, exercise<FML::GRID::PencilGrid<3>>(pencil, "pencil", true, 4, 8, &table, &fields), "pencil", true);
     compare(dense, exercise<FML::GRID::PencilGrid<3>>(pencil, "dense-pencil", false, 8, 4, &table), "dense-pencil", false);
     compare(compensated, exercise<FML::GRID::PencilGrid<3>>(pencil, "compensated-pencil", false, 8, 4, &table, nullptr, FF::PMForceWindow::CICCompensated), "compensated-pencil", false);
+    compare(tsc, exercise<FML::GRID::PencilGrid<3>>(pencil, "TSC-pencil", false, 8, 4, &table, nullptr, FF::PMForceWindow::TSCCompensated, FF::PMAssignment::TSC), "TSC-pencil", false);
     if (FML::NTasks == 4) {
         exercise<FML::GRID::PencilGrid<3>>(pencil, "unequal-N10", false, 10, 20, &table);
     }

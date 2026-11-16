@@ -69,14 +69,15 @@ struct Summary { Field gradient, spectrum; double objective{}, directional_error
 template <class Grid>
 static Summary exercise(const FML::Domain & domain, const std::string & label,
                         int n = 8, int nf = 16, double om = .3, int steps = 8, bool detailed = true,
-                        std::ostream * table = nullptr, FF::PMForceWindow window = FF::PMForceWindow::None) {
-    auto options = settings(om, steps); options.force_window = window;
+                        std::ostream * table = nullptr, FF::PMForceWindow window = FF::PMForceWindow::None, FF::PMAssignment assignment = FF::PMAssignment::CIC) {
+    auto options = settings(om, steps); options.force_window = window; options.assignment = assignment;
     FF::ParticleMeshForwardT<Grid> m(configuration(n, nf), spectrum(), options, domain);
     FF::ParticleMeshAdjointT<Grid> adjoint(m);
     auto w = m.workspace(); auto s = m.white_noise(91); for (auto & x : s) x *= .7;
     auto theta = m.initial_parameters();
     check(FML::TESTS::throws([&] { adjoint.pullback({}, w); }), label + " adjoint rejects missing forward");
     const auto & r = m.evolve(s, theta, w);
+    for (const auto & node : r.diagnostics) check(std::abs(node.mass_error) < 2e-12, label + " assignment conserves mass");
     auto c = cotangent(m.layout(), r.density_layout);
     const auto stored_density = r.matter_density, stored_initial = r.initial_density;
     const auto stored_position = r.displacement, stored_momentum = r.momentum;
@@ -188,9 +189,13 @@ int main(int argc, char ** argv) {
     if (argc > 1 && FML::ThisTask == 0) {
         table.open(argv[1]); table << std::setprecision(17) << "backend,channel,h,analytic,numeric,relative_error\n";
     }
+    for(int invalid:{0,4})check(FML::TESTS::throws([&]{auto s=settings();s.assignment=static_cast<FF::PMAssignment>(invalid);FF::ParticleMeshForward bad(configuration(),spectrum(),s);}),"invalid PM assignment rejected");
+    check(FML::TESTS::throws([&]{auto s=settings();s.assignment=FF::PMAssignment::TSC;s.force_window=FF::PMForceWindow::CICCompensated;FF::ParticleMeshForward bad(configuration(),spectrum(),s);}),"mismatched force compensation rejected");
     auto baseline = exercise<FML::GRID::FFTWGrid<3>>(slab, "slab", 8, 16, .3, 8, true, &table);
     const auto dense = exercise<FML::GRID::FFTWGrid<3>>(slab, "dense-slab", 8, 4, .3, 4, true, &table);
     const auto compensated = exercise<FML::GRID::FFTWGrid<3>>(slab, "CIC-compensated", 8, 4, .3, 4, true, &table, FF::PMForceWindow::CICCompensated);
+    const auto tsc = exercise<FML::GRID::FFTWGrid<3>>(slab, "TSC", 8, 4, .3, 4, true, &table, FF::PMForceWindow::None, FF::PMAssignment::TSC);
+    const auto tsc_comp = exercise<FML::GRID::FFTWGrid<3>>(slab, "TSC-compensated", 8, 4, .3, 4, true, &table, FF::PMForceWindow::TSCCompensated, FF::PMAssignment::TSC);
     exercise<FML::GRID::FFTWGrid<3>>(slab, "EdS-small", 4, 4, 1., 4, false, &table);
 #ifdef USE_MPI
     for (auto shape : {std::array<int, 2>{FML::NTasks, 1}, {1, FML::NTasks}}) {
@@ -200,16 +205,22 @@ int main(int argc, char ** argv) {
         compare(baseline, value, "pencil");
         if (shape[1] <= 3)
             compare(compensated, exercise<FML::GRID::PencilGrid<3>>(domain, "compensated-pencil", 8, 4, .3, 4, false, &table, FF::PMForceWindow::CICCompensated), "compensated-pencil");
+        if (shape[1] <= 3) {
+            compare(tsc, exercise<FML::GRID::PencilGrid<3>>(domain, "TSC-pencil", 8, 4, .3, 4, false, &table, FF::PMForceWindow::None, FF::PMAssignment::TSC), "TSC-pencil");
+            compare(tsc_comp, exercise<FML::GRID::PencilGrid<3>>(domain, "TSC-compensated-pencil", 8, 4, .3, 4, false, &table, FF::PMForceWindow::TSCCompensated, FF::PMAssignment::TSC), "TSC-compensated-pencil");
+        }
         if (shape[1] <= 3)
             compare(dense, exercise<FML::GRID::PencilGrid<3>>(domain, "dense-pencil", 8, 4, .3, 4, false, &table), "dense-pencil");
     }
     if (FML::NTasks == 4) {
         const auto domain = FML::Domain::uniform_pencil(2, 2); FML::set_domain(domain);
         compare(baseline, exercise<FML::GRID::PencilGrid<3>>(domain, "2x2", 8, 16, .3, 8, false, &table), "2x2");
+        compare(tsc_comp, exercise<FML::GRID::PencilGrid<3>>(domain, "TSC-2x2", 8, 4, .3, 4, false, &table, FF::PMForceWindow::TSCCompensated, FF::PMAssignment::TSC), "TSC-2x2");
         exercise<FML::GRID::PencilGrid<3>>(domain, "unequal-N10", 10, 20, .3, 4, false, &table);
     }
     if (FML::NTasks > 1) {
         FML::set_domain(slab);
+        check(FML::TESTS::throws([&]{auto s=settings();s.assignment=FML::ThisTask?FF::PMAssignment::TSC:FF::PMAssignment::CIC;FF::ParticleMeshForward bad(configuration(),spectrum(),s);}),"rank-dependent assignment rejected collectively");
         FF::ParticleMeshForward m(configuration(), spectrum(), settings()); auto w = m.workspace();
         m.evolve(m.white_noise(1), m.initial_parameters(), w);
         FF::ParticleMeshAdjoint a(m);

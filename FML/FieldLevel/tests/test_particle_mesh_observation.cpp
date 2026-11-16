@@ -29,12 +29,20 @@ template<class Model> static double value(const Model & m,const FF::BasicPosteri
     double u=m.sum(posterior.likelihood().evaluate(pred,p.back(),unused,ng)+.5*dot(white,white));
     for(size_t j=0;j<p.size();++j)u+=m.parameters()[j].penalty(p[j]);return u;
 }
+static double quadratic(int k,int m) {
+    double sum=0;const int panels=256;
+    for(int section=0;section<2;++section) {
+        const double lo=section?.5:0.,hi=section?1.5:.5,step=(hi-lo)/panels;
+        for(int j=0;j<=panels;++j){double u=lo+j*step,w=section?.5*(1.5-u)*(1.5-u):.75-u*u;
+            sum+=step/3*(j==0||j==panels?1:(j%2?4:2))*2*w*std::cos(2*M_PI*k*u/m);}
+    }return sum;
+}
 struct Snapshot {Field values;};
-template<class Grid> static Snapshot exercise(const FML::Domain & domain,const std::string & label) {
+template<class Grid> static Snapshot exercise(const FML::Domain & domain,const std::string & label, FF::PMAssignment assignment=FF::PMAssignment::CIC) {
     using Model=FF::PeriodicPMModelT<Grid>;auto config=configuration();Snapshot result;
     for(int kind=1;kind<=4;++kind) {
-        FF::PMSettings pm;pm.scale_factors={.2,.35,.5};
-        if(kind>=3)pm.force_window=FF::PMForceWindow::CICCompensated;
+        FF::PMSettings pm;pm.assignment=assignment;pm.scale_factors={.2,.35,.5};
+        if(kind>=3)pm.force_window=assignment==FF::PMAssignment::TSC?FF::PMForceWindow::TSCCompensated:FF::PMForceWindow::CICCompensated;
         Model raw(config,spectrum(),pm,noise(),{2},domain);auto rw=raw.workspace();auto p=raw.initial_parameters();
         auto white=raw.white_noise(93);for(auto & x:white)x*=.3;
         auto truth=raw.white_noise(91);for(auto & x:truth)x*=.7;
@@ -55,12 +63,12 @@ template<class Grid> static Snapshot exercise(const FML::Domain & domain,const s
         bool correct=true;double err=0;
         for(size_t j=0;j<prediction.size();++j) {
             double expected=(kind==1||kind==3||kind==4)?obs.response.multiplier[j]:1.;
-            if(obs.reference_cic_mesh)for(int k:model.modes()[j].n)expected*=triangle(k,6)/triangle(k,8);
+            if(obs.reference_cic_mesh)for(int k:model.modes()[j].n)expected*=triangle(k,6)/(assignment==FF::PMAssignment::TSC?quadratic(k,8):triangle(k,8));
             err=std::max(err,std::abs(expected-model.observation_response()[j]));
             correct&=std::abs(prediction[j]-baseline[j]*model.observation_response()[j])<2e-13;
             correct&=std::abs((same_mock[j]-prediction[j])-(raw_mock[j]-baseline[j]))<2e-13;
         }
-        check(model.maximum(err)<1e-9,label+" response matches independent triangular-kernel quadrature");
+        check(model.maximum(err)<1e-9,label+" response matches independent assignment-kernel quadrature");
         check(correct,label+" fixed response changes signal and leaves added noise unchanged");
         check(model.observation_response_configured(),label+" configured response retained on ranks with no modes");
         const auto & raw_fields=model.reconstruction(work).matter_density;double field_error=0;
@@ -132,11 +140,14 @@ template<class Grid> static Snapshot exercise(const FML::Domain & domain,const s
 int main(int argc,char ** argv) {
     FML::FMLSetup::init(&argc,&argv);const auto slab=FML::Domain::uniform_slab(FML::NTasks);FML::set_domain(slab);
     const auto baseline=exercise<FML::GRID::FFTWGrid<3>>(slab,"slab");
+    const auto tsc=exercise<FML::GRID::FFTWGrid<3>>(slab,"TSC-slab",FF::PMAssignment::TSC);
 #ifdef USE_MPI
     int px=FML::NTasks==4?2:FML::NTasks,py=FML::NTasks/px;
     const auto pencil=FML::Domain::uniform_pencil(px,py);FML::set_domain(pencil);
     const auto other=exercise<FML::GRID::PencilGrid<3>>(pencil,"pencil");double error=0;
     for(size_t j=0;j<baseline.values.size();++j)error=std::max(error,std::abs(baseline.values[j]-other.values[j]));
+    const auto tsc_other=exercise<FML::GRID::PencilGrid<3>>(pencil,"TSC-pencil",FF::PMAssignment::TSC);
+    for(size_t j=0;j<tsc.values.size();++j)error=std::max(error,std::abs(tsc.values[j]-tsc_other.values[j]));
     check(error<2e-9,"slab/pencil response predictions, posterior and gradients agree");
 #endif
     return FML::TESTS::summary("PM observation response");

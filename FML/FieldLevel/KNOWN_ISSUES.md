@@ -282,3 +282,55 @@ L-BFGS status is LineSearchFailed, raw gradient 0.000116038 at
 83 iterations with tolerance2e-5. Its recovery/error and work/memory
 measurements are reported separately. Broader refinement remains deferred, and
 posterior calibration/PM survey/tracer/RSD work remains open.
+
+## Stalled PM reconstruction diagnosis (16 November 2026)
+
+[Read-only stationarity probes](pm_stationarity_validation/RESULTS.md) reproduce
+iteration83 and capture its full state. Fresh/reused caches and replay budgets
+0/1/4/8 give identical gradients/values; three stencil-preserving directional
+checks pass. A particle lies3.19e-10 force cells from a final CIC face. Larger
+trials cross stencils, while smaller smooth-branch decreases around2e-12 are
+masked by ordinary objective evaluation/subtraction errors around1e-11. The
+public value/full base targets agree; no cache/adjoint discrepancy was observed
+in these tests. Solver and assignment are unchanged. Next test stable objective
+change comparisons for Armijo before another full reconstruction. Broader
+refinement remains deferred; convergence and general calibration remain open.
+
+## Stable Armijo comparisons (16 November 2026)
+
+`BasicPosterior` gains an opt-in stable change API for likelihoods implementing
+local differences; Gaussian variance/normalization and field/scalar priors are
+included. Defaults and ordinary target evaluations remain unchanged.
+[The frozen-state/full-fit check](pm_stable_armijo_validation/RESULTS.md) accepts
+the diagnosed hidden descent. Stable L-BFGS uses 594 value trials versus
+1311, but ends at iteration 98 with raw gradient 0.00013902
+and status LineSearchFailed: convergence remains unresolved. Stable GD
+retains its 24-step coefficients bitwise. MPI/sanitizer and default-compatibility
+checks pass. Broader refinement/calibration remains deferred; next inspect CIC
+regularity/forward precision at the new endpoint before changing assignment.
+
+## Stable endpoint regularity diagnostic (16 November 2026)
+
+[Iteration-98 probes](pm_stable_stationarity_validation/RESULTS.md) reproduce the
+stable fit bitwise. A final-node CIC coordinate lies 7.47e-13 grid cells from a
+face. One-sided negative-gradient slopes differ across two stencil axes: the
+branch-preserving side agrees with the adjoint, while the nominal descent side
+increases the target. All 40 reconstructed search trials have positive stable
+changes; ordinary subtraction would accept 17 tiny apparent improvements.
+Fresh/reused caches and checkpoint budgets agree exactly. Two central derivative
+gates remain unresolved because no eligible same-stencil pairs exist; the report
+retains passed=false and consistency_passed=true. Convergence remains open.
+Next consider opt-in TSC with matched deposit/gather derivatives and adjoint,
+preserving CIC defaults. No assignment or stopping-rule change was made. Broader
+refinement/calibration remains deferred.
+
+## Opt-in TSC PM assignment (16 November 2026)
+
+[Matched-assignment reconstruction](pm_tsc_validation/RESULTS.md) converges in
+16 iterations with raw gradient 5.6502e-06 at the unchanged
+2e-5 tolerance. TSC covers force deposition/gather, reported density, matching
+adjoint and optional force compensation. CIC defaults and checkpoint identities
+remain compatible. Targeted serial/MPI/pencil/sanitizer and checkpoint checks pass.
+The matched TSC reference changes the discrete target; this is one finite
+realization, not general convergence or posterior calibration. Broader refinement
+remains deferred. Stable objective comparisons remain opt-in.

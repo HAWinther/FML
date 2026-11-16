@@ -26,12 +26,13 @@ namespace FML::FIELDLEVEL::FRAMEWORK::CHECKPOINT {
             // Opaque spectrum callbacks and external physics still require the
             // caller's explicit versioned CheckpointOptions::problem_id.
             const auto & settings = model.dynamics().settings();
-            const bool compensated = settings.force_window == PMForceWindow::CICCompensated;
+            const bool compensated = settings.force_window != PMForceWindow::None;
+            const bool tsc = settings.assignment == PMAssignment::TSC;
             const bool observed = model.observation_response_configured();
             // Preserve tag-1 bytes for the unchanged default numerical law.
-            e.text(observed ? "FML periodic PM matter Fourier target 3" :
+            e.text(tsc ? "FML periodic PM matter Fourier target 4" : observed ? "FML periodic PM matter Fourier target 3" :
                    compensated ? "FML periodic PM matter Fourier target 2" : "FML periodic PM matter Fourier target 1");
-            if (observed || compensated) e.integer(static_cast<int>(settings.force_window));
+            if (observed || compensated || tsc) e.integer(static_cast<int>(settings.force_window));
 #ifdef USE_MPI
             e.integer(1);
 #else
@@ -43,8 +44,11 @@ namespace FML::FIELDLEVEL::FRAMEWORK::CHECKPOINT {
             e.integer(0);
 #endif
             e.text("Flat matter+Lambda; x/L; p=a^2 dx/d(H0 t); growing spectrum at a=1");
-            e.text("ZA growing lattice IC; equal masses; CIC deposition/gather; density contrast");
-            e.text(compensated ? "Continuous i*k/k^2 force; DC/component Nyquist zero; inverse squared CIC window" :
+            e.text(tsc ? "ZA growing lattice IC; equal masses; TSC deposition/gather; density contrast" :
+                         "ZA growing lattice IC; equal masses; CIC deposition/gather; density contrast");
+            e.text(tsc ? (compensated ? "Continuous i*k/k^2 force; DC/component Nyquist zero; inverse squared TSC window" :
+                                    "Continuous i*k/k^2 force; DC/component Nyquist zero; no TSC deconvolution") :
+                   compensated ? "Continuous i*k/k^2 force; DC/component Nyquist zero; inverse squared CIC window" :
                                "Continuous i*k/k^2 force; DC/component Nyquist zero; no CIC deconvolution");
             e.text("KDK; arithmetic scale-factor midpoint; Simpson 128 background integrals");
             e.text("Euclidean discrete adjoint; binary midpoint/prefix replay; identity white metric");

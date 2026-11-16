@@ -8,7 +8,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
     // a window convention only, not a new data layout or a spatial regridding.
     struct PMObservationSettings {
         FourierResponse response;
-        int reference_cic_mesh{0}; // 0: raw force-grid CIC window; otherwise smooth to this coarser window.
+        int reference_cic_mesh{0}; // 0: raw selected assignment window; otherwise map to this coarser CIC window.
     };
     // Periodic matter-only Fourier adapter. Particle/white layout is on mesh N;
     // observation modes and grid indices are on density_mesh M, which may differ.
@@ -110,6 +110,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                         const double x = M_PI * k / reference_cic_mesh_, y = M_PI * k / c.density_mesh;
                         coarse *= std::pow(std::sin(x) / x, 2);
                         fine *= std::pow(std::sin(y) / y, 2);
+                        if (dynamics_.settings().assignment == PMAssignment::TSC) fine *= std::sin(y) / y;
                     }
                     observation_response_[i] *= coarse / fine;
                 }

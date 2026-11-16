@@ -1,0 +1,2 @@
+n,m,steps,seed,power,final,active,potential,density_rms,diagnostic_nodes,max_mass_error,max_mean_momentum
+128,64,32,91,0.002,1,122,-989.24812031967599,0.54634891885523829,33,6.4392935428259079e-15,1.9212062496443139e-16

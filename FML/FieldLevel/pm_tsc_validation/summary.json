@@ -1,0 +1,123 @@
+{
+  "passed": true,
+  "consistency_passed": true,
+  "checks": [
+    {
+      "check": "reconstruction analysis completed",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "physical and data consistency",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "coefficient recovery and correlation",
+      "passed": true,
+      "kind": "recovery"
+    },
+    {
+      "check": "actual predictions and pullbacks match optimizer counters",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "TSC reaches unchanged convergence tolerance",
+      "passed": true,
+      "kind": "convergence"
+    },
+    {
+      "check": "all accepted stable changes satisfy Armijo",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "complete finite truth-point derivative scan",
+      "passed": true,
+      "kind": "consistency"
+    },
+    {
+      "check": "TSC truth directional derivative 0",
+      "passed": true,
+      "kind": "derivative"
+    },
+    {
+      "check": "TSC truth directional derivative 1",
+      "passed": true,
+      "kind": "derivative"
+    }
+  ],
+  "row": {
+    "budget": 128,
+    "iterations": 16,
+    "status": 0,
+    "potential": -1050.5692655941932,
+    "initial_potential": -63.68895509607442,
+    "raw_gradient": 5.6502016432813384e-06,
+    "projected_gradient": 0.0002879035352225869,
+    "relative_initial_error": 0.26839013306907206,
+    "correlation": 0.9646395706693298,
+    "residual_noise_units": 0.7834737210046542,
+    "initial_residual_noise_units": 2.9515119738790005,
+    "signal_error_noise_units": 0.6719839482497739,
+    "truth_discretization_noise_units": 0.006609213314056789,
+    "optimizer": 2.0,
+    "history": 5.0,
+    "seconds": 85.400533881,
+    "forwards": 54.0,
+    "pullbacks": 17.0,
+    "value_evaluations": 21.0,
+    "gradient_evaluations": 17.0,
+    "peak_history_pairs": 5.0,
+    "total_history_bytes": 2622080.0,
+    "sum_rank_peak_rss_bytes": 71487488.0,
+    "curvature_skips": 0.0,
+    "history_resets": 0.0,
+    "reference_evaluations": 16.0
+  },
+  "baseline": {
+    "budget": 128,
+    "iterations": 98,
+    "status": 2,
+    "potential": -1049.6324599322945,
+    "initial_potential": -64.31195948124582,
+    "raw_gradient": 0.00013902008166620516,
+    "projected_gradient": 0.004259045815063477,
+    "relative_initial_error": 0.2695540505505479,
+    "correlation": 0.9643360007033553,
+    "residual_noise_units": 0.7880842887425098,
+    "initial_residual_noise_units": 2.9506873284358615,
+    "signal_error_noise_units": 0.6785423296976358,
+    "truth_discretization_noise_units": 0.07036666714508767,
+    "optimizer": 2.0,
+    "history": 5.0,
+    "seconds": 297.752640103,
+    "forwards": 792.0,
+    "pullbacks": 99.0,
+    "value_evaluations": 594.0,
+    "gradient_evaluations": 99.0,
+    "peak_history_pairs": 5.0,
+    "total_history_bytes": 2622080.0,
+    "sum_rank_peak_rss_bytes": 69107712.0,
+    "curvature_skips": 0.0,
+    "history_resets": 0.0,
+    "reference_evaluations": 99.0
+  },
+  "derivatives": [
+    {
+      "probe": 0,
+      "best_tail_error": 7.052153234701307e-10
+    },
+    {
+      "probe": 1,
+      "best_tail_error": 1.7349225660980907e-09
+    }
+  ],
+  "limits": [
+    "One fixed-parameter realization; broader refinement/calibration remains deferred.",
+    "CIC and TSC use matched assignment-specific reference mocks: different discrete targets, same seeds and physical ICs.",
+    "N128/M64/32-step reference is finite, not a continuum solution.",
+    "Wall times are indicative under uncontrolled host activity."
+  ]
+}

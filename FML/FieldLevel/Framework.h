@@ -544,6 +544,30 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         const Modes & data() const { return data_; }
         const std::vector<double> & weights() const { return weights_; }
         double volume() const { return volume_; }
+        // Local mathematical target change, trial minus reference. Evaluate the
+        // small residual/noise changes directly, avoiding subtraction of full NLLs.
+        long double difference(const Modes & trial, double noise,
+                               const Modes & reference, double reference_noise) const {
+            if(trial.size()!=data_.size() || reference.size()!=data_.size())
+                throw std::invalid_argument("[FieldFramework] Likelihood difference dimension mismatch");
+            for(double n:{noise,reference_noise}) {
+                const double variance=std::exp(n)/volume_;
+                if(!(variance>0) || !std::isfinite(variance))
+                    throw UnrepresentableState("[FieldFramework] Unrepresentable difference variance");
+            }
+            const long double v=std::exp((long double)noise)/volume_,v0=std::exp((long double)reference_noise)/volume_;
+            const long double dn=(long double)noise-reference_noise;
+            long double result=0;
+            for(size_t i=0;i<data_.size();++i) if(weights_[i]!=0) {
+                const long double rr=(long double)reference[i].real()-data_[i].real(),ri=(long double)reference[i].imag()-data_[i].imag();
+                const long double dr=(long double)trial[i].real()-reference[i].real(),di=(long double)trial[i].imag()-reference[i].imag();
+                const long double chi0=(rr*rr+ri*ri)/v0;
+                const long double dc=std::abs(dn)<=1 ? (2*(rr*dr+ri*di)+dr*dr+di*di)/v+chi0*std::expm1(-dn) :
+                    ((rr+dr)*(rr+dr)+(ri+di)*(ri+di))/v-chi0;
+                result+=.5L*weights_[i]*(dc+dn);
+            }
+            return result;
+        }
         double evaluate(const Modes & prediction, double log_noise, Modes & g, double & noise_gradient) const {
             if (prediction.size() != data_.size())
                 throw std::invalid_argument("[FieldFramework] Likelihood prediction dimension mismatch");
@@ -581,6 +605,9 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         }
         static FML::MCMC::HMCExecution hmc(const Forward &) { return {}; }
     };
+    template<class Likelihood,class=void> struct HasLikelihoodDifference : std::false_type {};
+    template<class Likelihood> struct HasLikelihoodDifference<Likelihood,std::void_t<decltype(
+        std::declval<const Likelihood &>().difference(std::declval<const Modes &>(),double{},std::declval<const Modes &>(),double{}))>> : std::true_type {};
     // A forward model satisfying this interface can replace Model without changing the posterior or sampler.
     template <class Forward, class Likelihood = GaussianFieldLikelihood>
     class BasicPosterior {
@@ -611,6 +638,69 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             U = Execution<Forward>::sum(model_, U);
             for (size_t j = 0; j < p.size(); ++j) U += model_.parameters()[j].penalty(p[j]);
             return U;
+        }
+        static constexpr bool supports_stable_changes=HasLikelihoodDifference<Likelihood>::value;
+        struct ValueReference {
+          private:
+            friend class BasicPosterior;
+            const BasicPosterior * owner{};
+            Modes prediction;
+            std::vector<double> parameters;
+        };
+        struct ValueChange {double value{},change{};};
+        // The supplied base white field must remain consistent with this reference
+        // until value_change() returns. It is supplied separately to avoid copying
+        // another potentially large field into every reference.
+        template<class Work>
+        ValueReference value_reference(const Field & white,const std::vector<double> & p,Work & work) const {
+            if constexpr(!supports_stable_changes) {
+                throw std::invalid_argument("[FieldFramework] Likelihood has no stable difference interface");
+            } else {
+                Execution<Forward>::validate(model_,white,p);
+                if(Execution<Forward>::maximum(model_,model_.in_support(p)?0:1)!=0)
+                    throw std::invalid_argument("[FieldFramework] Reference outside support");
+                const auto & prediction=model_.predict(white,p,work);
+                ValueReference result;bool failed=false;
+                try {result.prediction=prediction;result.parameters=p;result.owner=this;}catch(...){failed=true;}
+                if(Execution<Forward>::maximum(model_,failed?1:0)!=0)
+                    throw std::runtime_error("[FieldFramework] Collective value-reference allocation failed");
+                return result;
+            }
+        }
+        template<class Work>
+        ValueChange value_change(const Field & white,const std::vector<double> & p,Work & work,
+                                 const Field & base_white,const ValueReference & reference) const {
+            if constexpr(!supports_stable_changes) {
+                throw std::invalid_argument("[FieldFramework] Likelihood has no stable difference interface");
+            } else {
+                if(Execution<Forward>::maximum(model_,reference.owner==this?0:1)!=0)
+                    throw std::invalid_argument("[FieldFramework] Foreign/empty value reference");
+                Execution<Forward>::validate(model_,base_white,reference.parameters);
+                Execution<Forward>::validate(model_,white,p);
+                if(!model_.in_support(p))return {HUGE_VAL,HUGE_VAL};
+                double U=0,unused=0;long double delta=0;
+                try {
+                    const auto & prediction=model_.predict(white,p,work);
+                    U=likelihood_.evaluate(prediction,p.back(),work.cotangent_buffer(),unused);
+                    delta=likelihood_.difference(prediction,p.back(),reference.prediction,reference.parameters.back());
+                }catch(const UnrepresentableState &){return {HUGE_VAL,HUGE_VAL};}
+                for(size_t i=0;i<white.size();++i) {
+                    U+=.5*white[i]*white[i];
+                    const long double dx=(long double)white[i]-base_white[i];
+                    delta+=(long double)base_white[i]*dx+.5L*dx*dx;
+                }
+                U=Execution<Forward>::sum(model_,U);
+                delta=Execution<Forward>::sum(model_,double(delta));
+                for(size_t j=0;j<p.size();++j) {
+                    const auto & prior=model_.parameters()[j];U+=prior.penalty(p[j]);
+                    if(prior.prior==Prior::Gaussian) {
+                        const long double dx=((long double)p[j]-reference.parameters[j])/prior.sigma;
+                        const long double x0=((long double)reference.parameters[j]-prior.mean)/prior.sigma;
+                        delta+=x0*dx+.5L*dx*dx;
+                    }
+                }
+                return {U,double(delta)};
+            }
         }
         template <class Work>
         double evaluate(const Field & white,

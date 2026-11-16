@@ -28,7 +28,9 @@ check(hashlib.sha256(data_path.read_bytes()).hexdigest()==plan['data_sha256'],'f
 check(dof==plan['observed'],'independent observed degrees')
 check(ref_meta['n']==128 and ref_meta['m']==64 and ref_meta['steps']==32,'reference resolution')
 check(ref_meta['max_mass_error']<1e-10 and ref_meta['max_mean_momentum']<1e-10,'reference conservation')
-check(data_path.read_text().splitlines()[0].endswith(',observation_cic,16'),'new mock declared observation space')
+assignment=plan.get('assignment',2)
+check(assignment in [2,3],'supported assignment in protocol')
+check(data_path.read_text().splitlines()[0].endswith(',observation_cic,16'+(',assignment_tsc' if assignment==3 else '')),'new mock declared observation space and assignment')
 check(np.all(np.isfinite(signal)) and np.max(abs(signal[~mask]))==0,'finite supported reference signal')
 rows=[];details={};prior_truth=None;prior_start=None;start_modes=None
 for budget in plan['budgets']:
@@ -40,7 +42,8 @@ for budget in plan['budgets']:
     check(np.max(abs(values(prefix,'initial')-values(ref,'initial')))<2e-12,f'matched physical ICs {budget}')
     check(np.max(abs(values(prefix,'initial')-np.sqrt(plan['power'])*truth))<2e-12,f'independent initial normalization {budget}')
     for owner in [ref,prefix]:
-        check(values(owner,'window',1)[0]==1 and values(owner,'observation',1)[0]==16,f'compensated force and common window {owner.name}')
+        check(values(owner,'window',1)[0]==plan.get('force_window',1) and values(owner,'observation',1)[0]==16,f'compensated force and common window {owner.name}')
+        if assignment==3:check(values(owner,'assignment',1)[0]==3,f'TSC assignment {owner.name}')
     if prior_truth is not None:
         check(np.array_equal(truth,prior_truth) and np.array_equal(start,prior_start) and np.array_equal(sm,start_modes),f'identical starts {budget}')
     prior_truth,prior_start,start_modes=truth,start,sm

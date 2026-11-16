@@ -2,6 +2,7 @@
 #define FML_FIELD_LEVEL_PARTICLE_MESH_H
 #include <FML/FieldLevel/DistributedLinear.h>
 #include <FML/FieldLevel/DistributedAssignment.h>
+#include <FML/FieldLevel/PMAssignment.h>
 
 namespace FML::FIELDLEVEL::FRAMEWORK {
     template <class GridType> class ParticleMeshAdjointT;
@@ -49,13 +50,14 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             }, std::log(a), std::log(b));
         }
     };
-    // Numerical force convention; compensation removes both CIC windows in
-    // the mesh force, not the CIC window in the reported density observable.
-    enum class PMForceWindow { None = 0, CICCompensated = 1 };
+    // Compensation removes the selected deposit and gather windows in the force,
+    // while the reported density retains its assignment window.
+    enum class PMForceWindow { None = 0, CICCompensated = 1, TSCCompensated = 2 };
     struct PMSettings {
         PMBackground background;
         std::vector<double> scale_factors{.05, .1, .2, .4, .7, 1.};
         PMForceWindow force_window{PMForceWindow::None};
+        PMAssignment assignment{PMAssignment::CIC};
     };
     struct PMDiagnostic {
         double a{}, mass_error{}, density_rms{};
@@ -129,6 +131,10 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         void stencil(const Result & r, size_t q, Visit visit) const {
             const int n = configuration().density_mesh;
             const auto x = r.position(q);
+            if (settings_.assignment == PMAssignment::TSC) {
+                DETAIL::tsc_stencil(n, x, [&](auto node, double weight, const auto &) { visit(node, weight); });
+                return;
+            }
             int base[3];
             double f[3];
             for (int d = 0; d < 3; ++d) {
@@ -157,14 +163,15 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         template <class Wave>
         double force_coefficient(const Wave & wave, double square, int component, bool transpose = false) const {
             double value = (transpose ? -wave[component] : wave[component]) / (2 * M_PI * square);
-            if (settings_.force_window == PMForceWindow::CICCompensated) {
-                // CIC deposit and gather each have product sinc(k_i dx/2)^2.
+            if (settings_.force_window != PMForceWindow::None) {
+                // Each deposit/gather window is product sinc^order, order 2 or 3.
                 // The real, even compensation preserves the skew-adjoint force.
                 double window = 1.;
                 for (int k : wave) if (k != 0) {
                     const double x = M_PI * k / configuration().density_mesh;
                     const double sinc = std::sin(x) / x;
                     window *= sinc * sinc;
+                    if (settings_.assignment == PMAssignment::TSC) window *= sinc;
                 }
                 value /= window * window;
             }
@@ -173,7 +180,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         void force(Workspace & w) const {
             w.density.fftw_r2c();
             // Same continuous i*k/k^2 kernel as NBody, without importing its
-            // unrelated GSL/ODE dependencies. Optional explicit CIC compensation. Each even
+            // unrelated GSL/ODE dependencies. Optional matched assignment compensation. Each even
             // Nyquist derivative component is zero, preserving Hermitian symmetry.
             for (int d = 0; d < 3; ++d) {
                 w.force[d].fill_fourier_grid(0.);
@@ -256,9 +263,13 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             const size_t n = size_t(initial.density_mesh);
             require(n <= Field().max_size() / n / n, "[Field PM] Force mesh storage overflow");
             linear_.controls({settings_.background.omega_m, double(settings_.scale_factors.size()),
-                              double(static_cast<int>(settings_.force_window))});
-            require(settings_.force_window == PMForceWindow::None || settings_.force_window == PMForceWindow::CICCompensated,
-                    "[Field PM] Unsupported force-window convention");
+                              double(static_cast<int>(settings_.force_window)), double(static_cast<int>(settings_.assignment))});
+            require(settings_.assignment == PMAssignment::CIC || settings_.assignment == PMAssignment::TSC,
+                    "[Field PM] Unsupported assignment");
+            require(settings_.force_window == PMForceWindow::None ||
+                        (settings_.force_window == PMForceWindow::CICCompensated && settings_.assignment == PMAssignment::CIC) ||
+                        (settings_.force_window == PMForceWindow::TSCCompensated && settings_.assignment == PMAssignment::TSC),
+                    "[Field PM] Force compensation must match assignment");
             require(settings_.background.omega_m > 0 && settings_.background.omega_m <= 1 &&
                         settings_.scale_factors.size() >= 2 && settings_.scale_factors.size() <= 100001,
                     "[Field PM] Requires 0 < Omega_m <= 1 and 2..100001 scale-factor nodes");
@@ -301,7 +312,16 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             auto p = linear_.initial_parameters(); p.resize(parameters_.size()); return p;
         }
         Workspace workspace() const { return Workspace(this); }
+        struct NoObserver {};
         const Result & evolve(const Field & white, const std::vector<double> & theta, Workspace & w) const {
+            return evolve_observed(white,theta,w,NoObserver{});
+        }
+        // Read-only local callback at each position/force node, before deposition.
+        // All ranks participate; callbacks must not call collectives. NoObserver
+        // compiles away, preserving the default arithmetic and communication path.
+        template<class Observer>
+        const Result & evolve_observed(const Field & white, const std::vector<double> & theta, Workspace & w,
+                                       const Observer & observer) const {
             require(w.owner == this, "[Field PM] Foreign/moved workspace");
             w.valid = false;
             require(theta.size() == parameters_.size(), "[Field PM] Spectrum parameter dimension mismatch");
@@ -346,6 +366,11 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 }
             }, "Field PM particle state");
             finite(r);
+            auto observe=[&](size_t node) {
+                if constexpr(!std::is_same_v<Observer,NoObserver>)
+                    FML::COMMUNICATION::collective_try([&]{observer(node,static_cast<const Result &>(r));},"PM read-only observer");
+            };
+            observe(0);
             density(w); diagnostic(w, a0); momentum_diagnostic(w); force(w);
             for (size_t j = 0; j < steps_.size(); ++j) {
                 kick(w, steps_[j].first_kick);
@@ -353,6 +378,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                     for (size_t q = 0; q < cells(); ++q)
                         r.displacement[d][q] += steps_[j].drift * r.momentum[d][q];
                 finite(r);
+                observe(j+1);
                 density(w); diagnostic(w, settings_.scale_factors[j + 1]);
                 force(w); kick(w, steps_[j].last_kick);
                 finite(r);

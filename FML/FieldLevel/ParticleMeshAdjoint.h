@@ -50,6 +50,10 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         void derivative_stencil(const Work & w, size_t q, Visit visit) const {
             const int n = model.configuration().density_mesh;
             auto x = w.output.position(q);
+            if (model.settings_.assignment == PMAssignment::TSC) {
+                DETAIL::tsc_stencil(n, x, [&](auto node, double, const auto & dw) { visit(node, dw); });
+                return;
+            }
             int base[3]; double f[3];
             for (int d = 0; d < 3; ++d) {
                 const double u = x[d] * n;
@@ -85,7 +89,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             copy_state(start, w);
             for (size_t j = begin; j < end; ++j) forward_step(j, w, report);
         }
-        // Transpose of CIC mass deposition, with the current particle geometry.
+        // Transpose of the selected mass deposition, with the current particle geometry.
         // Routing is rebuilt at every geometry (particles need not remain on their owners).
         void deposition_pullback(Work & w, const Field & density_bar, Fields & position_bar) const {
             model.density(w);
@@ -113,7 +117,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                         for (int d = 0; d < 3; ++d) position_bar[d][q] += value * dw[d];
                     });
                 // Same keys/geometry as mass deposition, even for zero cotangents:
-                // all eight CIC corners are visited, so the routing stays compatible.
+                // all assignment nodes, including zero-weight nodes, are visited, so the routing stays compatible.
                 w.assignment.deposit(w.force[c], [&](auto add) {
                     for (size_t q = 0; q < model.cells(); ++q)
                         model.stencil(w.output, q, [&](auto node, double weight) {
@@ -229,7 +233,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             PMGradient result;
             size_t live = 0;
             const auto start = checkpoint(w, result.report, live);
-            // The final matter field is CIC deposition (the final FFT roundtrip is identity).
+            // The final matter field is the selected deposition (the final FFT roundtrip is identity).
             FML::COMMUNICATION::collective_try([&] {
                 w.output.displacement = forward.output.displacement;
             }, "PM adjoint final geometry");

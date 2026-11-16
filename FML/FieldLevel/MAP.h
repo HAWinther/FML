@@ -7,7 +7,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
     enum class MAPAlgorithm { GradientDescent, LBFGS };
     struct MAPOptions {
         MAPAlgorithm algorithm{MAPAlgorithm::LBFGS};
-        bool vary_parameters{true};
+        bool vary_parameters{true}, stable_objective_changes{false};
         int max_iterations{200}, history{5}, max_line_search{40};
         double tolerance{1e-6}, armijo{1e-4}, backtrack{.5};
     };
@@ -15,9 +15,12 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         int iteration{};
         double potential{}, gradient_norm{}, field_gradient_l2{}, step{};
         size_t value_evaluations{}, gradient_evaluations{};
+        double accepted_change{},armijo_bound{};
+        size_t reference_evaluations{};
     };
     struct MAPOptimizationResult {
         MAPResult fit;
+        size_t reference_evaluations{};
         size_t value_evaluations{}, gradient_evaluations{}, curvature_skips{}, history_resets{};
         size_t peak_history_pairs{}, peak_history_bytes{}; // Local-rank vector payload, excludes container overhead.
         std::vector<MAPIteration> trace;
@@ -54,8 +57,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         const auto & model=posterior.model();
         E::map_controls(model,options.vary_parameters,options.max_iterations,options.tolerance);
         MAP_DETAIL::controls(model,{double(static_cast<int>(options.algorithm)),double(options.history),
-            double(options.max_line_search),options.armijo,options.backtrack},0);
-        bool valid=(options.algorithm==MAPAlgorithm::LBFGS || options.algorithm==MAPAlgorithm::GradientDescent) &&
+            double(options.max_line_search),options.armijo,options.backtrack,double(options.stable_objective_changes)},0);
+        bool valid=(!options.stable_objective_changes || posterior.supports_stable_changes) && (options.algorithm==MAPAlgorithm::LBFGS || options.algorithm==MAPAlgorithm::GradientDescent) &&
             options.max_iterations>=0 && options.history>=0 &&
             (options.algorithm!=MAPAlgorithm::LBFGS || options.history>=1) && options.max_line_search>=1 &&
             std::isfinite(options.tolerance) && options.tolerance>0 &&
@@ -92,7 +95,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         if(!std::isfinite(U))throw std::invalid_argument("[FieldFramework] MAP initial state outside support");
         std::vector<MAP_DETAIL::Pair> history;
         if(options.algorithm==MAPAlgorithm::LBFGS)allocate([&]{history.reserve(options.history);});
-        double last_step=0;
+        double last_step=0,last_change=0,last_bound=0;
         for(int iteration=0;;++iteration) {
             Vector gradient=scaled_gradient(g,gp);
             double norm=0,field_square=0;
@@ -101,7 +104,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             for(double x:gradient.scalar)norm=std::max(norm,std::abs(x));
             if(!std::isfinite(norm) || !std::isfinite(field_square) || !std::isfinite(dot(gradient,gradient)))
                 throw UnrepresentableState("[FieldFramework] Nonfinite MAP gradient");
-            allocate([&]{result.trace.push_back({iteration,U,norm,std::sqrt(field_square),last_step,result.value_evaluations,result.gradient_evaluations});});
+            allocate([&]{result.trace.push_back({iteration,U,norm,std::sqrt(field_square),last_step,result.value_evaluations,result.gradient_evaluations,last_change,last_bound,result.reference_evaluations});});
             if(norm<options.tolerance || iteration==options.max_iterations) {
                 result.fit={std::move(white),std::move(p),U,norm,iteration,
                     norm<options.tolerance ? MAPStatus::Converged : MAPStatus::MaximumIterations};
@@ -130,21 +133,26 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 direction=base_metric(gradient);slope=dot(gradient,direction);
             }
             if(!std::isfinite(slope) || slope<=0)throw UnrepresentableState("[FieldFramework] MAP metric is not a finite descent metric");
+            typename BasicPosterior<Forward,Likelihood>::ValueReference reference;
+            if(options.stable_objective_changes){reference=posterior.value_reference(white,p,work);++result.reference_evaluations;}
             Field candidate,trialg;std::vector<double> params,trialgp;
-            double step=1,next=HUGE_VAL;bool accepted=false;
+            double step=1,next=HUGE_VAL,change=HUGE_VAL;bool accepted=false;
             for(int line=0;line<options.max_line_search;++line) {
                 allocate([&]{candidate=white;params=p;});
                 for(size_t q=0;q<white.size();++q)candidate[q]-=step*direction.field[q];
                 if(options.vary_parameters)for(size_t j=0;j<p.size();++j)params[j]-=step*direction.scalar[j]*scales[j];
-                next=posterior.value(candidate,params,work);++result.value_evaluations;
-                if(std::isfinite(next) && next<=U-options.armijo*step*slope) {
+                if(options.stable_objective_changes){const auto trial=posterior.value_change(candidate,params,work,white,reference);next=trial.value;change=trial.change;}
+                else {next=posterior.value(candidate,params,work);change=next-U;}
+                ++result.value_evaluations;
+                const bool sufficient=options.stable_objective_changes ? std::isfinite(change)&&change<=-options.armijo*step*slope : next<=U-options.armijo*step*slope;
+                if(std::isfinite(next) && sufficient) {
                     // Re-evaluate the accepted point with its gradient. A value-only
                     // trial is never assumed to leave a pullback-compatible cache.
                     next=posterior.evaluate(candidate,params,work,trialg,trialgp);++result.gradient_evaluations;
                     bool finite=true;
                     for(double x:trialg)finite &= std::isfinite(x);
                     for(double x:trialgp)finite &= std::isfinite(x);
-                    if(E::maximum(model,finite ? 0 : 1)==0 && std::isfinite(next) && next<=U-options.armijo*step*slope){accepted=true;break;}
+                    if(E::maximum(model,finite ? 0 : 1)==0 && std::isfinite(next) && (options.stable_objective_changes || next<=U-options.armijo*step*slope)){accepted=true;break;}
                 }
                 step*=options.backtrack;
             }
@@ -170,7 +178,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                     result.peak_history_bytes=result.peak_history_pairs*2*(white.size()+p.size())*sizeof(double);
                 } else ++result.curvature_skips;
             }
-            white.swap(candidate);p.swap(params);g.swap(trialg);gp.swap(trialgp);U=next;last_step=step;
+            white.swap(candidate);p.swap(params);g.swap(trialg);gp.swap(trialgp);U=next;last_step=step;last_change=change;last_bound=-options.armijo*step*slope;
         }
     }
 }

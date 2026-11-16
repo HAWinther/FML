@@ -126,3 +126,19 @@ and HISTORY (1..32, default5). Existing numerical files remain unchanged under
 the default. Fits also write `.fit_optimizer.csv` with MAP-only actual call/time
 and history/RSS diagnostics; options-based methods write `.fit_trace.csv`. See
 [the comparison protocol](../pm_optimizer_validation/README.md).
+
+Shared private validation helpers now live in `Validation.h`, used also by the
+[stalled-state diagnostic](../pm_stationarity_validation/README.md). The default
+native numerical outputs remain bitwise unchanged.
+
+The optional final STABLE_CHANGE argument (0/1, default 0) enables stable objective
+changes for OPTIMIZER=1/2. Extra reference-prediction counts and accepted-change
+traces are written to `.fit_change.csv` and `.fit_change_trace.csv`. See
+[stable Armijo validation](../pm_stable_armijo_validation/README.md).
+
+The final optional argument after `STABLE_CHANGE` is `ASSIGNMENT` (2=CIC default,
+3=TSC). `FORCE_WINDOW=2` selects matching TSC compensation; nonzero compensation
+must match the assignment. TSC writes an additional `.assignment.csv` and declares
+`assignment_tsc` in its data identity. The [TSC study](../pm_tsc_validation/README.md)
+generates and fits matched TSC mocks. Existing CIC calls and numerical schemas
+remain unchanged.

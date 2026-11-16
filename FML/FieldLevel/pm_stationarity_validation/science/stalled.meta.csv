@@ -1,0 +1,3 @@
+PM-stationarity-v1,32,16,16,compensated,Omega_m=.3,PM-nonlinear-v1,91,0.002,1,9,16,0.0001,observation_cic,16
+shards,status,iterations,potential,raw_gradient,direction_source,seconds
+4,2,83,-1049.6324599303684,0.00011603772163317708,1,388.06875653600002

@@ -1,0 +1,29 @@
+{
+  "date": "2026-11-16",
+  "n": 32,
+  "m": 16,
+  "steps": 16,
+  "force_window": 1,
+  "reference_cic_mesh": 16,
+  "seed": 91,
+  "power": 0.002,
+  "final": 1.0,
+  "initial_seed": 300,
+  "initial_amplitude": 0.05,
+  "tolerance": 2e-05,
+  "np": 4,
+  "omp_threads": 1,
+  "stable_changes": true,
+  "data_sha256": "2756e41dc801ce7c5c3940ebfadc03488c16b7397d6cca388845e37aab553808",
+  "snapshot_sha256": {
+    "stalled.rank2.csv": "cddef9651f742eae2064d336f8c01ea520c3a8a317aedf308f34261b02ad12ef",
+    "stalled.rank3.csv": "6abaed35c30d9961d70ddb59f24532d11dee72afaeca5c8e27c23814861c0817",
+    "stalled.rank1.csv": "745f9970725a10ad553f7fe7951ce2f70ceed08a95b842f9993a793fd7cecfa8",
+    "stalled.rank0.csv": "ecf335592cea4a38562c457df20ae66d464dc16854457d6680fbcf69a5117ff1",
+    "stalled.parameters.csv": "8ef789c7e70c97421ecdc7105dbaefecd349f9900c16f9781321f3f3424e5bb3",
+    "stalled.trace.csv": "3fb91dce25dbb0ccd7c7363cde7cbf97a7c5895dc72c3d50f2e8b434495d2896",
+    "stalled.meta.csv": "4c585b22175a73923c4755e0c48517a6d95b67e188146df9e5746e5eaf4619fb",
+    "stalled.capture.csv": "dd31d51d911de44af440ed96f1e1e54522c5a30df8bfaefbcde4d218fd723d07",
+    "stalled.projected.csv": "dd0205c2c550fb9db862d0149d28cf669214ea207f724f3bb4639da69cf4f3f2"
+  }
+}

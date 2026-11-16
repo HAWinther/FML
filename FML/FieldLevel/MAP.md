@@ -72,3 +72,47 @@ No posterior/likelihood/checkpoint numerical law is changed by choosing an optim
 
 See [the frozen-data comparison](pm_optimizer_validation/README.md) and
 [measured results](pm_optimizer_validation/RESULTS.md).
+
+## Stable objective-change comparisons
+
+Set `options.stable_objective_changes=true` to compare a directly computed target
+change with `-armijo*step*slope`. The default is false, preserving prior options-based
+runs and legacy comparisons. Explicit requests require a likelihood with a local
+`difference(trial_modes, trial_log_noise, base_modes, base_log_noise)` method
+returning a value convertible to long double. Unsupported likelihoods reject the
+request; survey likelihoods do not gain this interface automatically.
+
+`GaussianFieldLikelihood::difference` includes half-complex multiplicities, the
+noise variance and its parameter-dependent normalization. Small log-noise changes
+use `expm1`; larger changes avoid overflowing variance ratios. `BasicPosterior`
+adds the stable white-prior change and scalar-prior changes, with scalar priors
+added once after the distributed field/likelihood reduction. Gaussian and uniform
+scalar priors retain their existing meaning. Ordinary `value`/`evaluate` and their
+numerical target values are unchanged.
+
+The lower-level API is:
+
+```cpp
+auto reference = posterior.value_reference(base_white, base_parameters, workspace);
+auto trial = posterior.value_change(candidate_white, candidate_parameters, workspace,
+                                    base_white, reference);
+// trial.value is the ordinary target; trial.change is trial minus base.
+```
+
+The reference owns local predicted modes and a small parameter vector, not a copy
+of the base white field. Supply the unchanged consistent `base_white` for every
+call using that reference. The posterior/model must outlive it, and callbacks,
+likelihood and prior definitions must remain deterministic and fixed. Foreign or
+empty references reject collectively. Inputs and parameter support retain the
+usual forward-model contract.
+
+The optimizer makes one extra reference prediction per attempted iteration and
+reports `reference_evaluations`. Accepted points still recompute a fresh gradient
+and require finite values/gradients; they are not retested using the rounded
+full-value inequality that this mode replaces. `MAPIteration::accepted_change`
+and `armijo_bound` audit accepted trials. Rounded absolute trace values can move
+by roundoff; stable comparisons do not promise strictly monotone rounded values.
+
+Stable arithmetic removes lost objective changes, but forward predictions remain
+double precision and CIC support boundaries remain nonsmooth. The unchanged
+stopping criterion can still fail. See [the bounded rerun](pm_stable_armijo_validation/RESULTS.md).
