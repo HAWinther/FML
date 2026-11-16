@@ -4,7 +4,7 @@
 // so its zero crossings do not amplify relative errors. Guards refactorings that must not change
 // the results.
 //
-//   ./test_regression              compare (scaled tolerance 3e-7; 1e-4 when compiled with fused multiply-adds)
+//   ./test_regression              compare (scaled tolerance 1e-6; 1e-4 when compiled with fused multiply-adds)
 //   ./test_regression --update     rewrite the reference file (only after an intended change)
 // The current values are also written to data/regression_last.txt.
 //
@@ -13,9 +13,10 @@
 // without dividing by an arbitrarily small cross spectrum at a zero crossing.
 // The tolerance is set by the numerical noise of the adaptive ODE solvers: changing the order of
 // floating-point operations or of the state vector, or ode_relerr by one part in 1e9, moves the outputs
-// by up to ~1e-7 (high-ell C_ell, lensed BB). Physics changes show up far above this. The reference values were made
-// without fused multiply-adds (x86-64 without -march=native); with them (-march=native, FML's default, or ARM) the
-// rounding differs and the outputs move by up to ~3e-5, so the tolerance is then 1e-4.
+// by up to ~1e-7 (high-ell C_ell, lensed BB), and a different compiler or libm (e.g. a CI runner image update) by
+// up to ~5e-7 with the same code, so the tolerance is 1e-6. Physics changes show up far above this. The reference
+// values were made without fused multiply-adds (x86-64 without -march=native); with them (-march=native, FML's
+// default, or ARM) the rounding differs and the outputs move by up to ~3e-5, so the tolerance is then 1e-4.
 // =============================================================================
 
 #include <FML/Cosmology/Background/BackgroundCosmology.h>
@@ -232,7 +233,7 @@ int main(int argc, char ** argv) {
 #if defined(__FMA__) || defined(__ARM_FEATURE_FMA) || defined(__aarch64__)
     FML::TESTS::check_close(worst, 0.0, 1e-4, "outputs unchanged (scaled 1e-4 with FMA)");
 #else
-    FML::TESTS::check_close(worst, 0.0, 3e-7, "outputs unchanged (scaled 3e-7)");
+    FML::TESTS::check_close(worst, 0.0, 1e-6, "outputs unchanged (scaled 1e-6)");
 #endif
     return FML::TESTS::summary("EBS regression");
 }

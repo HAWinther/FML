@@ -83,6 +83,17 @@ namespace FML::COSMOLOGY {
             throw std::invalid_argument("ReACT solver integration supports lcdm, fr, LCDM-background nDGP and w0wa");
         }
 
+        // A massless LCDM target is its own pseudo cosmology: R = 1, and the pseudo baseline is the target's own
+        // HMcode-2020, built exactly as for nonlinear = hmcode2020 (P_m and P_cb are equal here only up to round-off,
+        // which HMcode's iterations amplify to ~1e-9 at high z)
+        if (model == "lcdm" && Onu == 0) {
+            hmcode = std::make_unique<HALOMODEL::HMcode2020>(
+                cosmo, [this](double x, double k) { return get_matter_power_spectrum_extrapolated(x, k); },
+                [this](double x, double k) { return get_matter_power_spectrum_cb_extrapolated(x, k); });
+            react.reset();
+            return;
+        }
+
         // The pseudo cosmology has GR/LCDM expansion and massless clustering matter of density Omega_m,total. At each
         // z it matches the TARGET total linear P(k). HMcode-2020 gives its nonlinear spectrum.
         auto pseudo_params = p;
@@ -94,12 +105,6 @@ namespace FML::COSMOLOGY {
         BackgroundCosmology pseudo_bg(pseudo_params);
         auto target = [this](double x, double k) { return get_matter_power_spectrum_extrapolated(x, k); };
         hmcode = std::make_unique<HALOMODEL::HMcode2020>(pseudo_bg, target, target);
-
-        // A massless LCDM target is its own pseudo cosmology: R = 1 exactly
-        if (model == "lcdm" && Onu == 0) {
-            react.reset();
-            return;
-        }
 
         // Linear spectra in h/Mpc and (Mpc/h)^3; the LCDM cold spectrum with the target's primordial parameters and
         // neutrinos (for sigma(M) of the real halos) from a separate linear LCDM run
