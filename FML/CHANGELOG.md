@@ -5,6 +5,22 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### AMRCode: dilaton gravity
+- `gravity_model = Dilaton` (`dilaton_A2`, `dilaton_beta0`, `dilaton_r`, `dilaton_xi`, `dilaton_start_redshift`,
+  `dilaton_epsilon`): the field `w = phi / phi_bar` is solved on the AMR leaves like the symmetron (full and partial
+  solves) from `dilaton_start_redshift` (default 4) on. P_Dilaton / P_LCDM agrees with SimulationCode's exact solver to
+  0.5% up to k = 1 h/Mpc (64^3 in 128 Mpc/h, A2 = 1e5 and 5e5) and is lower where AMR resolves screened halos.
+- `MultigridSolver/AMRDilatonSolver.h`: `AMRDilatonSolverCosmology<NDIM>`, the AMR version of `DilatonSolverCosmology`
+  (the cell solve in ln w); example and tests `examples/AMRDilatonExample.cpp` (`make amrdilaton`): second order
+  against a radial reference, equal to the uniform solver to 5e-14 on a uniform grid, the same on 1-4 tasks.
+- `AMRMultiGridSolver`: `set_custom_update` (a custom Gauss-Seidel update, as `MultiGridSolver`) and
+  `set_coarse_fine_limiter` (minmod-limited coarse gradient in the coarse/fine ghosts: non-negative neighbour weights).
+  Off by default; the other AMR examples give identical output.
+- `DilatonSolverCosmology::solve_cell_affine`: the cell solve for any Laplacian affine in the cell value (`solve_cell`
+  calls it; test_multigrid output unchanged).
+- AMRCode: the scalar field (symmetron or dilaton) is first solved at a full solve (starting on a partial sub-step
+  could add its force to stale forces of the coarser leaves); the symmetron runs are unchanged.
+
 ### AMRCode: symmetron gravity and less memory
 - `gravity_model = Symmetron`: the symmetron field is solved on the AMR leaves with the same multigrid as the
   potential (full and partial solves, so at every sub-step) and its fifth force added. P_Symmetron / P_LCDM agrees

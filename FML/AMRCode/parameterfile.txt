@@ -37,10 +37,15 @@ pofk_ngrid       = 64
 output_gadget    = false
 output_images    = false # A PNG of the particles in a slab through the middle of the box at the outputs
 
-# Gravity: LCDM or Symmetron (the fifth force of the symmetron, solved on the AMR grid)
+# Gravity: LCDM, Symmetron or Dilaton (the fifth force of the scalar field, solved on the AMR grid)
 gravity_model    = LCDM
 # symmetron_assb   = 0.5 # Symmetry breaking scale factor
 # symmetron_beta   = 1.0 # Coupling
 # symmetron_L_mpch = 1.0 # Range in vacuum (Mpc/h)
 # symmetron_N      = 2   # Powers of the potential (2, 4: the original symmetron)
 # symmetron_M      = 4
+# dilaton_A2       = 5e5   # A(phi) = 1 + A2 phi^2 / (2 Mpl^2)
+# dilaton_beta0    = 0.5   # Coupling today
+# dilaton_r        = 1.0   # Mass m(a) = m0 a^-r (r <= 3/2; 3/2 is the original dilaton)
+# dilaton_xi       = 1e-3  # H0 / m0 (range today c/H0 xi = 3 Mpc/h)
+# dilaton_start_redshift = 4 # Solve for the field from here on (LCDM before)

@@ -147,14 +147,32 @@ class DilatonSolverCosmology {
                              double ulo,
                              double uhi,
                              int ndim = NDIM) {
-        const double c = sum_wnb - fas * h2;
+        return solve_cell_affine(u, sum_wnb - fas * h2, h2, 2.0 * ndim / h2, rhoa3, norm, Ea, s, p, ulo, uhi);
+    }
+
+    /// The same for any Laplacian that is affine in the cell's own value, D^2 w = c / h2 - diag w (with the FAS
+    /// source already subtracted from c / h2; diag > 0): the root in u = ln w of
+    ///   F(u) = c e^-u / h2 - diag - norm [rhoa3 - T(u)]
+    /// (solve_cell is c = sum_n w_n - f h^2, diag = 2 NDIM / h^2; the AMR solver, AMRDilatonSolver.h, uses the flux
+    /// Laplacian with coarse/fine faces)
+    static double solve_cell_affine(double u,
+                                    double c,
+                                    double h2,
+                                    double diag,
+                                    double rhoa3,
+                                    double norm,
+                                    double Ea,
+                                    double s,
+                                    double p,
+                                    double ulo,
+                                    double uhi) {
         auto eval = [&](double x, double & F, double & dF, double & Fscale) {
             double T, dT;
             potential_term(x, Ea, s, p, T, dT);
             const double ce = c * std::exp(-x) / h2;
-            F = ce - 2.0 * ndim / h2 - norm * (rhoa3 - T);
+            F = ce - diag - norm * (rhoa3 - T);
             dF = -ce + norm * dT;
-            Fscale = std::abs(ce) + 2.0 * ndim / h2 + norm * (std::abs(rhoa3) + T);
+            Fscale = std::abs(ce) + diag + norm * (std::abs(rhoa3) + T);
         };
         double F, dF, Fscale;
         eval(ulo, F, dF, Fscale);

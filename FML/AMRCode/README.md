@@ -53,6 +53,29 @@ Units: positions in [0,1), velocities `v = a^2 dx/dt / (H0 B)` (FML's convention
    solver, the same initial amplitude); at k > 1 h/Mpc it stays near 1.03 while PM goes up to 1.09 at k = 2: the
    AMR resolves the halos, where the field is screened. The symmetron costs about 20% more time and 70% more memory
    (a second solver).
+6. **Dilaton gravity** (`gravity_model = Dilaton`, parameters `dilaton_A2`, `dilaton_beta0`, `dilaton_r`,
+   `dilaton_xi`, `dilaton_start_redshift`, `dilaton_epsilon`): the generalised dilaton of Brax, Davis, Li, Winther &
+   Zhao 2012 (as SimulationCode's `Dilaton`) with `MultigridSolver/AMRDilatonSolver.h`, solved for `w = phi / phi_bar`
+   on the same leaves exactly as the symmetron (full and partial solves, the field carried through refinement). The
+   cell update solves for `ln w` and the coarse/fine ghosts use a limited gradient (`set_coarse_fine_limiter`), so `w`
+   stays positive across ~15 e-folds; without the limiter a negative ghost next to a screened halo stalled the solve.
+   The fifth force is `-D(PhiF) / (a^2 E)`, `PhiF = PhiF_bar(a) w^2`. The field is solved from
+   `dilaton_start_redshift` (default 4; LCDM before, where `beta(a)` is small and the field contrasts on the particle
+   lattice too large, as in SimulationCode). Check (64^3 in 128 Mpc/h, levels 6-10, beta0 = 0.5, r = 1, xi = 1e-3)
+   against SimulationCode (PM, 128^3 grid, the exact multigrid solver from z = 4, the same initial amplitude), P / P_LCDM
+   at z = 0:
+
+   | k [h/Mpc] | 0.1 | 0.3 | 0.5 | 1 | 1.5 | 2 | 3 |
+   |---|---|---|---|---|---|---|---|
+   | A2 = 5e5, SimulationCode exact | 1.001 | 1.004 | 1.006 | 1.008 | 1.011 | 1.014 | 1.020 |
+   | A2 = 5e5, AMRCode | 1.001 | 1.005 | 1.006 | 1.006 | 1.006 | 1.005 | 1.005 |
+   | A2 = 1e5, SimulationCode exact | 1.010 | 1.042 | 1.059 | 1.079 | 1.085 | 1.088 | 1.083 |
+   | A2 = 1e5, AMRCode | 1.011 | 1.046 | 1.063 | 1.078 | 1.077 | 1.063 | 1.037 |
+
+   The same to 0.5% up to k = 1 h/Mpc (at z = 1 too: 1.040 against 1.039 at k = 0.5 for A2 = 1e5); above it lower,
+   where AMR resolves the screened halos (as for the symmetron). All solves converged, no partial solve had to be
+   redone. The dilaton costs about 70% more time (2m05s against 1m14s on 2 cores; SimulationCode's exact solver ~8 min
+   against 4 s for GR).
 
 Outputs: `pofk_<label>_z<z>.txt` (k, P(k) without shot-noise subtraction, linear P(k)) and optionally GADGET
 snapshots and a PNG of the particles in a slab through the middle of the box (`output_images`, `images_npix`,
@@ -128,7 +151,7 @@ first version). At z = 0 a coarse step costs: refinement 0.8 s, solver setup 1.1
   step and now dominate.
 - The coarse step is fixed (`nsteps` in log a); there is no adaptive global step.
 - With the base level equal to the particle grid, intermediate scales lose a few % of growth (see Tests).
-- No OpenMP. Flat LCDM and the symmetron (no massive neutrinos; the solver also has DGP).
+- No OpenMP. Flat LCDM, the symmetron and the dilaton (no massive neutrinos; the solver also has DGP).
 - **Memory**: about 2.7 kB per particle for LCDM (64^3: 0.7 GB) and 4.8 kB with the symmetron, mostly the
   multigrid solver, whose levels between the base level and the finest each hold a copy of the base leaves (so it
   grows with levelmax - levelmin). Freeing the old solver before building the new one at a regrid (it was 1.5 GB

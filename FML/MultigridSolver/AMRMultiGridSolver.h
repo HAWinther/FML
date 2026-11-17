@@ -44,6 +44,15 @@ namespace FML {
             template <int NDIM>
             using AMRBoundaryFunction = std::function<double(const std::array<double, NDIM> &)>;
 
+            /// A custom Gauss-Seidel update (set_custom_update, as MultiGridSolver::set_custom_update): given (solver,
+            /// level, local cell index, source) return the new value of f in the cell, solving L(f) = source there with
+            /// the neighbours fixed (source is the FAS source of the level, 0 on the grid itself, plus the mean
+            /// residual with set_subtract_mean_residual). The Laplacian is affine in the cell's own value:
+            /// get_laplacian gives D^2 f and its (constant) derivative, so D^2 f(f') = lap + dlap (f' - f). For
+            /// equations where the Newton step of the default update is not robust (e.g. exponential non-linearities)
+            template <int NDIM>
+            using AMRUpdateFunction = std::function<double(const AMRMultiGridSolver<NDIM> &, int, IndexInt, double)>;
+
             //==========================================================================================
             ///
             /// Full Approximation Storage (FAS) multigrid on an adaptively refined grid.
@@ -136,11 +145,13 @@ namespace FML {
                 double _eps_converge = 1e-8; // Convergence parameter
                 bool _use_residual_criterion = false; // Residual < eps (true) or residual / initial < eps (false)
                 bool _coarse_fine_gradient = true;    // Ghost value across coarse/fine faces with the coarse gradient
+                bool _limit_coarse_fine_gradient = false; // That gradient limited (minmod)
                 bool _subtract_mean = false;          // Solve L(f) = <L(f)> (equations that fix f up to a constant)
                 bool _gradient_all = false;           // Keep the gradient of f in every cell (for get_hessian)
 
                 AMREquation<NDIM> _equation;
                 AMRBoundaryFunction<NDIM> _boundary;
+                AMRUpdateFunction<NDIM> _update; // Custom Gauss-Seidel update (empty: Newton)
 
                 // Partial solve (solve(eq, min_active_level)): the unknowns are the leaves at refinement level >=
                 // min_active_level and the cells of the coarser levels made only of them. All other cells are fixed
@@ -190,7 +201,8 @@ namespace FML {
                                   IndexInt i,
                                   const std::vector<double> & v,
                                   const std::vector<double> & vg,
-                                  bool homogeneous) const;
+                                  bool homogeneous,
+                                  bool limited = false) const;
                 void update_gradients(int level);
                 double newton_update(int level, IndexInt i);
                 void gauss_seidel(int level, int nsweeps);
@@ -245,12 +257,22 @@ namespace FML {
                 /// Coarse/fine faces: the fine cell sees the coarse value plus the coarse gradient times the tangential
                 /// offset (true, default) or just the coarse value (false: only first order at the interface)
                 void set_coarse_fine_gradient(bool use_gradient) { _coarse_fine_gradient = use_gradient; }
+                /// Limit the coarse gradient of the coarse/fine ghost values (minmod of the one-sided differences;
+                /// default false). The ghost value then lies between the coarse value and that of its neighbour, so
+                /// the Laplacian has non-negative neighbour weights and a positive field stays positive (a discrete
+                /// maximum principle), at the cost of a first order ghost at extrema of f. For equations that need
+                /// f > 0 with large contrasts (the dilaton). With set_gradient_field(true) get_hessian uses the
+                /// limited gradient too
+                void set_coarse_fine_limiter(bool limit) { _limit_coarse_fine_gradient = limit; }
                 /// For equations with L(f + const) = L(f) on a periodic grid (Poisson-like, DGP): a discretized
                 /// non-linear term does not have exactly zero mean, so there is no exact solution. With this we solve
                 /// L(f) = c instead, c the volume weighted mean of L - S on each level (as in MultiGridSolver)
                 void set_subtract_mean_residual(bool subtract) { _subtract_mean = subtract; }
                 /// Keep the gradient of f in every cell (before each sweep and residual), needed by get_hessian
                 void set_gradient_field(bool keep) { _gradient_all = keep; }
+                /// Replace the Newton step of the Gauss-Seidel sweeps by a custom update (see AMRUpdateFunction; the
+                /// equation is still used for the residuals and the FAS sources). An empty function restores Newton
+                void set_custom_update(const AMRUpdateFunction<NDIM> & update) { _update = update; }
 
                 //======================================================================
                 // Solve
@@ -644,7 +666,8 @@ namespace FML {
                                                                                           IndexInt i,
                                                                                           const std::vector<double> & v,
                                                                                           const std::vector<double> & vg,
-                                                                                          bool homogeneous) const {
+                                                                                          bool homogeneous,
+                                                                                          bool limited) const {
                 // Second order (non-uniform) centred difference from the value on each side and its distance.
                 // A finer side uses the mean of the sub-face cells (centred on the line), a coarser side the coarse
                 // cell (its tangential offset is ignored), a boundary the Dirichlet value on the face.
@@ -679,7 +702,13 @@ namespace FML {
                         }
                     }
                     const double dm = dist[0], dp = dist[1];
-                    g[d] = dm / (dp * (dp + dm)) * (val[1] - fi) + dp / (dm * (dp + dm)) * (fi - val[0]);
+                    if (limited) {
+                        // minmod of the one-sided differences
+                        const double sm = (fi - val[0]) / dm, sp = (val[1] - fi) / dp;
+                        g[d] = sm * sp <= 0.0 ? 0.0 : (std::abs(sm) < std::abs(sp) ? sm : sp);
+                    } else {
+                        g[d] = dm / (dp * (dp + dm)) * (val[1] - fi) + dp / (dm * (dp + dm)) * (fi - val[0]);
+                    }
                 }
                 return g;
             }
@@ -740,10 +769,10 @@ namespace FML {
                 auto & L = _levels[level];
                 if (_gradient_all) {
                     for (IndexInt i = 0; i < L.grid.get_n_local(); i++)
-                        L.grad[i] = cell_gradient(L, i, L.f, L.fghost, false);
+                        L.grad[i] = cell_gradient(L, i, L.f, L.fghost, false, _limit_coarse_fine_gradient);
                 } else {
                     for (auto i : (_as ? _as->grad_list[level] : L.coarse_side))
-                        L.grad[i] = cell_gradient(L, i, L.f, L.fghost, false);
+                        L.grad[i] = cell_gradient(L, i, L.f, L.fghost, false, _limit_coarse_fine_gradient);
                 }
                 L.grid.communicate_ghosts(L.grad, L.gradghost);
             }
@@ -819,6 +848,10 @@ namespace FML {
             template <int NDIM>
             double AMRMultiGridSolver<NDIM>::newton_update(int level, IndexInt i) {
                 auto & L = _levels[level];
+                if (_update) {
+                    L.f[i] = _update(*this, level, i, L.S[i] + L.meanL);
+                    return 0.0;
+                }
                 const auto [l, dl] = _equation(*this, level, i);
                 const double r = l - L.S[i] - L.meanL;
                 if (dl != 0.0)

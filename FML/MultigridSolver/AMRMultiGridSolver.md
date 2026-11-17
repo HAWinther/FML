@@ -27,7 +27,10 @@ first)`, `set_coarsest_solve(reduction, max_sweeps)`, `set_convergence_criterion
 of the reduction relative to the initial residual), `set_initial_guess`, `set_boundary_value` (Dirichlet value on the
 non-periodic faces of the box, default 0), `set_coarse_fine_gradient`, `set_subtract_mean_residual` (solve
 `L(f) = <L(f)>` for equations that fix `f` only up to a constant on a periodic grid, as in `MultiGridSolver`),
-`set_gradient_field`.
+`set_gradient_field`, `set_custom_update` (replace the Newton step of the sweeps by your own solve of the equation in
+a cell, as `MultiGridSolver::set_custom_update`; the Laplacian is affine in the cell's value, `lap + dlap (f' - f)`),
+`set_coarse_fine_limiter` (minmod-limit the coarse gradient of the coarse/fine ghost values, so the Laplacian has
+non-negative neighbour weights and a positive field stays positive).
 
 ## Design
 
@@ -134,6 +137,53 @@ grid at its finest level with 20x fewer leaves. Identical on 1 and 3 tasks (12-d
 grid it equals `SymmetronSolverCosmology` to 1.2e-12 (relative, max over the grid) on 1, 2 and 4 tasks. Works with
 both the original and the modified `AMRMultiGridSolver.h` (only the public interface is used).
 
+## Dilaton (AMRDilatonSolver.h)
+
+`AMRDilatonSolverCosmology<NDIM>` is the AMR version of `DilatonSolverCosmology` (`DilatonSolver.h`, Brax et al. 2012):
+the same parameters (`OmegaM`, `A2`, `beta0`, `r <= 3/2`, `xi`, `H0Box`), the equation for `w = phi / phi_bar(a)`
+
+    D^2 w = norm w [ (1 + delta) a^-3 - T(ln w) ],   norm = 3 A2 OmegaM a^2 (H0 Box)^2
+
+and the returned potential `PhiF = PhiF_bar(a) w^2` (total force `D(PhiGR + PhiF)`), with the relative criterion
+(`epsilon * rms(norm a^-3 delta)`). Input and output per local leaf:
+
+```cpp
+#include <FML/MultigridSolver/AMRDilatonSolver.h>
+AMRDilatonSolverCosmology<3> dil(OmegaM, A2, beta0, r, xi, H0Box, verbose);
+dil.set_epsilon(1e-6);
+dil.set_relative_criterion(true);
+std::vector<double> phi;
+std::vector<std::array<double, 3>> force;   // optional: D(PhiF) = 2 PhiF_bar w D(w) per leaf
+dil.solve(a, grid, delta, phi, &force);
+dil.get_field();                            // w; the next solve on the same leaves starts from it
+                                            // (or set_previous_field(w)), else from the background w = 1
+```
+
+As in the uniform solver the multigrid works with `w` and the Gauss-Seidel update solves the equation in the cell for
+`u = ln w` (a `set_custom_update` with `DilatonSolverCosmology::solve_cell_affine`, shared with the uniform solver):
+monotone after dividing by `w`, so the root is unique and positive even where `w` spans many e-folds. That needs a
+positive sum over the neighbours: the coarse/fine ghosts use the limited gradient (`set_coarse_fine_limiter`; with the
+unlimited gradient a ghost next to a screened halo in an N-body run went negative and the solve stalled). The root is
+bracketed by the minima of the effective potential for the extreme densities, widened by 1 in `u`. For a code with its
+own `AMRMultiGridSolver` (AMRCode, partial solves) `get_equation(a, id_delta)` and `get_update(a, id_delta, ulo, uhi)`
+give the equation and the update. Fiducial 4 + 4 sweeps.
+
+Tests (`examples/AMRDilatonExample.cpp`, `make amrdilaton`, `mpirun -np 4 ./amrdilaton [quick]`): the compensated
+spherical overdensity `delta = A exp(-r^2/2s^2)(3 - r^2/s^2)` (A = 6, s = 0.05) in a 100 Mpc/h box, A2 = 5e5,
+xi = 1e-3 (range 0.03 box), a = 1: the centre is screened (w = 0.28 for r = 3/2, 0.16 for r = 1). Reference: the radial
+equation with Newton on 20000 cells. Errors within 4s ("quick", levels to 7), r = 1:
+
+| | leaves | w rms error | radial force rms error (of the peak) | V-cycles |
+|---|---|---|---|---|
+| uniform level 4 | 4096 | 5.1e-2 | 8.1e-2 | 2 |
+| uniform level 6 | 262144 | 1.8e-3 | 1.1e-2 | 5 |
+| AMR levels 4-6 (refined within 0.2) | 13224 | 1.9e-3 | 1.2e-2 | 7 |
+| AMR levels 5-7 | 103440 | 5.0e-4 | 3.6e-3 | 7 |
+
+Order 1.93 for `w`, 1.75 for the force (r = 3/2: 1.92, 1.73; the limiter changes the errors by < 5%, slightly
+smaller). Identical on 1, 2 and 4 tasks (12-digit checksums). On a uniform 32^3 grid with A2 = 5e6 at a = 0.5 (ln w
+from -0.03 to 10.1) `PhiF` equals that of `DilatonSolverCosmology` to 5e-14 (relative, max over the grid).
+
 ## Tests (examples/AMRPoissonExample.cpp)
 
 `D^2 phi = delta` for a Gaussian `phi` (periodic) and `D^2 u - 500 u^3 = s` (Dirichlet, `u = u_exact` on the faces),
@@ -155,8 +205,8 @@ including tasks that are empty on the coarse levels, without MPI, and clean unde
 
 - The gradient used for the coarse/fine ghost ignores the tangential offset of a coarser neighbour of the coarse cell
   (three levels within two cells, only at corners of the refinement).
-- No helper for a variable-coefficient operator `D(b(f) D f)` yet (f(R) in the sqrt(f_R) form, symmetron-like
-  equations need it or a custom pointwise update).
+- No helper for a variable-coefficient operator `D(b(f) D f)` yet (f(R) in the sqrt(f_R) form needs it or a custom
+  pointwise update, `set_custom_update`).
 - DGP is not wired into SimulationCode (which uses uniform grids).
 - Construction: about 3 s for 2M leaves in 3D on one core (was 15 s), versus 1 s per V-cycle. Most of it is
   now the face-neighbour lookups of the stencils (6 `find_leaf` per leaf and level) and making the truncated cells;

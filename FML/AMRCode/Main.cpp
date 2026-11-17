@@ -276,6 +276,12 @@ int main(int argc, char ** argv) {
     par.symmetron_N = pf.get("symmetron_N", 2.0);
     par.symmetron_M = pf.get("symmetron_M", 4.0);
     par.symmetron_epsilon = pf.get("symmetron_epsilon", 1e-6);
+    par.dilaton_A2 = pf.get("dilaton_A2", 5e5);
+    par.dilaton_beta0 = pf.get("dilaton_beta0", 0.5);
+    par.dilaton_r = pf.get("dilaton_r", 1.0);
+    par.dilaton_xi = pf.get("dilaton_xi", 1e-3);
+    par.dilaton_epsilon = pf.get("dilaton_epsilon", 1e-6);
+    par.dilaton_start_redshift = pf.get("dilaton_start_redshift", 4.0);
     const int Npart_1D = pf.get("Npart_1D", 64);
     const int Nmesh_ic = pf.get("Nmesh_ic", Npart_1D);
     const int LPT_order = pf.get("LPT_order", 2);
