@@ -38,7 +38,7 @@ snapshots from other simulations. There is more documentation on [the website](h
 - **[On-the-fly analysis and output](ANALYSIS.md)**
   - P(k) at every step with nonlinear predictions (EuclidEmulator2, and the f(R) fitting function).
   - Redshift-space multipoles and bispectra.
-  - Hybrid-bias spectra with Zel'dovich and one-loop predictions.
+  - Hybrid-bias spectra (real and redshift space) with Zel'dovich and one-loop predictions.
   - FoF and spherical-overdensity halos with mass functions.
   - Lightcones with HEALPix maps.
   - Baryonification.
@@ -111,7 +111,7 @@ Everything goes to `output_folder`, labelled with `simulation_name`:
 - at each of the `output_redshifts`, the particles (GADGET binary or HDF5) and the analysis that is switched on:
   - P(k) and its multipoles
   - bispectra
-  - hybrid-bias spectra
+  - hybrid-bias spectra and their redshift-space multipoles
   - halo catalogues and mass functions
   - baryonified spectra
 - lightcone particles and maps
@@ -127,7 +127,7 @@ Everything goes to `output_folder`, labelled with `simulation_name`:
 | [INITIAL_CONDITIONS.md](INITIAL_CONDITIONS.md) | Random fields, non-Gaussianity, input spectra and transfer functions (CAMB, CLASS, the internal solver), snapshots as initial conditions |
 | [EVOLUTION.md](EVOLUTION.md) | PM forces, the force grid, accurate forces on a coarse grid, time stepping, starting from the Big Bang, COLA |
 | [SPECIES.md](SPECIES.md) | Separate CDM and baryons, neutrino masses, neutrino particles, the N-body gauge |
-| [ANALYSIS.md](ANALYSIS.md) | P(k), multipoles, halos, bispectra, hybrid-bias spectra, baryonification, snapshots and lightcones |
+| [ANALYSIS.md](ANALYSIS.md) | P(k), multipoles, halos, bispectra, hybrid-bias spectra (real and redshift space), baryonification, snapshots and lightcones |
 | [SHORT_RANGE.md](SHORT_RANGE.md), [COLA_SHORT_RANGE.md](COLA_SHORT_RANGE.md) | Short-range forces with PM and with COLA ([results](SHORT_RANGE_RESULTS.md), [clustered force](CLUSTERED_FORCE.md), [dynamics](DYNAMICS.md)) |
 | [DEVELOPING.md](DEVELOPING.md) | The code layout, adding parameters, particle types and models |
 | [tests/README.md](tests/README.md) | The tests: comparisons with MG-PICOLA, accuracy checks and regression tests |

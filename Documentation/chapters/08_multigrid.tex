@@ -1,5 +1,5 @@
 \chapter{Multigrid solvers}\label{ch:multigrid}
-\chapterstatus{written}{2026-11-15}
+\chapterstatus{written}{2026-11-17}
 
 Screened modified-gravity theories have nonlinear elliptic field equations that cannot be solved with FFTs. \fml{} has a
 general nonlinear multigrid solver on uniform, MPI-distributed grids in any dimension, with the field equations of
@@ -12,11 +12,11 @@ second solver on adaptively refined grids. In \file{SimulationCode} they give th
 \file{FofrSolver.h} (\cls{FofrSolverCosmology}), \file{DGPSolver.h} (\cls{DGPSolverCosmology}), \file{SymmetronSolver.h},
 \file{DilatonSolver.h}; the grids in \file{MPIGrid/MPIGrid.h} and \file{MPIGrid/MPIMultiGrid.h}.\par
 \nsp{FML::SOLVERS::AMRMULTIGRIDSOLVER}: \file{AMRMultiGridSolver.h} (\cls{AMRMultiGridSolver}), \file{AMRDGPSolver.h}
-(\cls{AMRDGPSolverCosmology}); the grid in \file{AdaptiveMPIGrid/AdaptiveMPIGrid.h} (\cls{AdaptiveMPIGrid},
+(\cls{AMRDGPSolverCosmology}), \file{AMRSymmetronSolver.h}, \file{AMRDilatonSolver.h} (\cls{AMRDilatonSolverCosmology}); the grid in \file{AdaptiveMPIGrid/AdaptiveMPIGrid.h} (\cls{AdaptiveMPIGrid},
 \cls{AdaptiveMPIGridTransfer}).\par
 Documentation: \file{MultigridSolver/TerminationStatus.md}, \file{MultigridSolver/AMRMultiGridSolver.md},
-\file{AdaptiveMPIGrid/README.md}. Examples: \file{MultigridSolver/examples} (Poisson, f(R), symmetron, DGP, AMR Poisson and
-DGP). Tests: \file{tests/test_multigrid.cpp}, \file{tests/test_multigrid_domain.cpp}, \file{AdaptiveMPIGrid/example}.
+\file{AdaptiveMPIGrid/README.md}. Examples: \file{MultigridSolver/examples} (Poisson, f(R), symmetron, DGP, AMR Poisson,
+DGP and dilaton). Tests: \file{tests/test_multigrid.cpp}, \file{tests/test_multigrid_domain.cpp}, \file{AdaptiveMPIGrid/example}.
 \end{modulebox}
 
 \section{The full approximation scheme}\label{sec:mg-fas}
@@ -207,8 +207,9 @@ follow the grid.
 \item on each level only the finest cells are relaxed (red--black Newton--Gauss--Seidel); the FAS source
       $S_c=L_c(\mathcal Rf)+\mathcal R(S-L(f))$ carries the refinement into the coarse cells, so the fixed point solves the
       composite equation on the leaves, at a cost per V-cycle proportional to the number of leaves;
-\item the correction is prolonged linearly (with its gradient) into children and injected where the cell exists on both
-      levels; the coarsest level is relaxed until its residual drops by $10^3$;
+\item the correction is prolonged linearly (with its gradient) into children; a cell that exists on both levels gets
+      the coarse value itself (the same as adding the correction, but without the cancellation that turns a value that
+      changed by many orders of magnitude, as the dilaton in a halo, into exactly zero); the coarsest level is relaxed until its residual drops by $10^3$;
 \item the Laplacian is flux-conservative and cell-centred: across a coarse/fine face the fine cell uses a ghost value at its
       own tangential position (coarse value plus the coarse gradient times the offset), and the coarse cell the sum of the
       fluxes through the fine sub-faces, so the volume integral of the Laplacian vanishes exactly on a periodic grid; mixed
@@ -216,7 +217,14 @@ follow the grid.
 \end{itemize}
 \cls{AMRDGPSolverCosmology} is the DGP solver on these grids, with the same equation, splitting, units and options as
 \cls{DGPSolverCosmology}, input and output per local leaf. The symmetron solver on these grids is
-\cls{AMRSymmetronSolverCosmology} (\file{AMRSymmetronSolver.h}). A \emph{partial solve} (\code{solve(eq, min_level)}) treats only the leaves at levels
+\cls{AMRSymmetronSolverCosmology} (\file{AMRSymmetronSolver.h}), and the dilaton solver \cls{AMRDilatonSolverCosmology}
+(\file{AMRDilatonSolver.h}): the parameters, the equation for $w=\phi/\bar\phi(a)$, the relative criterion and the potential
+$\Phi_F=\bar\Phi_F(a)w^2$ of \cls{DilatonSolverCosmology} (\cref{sec:mg-models}), with the same cell update in $u=\ln w$
+(\code{DilatonSolverCosmology::solve_cell_affine}, shared by both, installed with \code{set_custom_update}). The update needs a
+positive sum over the neighbours, so the coarse/fine ghosts use the minmod-limited coarse gradient (\code{set_coarse_fine_limiter};
+with the unlimited gradient a ghost next to a screened halo in an $N$-body run went negative and the solve stalled); both options are
+off by default. \code{get_equation} and \code{get_update} give the equation and the update to a code with its own solver
+(\file{AMRCode}, partial solves). A \emph{partial solve} (\code{solve(eq, min_level)}) treats only the leaves at levels
 $\geq$ \code{min_level} (and the coarser cells made of them) as unknowns and the rest as Dirichlet values, with V-cycles
 that touch only the unknowns; it is what the adaptive $N$-body code \file{AMRCode} uses at its fine sub-steps
 (\cref{sec:sr-amr}). The face table, most of the solver's memory, stores 32-bit indices. Limitations: no OpenMP yet,
@@ -266,7 +274,12 @@ the rms error is $6.2\times10^{-5}$ and $6.7\times10^{-5}$ for AMR levels 4--8 a
 $6.9\times10^{-5}$ for the uniform level 8, and converges at second order; the residual drops by 0.12--0.21 per V-cycle. DGP for a
 compensated spherical overdensity with an exact force: rms force error $2.6\times10^{-3}$ of the peak force for AMR levels 4--7
 (second order, 2.35), identical on 1--4 tasks, and on a uniform $32^3$ grid equal to \cls{DGPSolverCosmology} to
-$7\times10^{-11}$. Solutions are independent of the number of tasks (1--13) and clean under AddressSanitizer.
+$7\times10^{-11}$. Dilaton (\file{examples/AMRDilatonExample.cpp}): the same overdensity, $A_2=5\times10^5$, $\xi=10^{-3}$, screened in
+the centre ($w=0.16$ for $r=1$), against a radial Newton solution: rms errors of $w$ and of the force (of the peak) $1.8\times10^{-3}$
+and $1.1\times10^{-2}$ on the uniform level 6, $1.9\times10^{-3}$ and $1.2\times10^{-2}$ for AMR levels 4--6 (5\% of the leaves), $5\times10^{-4}$
+and $3.6\times10^{-3}$ for levels 5--7 (order 1.93 and 1.75); on a uniform $32^3$ grid ($\ln w$ from $-0.03$ to 10.1) $\Phi_F$ equals
+\cls{DilatonSolverCosmology} to $5\times10^{-14}$; a first solve from $w=1$ in a peak with $1+\delta=2\times10^4$ resolved one level
+below the finest converges in 4 V-cycles. Solutions are independent of the number of tasks (1--13) and clean under AddressSanitizer.
 \end{validation}
 
 \begin{validation}[Exact against approximate screening]

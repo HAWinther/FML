@@ -126,7 +126,9 @@ $s_n+s_{n2}k^2\mu^2+s_{n4}k^4\mu^4$; the 19 multipole columns (with Alcock--Pacz
 velocileptors' defaults are not converged in the angular series (0.8\% in $P_0$, 4\% in $P_2$ at $k=0.2\hMpc$), so the
 defaults here are higher ($j_n=n_{\max}=10$, $N=1024$). Validation: velocileptors with its settings to $7\times10^{-9}$;
 the redshift-space Zel'dovich $P(k,\mu)$ against direct integration (0.02--0.12\%); $f=0$ against the real-space CLEFT of
-\cref{ch:power-spectra} ($2\times10^{-4}$); the Kaiser limit.
+\cref{ch:power-spectra} ($2\times10^{-4}$); the Kaiser limit. \code{operator_components} gives the $\delta_L$ terms with a
+weight $F(k)$ on the operator leg ($F=-k^2$ for $\nabla^2\delta_L$), used by the redshift-space hybrid bias prediction
+(\cref{sec:pk-hybrid-rsd}).
 
 \subsection{IR-resummed Eulerian perturbation theory}
 

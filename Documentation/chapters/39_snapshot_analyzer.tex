@@ -32,7 +32,7 @@ Analysis & Method & Output \\
 \code{measure_power_spectrum} & $P(k)$ (\cref{sec:pk-estimator}) & \file{pofk_z<z>.txt} \\
 \code{measure_power_spectrum_multipoles} & $P_\ell(k)$ in redshift space (\cref{sec:pk-multipoles}) & \file{pofk_multipole_z<z>.txt} \\
 \code{measure_bispectrum} & $B(k_1,k_2,k_3)$ and $Q$ (\cref{sec:pk-polyspectra}) & \file{bispectrum_z<z>.txt} \\
-\code{measure_hybrid_bias} & hybrid bias spectra (\cref{sec:pk-hybrid}) & \file{hybridbias_z<z>.txt} \\
+\code{measure_hybrid_bias} & hybrid bias spectra (\cref{sec:pk-hybrid}) and multipoles (\cref{sec:pk-hybrid-rsd}) & \file{hybridbias_[rsd_]z<z>.txt} \\
 \code{measure_cosmic_web} & T-web fractions (\cref{sec:web-tweb}) & \file{cosmicweb_z<z>.txt} \\
 \code{measure_minkowski_functionals} & $V_0$--$V_3$ and Gaussian predictions (\cref{sec:web-minkowski}) & \file{minkowski_z<z>.txt} \\
 \code{find_halos} & FoF/relaxed FoF, SO masses, overlaps (\cref{ch:halo-finding}) & \file{halos_z<z>.txt}, \file{massfunc_*} \\
@@ -47,7 +47,8 @@ Analysis & Method & Output \\
 
 For the hybrid bias spectra the linear field comes from an initial-conditions snapshot of the same particles (the lattice and $\delta_L=-\nabla\cdot\bm\Psi$ of the
 displacements, matched by ID, with the second-order part removed for 2LPT initial conditions) or from the file written by \file{SimulationCode}, and is scaled by
-$D(z)/D(z_L)$ of the analysis cosmology.
+$D(z)/D(z_L)$ of the analysis cosmology. With \param{hybridbias_rsd} the operators are also assigned at the redshift-space
+positions (the velocities converted as for the multipoles) and the multipoles up to \param{hybridbias_rsd_ellmax} written.
 
 \section{SnapshotAnalyzer}\label{sec:sa-program}
 

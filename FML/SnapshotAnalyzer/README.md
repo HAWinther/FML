@@ -68,6 +68,14 @@ and output files as SimulationCode, so the two give the same result for the same
   On a SimulationCode run (64^3 in 256 Mpc/h) the spectra from the linear field file equal the in-run ones to 2e-5 of
   sqrt(P_aa P_bb); from the IC snapshot (2LPT IC at z = 20) to < 0.3% for most pairs (0.8% for delta^2 delta^2,
   s^2 s^2) with the 2LPT correction and up to 18% without it.
+
+  With `hybridbias_rsd = true` also the redshift-space multipoles P_ab^l(k), l = 0, 2, ..., `hybridbias_rsd_ellmax`,
+  of the 15 spectra: the operators are assigned at the redshift-space positions s = x + v_n n of the particles
+  (plane-parallel along each box axis, the mean of the three; the velocities are converted as for `pofk_multipole`),
+  `hybridbias_rsd_z<z>.txt` (k, number of modes, then the multipoles of each pair; the shot noise in the header).
+  The snapshot needs velocities. Predictions (Zel'dovich, one loop) and the Zel'dovich control variate are in
+  `FML/ComputePowerSpectra/HYBRID_BIAS_RSD.md` (SimulationCode writes them in the run). On a SimulationCode run the
+  multipoles equal the in-run ones to 1e-5 - 4e-4.
 - Minkowski functionals V0-V3 (volume, surface area, integrated mean curvature, Euler characteristic per volume) of
   the excursion sets delta >= delta_th of the Gaussian-smoothed density contrast ([FML/Morphology](../Morphology/README.md),
   exact counts of the voxel complex, the isotropic Crofton estimator). Thresholds in nu = delta / sigma_0
@@ -176,6 +184,8 @@ hybridbias_ic_lpt_correction = "2lpt" -- or "none" (Zel'dovich IC)
 hybridbias_linear_field_file = "" -- e.g. SimulationCode's hybridbias_linear_field_<name>.dat
 hybridbias_id_offset = 0 -- lattice index = id - offset (file source without an IC snapshot)
 hybridbias_growth_ratio = 0.0 -- D(z)/D(z_L); 0: from the cosmology
+hybridbias_rsd = false -- also the redshift-space multipoles: hybridbias_rsd_z<z>.txt
+hybridbias_rsd_ellmax = 4 -- even
 
 cosmicweb = false
 cosmicweb_nmesh = 128

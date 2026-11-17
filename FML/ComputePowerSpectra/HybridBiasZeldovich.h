@@ -199,41 +199,28 @@ namespace FML {
                 }
             } // namespace detail
 
-            //=====================================================================================================
-            /// @brief The Zel'dovich prediction for the hybrid bias spectra
-            ///
-            /// @param[in] pofk The linear power spectrum P(k)
-            /// @param[in] W_operators The filter of the operators (e.g. 1 for k < kcut and 0 otherwise)
-            /// @param[in] W_displacement The filter of the displacement field
-            /// @param[in] kvalues The k-values to compute the spectra at
-            /// @param[in] options The options (kmax_integration must be set)
-            /// @param[out] names The names of the operators
-            /// @param[out] pairs The pairs (a,b) in the same order as HybridBiasSpectra
-            ///
-            /// @return result[pair][ik] = P_ab(k[ik])
-            //=====================================================================================================
-            inline std::vector<std::vector<double>>
-            zeldovich_hybrid_bias_spectra(const std::function<double(double)> & pofk,
-                                          const std::function<double(double)> & W_operators,
-                                          const std::function<double(double)> & W_displacement,
-                                          const std::vector<double> & kvalues,
-                                          const ZeldovichOptions & options,
-                                          std::vector<std::string> * names = nullptr,
-                                          std::vector<std::array<int, 2>> * pairs = nullptr) {
-                using namespace detail;
-                if (options.kmax_integration <= options.kmin_integration)
-                    throw std::runtime_error("[zeldovich_hybrid_bias_spectra] Set kmax_integration (the cutoff)");
-                if (options.noperators < 1 or options.noperators > 5)
-                    throw std::runtime_error("[zeldovich_hybrid_bias_spectra] noperators must be 1, ..., 5");
-                const int nop = options.noperators;
-                if (kvalues.empty())
-                    return {};
-                double kout_min = 1e100, kout_max = 0.0;
-                for (auto k : kvalues) {
-                    if (k > 0.0)
-                        kout_min = std::min(kout_min, k);
-                    kout_max = std::max(kout_max, k);
-                }
+            namespace detail {
+                /// The scalar q-functions of the Zel'dovich prediction (with q-hat = z):
+                ///   A = X delta + Y zz, U = Uq z, W_L = WLq z,  V_ijl V_ijm = alpha delta_lm + beta z_l z_m,
+                ///   V_ijl T_ijab V_abm = alphaT delta_lm + betaT z_l z_m, C_ij V_ijl = gamma z_l,
+                ///   C^L_ij V_ijl = gammaL z_l, C:C, T:T, xi, xi_dL, xi_LL
+                struct ZeldovichQFunctions {
+                    double X, Y, U, WL, alpha, beta, alphaT, betaT, gamma, gammaL, CC, TT, xi, xidL, xiLL;
+                };
+                /// The q-grid and the q-functions on it
+                struct ZeldovichQSetup {
+                    std::vector<ZeldovichQFunctions> qf;
+                    double Xinf{0.0}, dq{0.0}, qmax{0.0};
+                    int nq{0};
+                };
+
+                /// The q-functions for the output k-range [kout_min, kout_max]
+                inline ZeldovichQSetup zeldovich_qsetup(const std::function<double(double)> & W_operators,
+                                                        const std::function<double(double)> & W_displacement,
+                                                        const std::function<double(double)> & pofk,
+                                                        double kout_min,
+                                                        double kout_max,
+                                                        const ZeldovichOptions & options) {
                 const double kmax_int = options.kmax_integration;
                 const double kmin_int = options.kmin_integration;
 
@@ -351,14 +338,8 @@ namespace FML {
                     return t;
                 };
 
-                // The scalar q-functions (with q-hat = z):
-                //   A = X delta + Y zz, U = Uq z, W_L = WLq z,  V_ijl V_ijm = alpha delta_lm + beta z_l z_m,
-                //   V_ijl T_ijab V_abm = alphaT delta_lm + betaT z_l z_m, C_ij V_ijl = gamma z_l,
-                //   C^L_ij V_ijl = gammaL z_l, C:C, T:T, xi, xi_dL, xi_LL
-                struct QFunctions {
-                    double X, Y, U, WL, alpha, beta, alphaT, betaT, gamma, gammaL, CC, TT, xi, xidL, xiLL;
-                };
-                std::vector<QFunctions> qf(nq + 1);
+                // The scalar q-functions (ZeldovichQFunctions)
+                std::vector<ZeldovichQFunctions> qf(nq + 1);
                 double Xinf = 0.0;
                 {
                     const auto t0 = tensor(corr[0], 0); // <Psi_i Psi_j>(0)
@@ -375,7 +356,7 @@ namespace FML {
                     auto dL = tensor(corr[7], iq);
                     auto sL = tensor(corr[8], iq);
                     auto LL = tensor(corr[9], iq);
-                    QFunctions f;
+                    ZeldovichQFunctions f;
                     // A_ij = 2 (<Psi Psi>(0) - <Psi_i(q1) Psi_j(q2)>)
                     f.X = Xinf - 2.0 * PP[0 * 3 + 0];
                     f.Y = (Xinf - 2.0 * PP[2 * 3 + 2]) - f.X;
@@ -421,90 +402,148 @@ namespace FML {
                     qf[iq] = f;
                 }
 
-                // The pairs
-                std::vector<std::array<int, 2>> pairlist;
-                for (int a = 0; a < nop; a++)
-                    for (int b = a; b < nop; b++)
-                        pairlist.push_back({a, b});
-                if (names) {
-                    const std::vector<std::string> all{"1", "delta", "delta2", "s2", "nabla2delta"};
-                    *names = std::vector<std::string>(all.begin(), all.begin() + nop);
+                    ZeldovichQSetup setup;
+                    setup.qf = std::move(qf);
+                    setup.Xinf = Xinf;
+                    setup.dq = dq;
+                    setup.qmax = qmax;
+                    setup.nq = nq;
+                    return setup;
                 }
-                if (pairs)
-                    *pairs = pairlist;
-                const int npairs = int(pairlist.size());
-                auto pair_index = [&](int a, int b) {
-                    for (int i = 0; i < npairs; i++)
-                        if (pairlist[i][0] == a and pairlist[i][1] == b)
-                            return i;
-                    return -1;
-                };
 
-                // Gauss-Legendre rules for the mu-integral (cached by size)
-                std::map<int, std::pair<std::vector<double>, std::vector<double>>> rules;
-                auto nodes_needed = [&](double kq) { return 32 * (1 + int((0.75 * kq + 32) / 32)); };
-                for (auto k : kvalues)
-                    for (int n = nodes_needed(0.0); n <= nodes_needed(k * qmax); n += 32)
-                        if (rules.find(n) == rules.end()) {
-                            std::vector<double> x, w;
-                            gauss_legendre(n, x, w);
-                            rules[n] = {x, w};
+                /// The integrand F_ab (E F_ab minus expinf times its part linear in the correlators, whose Fourier
+                /// transform is added analytically) for the displacement wavevector of size K at mu = K-hat . q-hat
+                /// (in real space K = k; in redshift space K = (1 + f n n) k)
+                inline void zeldovich_integrand(const ZeldovichQFunctions & f,
+                                                double K,
+                                                double m,
+                                                double Xinf,
+                                                double expinf,
+                                                const std::vector<int> & index, // pair index of (a,b) = a*5+b, -1: none
+                                                std::vector<Complex> & F) {
+                    const double k = K, k2 = K * K, m2 = m * m;
+                    const double E = std::exp(-0.5 * k2 * (f.X + f.Y * m2));
+                    const Complex D(0.0, k * f.U * m);
+                    const Complex DL(0.0, k * f.WL * m);
+                    const double SS = -k2 * (f.alpha + f.beta * m2);
+                    const double STS = -k2 * (f.alphaT + f.betaT * m2);
+                    const Complex CS(0.0, k * f.gamma * m);
+                    const Complex CLS(0.0, k * f.gammaL * m);
+                    const Complex D2 = D * D;
+                    // The full integrand E F minus the large-q limit and the part linear in the correlators
+                    // (whose Fourier transform we add analytically)
+                    const double dA = k2 * (f.X - Xinf + f.Y * m2);
+                    auto set = [&](int a, int b, Complex full, Complex linear) {
+                        const int i = index[a * max_operators + b];
+                        if (i >= 0)
+                            F[i] = E * full - expinf * linear;
+                    };
+                    set(ONE, ONE, 1.0, 1.0 - 0.5 * dA);
+                    set(ONE, DELTA, D, D);
+                    set(ONE, DELTA2, D2, 0.0);
+                    set(ONE, S2, SS, 0.0);
+                    set(ONE, NABLA2DELTA, DL, DL);
+                    set(DELTA, DELTA, f.xi + D2, f.xi);
+                    set(DELTA, DELTA2, 2.0 * D * f.xi + D2 * D, 0.0);
+                    set(DELTA, S2, 2.0 * CS + D * SS, 0.0);
+                    set(DELTA, NABLA2DELTA, f.xidL + D * DL, f.xidL);
+                    set(DELTA2, DELTA2, 2.0 * f.xi * f.xi + 4.0 * D2 * f.xi + D2 * D2, 0.0);
+                    set(DELTA2, S2, 2.0 * f.CC + 4.0 * D * CS + D2 * SS, 0.0);
+                    set(DELTA2, NABLA2DELTA, 2.0 * D * f.xidL + D2 * DL, 0.0);
+                    set(S2, S2, 2.0 * f.TT + 4.0 * STS + SS * SS, 0.0);
+                    set(S2, NABLA2DELTA, 2.0 * CLS + SS * DL, 0.0);
+                    set(NABLA2DELTA, NABLA2DELTA, f.xiLL + DL * DL, f.xiLL);
+                }
+
+                /// The pairs a <= b of nop operators and the index of (a,b) in that list (a*5+b, -1 if absent)
+                inline std::vector<std::array<int, 2>> zeldovich_pairs(int nop, std::vector<int> & index) {
+                    std::vector<std::array<int, 2>> pairlist;
+                    for (int a = 0; a < nop; a++)
+                        for (int b = a; b < nop; b++)
+                            pairlist.push_back({a, b});
+                    index.assign(max_operators * max_operators, -1);
+                    for (size_t i = 0; i < pairlist.size(); i++)
+                        index[pairlist[i][0] * max_operators + pairlist[i][1]] = int(i);
+                    return pairlist;
+                }
+
+                /// The Bessel function J_0(x) (power series for x < 8, the Hankel asymptotic expansion above;
+                /// relative accuracy ~1e-10)
+                inline double bessel_j0(double x) {
+                    x = std::abs(x);
+                    if (x < 8.0) {
+                        const double y = 0.25 * x * x;
+                        double term = 1.0, sum = 1.0;
+                        for (int n = 1; n < 60; n++) {
+                            term *= -y / (double(n) * n);
+                            sum += term;
+                            if (std::abs(term) < 1e-17 * std::abs(sum) and n > 3)
+                                break;
                         }
+                        return sum;
+                    }
+                    // J0 = sqrt(2/(pi x)) (P cos(x - pi/4) - Q sin(x - pi/4))
+                    const double z = 1.0 / (8.0 * x), z2 = z * z;
+                    double P = 1.0, Q = 0.0, tp = 1.0, tq = z;
+                    Q = -tq;
+                    // terms: P = sum (-1)^m a_{2m} / x^{2m}, Q = sum (-1)^m a_{2m+1} / x^{2m+1} with
+                    // a_n = prod_{j=1..n} (2j-1)^2 / (n! 8^n)
+                    for (int m = 1; m < 12; m++) {
+                        const double a = double(4 * m - 3) * (4 * m - 3) * double(4 * m - 1) * (4 * m - 1);
+                        tp *= -a * z2 / ((2.0 * m - 1) * (2.0 * m));
+                        P += tp;
+                        const double b = double(4 * m - 1) * (4 * m - 1) * double(4 * m + 1) * (4 * m + 1);
+                        tq *= -b * z2 / ((2.0 * m) * (2.0 * m + 1));
+                        Q -= tq;
+                        if (std::abs(tp) < 1e-17 and std::abs(tq) < 1e-17)
+                            break;
+                    }
+                    const double phase = x - 0.25 * M_PI;
+                    return std::sqrt(2.0 / (M_PI * x)) * (P * std::cos(phase) - Q * std::sin(phase));
+                }
 
-                // The linear (analytic) part and the numerical part
-                std::vector<std::vector<double>> result(npairs, std::vector<double>(kvalues.size(), 0.0));
-#ifdef USE_OMP
-#pragma omp parallel for schedule(dynamic, 1)
-#endif
-                for (int ik = 0; ik < int(kvalues.size()); ik++) {
-                    const double k = kvalues[ik];
+                /// The Zel'dovich P_ab(k, nu) in redshift space for growth rate f (f = 0: real space) for all pairs
+                /// (the core of zeldovich_hybrid_bias_spectra and zeldovich_hybrid_bias_pkmu)
+                inline std::vector<double> zeldovich_pkmu_at(const ZeldovichQSetup & S,
+                                                            const std::function<double(double)> & pofk,
+                                                            const std::function<double(double)> & W_operators,
+                                                            const std::function<double(double)> & W_displacement,
+                                                            double k,
+                                                            double f,
+                                                            double nu,
+                                                            int npairs,
+                                                            const std::vector<int> & index,
+                                                            const std::map<int, std::pair<std::vector<double>, std::vector<double>>> & rules) {
+                    std::vector<double> result(npairs, 0.0);
                     if (k <= 0.0)
-                        continue;
-                    const double k2 = k * k;
-                    const double expinf = std::exp(-0.5 * k2 * Xinf);
+                        return result;
+                    auto nodes_needed = [&](double kq) { return 32 * (1 + int((0.75 * kq + 32) / 32)); };
+                    // The displacement wavevector K = (1 + f n n) k: |K| = k Kfac, K-hat . k-hat = ctheta
+                    const double Kfac = std::sqrt(1.0 + f * (2.0 + f) * nu * nu);
+                    const bool rsd = f != 0.0;
+                    const double ctheta = rsd ? (1.0 + f * nu * nu) / Kfac : 1.0;
+                    const double stheta = rsd ? std::abs(f * nu) * std::sqrt(std::max(0.0, 1.0 - nu * nu)) / Kfac : 0.0;
+                    const double K = k * Kfac;
+                    const double expinf = std::exp(-0.5 * K * K * S.Xinf);
                     std::vector<double> sum(npairs, 0.0);
                     std::vector<Complex> F(npairs);
+                    const int nq = S.nq;
+                    const double dq = S.dq;
                     for (int iq = 1; iq <= nq; iq++) {
                         const double q = iq * dq;
-                        const auto & f = qf[iq];
-                        const auto & rule = rules.at(nodes_needed(k * q));
+                        const auto & qf = S.qf[iq];
+                        const auto & rule = rules.at(nodes_needed(std::max(k, K) * q));
                         const auto & mu = rule.first;
                         const auto & w = rule.second;
                         std::vector<Complex> musum(npairs, 0.0);
                         for (size_t im = 0; im < mu.size(); im++) {
-                            const double m = mu[im], m2 = m * m;
-                            const double E = std::exp(-0.5 * k2 * (f.X + f.Y * m2));
-                            const Complex D(0.0, k * f.U * m);
-                            const Complex DL(0.0, k * f.WL * m);
-                            const double SS = -k2 * (f.alpha + f.beta * m2);
-                            const double STS = -k2 * (f.alphaT + f.betaT * m2);
-                            const Complex CS(0.0, k * f.gamma * m);
-                            const Complex CLS(0.0, k * f.gammaL * m);
-                            const Complex D2 = D * D;
-                            // The full integrand E F minus the large-q limit and the part linear in the correlators
-                            // (whose Fourier transform we add analytically)
-                            const double dA = k2 * (f.X - Xinf + f.Y * m2);
-                            auto set = [&](int a, int b, Complex full, Complex linear) {
-                                const int i = pair_index(a, b);
-                                if (i >= 0)
-                                    F[i] = E * full - expinf * linear;
-                            };
-                            set(ONE, ONE, 1.0, 1.0 - 0.5 * dA);
-                            set(ONE, DELTA, D, D);
-                            set(ONE, DELTA2, D2, 0.0);
-                            set(ONE, S2, SS, 0.0);
-                            set(ONE, NABLA2DELTA, DL, DL);
-                            set(DELTA, DELTA, f.xi + D2, f.xi);
-                            set(DELTA, DELTA2, 2.0 * D * f.xi + D2 * D, 0.0);
-                            set(DELTA, S2, 2.0 * CS + D * SS, 0.0);
-                            set(DELTA, NABLA2DELTA, f.xidL + D * DL, f.xidL);
-                            set(DELTA2, DELTA2, 2.0 * f.xi * f.xi + 4.0 * D2 * f.xi + D2 * D2, 0.0);
-                            set(DELTA2, S2, 2.0 * f.CC + 4.0 * D * CS + D2 * SS, 0.0);
-                            set(DELTA2, NABLA2DELTA, 2.0 * D * f.xidL + D2 * DL, 0.0);
-                            set(S2, S2, 2.0 * f.TT + 4.0 * STS + SS * SS, 0.0);
-                            set(S2, NABLA2DELTA, 2.0 * CLS + SS * DL, 0.0);
-                            set(NABLA2DELTA, NABLA2DELTA, f.xiLL + DL * DL, f.xiLL);
-                            const Complex phase = std::polar(w[im] * 0.5, k * q * m);
+                            const double m = mu[im];
+                            zeldovich_integrand(qf, K, m, S.Xinf, expinf, index, F);
+                            // e^{i k.q} averaged over the azimuth of q-hat around K-hat
+                            double amp = w[im] * 0.5;
+                            if (rsd)
+                                amp *= bessel_j0(k * q * stheta * std::sqrt(std::max(0.0, 1.0 - m * m)));
+                            const Complex phase = std::polar(amp, k * q * m * ctheta);
                             for (int i = 0; i < npairs; i++)
                                 musum[i] += phase * F[i];
                         }
@@ -515,26 +554,236 @@ namespace FML {
                     }
                     // int d^3q = 4 pi int q^2 dq <...>_mu (we averaged over mu above)
                     for (int i = 0; i < npairs; i++)
-                        result[i][ik] = 4.0 * M_PI * sum[i] * dq / 3.0;
+                        result[i] = 4.0 * M_PI * sum[i] * dq / 3.0;
 
-                    // The linear part: exp(-k^2 X_inf / 2) times the Fourier transform of the linear terms
+                    // The linear part: exp(-K^2 X_inf / 2) times the Fourier transform of the linear terms (in
+                    // redshift space the displacement terms get K.k-hat / k = 1 + f nu^2 per leg on the displacement)
                     const double PL = pofk(k);
                     const double wo = W_operators(k), wd = W_displacement(k);
+                    const double kaiser = 1.0 + f * nu * nu;
+                    const double k2 = k * k;
                     auto add = [&](int a, int b, double value) {
-                        const int i = pair_index(a, b);
+                        const int i = index[a * max_operators + b];
                         if (i >= 0)
-                            result[i][ik] += expinf * value;
+                            result[i] += expinf * value;
                     };
-                    add(ONE, ONE, PL * wd * wd);
-                    add(ONE, DELTA, PL * wo * wd);
-                    add(ONE, NABLA2DELTA, -k2 * PL * wo * wd);
+                    add(ONE, ONE, kaiser * kaiser * PL * wd * wd);
+                    add(ONE, DELTA, kaiser * PL * wo * wd);
+                    add(ONE, NABLA2DELTA, -kaiser * k2 * PL * wo * wd);
                     add(DELTA, DELTA, PL * wo * wo);
                     add(DELTA, NABLA2DELTA, -k2 * PL * wo * wo);
                     add(NABLA2DELTA, NABLA2DELTA, k2 * k2 * PL * wo * wo);
+                    return result;
+                }
+
+                /// The Gauss-Legendre rules (by number of nodes) needed for the q-range of setup at the k-values
+                inline std::map<int, std::pair<std::vector<double>, std::vector<double>>>
+                zeldovich_rules(const ZeldovichQSetup & S, const std::vector<double> & kvalues, double Kfac_max) {
+                    std::map<int, std::pair<std::vector<double>, std::vector<double>>> rules;
+                    auto nodes_needed = [&](double kq) { return 32 * (1 + int((0.75 * kq + 32) / 32)); };
+                    for (auto k : kvalues)
+                        for (int n = nodes_needed(0.0); n <= nodes_needed(k * Kfac_max * S.qmax); n += 32)
+                            if (rules.find(n) == rules.end()) {
+                                std::vector<double> x, w;
+                                gauss_legendre(n, x, w);
+                                rules[n] = {x, w};
+                            }
+                    return rules;
+                }
+
+                inline void kout_range(const std::vector<double> & kvalues, double & kout_min, double & kout_max) {
+                    kout_min = 1e100;
+                    kout_max = 0.0;
+                    for (auto k : kvalues) {
+                        if (k > 0.0)
+                            kout_min = std::min(kout_min, k);
+                        kout_max = std::max(kout_max, k);
+                    }
+                }
+            } // namespace detail
+
+            inline std::vector<std::vector<double>>
+            zeldovich_hybrid_bias_pkmu(const std::function<double(double)> & pofk,
+                                       const std::function<double(double)> & W_operators,
+                                       const std::function<double(double)> & W_displacement,
+                                       const std::vector<double> & kvalues,
+                                       double f,
+                                       double nu,
+                                       const ZeldovichOptions & options,
+                                       std::vector<std::string> * names = nullptr,
+                                       std::vector<std::array<int, 2>> * pairs = nullptr);
+
+            //=====================================================================================================
+            /// @brief The Zel'dovich prediction for the hybrid bias spectra
+            ///
+            /// @param[in] pofk The linear power spectrum P(k)
+            /// @param[in] W_operators The filter of the operators (e.g. 1 for k < kcut and 0 otherwise)
+            /// @param[in] W_displacement The filter of the displacement field
+            /// @param[in] kvalues The k-values to compute the spectra at
+            /// @param[in] options The options (kmax_integration must be set)
+            /// @param[out] names The names of the operators
+            /// @param[out] pairs The pairs (a,b) in the same order as HybridBiasSpectra
+            ///
+            /// @return result[pair][ik] = P_ab(k[ik])
+            //=====================================================================================================
+            inline std::vector<std::vector<double>>
+            zeldovich_hybrid_bias_spectra(const std::function<double(double)> & pofk,
+                                          const std::function<double(double)> & W_operators,
+                                          const std::function<double(double)> & W_displacement,
+                                          const std::vector<double> & kvalues,
+                                          const ZeldovichOptions & options,
+                                          std::vector<std::string> * names = nullptr,
+                                          std::vector<std::array<int, 2>> * pairs = nullptr) {
+                return zeldovich_hybrid_bias_pkmu(pofk, W_operators, W_displacement, kvalues, 0.0, 0.0, options, names, pairs);
+            }
+
+            //=====================================================================================================
+            /// @brief The Zel'dovich prediction for the hybrid bias spectra in redshift space, P_ab(k, nu) with nu the
+            /// cosine of k with the line of sight (plane-parallel), for the growth rate f: the displacement is
+            /// (1 + f n n) Psi, so the Zel'dovich integral is that of real space with the displacement wavevector
+            /// K = (1 + f n n) k (|K| = k sqrt(1 + f (2 + f) nu^2)) and the phase e^{i k.q}; the angular integral
+            /// over q-hat is done around K-hat (the azimuth analytically, giving J_0). The operators are those of the
+            /// Lagrangian field (no redshift-space factor), the field "1" is the matter in redshift space. Exact (all
+            /// orders in the linear correlators) for the Zel'dovich field: the mean of
+            /// compute_zeldovich_hybrid_bias_multipoles (HybridBiasRedshiftSpace.h). f = 0 is zeldovich_hybrid_bias_spectra.
+            /// Large-scale limit: P_11 = (1 + f nu^2)^2 P, P_1d = (1 + f nu^2) P, P_dd = P (Kaiser for the Eulerian
+            /// bias 1 + b1).
+            ///
+            /// @param[in] pofk, W_operators, W_displacement, kvalues, options As for zeldovich_hybrid_bias_spectra
+            /// @param[in] f The growth rate
+            /// @param[in] nu The cosine of the angle between k and the line of sight
+            /// @param[out] names, pairs As for zeldovich_hybrid_bias_spectra
+            ///
+            /// @return result[pair][ik] = P_ab(k[ik], nu)
+            //=====================================================================================================
+            inline std::vector<std::vector<double>>
+            zeldovich_hybrid_bias_pkmu(const std::function<double(double)> & pofk,
+                                       const std::function<double(double)> & W_operators,
+                                       const std::function<double(double)> & W_displacement,
+                                       const std::vector<double> & kvalues,
+                                       double f,
+                                       double nu,
+                                       const ZeldovichOptions & options,
+                                       std::vector<std::string> * names,
+                                       std::vector<std::array<int, 2>> * pairs) {
+                using namespace detail;
+                if (options.kmax_integration <= options.kmin_integration)
+                    throw std::runtime_error("[zeldovich_hybrid_bias_spectra] Set kmax_integration (the cutoff)");
+                if (options.noperators < 1 or options.noperators > 5)
+                    throw std::runtime_error("[zeldovich_hybrid_bias_spectra] noperators must be 1, ..., 5");
+                if (std::abs(nu) > 1.0)
+                    throw std::runtime_error("[zeldovich_hybrid_bias_pkmu] |nu| > 1");
+                const int nop = options.noperators;
+                if (kvalues.empty())
+                    return {};
+                double kout_min, kout_max;
+                kout_range(kvalues, kout_min, kout_max);
+                const auto S = zeldovich_qsetup(W_operators, W_displacement, pofk, kout_min, kout_max, options);
+
+                std::vector<int> index;
+                const auto pairlist = zeldovich_pairs(nop, index);
+                if (names) {
+                    const std::vector<std::string> all{"1", "delta", "delta2", "s2", "nabla2delta"};
+                    *names = std::vector<std::string>(all.begin(), all.begin() + nop);
+                }
+                if (pairs)
+                    *pairs = pairlist;
+                const int npairs = int(pairlist.size());
+                const double Kfac = std::sqrt(1.0 + f * (2.0 + f) * nu * nu);
+                const auto rules = zeldovich_rules(S, kvalues, Kfac);
+
+                std::vector<std::vector<double>> result(npairs, std::vector<double>(kvalues.size(), 0.0));
+#ifdef USE_OMP
+#pragma omp parallel for schedule(dynamic, 1)
+#endif
+                for (int ik = 0; ik < int(kvalues.size()); ik++) {
+                    const auto r =
+                        zeldovich_pkmu_at(S, pofk, W_operators, W_displacement, kvalues[ik], f, nu, npairs, index, rules);
+                    for (int i = 0; i < npairs; i++)
+                        result[i][ik] = r[i];
                 }
                 if (options.verbose)
-                    std::cout << "[zeldovich_hybrid_bias_spectra] nq = " << nq << " dq = " << dq << " qmax = " << qmax
-                              << " nk = " << nkint << " sigma^2 = X_inf / 2 = " << 0.5 * Xinf << "\n";
+                    std::cout << "[zeldovich_hybrid_bias_spectra] nq = " << S.nq << " dq = " << S.dq
+                              << " qmax = " << S.qmax << " sigma^2 = X_inf / 2 = " << 0.5 * S.Xinf << "\n";
+                return result;
+            }
+
+            //=====================================================================================================
+            /// @brief The Zel'dovich prediction for the redshift-space hybrid bias multipoles: P_ab^l(k) = (2l+1)
+            /// int_0^1 dnu P_ab(k, nu) L_l(nu) (zeldovich_hybrid_bias_pkmu) with Gauss-Legendre in nu. This is the
+            /// mean of compute_zeldovich_hybrid_bias_multipoles (HybridBiasRedshiftSpace.h) for the same filters
+            /// (up to the binning).
+            ///
+            /// @param[in] pofk, W_operators, W_displacement, kvalues, options As for zeldovich_hybrid_bias_spectra
+            /// @param[in] f The growth rate
+            /// @param[in] ellmax The largest (even) multipole
+            /// @param[in] nnu The number of Gauss-Legendre nodes in nu on [0, 1]
+            /// @param[out] names, pairs As for zeldovich_hybrid_bias_spectra
+            ///
+            /// @return result[pair][ell][ik] (odd ell are zero)
+            //=====================================================================================================
+            inline std::vector<std::vector<std::vector<double>>>
+            zeldovich_hybrid_bias_multipoles(const std::function<double(double)> & pofk,
+                                             const std::function<double(double)> & W_operators,
+                                             const std::function<double(double)> & W_displacement,
+                                             const std::vector<double> & kvalues,
+                                             double f,
+                                             int ellmax,
+                                             const ZeldovichOptions & options,
+                                             int nnu = 12,
+                                             std::vector<std::string> * names = nullptr,
+                                             std::vector<std::array<int, 2>> * pairs = nullptr) {
+                using namespace detail;
+                if (options.kmax_integration <= options.kmin_integration)
+                    throw std::runtime_error("[zeldovich_hybrid_bias_multipoles] Set kmax_integration (the cutoff)");
+                if (options.noperators < 1 or options.noperators > 5)
+                    throw std::runtime_error("[zeldovich_hybrid_bias_multipoles] noperators must be 1, ..., 5");
+                if (ellmax < 0 or ellmax % 2 != 0)
+                    throw std::runtime_error("[zeldovich_hybrid_bias_multipoles] ellmax must be even");
+                const int nop = options.noperators;
+                if (kvalues.empty())
+                    return {};
+                double kout_min, kout_max;
+                kout_range(kvalues, kout_min, kout_max);
+                const auto S = zeldovich_qsetup(W_operators, W_displacement, pofk, kout_min, kout_max, options);
+                std::vector<int> index;
+                const auto pairlist = zeldovich_pairs(nop, index);
+                if (names) {
+                    const std::vector<std::string> all{"1", "delta", "delta2", "s2", "nabla2delta"};
+                    *names = std::vector<std::string>(all.begin(), all.begin() + nop);
+                }
+                if (pairs)
+                    *pairs = pairlist;
+                const int npairs = int(pairlist.size());
+                const auto rules = zeldovich_rules(S, kvalues, std::sqrt(1.0 + f * (2.0 + f)));
+
+                // Gauss-Legendre in nu on [0, 1]
+                std::vector<double> x, w;
+                gauss_legendre(2 * nnu, x, w);
+                std::vector<double> nus, ws;
+                for (size_t i = 0; i < x.size(); i++)
+                    if (x[i] > 0.0) {
+                        nus.push_back(x[i]);
+                        ws.push_back(w[i]);
+                    }
+                const int nk = int(kvalues.size()), nn = int(nus.size());
+                std::vector<std::vector<double>> pk(size_t(nk) * nn);
+#ifdef USE_OMP
+#pragma omp parallel for schedule(dynamic, 1)
+#endif
+                for (int t = 0; t < nk * nn; t++) {
+                    const int ik = t / nn, in = t % nn;
+                    pk[t] = zeldovich_pkmu_at(S, pofk, W_operators, W_displacement, kvalues[ik], f, nus[in], npairs, index, rules);
+                }
+                std::vector<std::vector<std::vector<double>>> result(
+                    npairs, std::vector<std::vector<double>>(ellmax + 1, std::vector<double>(nk, 0.0)));
+                for (int ik = 0; ik < nk; ik++)
+                    for (int in = 0; in < nn; in++)
+                        for (int ell = 0; ell <= ellmax; ell += 2) {
+                            const double fac = (2.0 * ell + 1.0) * ws[in] * legendre(ell, nus[in]);
+                            for (int i = 0; i < npairs; i++)
+                                result[i][ell][ik] += fac * pk[size_t(ik) * nn + in][i];
+                        }
                 return result;
             }
 

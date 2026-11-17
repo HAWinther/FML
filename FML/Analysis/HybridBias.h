@@ -6,6 +6,7 @@
 #include <FML/Analysis/Output.h>
 #include <FML/ComputePowerSpectra/ComputePowerSpectrum.h>
 #include <FML/ComputePowerSpectra/HybridBiasLinearFieldIO.h>
+#include <FML/ComputePowerSpectra/HybridBiasRedshiftSpace.h>
 #include <FML/ComputePowerSpectra/HybridBiasSpectra.h>
 #include <FML/Global/Global.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
@@ -66,6 +67,8 @@ namespace FML {
             std::string ic_lpt_correction;
             int id_offset;
             double growth_ratio;
+            bool rsd;
+            int rsd_ellmax;
 
             HybridBiasSettings() {
                 parameters([](const char *, auto & value, const auto & default_value, const char *) {
@@ -113,6 +116,12 @@ namespace FML {
                   growth_ratio,
                   0.0,
                   "D(z_snapshot) / D(z of the linear field) (0: from the expansion history, scale-independent)");
+                f("rsd",
+                  rsd,
+                  false,
+                  "Also the redshift-space multipoles P_ab^l(k) (the operators assigned at the redshift-space positions, "
+                  "mean over the three axes; ComputePowerSpectra/HybridBiasRedshiftSpace.h): hybridbias_rsd_z<z>.txt");
+                f("rsd_ellmax", rsd_ellmax, 4, "The largest multipole of the redshift-space spectra (even)");
             }
 
             void validate() const {
@@ -139,6 +148,8 @@ namespace FML {
                 }
                 if (ic_lpt_correction != "2lpt" and ic_lpt_correction != "none")
                     throw std::runtime_error("hybridbias_ic_lpt_correction must be 2lpt or none");
+                if (rsd and (rsd_ellmax < 0 or rsd_ellmax % 2 != 0))
+                    throw std::runtime_error("hybridbias_rsd_ellmax must be even and >= 0");
             }
         };
 
@@ -502,6 +513,10 @@ namespace FML {
             std::string source;
             std::array<double, 3> lattice_offset{};
             double max_displacement_cells{0.0};
+            /// The redshift-space multipoles (settings.rsd)
+            bool has_multipoles{false};
+            FML::CORRELATIONFUNCTIONS::HYBRIDBIAS::HybridBiasMultipoles<3> multipoles;
+            double velocity_to_displacement{0.0};
         };
 
         //=============================================================================
@@ -593,6 +608,30 @@ namespace FML {
             for (size_t i = 0; i < plin.pofk.size(); i++)
                 result.plinear[i] = ratio * ratio * plin.pofk[i];
 
+            // The redshift-space multipoles (the same operators at s = x + v_n n velocity_to_displacement)
+            if (settings.rsd) {
+                if constexpr (FML::PARTICLE::has_get_vel<P>()) {
+                    result.velocity_to_displacement = context.velocity_to_displacement();
+                    HB::compute_hybrid_bias_multipoles<3, P>(part,
+                                                             npart,
+                                                             ntot,
+                                                             field.delta_fourier,
+                                                             N,
+                                                             settings.nmesh,
+                                                             result.velocity_to_displacement,
+                                                             options,
+                                                             result.multipoles,
+                                                             settings.rsd_ellmax,
+                                                             {},
+                                                             [ratio](double) { return ratio; },
+                                                             lattice_coordinate);
+                    result.multipoles.scale(context.boxsize);
+                    result.has_multipoles = true;
+                } else {
+                    throw std::runtime_error("hybridbias_rsd: the particles have no velocities");
+                }
+            }
+
             result.nlattice = N;
             result.linear_field_redshift = field.redshift;
             result.growth_ratio = ratio;
@@ -627,6 +666,31 @@ namespace FML {
                       "the operators (1, delta_L, delta_L^2 - <delta_L^2>, s^2 - <s^2>, nabla^2 delta_L)\n";
             header << "# Plinear(k): D^2 |delta_L(k)|^2 of this realization's linear field in the same bins\n";
             r.spectra.write(filename, header.str(), {{"Plinear(k)", r.plinear}});
+#ifdef USE_MPI
+            MPI_Barrier(FML::communicator);
+#endif
+        }
+
+        /// Write the redshift-space multipoles (settings.rsd). Collective
+        inline void write_hybrid_bias_multipoles(const std::string & filename,
+                                                 const HybridBiasResult & r,
+                                                 const HybridBiasSettings & settings,
+                                                 double redshift,
+                                                 double boxsize,
+                                                 const std::string & header_text = "") {
+            std::ostringstream header;
+            header << header_text;
+            header << "# Hybrid bias spectra in redshift space at z = " << redshift << " (boxsize " << boxsize
+                   << " Mpc/h, lattice " << r.nlattice << "^3, nmesh " << settings.nmesh << ", "
+                   << settings.density_assignment_method << (settings.interlacing ? " with interlacing" : "")
+                   << ", shot noise subtracted from the monopole: " << std::boolalpha << settings.subtract_shotnoise
+                   << ", velocity_to_displacement = " << r.velocity_to_displacement << " box units per velocity unit)\n";
+            header << "# Linear field: " << r.source << " at z = " << r.linear_field_redshift
+                   << ", scaled with D(z)/D(z_L) = " << r.growth_ratio << "\n";
+            header << "# The tracer multipoles are P_tt^l = sum_ab b_a b_b P_ab^l with b = (1, b1, b2, bs, bnabla); "
+                      "fingers of god and noise are not included (counterterms k^2 mu^(2n) P and stochastic terms in "
+                      "the fit)\n";
+            r.multipoles.write(filename, header.str());
 #ifdef USE_MPI
             MPI_Barrier(FML::communicator);
 #endif

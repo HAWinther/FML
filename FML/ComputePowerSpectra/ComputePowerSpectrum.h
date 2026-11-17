@@ -3,6 +3,7 @@
 
 #include <array>
 #include <cassert>
+#include <string>
 #include <iostream>
 #include <vector>
 
@@ -210,6 +211,27 @@ namespace FML {
         void compute_power_spectrum_multipoles_fourier(const Grid<N> & fourier_grid,
                                                        std::vector<PowerSpectrumBinning<N>> & Pell,
                                                        std::vector<double> line_of_sight_direction);
+
+        //================================================================================
+        /// @brief Cross power-spectrum multipoles of two Fourier grids (same size and layout) with a fixed line of
+        /// sight: \f$ P_\ell(k) = (2\ell+1) \left< {\rm Re}[\delta_1(\vec k) \delta_2^*(\vec k)] L_\ell(\mu) \right> \f$
+        /// with \f$ \mu = \hat k \cdot \hat n \f$, binned as compute_power_spectrum_multipoles_fourier (which is this with
+        /// \f$ \delta_1 = \delta_2 \f$; the two give the same result for the same grid). Only the even multipoles are
+        /// computed (the odd ones are zero; for two real fields that are statistically symmetric under
+        /// \f$ \vec k \to -\vec k \f$ the odd multipoles and the imaginary part vanish on average). The result has no
+        /// scales (pofk.scale(boxsize) as for the other estimators). No window deconvolution or shot noise is applied
+        /// here: do it on the grids before (deconvolve_window_function_fourier).
+        ///
+        /// @param[in] fourier_grid_1, fourier_grid_2 The grids in Fourier space
+        /// @param[out] Pell Pell[ell] is P_ell(k) for ell < Pell.size() (initialized with nbins, kmin, kmax)
+        /// @param[in] line_of_sight_direction The line of sight, e.g. (0,0,1)
+        ///
+        //================================================================================
+        template <int N, template <int> class Grid = FFTWGrid>
+        void compute_cross_power_spectrum_multipoles_fourier(const Grid<N> & fourier_grid_1,
+                                                             const Grid<N> & fourier_grid_2,
+                                                             std::vector<PowerSpectrumBinning<N>> & Pell,
+                                                             std::vector<double> line_of_sight_direction);
 
         //================================================================================
         /// @brief A simple power-spectrum estimator for multipoles in simulations.
@@ -440,87 +462,120 @@ namespace FML {
         // PowerSpectrumBinning using scale(kscale, pofkscale) with kscale = 1/Boxsize
         // and pofkscale = Boxsize^N once spectrum has been computed
         //==========================================================================================
+        namespace detail {
+            /// The multipoles of power(fourier_index) (|delta|^2 or Re[delta_1 delta_2^*]) on the modes of grid
+            template <int N, class Grid, class Power>
+            void power_spectrum_multipoles_fourier_impl(const Grid & fourier_grid,
+                                                        Power && power_of_mode,
+                                                        std::vector<PowerSpectrumBinning<N>> & Pell,
+                                                        std::vector<double> line_of_sight_direction,
+                                                        const char * name) {
+                const std::string where = std::string("[") + name + "] ";
+                assert_mpi(line_of_sight_direction.size() == N,
+                           (where + "Line of sight direction has wrong number of dimensions\n").c_str());
+                assert_mpi(Pell.size() > 0, (where + "Pell must have size > 0\n").c_str());
+                assert_mpi(fourier_grid.get_nmesh() > 0, (where + "grid must have Nmesh > 0\n").c_str());
+
+                // Norm of LOS vector
+                double rmag = 0.0;
+                for (int idim = 0; idim < N; idim++)
+                    rmag += line_of_sight_direction[idim] * line_of_sight_direction[idim];
+                rmag = std::sqrt(rmag);
+                assert_mpi(rmag > 0.0, (where + "Line of sight vector has zero length\n").c_str());
+
+                // Initialize binning just in case
+                for (size_t ell = 0; ell < Pell.size(); ell++)
+                    Pell[ell].reset();
+
+                // Bin up mu^k |delta|^2
+                FML::GRID::for_each_nonzero_fourier_mode(
+                    fourier_grid,
+                    [&](IndexIntType fourier_index, const std::array<double, N> & kvec, double kmag, double weight) {
+                        const double power = power_of_mode(fourier_index);
+
+                        // Compute mu = k_vec*r_vec
+                        double mu2 = 0.0;
+                        for (int idim = 0; idim < N; idim++)
+                            mu2 += kvec[idim] * line_of_sight_direction[idim];
+                        mu2 /= (kmag * rmag);
+                        mu2 = mu2 * mu2;
+
+                        // Add to bin |delta|^2, |delta|^2mu^2, |delta^2|mu^4, ...
+                        double mutotwoell = 1.0;
+                        for (size_t ell = 0; ell < Pell.size(); ell += 2) {
+                            Pell[ell].add_to_bin(kmag, power * mutotwoell, weight);
+                            mutotwoell *= mu2;
+                        }
+                    });
+
+                // Normalize (sums over the threads and the MPI tasks)
+                for (size_t ell = 0; ell < Pell.size(); ell++)
+                    Pell[ell].normalize();
+
+                // Binomial coefficient
+                auto binomial = [](int n, int k) -> double {
+                    double res = 1.0;
+                    for (int i = 0; i < k; i++) {
+                        res *= double(n - i) / double(k - i);
+                    }
+                    return res;
+                };
+
+                // P_ell(x) = Sum_{k=0}^{ell/2} summand_legendre_polynomial * x^(ell - 2k)
+                auto summand_legendre_polynomial = [&](int k, int ell) -> double {
+                    double sign = (k % 2) == 0 ? 1.0 : -1.0;
+                    return sign * binomial(ell, k) * binomial(2 * ell - 2 * k, ell) / std::pow(2.0, ell);
+                };
+
+                // Go from <mu^k |delta|^2> to (2ell+1) <L_ell(mu) |delta|^2>
+                std::vector<std::vector<double>> temp;
+                for (int ell = 0; ell < int(Pell.size()); ell++) {
+                    std::vector<double> sum(Pell[0].pofk.size(), 0.0);
+                    for (int k = 0; k <= ell / 2; k++) {
+                        std::vector<double> & mu_power = Pell[ell - 2 * k].pofk;
+                        for (size_t i = 0; i < sum.size(); i++)
+                            sum[i] += mu_power[i] * summand_legendre_polynomial(k, ell) * double(2 * ell + 1);
+                    }
+                    temp.push_back(sum);
+                }
+
+                // Copy over data. We now have P0,P1,... in Pell
+                for (size_t ell = 0; ell < Pell.size(); ell++) {
+                    Pell[ell].pofk = temp[ell];
+                }
+            }
+        } // namespace detail
+
         template <int N, template <int> class Grid>
         void compute_power_spectrum_multipoles_fourier(const Grid<N> & fourier_grid,
                                                        std::vector<PowerSpectrumBinning<N>> & Pell,
                                                        std::vector<double> line_of_sight_direction) {
-
-            assert_mpi(
-                line_of_sight_direction.size() == N,
-                "[compute_power_spectrum_multipoles_fourier] Line of sight direction has wrong number of dimensions\n");
-            assert_mpi(Pell.size() > 0, "[compute_power_spectrum_multipoles_fourier] Pell must have size > 0\n");
-            assert_mpi(fourier_grid.get_nmesh() > 0,
-                       "[compute_power_spectrum_multipoles_fourier] grid must have Nmesh > 0\n");
-
-            // Norm of LOS vector
-            double rmag = 0.0;
-            for (int idim = 0; idim < N; idim++)
-                rmag += line_of_sight_direction[idim] * line_of_sight_direction[idim];
-            rmag = std::sqrt(rmag);
-            assert_mpi(rmag > 0.0,
-                       "[compute_power_spectrum_multipoles_fourier] Line of sight vector has zero length\n");
-
-            // Initialize binning just in case
-            for (size_t ell = 0; ell < Pell.size(); ell++)
-                Pell[ell].reset();
-
-            // Bin up mu^k |delta|^2
-            FML::GRID::for_each_nonzero_fourier_mode(
+            detail::power_spectrum_multipoles_fourier_impl<N>(
                 fourier_grid,
-                [&](IndexIntType fourier_index, const std::array<double, N> & kvec, double kmag, double weight) {
-                    auto delta = fourier_grid.get_fourier_from_index(fourier_index);
-                    double power = std::norm(delta);
+                [&](IndexIntType fourier_index) { return double(std::norm(fourier_grid.get_fourier_from_index(fourier_index))); },
+                Pell,
+                line_of_sight_direction,
+                "compute_power_spectrum_multipoles_fourier");
+        }
 
-                    // Compute mu = k_vec*r_vec
-                    double mu2 = 0.0;
-                    for (int idim = 0; idim < N; idim++)
-                        mu2 += kvec[idim] * line_of_sight_direction[idim];
-                    mu2 /= (kmag * rmag);
-                    mu2 = mu2 * mu2;
-
-                    // Add to bin |delta|^2, |delta|^2mu^2, |delta^2|mu^4, ...
-                    double mutotwoell = 1.0;
-                    for (size_t ell = 0; ell < Pell.size(); ell += 2) {
-                        Pell[ell].add_to_bin(kmag, power * mutotwoell, weight);
-                        mutotwoell *= mu2;
-                    }
-                });
-
-            // Normalize (sums over the threads and the MPI tasks)
-            for (size_t ell = 0; ell < Pell.size(); ell++)
-                Pell[ell].normalize();
-
-            // Binomial coefficient
-            auto binomial = [](int n, int k) -> double {
-                double res = 1.0;
-                for (int i = 0; i < k; i++) {
-                    res *= double(n - i) / double(k - i);
-                }
-                return res;
-            };
-
-            // P_ell(x) = Sum_{k=0}^{ell/2} summand_legendre_polynomial * x^(ell - 2k)
-            auto summand_legendre_polynomial = [&](int k, int ell) -> double {
-                double sign = (k % 2) == 0 ? 1.0 : -1.0;
-                return sign * binomial(ell, k) * binomial(2 * ell - 2 * k, ell) / std::pow(2.0, ell);
-            };
-
-            // Go from <mu^k |delta|^2> to (2ell+1) <L_ell(mu) |delta|^2>
-            std::vector<std::vector<double>> temp;
-            for (int ell = 0; ell < int(Pell.size()); ell++) {
-                std::vector<double> sum(Pell[0].pofk.size(), 0.0);
-                for (int k = 0; k <= ell / 2; k++) {
-                    std::vector<double> & mu_power = Pell[ell - 2 * k].pofk;
-                    for (size_t i = 0; i < sum.size(); i++)
-                        sum[i] += mu_power[i] * summand_legendre_polynomial(k, ell) * double(2 * ell + 1);
-                }
-                temp.push_back(sum);
-            }
-
-            // Copy over data. We now have P0,P1,... in Pell
-            for (size_t ell = 0; ell < Pell.size(); ell++) {
-                Pell[ell].pofk = temp[ell];
-            }
+        template <int N, template <int> class Grid>
+        void compute_cross_power_spectrum_multipoles_fourier(const Grid<N> & fourier_grid_1,
+                                                             const Grid<N> & fourier_grid_2,
+                                                             std::vector<PowerSpectrumBinning<N>> & Pell,
+                                                             std::vector<double> line_of_sight_direction) {
+            assert_mpi(fourier_grid_1.get_nmesh() == fourier_grid_2.get_nmesh(),
+                       "[compute_cross_power_spectrum_multipoles_fourier] Grids must have the same gridsize\n");
+            // (the two grids have the same layout: the same index is the same mode)
+            detail::power_spectrum_multipoles_fourier_impl<N>(
+                fourier_grid_1,
+                [&](IndexIntType fourier_index) {
+                    const auto d1 = fourier_grid_1.get_fourier_from_index(fourier_index);
+                    const auto d2 = fourier_grid_2.get_fourier_from_index(fourier_index);
+                    return double(d1.real()) * double(d2.real()) + double(d1.imag()) * double(d2.imag());
+                },
+                Pell,
+                line_of_sight_direction,
+                "compute_cross_power_spectrum_multipoles_fourier");
         }
 
         /// @brief Loop over the local Fourier modes of a 3D grid (except k = 0): FML::GRID::for_each_nonzero_fourier_mode

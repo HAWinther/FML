@@ -6,6 +6,7 @@
 
 #include <array>
 #include <cmath>
+#include <functional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -251,7 +252,152 @@ namespace FML::PERTURBATION {
             return combine(multipole_components(f, k, apar, aperp, ngauss), b);
         }
 
+        //=============================================================================================================
+        // Spectra with a linear operator O(k) = F(k) delta_L(k) (e.g. nabla^2 delta_L: F = -k^2) as a bias operator,
+        // at the same order as the delta_L terms (the hybrid bias spectra in redshift space,
+        // ComputePowerSpectra/HybridBiasOneLoopRSD.h). They are the delta_L terms with F on the leg of the operator:
+        // the q-functions of delta_L (Ulin, U3, X10, Y10, corlin, U11, V) are replaced by those with F on that leg.
+        //=============================================================================================================
+
+        /// The q-functions with the operator O on one leg (on the internal q-grid): U = <O_1 Delta>, U3 = <O_1
+        /// Psi^(3)>, X10, Y10 (A10 = <O_1 Delta_i Delta_j>, as 2 X10loop12, 2 Y10loop12 for delta), xi = <delta O>,
+        /// xiOO = <O O>, U11 = <delta_1 O_2 Delta>, U11OO = <O_1 O_2 Delta>, V (the shear term <O_1 s^2_2 Delta>)
+        struct OperatorQFunctions {
+            DVector U, U3, X10, Y10, xi, xiOO, U11, U11OO, V;
+            double F_kref{0.0}; // F(kref_operator)
+        };
+
+        /// The operator spectra (1,O), (delta,O), (delta^2,O), (s^2,O), (O,O) in the normalization of the hybrid
+        /// bias basis spectra (delta_t = 1 + b1 delta + b2/2 delta^2 + bs s^2 + bO O: P_tt = ... + 2 bO P_1O +
+        /// 2 b1 bO P_dO + b2 bO P_d2O + 2 bs bO P_s2O + bO^2 P_OO; for F = 1 they are [b1]/2, [b1^2], [b1 b2],
+        /// [b1 bs]/2 and [b1^2] of pk_components)
+        static constexpr int noperator_components = 5;
+        /// The k where the constant from the missing small-q part of (O, O) is measured (h/Mpc; the components are
+        /// valid for k >~ 0.005 h/Mpc, as the others)
+        static constexpr double kref_operator = 5e-3;
+        using OperatorComponents = std::array<double, noperator_components>;
+
+        /// The q-functions of the operator F(k) delta_L from the loop spectra with F on the operator leg, given on
+        /// k_internal(): Q5F (Q5 with F on the leg p of the operator), R1F, R2F (R1, R2 with F on the internal
+        /// leg) (ComputePowerSpectra/HybridBiasOneLoop.h detail::loop_spectra). For F = 1 (and Q5F = Q5, R1F =
+        /// R1, R2F = R2 of qfunctions()) these are the delta_L q-functions.
+        OperatorQFunctions operator_qfunctions(const std::function<double(double)> & F,
+                                               const DVector & Q5F,
+                                               const DVector & R1F,
+                                               const DVector & R2F) {
+            const size_t n = kint.size();
+            if (Q5F.size() != n or R1F.size() != n or R2F.size() != n)
+                throw std::invalid_argument("[LPTRedshiftSpace::operator_qfunctions] loop spectra must be on k_internal()");
+            DVector Fk(n), FP(n), F2P(n), FR1(n), GA(n), GB(n), G11(n), G11OO(n);
+            // Without the loop terms (one_loop = false) R1, R2 are zero (the operator spectra are then the Zel'dovich
+            // ones with the linear exponent resummed)
+            const DVector zero(n, 0.0);
+            const DVector & R1 = qf.R1.size() == n ? qf.R1 : zero;
+            const DVector & R2 = qf.R2.size() == n ? qf.R2 : zero;
+            for (size_t i = 0; i < n; i++) {
+                Fk[i] = F(kint[i]);
+                FP[i] = Fk[i] * pint[i];
+                F2P[i] = Fk[i] * Fk[i] * pint[i];
+                FR1[i] = -5.0 / 21.0 * Fk[i] * R1[i];
+                // A10 for the operator on the external leg (F R1), the internal leg (R1F, R2F) or the leg of Q5
+                const double k2a = 3.0 / 7.0 * Fk[i] * R1[i];
+                const double k2b =
+                    -3.0 / 7.0 * Fk[i] * (R1[i] + 2.0 * R2[i]) - 6.0 / 7.0 * Q5F[i] - 6.0 / 7.0 * (R1F[i] + R2F[i]);
+                GA[i] = -0.5 * (k2a + k2b / 3.0);
+                GB[i] = -k2b / 6.0;
+                G11[i] = -3.0 / 7.0 * ((R1F[i] + R2F[i]) + Fk[i] * (R1[i] + R2[i]));
+                G11OO[i] = -6.0 / 7.0 * Fk[i] * (R1F[i] + R2F[i]);
+            }
+            OperatorQFunctions o;
+            o.F_kref = F(kref_operator);
+            o.U = qf.xi_l_n(1, -1, FP);
+            for (auto & v : o.U)
+                v = -v;
+            o.xi = qf.xi_l_n(0, 0, FP);
+            o.xiOO = qf.xi_l_n(0, 0, F2P);
+            o.U3 = qf.xi_l_n(1, -1, FR1);
+            // X10(q = 0) = 0: the zero-lag term is int dk GA / (2 pi^2) (trapezoid in k)
+            double zerolag = 0.0;
+            for (size_t i = 0; i + 1 < n; i++)
+                zerolag += 0.5 * (GA[i] + GA[i + 1]) * (kint[i + 1] - kint[i]);
+            zerolag /= 2 * M_PI * M_PI;
+            const auto xa = qf.xi_l_n(0, -2, GA);
+            const auto xb = qf.xi_l_n(2, -2, GB);
+            o.X10.resize(qint.size());
+            o.Y10.resize(qint.size());
+            for (size_t i = 0; i < qint.size(); i++) {
+                o.X10[i] = 2.0 * (zerolag - xa[i] - xb[i]);
+                o.Y10[i] = 6.0 * xb[i];
+            }
+            o.U11 = qf.xi_l_n(1, -1, G11);
+            o.U11OO = qf.xi_l_n(1, -1, G11OO);
+            // V = 4 J2 <O s> with J2 = 2/15 xi_1^-1 - xi_3^-1 / 5 (the shear-displacement correlator)
+            const auto x1m1 = qf.xi_l_n(1, -1);
+            const auto x3m1 = qf.xi_l_n(3, -1);
+            const auto x20F = qf.xi_l_n(2, 0, FP);
+            o.V.resize(qint.size());
+            for (size_t i = 0; i < qint.size(); i++)
+                o.V[i] = 4.0 * (2.0 * x1m1[i] / 15.0 - 0.2 * x3m1[i]) * x20F[i];
+            return o;
+        }
+
+        /// The operator spectra at the growth rate f and mu = nu (no AP) for the k-values
+        std::vector<OperatorComponents>
+        operator_components(const OperatorQFunctions & o, double f, double nu, const DVector & k) {
+            const size_t N = qint.size();
+            for (const DVector * v : {&o.U, &o.U3, &o.X10, &o.Y10, &o.xi, &o.xiOO, &o.U11, &o.U11OO, &o.V})
+                if (v->size() != N)
+                    throw std::invalid_argument("[LPTRedshiftSpace::operator_components] q-functions not on q_internal()");
+            const auto r = rsd_factors(f, nu);
+            std::vector<OperatorComponents> out;
+            // The q-grid starts at 10^-log10_kmax: the part of the integrals from smaller q is missing. For (O, O),
+            // whose correlator <O O> = int k^2 dk F^2 P j0(kq) is concentrated at small q, this gives a constant (k <<
+            // 1 / q_min) that does not go to zero as k -> 0 (it must: O has no k = 0 mode). We remove it with the
+            // value at kref_operator, where (O, O) is its linear value F(k)^2 P(k)
+            DVector kall{kref_operator};
+            kall.insert(kall.end(), k.begin(), k.end());
+            for (double kk : kall) {
+                const double Kfac = r.Kfac, ksq = kk * kk, K = kk * Kfac, Ksq = K * K, Knfac = nu * (1 + f);
+                const auto & Xg = qf.Xlin_gt;
+                const auto & Yg = qf.Ylin_gt;
+                out.push_back(p_integrals_generic<noperator_components>(
+                    r, kk, [&](int, int i, const AngularFactors & a, OperatorComponents & c) {
+                        const double xg = Xg[i], yg = Yg[i], Ul = qf.Ulin[i];
+                        const double zel0 = a.mu0 - 0.5 * Ksq * (xg * a.mu0 + yg * a.mu2);
+                        const double kq1 = K * a.mu1 + f * kk * nu * a.nq1;
+                        // (1, O): half the b1 integrand with the operator q-functions
+                        c[0] = 0.5 * (-2 * K * (o.U[i] + o.U3[i]) * a.mu1 - Ksq * (o.X10[i] * a.mu0 + o.Y10[i] * a.mu2) -
+                                      4 * f * kk * nu * o.U3[i] * a.nq1 -
+                                      f * ksq * nu * (o.X10[i] * Knfac * a.mu0 + Kfac * o.Y10[i] * a.mu_nq1) -
+                                      2 * K * o.U[i] * (-0.5 * Ksq * (xg * a.mu1 + yg * a.mu3)));
+                        // (delta, O): the b1^2 integrand with one leg on the operator
+                        c[1] = o.xi[i] * zel0 - Ksq * Ul * o.U[i] * a.mu2 - kq1 * o.U11[i];
+                        // (delta^2, O): the b1 b2 integrand (the shift of delta^2 times <delta O>)
+                        c[2] = -2 * K * Ul * o.xi[i] * a.mu1;
+                        // (s^2, O): half the b1 bs integrand
+                        c[3] = -K * o.V[i] * a.mu1;
+                        // (O, O): the b1^2 integrand with both legs on the operator
+                        c[4] = o.xiOO[i] * zel0 - Ksq * o.U[i] * o.U[i] * a.mu2 - kq1 * o.U11OO[i];
+                    }));
+            }
+            {
+                const double Fr = o.F_kref;
+                const double lin = Fr * Fr * detail::interp_clamped(std::log(kref_operator), logkint(), pint);
+                const double constant = out[0][4] - lin;
+                for (size_t i = 1; i < out.size(); i++)
+                    out[i][4] -= constant;
+            }
+            out.erase(out.begin());
+            return out;
+        }
+
         const LagrangianQFunctions & qfunctions() const { return qf; }
+        DVector logkint() const {
+            DVector l(kint.size());
+            for (size_t i = 0; i < kint.size(); i++)
+                l[i] = std::log(kint[i]);
+            return l;
+        }
         const DVector & k_internal() const { return kint; }
         const DVector & p_internal() const { return pint; }
         const DVector & q_internal() const { return qint; }
@@ -396,9 +542,57 @@ namespace FML::PERTURBATION {
         }
 
         Components p_integrals(const RSD & r, double k) {
-            const int jn = opt.jn, nmax = opt.nmax, N = opt.N;
-            const double f = r.f, nu = r.nu, Kfac = r.Kfac, Anu = r.Anu, Bnu = r.Bnu;
+            const double f = r.f, nu = r.nu, Kfac = r.Kfac;
             const double ksq = k * k, K = k * Kfac, Ksq = K * K, Knfac = nu * (1 + f);
+            const auto & Xg = qf.Xlin_gt;
+            const auto & Yg = qf.Ylin_gt;
+            const auto & q = qf;
+            return p_integrals_generic<ncomponents>(r, k, [&](int, int i, const AngularFactors & a, Components & out) {
+                const double xg = Xg[i], yg = Yg[i];
+                    double c0 = a.mu0 - 0.5 * Ksq * (xg * a.mu0 + yg * a.mu2);
+                    c0 += (-0.5 * ksq *
+                               (2 * (Kfac * Kfac + 2 * f * (1 + f) * nu * nu) * a.mu0 * q.Xloop13[i] +
+                                2 * (Kfac * Kfac * a.mu2 + 2 * f * Kfac * nu * a.mu_nq1) * q.Yloop13[i] +
+                                (Kfac * Kfac + 2 * f * (1 + f) * nu * nu + f * f * nu * nu) * a.mu0 * q.Xloop22[i] +
+                                (Kfac * Kfac * a.mu2 + 2 * f * Kfac * nu * a.mu_nq1 + f * f * nu * nu * a.nq2) * q.Yloop22[i]) +
+                           Ksq * Ksq / 8. * (xg * xg * a.mu0 + 2 * xg * yg * a.mu2 + yg * yg * a.mu4));
+                    c0 += 0.5 * k * k * k *
+                          (2 * Kfac * (Kfac * Kfac + f * (1 + f) * nu * nu) * a.mu1 * q.V1loop112[i] +
+                           Kfac * Kfac * (Kfac * a.mu1 + f * nu * a.nq1) * q.V3loop112[i] +
+                           Kfac * Kfac * (Kfac * a.mu3 + f * nu * a.mu2_nq1) * q.Tloop112[i]);
+                    out[0] = c0;
+                    const double Ul = q.Ulin[i], xi = q.corlin[i];
+                    out[1] = -2 * K * (Ul + q.U3[i]) * a.mu1 - Ksq * (X10[i] * a.mu0 + Y10[i] * a.mu2) -
+                                       4 * f * k * nu * q.U3[i] * a.nq1 -
+                                       f * ksq * nu * (X10[i] * Knfac * a.mu0 + Kfac * Y10[i] * a.mu_nq1) -
+                                       2 * K * Ul * (-0.5 * Ksq * (xg * a.mu1 + yg * a.mu3));
+                    out[2] = xi * (a.mu0 - 0.5 * Ksq * (xg * a.mu0 + yg * a.mu2)) - Ksq * Ul * Ul * a.mu2 -
+                                       (K * a.mu1 + f * k * nu * a.nq1) * q.U11[i];
+                    out[3] = -Ksq * Ul * Ul * a.mu2 - k * (Kfac * a.mu1 + f * nu * a.nq1) * q.U20[i];
+                    out[4] = -2 * K * Ul * xi * a.mu1;
+                    out[5] = 0.5 * xi * xi * a.mu0;
+                    out[6] = -Ksq * (q.Xs2[i] * a.mu0 + q.Ys2[i] * a.mu2) - 2 * k * (Kfac * a.mu1 + f * nu * a.nq1) * q.Us2[i];
+                    out[7] = -2 * K * q.V[i] * a.mu1;
+                    out[8] = q.chi[i] * a.mu0;
+                    out[9] = q.zeta[i] * a.mu0;
+                    out[10] = -2 * K * q.Ub3[i] * a.mu1;
+                    out[11] = 2 * q.theta[i] * a.mu0;
+                    out[12] = opt.use_Pzel ? a.mu0 - 0.5 * Ksq * (xg * a.mu0 + yg * a.mu2) : xi * a.mu0;
+            });
+        }
+
+        /// The angular factors of the integrands at (l, q_i) (velocileptors' notation)
+        struct AngularFactors {
+            double mu0, mu1, mu2, mu3, mu4, nq1, mu_nq1, nq2, mu2_nq1;
+        };
+
+        /// The Fourier-Bessel integrals of NC integrands: build(l, i, angular factors, out) sets out[c] for the
+        /// q-point i (the resummed exponent and the transform are done here)
+        template <int NC, class Builder>
+        std::array<double, NC> p_integrals_generic(const RSD & r, double k, Builder && build) {
+            const int jn = opt.jn, nmax = opt.nmax, N = opt.N;
+            const double Kfac = r.Kfac, Anu = r.Anu, Bnu = r.Bnu;
+            const double K = k * Kfac, Ksq = K * K;
 
             // The 9 G-functions [type][l][q]
             const int npow[9] = {0, 1, 1, 2, 2, 2, 3, 3, 4};
@@ -432,11 +626,8 @@ namespace FML::PERTURBATION {
             // X[l - m] (zero for l < m)
             auto sh = [](const std::vector<DVector> & X, int l, int m, int i) { return l >= m ? X[l - m][i] : 0.0; };
 
-            const auto & Xg = qf.Xlin_gt;
-            const auto & Yg = qf.Ylin_gt;
-            const auto & q = qf;
-            Components ret{};
-            std::vector<DVector> integrands(ncomponents, DVector(N, 0.0));
+            std::array<double, NC> ret{};
+            std::vector<DVector> integrands(NC, DVector(N, 0.0));
             for (int l = 0; l < jn; l++) {
                 for (int i = 0; i < N; i++) {
                     const double A = k * qint[i] * r.c, C = k * qint[i] * r.s;
@@ -461,51 +652,30 @@ namespace FML::PERTURBATION {
                                          0.25 * A2 * sh(dGdC, l, 2, i) + 0.25 * C * sh(G0, l, 2, i) +
                                          (A2 * C / 8.) * sh(G0, l, 3, i));
 
-                    const double mu0 = G0[l][i], mu1 = G01, mu2 = G02, mu3 = G03, mu4 = G04;
-                    const double nq1 = Anu * G01 + Bnu * G10;
-                    const double mu_nq1 = Anu * G02 + Bnu * G11;
-                    const double nq2 = Anu * Anu * G02 + 2 * Anu * Bnu * G11 + Bnu * Bnu * G20;
-                    const double mu2_nq1 = Anu * G03 + Bnu * G12;
-                    const double xg = Xg[i], yg = Yg[i];
+                    AngularFactors a;
+                    a.mu0 = G0[l][i];
+                    a.mu1 = G01;
+                    a.mu2 = G02;
+                    a.mu3 = G03;
+                    a.mu4 = G04;
+                    a.nq1 = Anu * G01 + Bnu * G10;
+                    a.mu_nq1 = Anu * G02 + Bnu * G11;
+                    a.nq2 = Anu * Anu * G02 + 2 * Anu * Bnu * G11 + Bnu * Bnu * G20;
+                    a.mu2_nq1 = Anu * G03 + Bnu * G12;
 
-                    double c0 = mu0 - 0.5 * Ksq * (xg * mu0 + yg * mu2);
-                    c0 += (-0.5 * ksq *
-                               (2 * (Kfac * Kfac + 2 * f * (1 + f) * nu * nu) * mu0 * q.Xloop13[i] +
-                                2 * (Kfac * Kfac * mu2 + 2 * f * Kfac * nu * mu_nq1) * q.Yloop13[i] +
-                                (Kfac * Kfac + 2 * f * (1 + f) * nu * nu + f * f * nu * nu) * mu0 * q.Xloop22[i] +
-                                (Kfac * Kfac * mu2 + 2 * f * Kfac * nu * mu_nq1 + f * f * nu * nu * nq2) * q.Yloop22[i]) +
-                           Ksq * Ksq / 8. * (xg * xg * mu0 + 2 * xg * yg * mu2 + yg * yg * mu4));
-                    c0 += 0.5 * k * k * k *
-                          (2 * Kfac * (Kfac * Kfac + f * (1 + f) * nu * nu) * mu1 * q.V1loop112[i] +
-                           Kfac * Kfac * (Kfac * mu1 + f * nu * nq1) * q.V3loop112[i] +
-                           Kfac * Kfac * (Kfac * mu3 + f * nu * mu2_nq1) * q.Tloop112[i]);
-                    integrands[0][i] = c0;
-                    const double Ul = q.Ulin[i], xi = q.corlin[i];
-                    integrands[1][i] = -2 * K * (Ul + q.U3[i]) * mu1 - Ksq * (X10[i] * mu0 + Y10[i] * mu2) -
-                                       4 * f * k * nu * q.U3[i] * nq1 -
-                                       f * ksq * nu * (X10[i] * Knfac * mu0 + Kfac * Y10[i] * mu_nq1) -
-                                       2 * K * Ul * (-0.5 * Ksq * (xg * mu1 + yg * mu3));
-                    integrands[2][i] = xi * (mu0 - 0.5 * Ksq * (xg * mu0 + yg * mu2)) - Ksq * Ul * Ul * mu2 -
-                                       (K * mu1 + f * k * nu * nq1) * q.U11[i];
-                    integrands[3][i] = -Ksq * Ul * Ul * mu2 - k * (Kfac * mu1 + f * nu * nq1) * q.U20[i];
-                    integrands[4][i] = -2 * K * Ul * xi * mu1;
-                    integrands[5][i] = 0.5 * xi * xi * mu0;
-                    integrands[6][i] = -Ksq * (q.Xs2[i] * mu0 + q.Ys2[i] * mu2) - 2 * k * (Kfac * mu1 + f * nu * nq1) * q.Us2[i];
-                    integrands[7][i] = -2 * K * q.V[i] * mu1;
-                    integrands[8][i] = q.chi[i] * mu0;
-                    integrands[9][i] = q.zeta[i] * mu0;
-                    integrands[10][i] = -2 * K * q.Ub3[i] * mu1;
-                    integrands[11][i] = 2 * q.theta[i] * mu0;
-                    integrands[12][i] = opt.use_Pzel ? mu0 - 0.5 * Ksq * (xg * mu0 + yg * mu2) : xi * mu0;
+                    std::array<double, NC> out{};
+                    build(l, i, a, out);
+                    for (int c = 0; c < NC; c++)
+                        integrands[c][i] = out[c];
                 }
                 // The resummed exponent times (-2/(kq))^l; for l = 0 the large-q value is subtracted
                 for (int i = 0; i < N; i++) {
                     const double fac = std::exp(-0.5 * Ksq * (XYlin[i] - sigma)) * std::pow(-2.0 / (k * qint[i]), l);
-                    for (int c = 0; c < ncomponents; c++)
+                    for (int c = 0; c < NC; c++)
                         integrands[c][i] *= fac;
                 }
                 if (l == 0)
-                    for (int c = 0; c < ncomponents; c++) {
+                    for (int c = 0; c < NC; c++) {
                         const double last = integrands[c][N - 1];
                         for (int i = 0; i < N; i++)
                             integrands[c][i] -= last;
@@ -516,7 +686,7 @@ namespace FML::PERTURBATION {
                 idx = std::clamp<size_t>(idx, 1, y.size() - 1);
                 const double w = (k - y[idx - 1]) / (y[idx] - y[idx - 1]);
                 DVector g(N);
-                for (int c = 0; c < ncomponents; c++) {
+                for (int c = 0; c < NC; c++) {
                     sph.transform(l, integrands[c].data(), g.data());
                     ret[c] += g[idx - 1] + w * (g[idx] - g[idx - 1]);
                 }

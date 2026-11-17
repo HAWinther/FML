@@ -5,6 +5,31 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### AMR multigrid: exact injection of the coarse-grid correction
+- `AMRMultiGridSolver::prolong_correction`: the cells that exist on both levels get the coarse value instead of
+  f + (f_c - Rf), which is the same in exact arithmetic but gives exactly 0 when a cell changes by more than 16 orders of
+  magnitude on the coarse level. This made the first dilaton solve in AMRCode fail with NaN in dense haloes resolved
+  below the finest level (models C4 and D4). Other solves are unchanged (identical outputs of the AMR examples and of a
+  dilaton N-body run). `AMRDilatonSolver.h`: no NaN in the equation for w <= 0. Test in `AMRDilatonExample.cpp`.
+
+### Hybrid bias spectra in redshift space
+- `compute_cross_power_spectrum_multipoles_fourier` (ComputePowerSpectrum.h): cross multipoles of two grids; the auto
+  multipoles use the same code (identical results).
+- `ComputePowerSpectra/HybridBiasRedshiftSpace.h`: the redshift-space multipoles of the 15 hybrid bias spectra from
+  particles with velocities (`compute_hybrid_bias_multipoles`) and of the Zel'dovich field (control variate).
+- Predictions: the exact Zel'dovich P_ab(k, nu) and multipoles in redshift space (`zeldovich_hybrid_bias_pkmu`,
+  `zeldovich_hybrid_bias_multipoles`; the real-space function shares the code, identical output) and the one-loop
+  LPT prediction (`HybridBiasOneLoopRSD.h`) including the nabla^2 delta spectra (`LPTRedshiftSpace::operator_components`;
+  `LPTRedshiftSpace` itself gives identical output). Docs in `ComputePowerSpectra/HYBRID_BIAS_RSD.md`, tests in
+  `tests/test_hybridbias_rsd.cpp`.
+- SimulationCode: `hybridbias_rsd` (and `hybridbias_rsd_ellmax`) writes `hybridbias_rsd_z<z>.txt` and, with the
+  Zel'dovich field / Zel'dovich / one-loop switches, the redshift-space Zel'dovich field, prediction, control variate
+  and one-loop prediction (also in `hybridbias_zeldovich_field_only` mode). SnapshotAnalyzer (`FML::ANALYSIS`
+  `HybridBias.h`): the same `hybridbias_rsd` options; it reproduces the in-run multipoles to 1e-5 - 4e-4.
+- Documentation: the book (sections on the redshift-space hybrid bias and on the AMR dilaton solver and AMRCode's
+  dilaton), the website (AMR, SimulationCode, SnapshotAnalyzer, correlation-function pages), PARAMETERS.md,
+  ANALYSIS.md and the READMEs.
+
 ### AMRCode: dilaton gravity
 - `gravity_model = Dilaton` (`dilaton_A2`, `dilaton_beta0`, `dilaton_r`, `dilaton_xi`, `dilaton_start_redshift`,
   `dilaton_epsilon`): the field `w = phi / phi_bar` is solved on the AMR leaves like the symmetron (full and partial

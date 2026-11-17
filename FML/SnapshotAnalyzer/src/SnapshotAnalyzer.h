@@ -609,6 +609,18 @@ namespace FML {
                     std::cout << "Hybrid bias spectra written: " << filename << " (linear field: " << r.source
                               << " at z = " << r.linear_field_redshift << ", D(z)/D(z_L) = " << r.growth_ratio
                               << ")\n";
+                if (r.has_multipoles) {
+                    const auto rsd_filename = output_path("hybridbias_rsd_z" + redshift_label() + ".txt");
+                    ANALYSIS::write_hybrid_bias_multipoles(rsd_filename,
+                                                           r,
+                                                           s,
+                                                           context.redshift(),
+                                                           context.boxsize,
+                                                           "# Hybrid bias spectra in redshift space of " +
+                                                               options.snapshot_input + "\n");
+                    if (FML::ThisTask == 0)
+                        std::cout << "Hybrid bias multipoles in redshift space written: " << rsd_filename << "\n";
+                }
             }
 
             void classify_cosmic_web() {

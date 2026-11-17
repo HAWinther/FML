@@ -38,6 +38,8 @@ void NBodySimulation<NDIM, T>::run() {
                                           hybrid_bias_options(*this),
                                           pofk_linear,
                                           false);
+            if (params.hybridbias.rsd)
+                compute_hybrid_bias_rsd(*this, redshift, snapshot_folder, false);
             timer.EndTiming("Hybrid bias spectra");
         }
         timer.EndTiming("Timestepping");

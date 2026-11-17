@@ -160,6 +160,13 @@ Valid for k >~ 0.005 h/Mpc with the default grid. Cost: ~0.8 s for the multipole
 [`CorrelationWorkspace`](CORRELATION_MULTIPOLES.md), which also consumes EPT/TNS/EFTofLSS results. The moment expansion
 of velocileptors is not ported.
 
+Linear operators as bias operators: `operator_qfunctions(F, Q5F, R1F, R2F)` and `operator_components(oq, f, nu, k)`
+give the spectra (1,O), (delta,O), (delta^2,O), (s^2,O), (O,O) of an operator O = F(k) delta_L (e.g. nabla^2 delta_L,
+F = -k^2) at the same order as the delta_L terms (the delta_L q-functions with F on the leg of the operator; the loop
+spectra with F on a leg from `ComputePowerSpectra/HybridBiasOneLoop.h`). With F = 1 they reproduce the delta_L
+components to 1e-3; without loops (`one_loop = false`) they equal the redshift-space Zel'dovich prediction to 1.4e-3.
+Used by the redshift-space hybrid bias prediction ([`ComputePowerSpectra/HYBRID_BIAS_RSD.md`](../ComputePowerSpectra/HYBRID_BIAS_RSD.md)).
+
 ## IR-resummed Eulerian perturbation theory in redshift space
 
 `EPTRedshiftSpace.h` gives P(k, mu) and the multipoles P_0, P_2, P_4 of biased tracers in one-loop Eulerian

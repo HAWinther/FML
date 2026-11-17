@@ -1,9 +1,9 @@
 \chapter{Power spectra and polyspectra}\label{ch:power-spectra}
-\chapterstatus{written}{2026-11-15}
+\chapterstatus{written}{2026-11-17}
 
 Fourier-space statistics of particles and fields in periodic boxes: auto and cross power spectra, redshift-space
 multipoles, the bispectrum and higher polyspectra with the shell-product method, and the hybrid Lagrangian-bias basis
-spectra with their perturbation-theory predictions.
+spectra in real and redshift space with their perturbation-theory predictions.
 
 \begin{modulebox}{ComputePowerSpectra}
 \nsp{FML::CORRELATIONFUNCTIONS}: \file{ComputePowerSpectra/ComputePowerSpectrum.h} (\code{compute_power_spectrum},
@@ -11,9 +11,11 @@ spectra with their perturbation-theory predictions.
 \code{compute_bispectrum}, \code{compute_polyspectrum}, \ldots), \file{PowerSpectrumBinning.h} (\cls{PowerSpectrumBinning}),
 \file{PolyspectrumBinning.h} (\cls{PolyspectrumBinning}, \cls{SparsePolyspectrumBinning}), \file{PolyspectrumWorkspace.h};
 \nsp{HYBRIDBIAS}: \file{HybridBiasSpectra.h}, \file{HybridBiasOperators.h}, \file{HybridBiasZeldovich.h},
-\file{HybridBiasOneLoop.h}, \file{HybridBiasOneLoopMG.h}, \file{HybridBiasLinearFieldIO.h}.\par
-Documentation: \file{ComputePowerSpectra/README.md}. Tests: \file{tests/test_pofk.cpp}, \file{tests/test_spectra_pencil.cpp},
-\file{tests/test_hybridbias.cpp}, \file{tests/test_hybridbias_pencil.cpp}.
+\file{HybridBiasOneLoop.h}, \file{HybridBiasOneLoopMG.h}, \file{HybridBiasLinearFieldIO.h}, \file{HybridBiasRedshiftSpace.h},
+\file{HybridBiasOneLoopRSD.h}.\par
+Documentation: \file{ComputePowerSpectra/README.md}, \file{ComputePowerSpectra/HYBRID_BIAS_RSD.md}. Tests: \file{tests/test_pofk.cpp},
+\file{tests/test_spectra_pencil.cpp}, \file{tests/test_hybridbias.cpp}, \file{tests/test_hybridbias_pencil.cpp},
+\file{tests/test_hybridbias_rsd.cpp}.
 \end{modulebox}
 
 \section{The power spectrum estimator}\label{sec:pk-estimator}
@@ -50,7 +52,9 @@ binned from the moments $\mu^{2n}|\delta_{\bm k}|^2$ (\code{compute_power_spectr
 \code{compute_power_spectrum_multipoles} moves them to redshift space along each coordinate axis in turn,
 $\bm x\to\bm x+\bm v\cdot\hat{\bm n}\,\hat{\bm n}/(aH)$ (the conversion factor depends on the velocity convention), and averages the three
 estimates; the shot noise is subtracted from the monopole. In \file{SimulationCode}: \param{pofk_multipole} and its options, up to
-\param{pofk_multipole_ellmax}.
+\param{pofk_multipole_ellmax}. The cross multipoles of two grids, $\hat P^{12}_\ell=\frac{2\ell+1}{N_k}\sum{\rm Re}(\delta^1_{\bm k}\delta^{2*}_{\bm k})\mathcal L_\ell(\mu)$,
+come from \code{compute_cross_power_spectrum_multipoles_fourier(grid1, grid2, Pell, los)}; the auto version uses the same code
+(identical results).
 
 \section{Polyspectra}\label{sec:pk-polyspectra}
 
@@ -121,4 +125,75 @@ with Matsubara's $Q_n$, $R_n$ \cite{Matsubara2008} computed in $k$-space (so a s
 with an independent Eulerian computation for $f(R)$ with and without screening, DGP and a $\mu(k,a)$ model; separate operator and displacement filters scale
 correctly. The one-loop spectra reduce to velocileptors to $10^{-6}$ for $F=1$, and the $\nabla^2\delta$ corrections agree with the difference between 2LPT
 and Zel'dovich particles to a few per cent. \file{tests/test_hybridbias_pencil.cpp}: slabs equal pencils.
+\end{validation}
+
+\subsection{Hybrid bias spectra in redshift space}\label{sec:pk-hybrid-rsd}
+
+In redshift space the operators are advected to $\bm s=\bm x+\hat{\bm n}(\bm v\cdot\hat{\bm n})/(aH)$, i.e.\ by the redshift-space
+displacement $\bm\Psi_s=\bm\Psi+\hat{\bm n}(\hat{\bm n}\cdot\dot{\bm\Psi})/H$, and the spectra become the multipoles
+\begin{equation}
+P^\ell_{ab}(k)=\frac{2\ell+1}{2}\int_{-1}^1\dd\mu\,P_{ab}(k,\mu)\mathcal L_\ell(\mu),\qquad
+P^\ell_{tt}=\sum_{ab}b_ab_bP^\ell_{ab},
+\end{equation}
+plane-parallel along each box axis and averaged over the three (\file{HybridBiasRedshiftSpace.h},
+\code{compute_hybrid_bias_multipoles}, result \cls{HybridBiasMultipoles} with \code{get(a, b, ell)}, \code{tracer_multipole} and
+\code{write}; $\ell\le$ \code{ellmax}, default 4). The operators stay Lagrangian (no redshift-space factor on the weights), so
+the templates hold for any Lagrangian bias; the velocities of the tracers relative to the matter (fingers of god) and their noise
+are not in them and enter a fit as counterterms $k^2\mu^{2n}P$ and stochastic terms.
+\code{compute_zeldovich_hybrid_bias_multipoles} gives the same for the Zel'dovich field of the same initial conditions (the
+lattice moved by $(1+f\hat{\bm n}\hat{\bm n})\bm\Psi^{(1)}$), the control variate.
+
+\paragraph*{Zel'dovich prediction.} In the Zel'dovich approximation $\bm\Psi_s=(\mathbb 1+f\hat{\bm n}\hat{\bm n})\bm\Psi$,
+so the redshift-space integral is the real-space one with the displacement wavevector $\bm K=(\mathbb 1+f\hat{\bm n}\hat{\bm n})\bm k$,
+$|\bm K|^2=k^2[1+f(f+2)\mu^2]$, in the exponent and the phase $e^{i\bm k\cdot\bm q}$; the angle of $\bm q$ about $\bm K$ is
+integrated analytically ($J_0$) and the rest numerically for every $(k,\mu)$, so the prediction is exact for the Zel'dovich field
+(\code{zeldovich_hybrid_bias_pkmu}, \code{zeldovich_hybrid_bias_multipoles} in \file{HybridBiasZeldovich.h}, with separate filters for the
+operators and the displacement). On large scales $P_{11}=(1+f\mu^2)^2P$, $P_{1\delta}=(1+f\mu^2)P$,
+$P_{1\nabla^2\delta}=-k^2(1+f\mu^2)P$, damped by $e^{-K^2\sigma^2}$.
+
+\paragraph*{One-loop prediction.} \cls{HybridBiasOneLoopRSD} (\file{HybridBiasOneLoopRSD.h}; \code{pkmu(f, nu, k)},
+\code{multipoles(f, k, ellmax)}) maps the components of \cls{LPTRedshiftSpace} (\cref{ch:perturbation-theory}) onto the 10 spectra
+without $\nabla^2\delta$, as in real space. For the 5 with $\nabla^2\delta=F(k)\delta_L$, $F=-k^2$, the $\delta_L$ terms are
+recomputed with $F$ on the operator leg (\code{LPTRedshiftSpace::operator_components}: $F$-weighted $Q$ and $R$ functions);
+$(\delta^2,\nabla^2\delta)$ and $(s^2,\nabla^2\delta)$ keep only the one-loop terms. The constant small-$q$ part of the
+$(\nabla^2\delta,\nabla^2\delta)$ term missing from the FFTLog grid is fixed by matching the linear value at $k=5\times10^{-3}\hMpc$.
+
+\begin{caveat}[The $\nabla^2\delta$ templates]
+The spectra with $\nabla^2\delta$ are dominated by the modes near the cut of the operator field: the loop terms change the
+$k^2P$ part of the template by tens of per cent ($P_{\delta\nabla^2\delta}/(-k^2P)=1.5$ at $f=0$ with a cutoff at $1\hMpc$, as in
+real space), and the zero-lag term $\langle\nabla^2\delta\,\Psi^{(1)}\Psi^{(2)}\rangle$, which picks up
+$(1+f\mu^2)(1+2f\mu^2)$, changes the sign of $P_{1\nabla^2\delta}$ along the line of sight for $f=0.8$. Compare with a
+measurement with the same cut and treat the amplitude of the $k^2P$ part as free (it is degenerate with $b_{\nabla^2}$ and the counterterms).
+\end{caveat}
+
+In \file{SimulationCode} \param{hybridbias_rsd} (with \param{hybridbias_rsd_ellmax}) writes the multipoles at each output, and with
+\param{hybridbias_zeldovich_field}, \param{hybridbias_zeldovich} and \param{hybridbias_oneloop} also those of the Zel'dovich field,
+its exact mean (averaged over $|\bm k|$ of the modes in the bins below $16k_f$), the control variate (the same $\beta(k)$ for all
+$\ell$) and the one-loop prediction (EdS kernels, a Gaussian cutoff of $P(k)$ at the operator cut), with $f$ of the gravity model
+at $k=0.01\hMpc$; \file{SnapshotAnalyzer} measures them from snapshots with velocities (\cref{ch:snapshot-analyzer}).
+
+\begin{cppcode}[Hybrid bias multipoles]
+#include <FML/ComputePowerSpectra/HybridBiasRedshiftSpace.h>
+using namespace FML::CORRELATIONFUNCTIONS::HYBRIDBIAS;
+HybridBiasOptions options;                   // as for the real-space spectra
+HybridBiasMultipoles<3> m;
+compute_hybrid_bias_multipoles<3>(
+    part.get_particles_ptr(), part.get_npart(), part.get_npart_total(),
+    delta_linear_fourier, Npart_1D, Nmesh, velocity_to_displacement,
+    options, m);                             // ellmax = 4, mean of 3 axes
+m.scale(Boxsize);                            // h/Mpc and (Mpc/h)^3
+auto & P_delta_s2_quadrupole = m.get("delta", "s2", 2);
+\end{cppcode}
+
+\begin{validation}[Validation: hybrid bias in redshift space]
+\file{tests/test_hybridbias_rsd.cpp} (1, 2 and 4 tasks, $\sim2$ min): the cross multipoles of a grid with itself equal the auto
+multipoles exactly, and for $\delta_2=(1+\beta\mu^2)\delta_1$ give $P_0/P=1+\beta/3$ ($10^{-13}$) and $P_2/P=2\beta/3$ (1.7\%, the discrete
+$\mu$ of the modes); at $f=0$ the Zel'dovich monopoles equal the real-space spectra ($5\times10^{-15}$), and particles at
+$\bm q+\bm\Psi$ with velocities $\bm\Psi$ reproduce the Zel'dovich field in redshift space ($10^{-13}$); the Zel'dovich field
+($64^3$, $500\Mpch$, $f=0.8$) against the mode-averaged prediction: mean $(\Delta/\sigma)^2=0.13$ for all 15 spectra and
+$\ell=0,2,4$ at $k<0.15\hMpc$; the Zel'dovich prediction against the no-loop components of \cls{LPTRedshiftSpace} (an independent
+calculation) to $1.4\times10^{-3}$; the one-loop prediction at $f=0$ against the real-space one ($1.2\times10^{-3}$, $2.4\times10^{-3}$
+with $\nabla^2\delta$) and with $F=1$ against the $\delta_L$ components. In a \file{SimulationCode} run ($64^3$ in $128\Mpch$)
+$P^\ell_{11}$ equals \param{pofk_multipole} exactly and \file{SnapshotAnalyzer} reproduces the multipoles to $10^{-5}$--$4\times10^{-4}$.
+Not yet: wide-angle terms for light cones and scale-dependent $f(k)$.
 \end{validation}

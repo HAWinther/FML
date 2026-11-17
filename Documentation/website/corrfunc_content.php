@@ -293,6 +293,14 @@ template&lt;int N, class T&gt;
       std::vector&lt;PowerSpectrumBinning&lt;N&gt;&gt; &amp; Pell,
       std::string density_assignment_method,
       bool interlacing);
+
+// Cross multipoles of two fields (same binning as above)
+template&lt;int N&gt;
+  void compute_cross_power_spectrum_multipoles_fourier(
+      const FFTWGrid&lt;N&gt; &amp; fourier_grid1,
+      const FFTWGrid&lt;N&gt; &amp; fourier_grid2,
+      std::vector&lt;PowerSpectrumBinning&lt;N&gt;&gt; &amp; Pell,
+      std::vector&lt;double&gt; line_of_sight_direction);
 </pre>
 </div>
 </div>
@@ -479,7 +487,7 @@ double B = bins.get_spectrum(3, 1, 2);       // any permutation
 <hr/>
 
 <p>
-Power-spectrum multipoles of a survey with a local line of sight, the window function and reconstruction are on the <a href="survey.php" style="display: inline">survey page</a>. Matched auto- and cross-spectra of simulations with the same phases (and control variates) are on the <a href="statistics.php#Ensemble" style="display: inline">summary statistics page</a>, kNN-CDFs, counts-in-cells, density-split and marked correlations as well. The hybrid Lagrangian bias spectra (with their Zel'dovich and one-loop predictions, also in modified gravity) are computed in the <a href="nbodycode.php#Analysis" style="display: inline">COLA code</a>, and the one-loop SPT power spectrum on the <a href="perturbationtheory.php" style="display: inline">perturbation theory page</a>.
+Power-spectrum multipoles of a survey with a local line of sight, the window function and reconstruction are on the <a href="survey.php" style="display: inline">survey page</a>. Matched auto- and cross-spectra of simulations with the same phases (and control variates) are on the <a href="statistics.php#Ensemble" style="display: inline">summary statistics page</a>, kNN-CDFs, counts-in-cells, density-split and marked correlations as well. The hybrid Lagrangian bias spectra in real and redshift space (with their Zel'dovich and one-loop predictions, also in modified gravity) are computed in the <a href="nbodycode.php#Analysis" style="display: inline">COLA code</a>, and the one-loop SPT power spectrum on the <a href="perturbationtheory.php" style="display: inline">perturbation theory page</a>.
 </p>
 
 <header class="entry-header text-center">

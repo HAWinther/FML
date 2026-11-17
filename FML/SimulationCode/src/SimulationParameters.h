@@ -1098,6 +1098,8 @@ namespace SIMCODE {
         double cv_beta_k0;                     // beta(k) of the control variate: [1 - tanh((k - k0) / dk)] / 2
         double cv_beta_dk;                     // (k0 <= 0: beta = 1)
         bool output_linear_field{false};       // Write delta_L(zini) on the lattice (for SnapshotAnalyzer)
+        bool rsd{false};                       // Also the redshift-space multipoles
+        int rsd_ellmax{4};                     // The largest multipole of the redshift-space spectra
 
         /// The parameters (see ParameterFields.h)
         template <class F>
@@ -1118,6 +1120,22 @@ namespace SIMCODE {
                                   "hybridbias_linear_field_<name>.dat in output_folder (FML linear field file, "
                                   "ComputePowerSpectra/HybridBiasLinearFieldIO.h): the input of the hybrid bias "
                                   "spectra of SnapshotAnalyzer (hybridbias_linear_field_source = \"file\")");
+                f.always_optional(
+                    "hybridbias_rsd",
+                    rsd,
+                    false,
+                    "Also the redshift-space multipoles P_ab^l(k) of the spectra (the operators assigned at the "
+                    "redshift-space positions of the particles, mean over the three axes): hybridbias_rsd_z<z>.txt. "
+                    "With hybridbias_zeldovich_field / hybridbias_zeldovich / hybridbias_oneloop also the "
+                    "Zel'dovich field (hybridbias_rsd_zeldovichfield_z<z>.txt), its exact mean "
+                    "(hybridbias_rsd_zeldovich_z<z>.txt), the control variate (hybridbias_rsd_cv_z<z>.txt) and the "
+                    "one-loop LPT prediction with EdS kernels (hybridbias_rsd_oneloop_z<z>.txt), with the growth rate "
+                    "f at k = 0.01 h/Mpc (ComputePowerSpectra/HYBRID_BIAS_RSD.md)");
+                f.always_optional("hybridbias_rsd_ellmax",
+                                  rsd_ellmax,
+                                  4,
+                                  "The largest multipole of the redshift-space spectra (even)",
+                                  check::non_negative());
                 f.optional("hybridbias_noperators",
                            noperators,
                            5,
@@ -1576,6 +1594,8 @@ namespace SIMCODE {
                 if (ic.random_field_type == ICRandomFieldType::ReadParticles)
                     fail("hybridbias needs the linear density field of the initial conditions and particles that start "
                          "on a regular lattice (not ic_random_field_type = read_particles)");
+                if (hybridbias.rsd and hybridbias.rsd_ellmax % 2 != 0)
+                    fail("hybridbias_rsd_ellmax must be even");
                 if ((hybridbias.zeldovich or hybridbias.oneloop) and hybridbias.kcut_over_nyquist <= 0.0)
                     fail("hybridbias_zeldovich and hybridbias_oneloop need an isotropic cut of the operators "
                          "(hybridbias_kcut_over_nyquist > 0)");

@@ -6,6 +6,8 @@
 #include <FML/ComputePowerSpectra/HybridBiasSpectra.h>
 #include <FML/ComputePowerSpectra/HybridBiasOneLoop.h>
 #include <FML/ComputePowerSpectra/HybridBiasOneLoopMG.h>
+#include <FML/ComputePowerSpectra/HybridBiasOneLoopRSD.h>
+#include <FML/ComputePowerSpectra/HybridBiasRedshiftSpace.h>
 #include <FML/ComputePowerSpectra/HybridBiasZeldovich.h>
 #include "SimulationGrid.h"
 #include <FML/FileUtils/FileUtils.h>
@@ -764,6 +766,199 @@ void write_hybrid_bias_predictions(
     }
 }
 
+/// The redshift-space hybrid bias multipoles (hybridbias_rsd): of the particles (if with_particles), of the Zel'dovich
+/// field of the same IC (hybridbias_zeldovich_field or the Zel'dovich-field-only mode), the exact Zel'dovich prediction
+/// (hybridbias_zeldovich) and the control variate, and the one-loop LPT prediction (hybridbias_oneloop, EdS kernels),
+/// written to hybridbias_rsd[_label]_z<z>.txt. The predictions and the Zel'dovich field use the growth rate f at k =
+/// 0.01 h/Mpc (scale independent); the particles move with their own velocities
+template <int NDIM, class T>
+void compute_hybrid_bias_rsd(NBodySimulation<NDIM, T> & sim,
+                             double redshift,
+                             const std::string & snapshot_folder,
+                             bool with_particles) {
+    using namespace FML::CORRELATIONFUNCTIONS::HYBRIDBIAS;
+    const auto & settings = sim.get_parameters().hybridbias;
+    const double boxsize = sim.get_parameters().simulation.boxsize;
+    const int Npart_1D = sim.get_parameters().particle.Npart_1D;
+    const int ellmax = settings.rsd_ellmax;
+    const double a = 1.0 / (1.0 + redshift);
+    const auto cosmo = sim.get_cosmology();
+    const auto grav = sim.get_gravity_model();
+    const double f = grav->get_f_1LPT(a, 0.01 / grav->H0_hmpc);
+    const auto options = hybrid_bias_options(sim);
+    const auto growth = hybrid_bias_growth_factor(sim, redshift);
+    const double kcut_displacement = hybrid_bias_kcut_displacement(sim);
+    const std::string zs = redshift_to_string(redshift);
+    if (FML::ThisTask == 0)
+        std::cout << "# Hybrid bias multipoles in redshift space (l <= " << ellmax << ", growth rate f = " << f
+                  << " for the Zel'dovich field and the predictions)\n";
+
+    std::ostringstream common;
+    common << "# z = " << redshift << ", boxsize " << boxsize << " Mpc/h, Npart_1D " << Npart_1D << ", nmesh "
+           << settings.nmesh << ", " << settings.density_assignment_method
+           << (settings.interlacing ? " with interlacing" : "") << ", plane-parallel along each axis (mean)\n"
+           << "# The tracer multipoles are P_tt^l = sum_ab b_a b_b P_ab^l with b = (1, b1, b2, bs, bnabla); fingers "
+              "of god and noise are not included (counterterms k^2 mu^(2n) P and stochastic terms in the fit)\n";
+
+    HybridBiasMultipoles<NDIM> measured, zfield;
+    if (with_particles) {
+        auto & part = sim.get_particles();
+        const double velocity_to_displacement = 1.0 / (a * a * cosmo->HoverH0_of_a(a));
+        compute_hybrid_bias_multipoles<NDIM, T>(part.get_particles_ptr(),
+                                                part.get_npart(),
+                                                part.get_npart_total(),
+                                                sim.get_hybridbias_linear_field(),
+                                                Npart_1D,
+                                                settings.nmesh,
+                                                velocity_to_displacement,
+                                                options,
+                                                measured,
+                                                ellmax,
+                                                {},
+                                                growth);
+        measured.scale(boxsize);
+        measured.write(snapshot_folder + "/hybridbias_rsd_z" + zs + ".txt",
+                       "# Hybrid bias spectra in redshift space of the CDM+baryon particles (shot noise subtracted "
+                       "from the monopole: " +
+                           std::string(settings.subtract_shotnoise ? "true" : "false") + ")\n" + common.str());
+    }
+    const bool want_zfield = settings.zeldovich_field or not with_particles;
+    if (want_zfield) {
+        compute_zeldovich_hybrid_bias_multipoles<NDIM>(sim.get_hybridbias_linear_field(),
+                                                       Npart_1D,
+                                                       settings.nmesh,
+                                                       f,
+                                                       options,
+                                                       zfield,
+                                                       ellmax,
+                                                       {},
+                                                       growth,
+                                                       kcut_displacement);
+        zfield.scale(boxsize);
+        zfield.write(snapshot_folder + "/hybridbias_rsd_zeldovichfield_z" + zs + ".txt",
+                     "# Hybrid bias spectra in redshift space of the Zel'dovich field of the same initial conditions "
+                     "(x = q + (1 + f n n) Psi, f = " + std::to_string(f) +
+                         "; the shot noise is not subtracted). Its mean is hybridbias_rsd_zeldovich\n" + common.str());
+    }
+
+    // The predictions
+    const auto & power_initial_spline = sim.get_power_initial_spline();
+    if (not(settings.zeldovich or settings.oneloop) or not power_initial_spline)
+        return;
+    const auto krange = power_initial_spline.get_xrange();
+    auto pofk_linear_of_k = [&](double k) {
+        if (k < krange.first or k > krange.second)
+            return 0.0;
+        return sim.linear_pofk_cb(k, a);
+    };
+    const double kcut = options.kcut / boxsize;
+    const std::function<double(double)> W_of_k2 =
+        settings.smoothing_scale > 0.0 ?
+            FML::GRID::smoothing_filter_of_k2<NDIM>(settings.smoothing_scale, settings.smoothing_filter) :
+            nullptr;
+    auto W_operators = [&](double k) {
+        if (k >= kcut)
+            return 0.0;
+        return W_of_k2 ? W_of_k2(k * k) : 1.0;
+    };
+    const double kcutd = kcut_displacement / boxsize;
+    auto W_displacement = [&](double k) { return k < kcutd ? 1.0 : 0.0; };
+    const auto & reference = with_particles ? measured : zfield;
+    const HybridBiasPredictionGrid<NDIM> grid(reference.pofk[0][0], boxsize);
+
+    // prediction[pair][ell][j] at the local k-values -> multipoles in the bins of the measurement
+    auto to_multipoles = [&](const std::vector<std::vector<std::vector<double>>> & prediction) {
+        HybridBiasMultipoles<NDIM> theory = reference;
+        HybridBiasSpectra<NDIM> tmp;
+        tmp.pairs = reference.pairs;
+        tmp.names = reference.names;
+        tmp.shotnoise.assign(reference.pairs.size(), 0.0);
+        tmp.pofk.resize(reference.pairs.size());
+        for (int ell = 0; ell <= ellmax; ell += 2) {
+            std::vector<std::vector<double>> pell(reference.pairs.size());
+            for (size_t p = 0; p < reference.pairs.size(); p++) {
+                tmp.pofk[p] = reference.pofk[p][ell];
+                if (not prediction.empty())
+                    pell[p] = prediction[p][ell];
+            }
+            grid.bin(pell, tmp);
+            for (size_t p = 0; p < reference.pairs.size(); p++)
+                theory.pofk[p][ell].pofk = tmp.pofk[p].pofk;
+        }
+        for (auto & sn : theory.shotnoise)
+            sn = 0.0;
+        return theory;
+    };
+    ZeldovichOptions zoptions;
+    zoptions.noperators = settings.noperators;
+    zoptions.kmin_integration = settings.lpt_kmin > 0.0 ? settings.lpt_kmin : std::max(1e-5, krange.first);
+    zoptions.kmax_integration = std::min(std::max(kcut, kcutd), krange.second);
+    const std::string note = " (linear P_cb(k,z), operators cut at k = " + std::to_string(kcut) +
+                             " h/Mpc, displacement at " + std::to_string(kcutd) + " h/Mpc, f = " + std::to_string(f) +
+                             "; for k < 16 k_fundamental averaged over |k| of the modes in each bin, not over their mu)\n";
+    if (settings.zeldovich) {
+        std::vector<std::vector<std::vector<double>>> pred;
+        if (not grid.klocal.empty())
+            pred = zeldovich_hybrid_bias_multipoles(
+                pofk_linear_of_k, W_operators, W_displacement, grid.klocal, f, ellmax, zoptions);
+        const auto zprediction = to_multipoles(pred);
+        zprediction.write(snapshot_folder + "/hybridbias_rsd_zeldovich_z" + zs + ".txt",
+                          "# Zel'dovich prediction (exact) of the hybrid bias multipoles in redshift space" + note +
+                              common.str());
+        // The control variate P_cv = P - beta(k) (P_zeldovichfield - P_zeldovich) for every multipole
+        if (with_particles and settings.zeldovich_field) {
+            auto cv = measured;
+            for (size_t p = 0; p < cv.pairs.size(); p++)
+                for (int ell = 0; ell <= ellmax; ell += 2)
+                    for (int i = 0; i < cv.pofk[p][ell].n; i++) {
+                        const double beta = zeldovich_control_variate_beta_fiducial(
+                            cv.pofk[p][ell].kbin[i], settings.cv_beta_k0, settings.cv_beta_dk);
+                        cv.pofk[p][ell].pofk[i] -=
+                            beta * (zfield.pofk[p][ell].pofk[i] - zprediction.pofk[p][ell].pofk[i]);
+                    }
+            cv.write(snapshot_folder + "/hybridbias_rsd_cv_z" + zs + ".txt",
+                     "# Zel'dovich control variate of the hybrid bias multipoles in redshift space: P_cv = P - "
+                     "beta(k) (P_zeldovichfield - P_zeldovich) with beta(k) = [1 - tanh((k - " +
+                         std::to_string(settings.cv_beta_k0) + ") / " + std::to_string(settings.cv_beta_dk) +
+                         ")] / 2\n" + common.str());
+        }
+    }
+    if (settings.oneloop and with_particles) {
+        if (FML::ThisTask == 0 and settings.oneloop_kernels != "EdS")
+            std::cout << "Note: the redshift-space one-loop prediction uses the EdS kernels\n";
+        // The linear P(k) up to the operator cut (a Gaussian cutoff at the cut stands in for the sharp cut: the FFTLog
+        // transforms ring for a sharp one), on a log grid
+        std::vector<std::vector<std::vector<double>>> pred;
+        if (not grid.klocal.empty()) {
+            std::vector<double> kt, pt;
+            const double k0 = std::max(1e-4, zoptions.kmin_integration), k1 = std::min(kcut, krange.second);
+            for (int i = 0; i < 400; i++) {
+                const double kk = k0 * std::pow(k1 / k0, i / 399.0);
+                const double w = W_of_k2 ? W_of_k2(kk * kk) : 1.0;
+                kt.push_back(kk);
+                pt.push_back(pofk_linear_of_k(kk) * w * w);
+            }
+            FML::PERTURBATION::LPTRedshiftSpace::Options lopt;
+            lopt.cutoff = kcut;
+            HybridBiasOneLoopRSD hb(kt, pt, lopt);
+            pred = hb.multipoles(f, grid.klocal, ellmax);
+            // the operators beyond noperators are not in the measurement
+            std::vector<std::vector<std::vector<double>>> keep;
+            const auto pl = HybridBiasOneLoopRSD::pairs();
+            for (auto & pr : reference.pairs)
+                for (size_t q = 0; q < pl.size(); q++)
+                    if (pl[q][0] == pr[0] and pl[q][1] == pr[1])
+                        keep.push_back(pred[q]);
+            pred = keep;
+        }
+        const auto oprediction = to_multipoles(pred);
+        oprediction.write(snapshot_folder + "/hybridbias_rsd_oneloop_z" + zs + ".txt",
+                          "# One-loop LPT prediction (EdS kernels, no counterterms; Gaussian cutoff at the operator "
+                          "cut) of the hybrid bias multipoles in redshift space" +
+                              note + common.str());
+    }
+}
+
 /// The hybrid bias (Lagrangian bias basis) spectra P_ab(k) of the operators 1, delta_L, delta_L^2, s^2 and
 /// nabla^2 delta_L advected with the CDM+baryon particles and the LPT predictions (written to file)
 template <int NDIM, class T>
@@ -780,6 +975,8 @@ void compute_hybrid_bias_spectra(NBodySimulation<NDIM, T> & sim, double redshift
                                   pofk_linear,
                                   true,
                                   sim.get_parameters().hybridbias.zeldovich_field ? &zfield : nullptr);
+    if (sim.get_parameters().hybridbias.rsd)
+        compute_hybrid_bias_rsd(sim, redshift, snapshot_folder, true);
 }
 
 /// Returns P_ell(k) for ell = 0,1,...,ellmax (also written to file)
