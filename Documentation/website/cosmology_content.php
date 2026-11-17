@@ -37,7 +37,7 @@
 CosmologyParameters -> BackgroundCosmology -> RecombinationHistory -> Perturbations -> PowerSpectrum -> Lensing, TwoPoint
                               ^                                             ^
                     Model = species + gravity  (lcdm, w0wa, musigma, dgp, quintessence, jbd, fr, coupled_quintessence,
-                                                dark_scattering, covariant_dark_scattering, axion,
+                                                fading_dark_sector, dark_scattering, covariant_dark_scattering, axion,
                                                 cubic_galileon, horndeski, horndeski_table, ede, ide,
                                                 symmetron, dilaton, mbeta)</pre>
   </div>
@@ -176,6 +176,7 @@ A model combines a background/species prescription with linear perturbation equa
 <tr><td><tt>jbd</tt></td><td><tt>bd_omega</tt>, <tt>bd_GeffG_today</tt></td><td>Jordan&ndash;Brans&ndash;Dicke scalar-tensor gravity with $M_*^2\propto\phi$ and evolved scalar perturbations.</td></tr>
 <tr><td><tt>fr</tt></td><td><tt>fR0, fR_n</tt></td><td>Hu&ndash;Sawicki $f(R)$: $\mu=\frac{1+4Q}{(1+3Q)(1+f_R)}$, $\Sigma=1/(1+f_R)$, $Q=(k/a)^2f_{RR}/(1+f_R)$.</td></tr>
 <tr><td><tt>coupled_quintessence</tt></td><td><tt>cq_lambda, cq_beta</tt></td><td>Exponential quintessence coupled to CDM, $m_c\propto e^{-\beta\phi}$; energy exchange, drag and fifth-force factor $1+2\beta^2$.</td></tr>
+<tr><td><tt>fading_dark_sector</tt></td><td><tt>fds_c, fds_cprime</tt></td><td>The Fading Dark Sector of <a href="https://arxiv.org/abs/2611.17422" style="display: inline">Obied, Vafa &amp; Wu (2026)</a>, $V_\mathrm{DE}\propto e^{-c\phi}$, $m_\mathrm{DM}\propto e^{-c'\phi}$: <tt>coupled_quintessence</tt> with $\lambda=c$, $\beta=c'$. Defaults are the paper's best fit, $c=-0.85$, $c'=0.05$ (<tt>params/fading_dark_sector.ini</tt>).</td></tr>
 <tr><td><tt>dark_scattering</tt></td><td><tt>ds_w, ds_xi, ds_cs2</tt></td><td>Perturbed dark-energy fluid with sound speed and elastic DM&ndash;DE momentum exchange; $\xi=0$ gives wCDM perturbations.</td></tr>
 <tr><td><tt>covariant_dark_scattering</tt></td><td><tt>ds_w, cds_alpha, ds_cs2</tt></td><td>Covariant CDM–DE elastic momentum exchange; wCDM background with drag proportional to $\alpha a^3/(\Omega_{c0}E)$ per $\ln a$.</td></tr>
 <tr><td><tt>axion</tt></td><td><tt>ax_log10_m, ax_fraction, ax_switch_mH</tt></td><td>Mixed cold/ultralight-axion dark matter: frozen scalar, oscillatory evolution and averaged fluid; separate cold and axion power, with axion isocurvature options.</td></tr>

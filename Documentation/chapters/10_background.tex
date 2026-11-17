@@ -1,5 +1,5 @@
 \chapter{The background cosmology}\label{ch:background}
-\chapterstatus{written}{2026-11-14}
+\chapterstatus{written}{2026-11-17}
 
 The expansion history of a homogeneous and isotropic universe is the input of almost everything else in the library:
 the recombination rates compete with the expansion rate, the perturbation equations contain $\Hp$ and its derivatives,
@@ -369,7 +369,7 @@ or slowly rolling today and behave like dark energy; the whole range $10^{-33}$-
 The axion is its own component; the total matter power spectrum includes it when $m\ge10^{-25}$\,eV
 (\cref{ch:cmb-spectra}).
 
-\subsection{Coupled quintessence}
+\subsection{Coupled quintessence}\label{sec:bg-coupledquintessence}
 
 In coupled quintessence \cite{Wetterich1995,Amendola2000} the CDM particles have a field-dependent mass
 $m(\phi)\propto e^{-\beta\phi}$ and the field has $V=3H_0^2\Mpl^2V_0e^{-\lambda\phi}$:
@@ -384,6 +384,20 @@ where the exchange cancels in the total. $\beta$ is Amendola's $\sqrt{2/3}\,\bet
 iteration (finite-difference Jacobian) so that $\rho_c(0)=\Om_{\rm cdm}$ and $\rho_\phi(0)$ closes the budget. The
 CDM and the field are two species (\code{CoupledCDMSpecies}, \code{CoupledFieldSpecies}) sharing one solution;
 $\beta=0$ is uncoupled quintessence and $\beta=\lambda=0$ is $\Lambda$CDM.
+
+\paragraph*{Fading Dark Sector.} The Fading Dark Sector \cite{ObiedVafaWu2026}, $V_{\rm DE}=V_0e^{-c\phi}$ and
+$m_{\rm DM}=m_0e^{-c'\phi}$ (reduced Planck units), is this model with $\lambda=c$ and $\beta=c'$: its field equation,
+effective mass $m_{\rm eff}^2=c^2V+c'^2\rho_c$, dark-matter fifth force $2c'^2$ and drag $c'\phi'$ are those above.
+The registry entry \code{fading_dark_sector} (\param{fds_c}, \param{fds_cprime}, defaults $-0.85$ and $0.05$, the
+best fit of CMB + DESI + DES supernovae in \cite{ObiedVafaWu2026}) builds the same background under that name. For
+$c<0$ the potential grows with $\phi$; the field is pushed up by the dark matter in the matter era and rolls back once
+the potential dominates, a thawing dark energy with $w_0\approx-0.91$ at the best fit.
+\begin{validation}
+\code{fading_dark_sector} equals \code{coupled_quintessence} with $\lambda=c$, $\beta=c'$ exactly
+(\file{Background/tests/test_models.cpp}), and the outputs of the Einstein--Boltzmann solver are byte-identical. The
+solver's CDM growth from $z=54$ to $0$ at $k=0.1\,\mathrm{Mpc}^{-1}$, relative to $\Lambda$CDM, agrees with an
+independent sub-horizon two-fluid integration of the paper's linear equations to $10^{-6}$.
+\end{validation}
 
 \subsection{Cubic Galileon}
 
@@ -461,6 +475,7 @@ Name & Background & Parameters \\
 \code{axion} & CDM + ultralight axion + $\Lambda$ & \param{ax_log10_m}, \param{ax_fraction}, \param{ax_switch_mH} \\
 \code{jbd} & Brans--Dicke + $\Lambda$ & \param{bd_omega}, \param{bd_GeffG_today}, density definition \\
 \code{coupled_quintessence} & coupled CDM + field & \param{cq_lambda}, \param{cq_beta} \\
+\code{fading_dark_sector} & coupled CDM + field ($\lambda=c$, $\beta=c'$) & \param{fds_c}, \param{fds_cprime} \\
 \code{cubic_galileon} & tracker, no $\Lambda$ & --- \\
 \code{dark_scattering}, \code{covariant_dark_scattering} & $w$CDM & \param{ds_w} \\
 \code{ide} & interacting CDM + fluid & \param{ide_xi}, \param{ide_w} \\

@@ -1,5 +1,5 @@
 \chapter{Dark energy and modified gravity in linear theory}\label{ch:extended-models}
-\chapterstatus{written}{2026-11-14}
+\chapterstatus{written}{2026-11-17}
 
 The Einstein--Boltzmann solver has a library of some twenty models beyond $\Lambda$CDM. Their backgrounds were
 described in \cref{ch:background}; this chapter gives their perturbations. Every model uses the conventions of
@@ -178,7 +178,10 @@ v_c'=-(1-\beta\phi_x)v_c-\frac{ck}{\Hp}\Psi+\beta\frac{ck}{\Hp}\delta\phi,\\
 w'&=\ldots-\frac{3(v_\phi-\beta\rho_c)}{E^2}\Psi+\frac{3\beta\rho_c}{E^2}\delta_c,
 \end{align}
 i.e.\ a fifth force that makes the effective gravitational constant of the dark matter $G(1+2\beta^2)$ on small
-scales, and a drag $\propto\beta\phi_xv_c$.
+scales, and a drag $\propto\beta\phi_xv_c$. The Fading Dark Sector \cite{ObiedVafaWu2026} (\code{fading_dark_sector},
+\cref{sec:bg-coupledquintessence}) uses these perturbations with $\lambda=c$, $\beta=c'$; its quasi-static limit
+$G_{\rm eff,\chi\chi}=G[1+2c'^2k^2/(k^2+a^2m_{\rm eff}^2)]$ is the $k\gg am_{\rm eff}$ limit $1+2\beta^2$ here, since
+$m_{\rm eff}\sim H$.
 
 \section{Scalar--tensor theories with full perturbations}\label{sec:ext-scalartensor}
 

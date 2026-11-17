@@ -1,5 +1,5 @@
 \chapter{Modified gravity and dark-sector simulations}\label{ch:mg-simulations}
-\chapterstatus{written}{2026-11-14}
+\chapterstatus{written}{2026-11-17}
 
 SimulationCode separates the \emph{cosmology} (the background, \param{cosmology_model}) from the \emph{gravity model}
 (the growth of perturbations and the force, \param{gravity_model}), so that one can be changed while the other is
@@ -33,6 +33,7 @@ curvature, $\Lambda$ and the primordial parameters; the backgrounds are those of
 \code{Tabulated} & $H(z)$ from a file (\code{H}, a CLASS/hi\_class \code{background.dat}, or $w(a)$) \\
 \code{DarkScattering}, \code{CovariantDarkScattering} & $w$CDM with dark matter--dark energy momentum exchange \\
 \code{CoupledQuintessence} & field coupled to CDM, $m\propto e^{-\beta\phi}$ \\
+\code{FadingDarkSector} & the same with $\lambda=c$, $\beta=c'$ (\param{cosmology_fds_c}, \param{cosmology_fds_cprime}) \cite{ObiedVafaWu2026} \\
 \code{IDE} & energy exchange $Q=\xi H\rho_{\rm DE}$ \\
 \code{Horndeski} & reduced Horndeski theory from the frontend table \\
 \code{CubicGalileon} & the tracker (no free parameter) \\
@@ -59,6 +60,7 @@ Model & $G_{\rm eff}/G$ and nonlinear physics & Screening \\
 \code{mbeta} & as symmetron, power laws $\beta_0a^{n}$, $m_0a^{m}$ & potential \\
 \code{mu} & $\mu(a,k)$: DE form, Bertschinger--Zukin \cite{BertschingerZukin2008} or a table & none \\
 \code{CoupledQuintessence} & CDM feels $G(1+2\beta^2)$ from CDM, friction $\beta\phi'$ & --- \\
+\code{FadingDarkSector} & as \code{CoupledQuintessence}, $\beta=c'$ & --- \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -155,6 +157,12 @@ baryons and has the velocity term $+\beta\phi'\bm v$; the baryons feel gravity o
 a momentum-weighted fluid with $G_{\rm eff}/G=1+2\beta^2f_c^2$ and friction $-f_c\beta\phi'$; with separate baryons the
 CDM gets its fifth force from the CDM density in a second kick. The CDM density follows the field-dependent mass,
 $\rho_ca^3=\Om_{\rm cdm}m(a)/m(1)$. Agreement with the solver's growth: $6\times10^{-4}$ ($\lambda=0.5$, $\beta=0.15$).
+The Fading Dark Sector \cite{ObiedVafaWu2026} is \code{cosmology_model = FadingDarkSector} with \code{gravity_model =
+FadingDarkSector} (the same code with $\lambda=c$, $\beta=c'$; \code{CoupledQuintessence} also accepts this
+cosmology). At the best fit, $c=-0.85$, $c'=0.05$, the CDM feels $G_{\rm eff}/G=1.005$ from the CDM ($1.0036$ for the
+one-fluid CDM+baryons today) and the drag $-c'\,\dd\phi/\dd\ln a=0.022$ at $a=1$. Its outputs are bit-identical to
+\code{CoupledQuintessence} with the same parameters (regression cases \code{fading_dark_sector_cola},
+\code{_fastpm}).
 
 \paragraph*{Interacting dark energy.} The exchange is perturbed by the local expansion of the dark matter, so a CDM
 particle gains $\frac{\xi}{3}\rho_{\rm DE}$ times the change of its volume and keeps its momentum: particles carry
