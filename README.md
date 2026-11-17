@@ -1,6 +1,6 @@
 # FML
 
-[![CI](https://github.com/HAWinther/FML/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/HAWinther/FML/actions/workflows/ci.yml?query=branch%3Amaster) [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/HAWinther/FML/issues) [![HitCount](https://hits.dwyl.com/HAWinther/FML.svg?style=flat-square)](http://hits.dwyl.com/HAWinther/FML)
+[![CI](https://github.com/HAWinther/FML/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/HAWinther/FML/actions/workflows/ci.yml?query=branch%3Amaster) [![Nightly accuracy checks](https://github.com/HAWinther/FML/actions/workflows/nightly.yml/badge.svg)](https://github.com/HAWinther/FML/actions/workflows/nightly.yml) [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/HAWinther/FML/issues) [![HitCount](https://hits.dwyl.com/HAWinther/FML.svg?style=flat-square)](http://hits.dwyl.com/HAWinther/FML)
 
 **This is FML 2.0.** The library is constantly under construction. The changes since 1.0 are in the [changelog](FML/CHANGELOG.md); for the old version see [Version 1.0](#version-10). Development happens in the FMLDevelop branch.
 
