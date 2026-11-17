@@ -1,0 +1,854 @@
+# Periodic field-level framework: initial stages 1–3
+
+`Framework.h` provides a first periodic-box implementation of the
+[saved #52 plan](FRAMEWORK_PLAN.md): a generic power-spectrum input, separate
+forward model / Fourier response / Gaussian likelihood / posterior, exact linear
+conditionals, MAP and joint field/nuisance HMC. The BAO prototype remains available.
+This is not the complete survey/PM reconstruction scope of backlog #52. The
+validated configuration uses double-precision FFTW; other FFT precisions are not
+in this inference validation matrix.
+
+## A small reconstruction
+
+```cpp
+#include <FML/FieldLevel/Framework.h>
+namespace FF = FML::FIELDLEVEL::FRAMEWORK;
+FF::Configuration config;
+config.mesh = 8;
+config.density_mesh = 16;
+config.boxsize = 100;                  // Mpc/h
+config.initial_cutoff = .115;          // h/Mpc
+config.bias_cutoff = .08;
+config.likelihood_cutoff = .10;
+config.evolution = FF::Evolution::LPT2;
+config.growth_rate = .6;               // Fixed plane-parallel RSD parameter.
+FF::Model model(config, FF::Spectrum::bao(
+    FML::FIELDLEVEL::BAOSpectrum::eisenstein_hu(200)));
+auto work = model.workspace();
+auto parameters = model.initial_parameters();
+auto truth = model.white_noise(100);
+auto data = model.mock(truth, parameters, 200, work);
+FF::Posterior posterior(model, data);
+auto fit = FF::map(posterior, truth, parameters, false); // Field MAP at fixed parameters.
+FML::MCMC::HMCOptions options;
+options.warmup = 400;
+options.samples = 1000;
+options.target_acceptance = .95;
+auto chain = FF::sample(posterior, fit.white, parameters, options, true,
+    [ (archived)](ARCHIVE.md) {
+        // Optional streamed field samples: save summaries or selected snapshots here.
+    });
+```
+
+The example is a deliberately small mock calculation, not a cosmological
+calibration or proof that a short chain has converged. Inspect MAP status,
+divergences, dispersed-chain diagnostics and posterior predictive behavior.
+
+## Parameters and probability model
+
+The sampled field is a real cell-wise white Gaussian vector s, with prior
+`-log p(s)=sum s^2/2`. Its full grid, including modes absent from the likelihood,
+remains part of the state. Fixed cutoffs determine which modes affect predictions;
+unconstrained latent modes retain their prior. The real-field FFT convention is
+`r2c/N^3`, so correlated initial modes are
+
+```
+delta_L(k) = sqrt[P(k;theta) N^3 / V] s(k), 0 < k < initial_cutoff
+```
+
+P uses (Mpc/h)^3 and k uses h/Mpc. Initial DC and excluded modes are zero. There is
+no extra parameter-dependent determinant from changing P in this whitened
+parameterization. `Spectrum` supplies scalar parameter specifications and an
+`evaluate(k,theta)` callback returning positive P and one derivative of ln P per
+parameter. Derivatives are explicit; missing or malformed derivatives are rejected.
+`Spectrum::fixed` and `Spectrum::bao` are convenience factories. A transfer-provider
+power callback can supply a fixed cosmology; parameterized cosmology also needs
+consistent growth/evolution derivatives, which are not supplied automatically.
+
+The scalar state is ordered as:
+
+1. spectrum parameters;
+2. b1 for linear evolution, or b1, b2, b_s2 and b_laplacian for LPT;
+3. log_noise_power.
+
+Each scalar has a named Gaussian or bounded-uniform prior, an initial value and
+optional hard bounds. Gaussian is the default; uniform priors require finite bounds.
+Constructor prior overrides replace entries by name; unknown/duplicate names and
+invalid prior specifications fail. For example:
+
+```cpp
+FF::Model model(config, spectrum, response,
+    {{"b1", 1.7, 1.6, .2, 0., 5.}, // initial, mean, sigma, lower, upper
+     {"alpha_BAO", 1., 1., .1, .8, 1.2, FF::Prior::Uniform}});
+```
+
+The BAO factory defaults to a Gaussian alpha prior; the uniform override above
+reproduces the original BAO application's prior. Uniform priors use zero potential
+inside their support; their finite width supplies the optimizer/sampler scale.
+
+The prior on log_noise_power is a prior **on the logarithm**, not a linear-power
+prior with an omitted Jacobian. Noise is positive through P_eps=exp(log_noise_power).
+Changing to a prior on P_eps would require the appropriate transformation.
+
+`GaussianFieldLikelihood` evaluates
+
+```
+U_data = 1/2 sum_full [ |prediction - data|^2 / (P_eps/V) + log(P_eps/V) ]
+```
+
+The normalization term is retained when sampling noise. Half-complex multiplicities
+are explicit, including conjugate pairs on the kz=0 plane; data and fixed response
+must preserve the required Hermitian symmetry. Parameter-independent constants are
+omitted. Noise is added after the observation response. This is a Gaussian tracer
+field model, not a Poisson-count model; biased fields/particle weights may be negative.
+
+## Forward physics and observation
+
+`Evolution::Linear` predicts `(b1 + f mu^2) delta_L`. `Zeldovich` and `LPT2` use
+advected Lagrangian weights and smooth mass assignment with its explicit Fourier
+correction. The initial reference implementation shares verified numerical kernels
+with `FieldLevelBAO`; it does not rebuild a BAO model per force call or use a BAO
+spectrum internally for the generic initial field. An identity-transfer compatibility
+backend accepts the separately correlated delta_L.
+
+The LPT weight is
+
+```
+1 + (b1-1) delta_b
+  + b2 (delta_b^2 - mean delta_b^2)
+  + b_s2 (s_ij s_ij - mean s_ij s_ij)
+  + b_laplacian laplacian(delta_b)
+```
+
+Here delta_b uses the fixed bias smoothing cutoff, not necessarily the initial
+cutoff. b2 has no extra factor of 1/2. The shared legacy kernel uses
+G2=t_ij t_ij-delta_b^2, so the adapter explicitly maps
+`b2_legacy=b2+2 b_s2/3`, `bG2_legacy=b_s2`, including the corresponding adjoint.
+b_laplacian has units (Mpc/h)^2; its Laplacian uses physical k, not inverse-box k.
+All bias derivatives and smoothing/mean-subtraction terms are included in the
+reverse operation. The matter evolution uses the unsmoothed initial field.
+
+Plane-parallel RSD acts along z, with `f(Psi1_z+2 Psi2_z)` for 2LPT. The 2LPT growth
+factorization is EdS-like at the supplied linear epoch. f is a fixed configuration
+parameter in this milestone; it is not jointly sampled. GrowthHistory, higher-order
+LPT, time-dependent cosmological parameters and their derivatives remain extensions.
+
+The three cutoffs are distinct: initial field, bias smoothing and likelihood.
+Meshes and hard selections remain fixed during inference. For this first backend,
+meshes must be even and `initial_cutoff < half the initial-grid Nyquist` for LPT.
+This resolves quadratic source/bias products without silently enabling an
+unimplemented padded adjoint. Higher-cutoff padded operators require a separate
+verified extension. Particle sampling, assignment support and output mesh still
+need convergence checks. `density_mesh >= mesh` and likelihood modes must lie
+below the supported Nyquist band.
+
+`FourierResponse` is a separate fixed real multiplier per retained mode. Empty means
+identity. It can represent a declared periodic transfer/smoothing response and has
+its own adjoint. It is not a survey mask, a completeness probability or an implicit
+noise correction. Initial Cartesian survey/count observations are available in [stage 5a](SURVEY.md).
+
+## Composition and workspaces
+
+`Model` is the built-in periodic forward implementation. `BasicPosterior<Forward,
+Likelihood>` composes a forward implementation and likelihood without depending on
+the internal LPT algorithm; `Posterior` is its default alias. MAP and HMC are generic
+over that posterior. A replacement forward must provide:
+
+- cells, layout, modes, volume, parameter specifications and likelihood configuration;
+- workspace creation, support checking, prediction and a matching pullback;
+- a positive field-metric operation for optimization/HMC preconditioning.
+
+A replacement likelihood supplies `evaluate(prediction,last_scalar,cotangent,
+last_scalar_gradient)`. The initial interface has one scalar likelihood nuisance
+parameter; more general noise/count models need an explicit extension rather than
+silently interpreting several scalar parameters as one.
+
+Configuration and parameter metadata are separate from mutable per-chain workspaces.
+`workspace()` makes a workspace owned by that exact Model instance. Models must
+outlive posteriors and workspaces; rvalue-model posterior construction is rejected.
+Pullbacks require the matching successful forward evaluation and parameter state.
+Reacquire returned prediction views after another prediction. Construct FFT
+workspaces outside concurrent regions; no concurrent-chain thread-safety claim is
+made in this initial release. The shared kernel still allocates some intermediates;
+FL-6's profiling/reuse work remains open. No allocation/time speedup is claimed.
+
+Current layout metadata explicitly identifies global mesh/cells and owned start,
+width/cells. `Model` owns a full grid and supports one FML rank only; multi-rank
+construction still rejects before allocation. For distributed linear inference,
+use `DistributedLinearModel` below; `DistributedLPTModel` supplies the particle
+exchange and nonlinear adjoints in stages 4b–4c.
+
+## Exact linear inference, MAP and HMC
+
+At fixed scalar parameters `linear_conditional` returns the exact real-space mean,
+Fourier covariance multipliers of the whitened field, and the exact field-marginalized
+log likelihood. Inactive modes have unit prior covariance. `linear_log_marginal`
+evaluates the marginal without constructing the mean, useful for low-dimensional
+reference quadrature. These methods require linear evolution.
+
+`map` uses a Fourier preconditioner and backtracking line search. It reports
+Converged, MaximumIterations or LineSearchFailed with objective, gradient norm and
+iteration count. `vary_parameters=false` optimizes just the field; true includes
+all scalar priors and parameter support. Nonlinear MAP is local optimization, not
+a global optimum or a posterior uncertainty estimate.
+
+`sample` uses the shared HMC engine. Its field mass is a Fourier-diagonal linear
+approximation **frozen at the initial scalar parameters**, avoiding an unaccounted
+state-dependent mass. Scalar masses/step size use the existing warmup adaptation.
+LPT's metric is an approximation; Metropolis correction targets the full posterior.
+Recorded rows contain scalar parameters; `last` contains the final white field and,
+when varied, the scalar block. A field callback can stream samples or field summaries
+without retaining every full field in memory. When scalars are held fixed, recorded
+scalar rows are constant and must not be treated as informative chain diagnostics.
+Monitor reconstructed-field summaries through the callback instead.
+
+A usable sampler is not established by acceptance alone. Use dispersed chains,
+rank-normalized split/folded Rhat and bulk/tail ESS on parameters and field summaries,
+plus divergences, posterior predictive checks and repeated-mock/model-mismatch tests.
+The tests compare joint linear nuisance means/widths to independent quadrature and
+use measured Monte Carlo uncertainty. The deliberately wide noise-prior case still
+has rare divergent proposals; these are counted and reported, not described as zero.
+The regression requires a low rate plus usable Rhat/ESS and correct moments; that
+is not a production acceptance criterion. Investigate divergences and posterior
+tails with a suitable parameterization and tuning. Short nonlinear examples are smoke checks.
+
+## Posterior field outputs
+
+`reconstruct(white,parameters,workspace,velocity_factor)` returns:
+
+- initial linear density contrast on the initial mesh;
+- real-space matter density contrast restricted to the declared model band;
+- Lagrangian displacement samples at q, in box lengths;
+- Lagrangian velocity samples with the supplied conversion;
+- the observed biased/RSD tracer modes.
+
+For EdS-factorized 2LPT, velocity is `velocity_factor*(Psi1+2 Psi2)`.
+Passing `a H f boxsize` gives peculiar velocities for compatible H and length units.
+No cosmology is inferred from a default numerical factor. Matter outputs are
+independent of tracer bias and are evaluated in real space; tracer modes retain
+the configured RSD/response. Velocity samples are at Lagrangian positions, not a
+volume-weighted Eulerian velocity mesh. A separate deposition/normalization choice
+is needed for Eulerian velocity products. Run predict again before the next pullback after reconstruction. The distributed
+backends explicitly invalidate their forward caches for both linear and LPT models.
+
+## Build and validation
+
+```
+make -C FML/FieldLevel/tests framework
+make -C FML/FieldLevel/tests USE_MPI=true framework  # one-rank tests, 2/4-rank rejection
+make -C FML/FieldLevel/example framework
+./FML/FieldLevel/example/framework 2lpt 200 output_prefix
+```
+
+The example writes scalar samples, optionally streamed white-field snapshots, and a
+final initial/matter/velocity reconstruction. It is an analytic periodic toy.
+See [framework validation results](validation/tests/FRAMEWORK_RESULTS.md). Tests cover field
+and scalar adjoints for linear/1LPT/2LPT with RSD, distinct cutoffs, higher-derivative
+bias and BAO shape; exact linear MAP/covariance; normalized sampled noise; no-data
+information limits; nuisance inference against exact-marginal quadrature; BAO
+compatibility; reconstruction semantics; malformed dimensions and unsupported MPI.
+
+Initial distributed inference, reconstruction and checkpointing are available in
+stages 4a–4e below; initial Cartesian survey/count observations are documented in
+[stage 5a](SURVEY.md). PM/COLA adjoints, broader physical models, production
+nonlinear/survey calibration, full high-cutoff padding, time/growth derivatives
+and measured workspace optimization remain open. Same-rank survey checkpoints
+are now available in [SurveyCheckpoint.h](SURVEY.md#same-rank-survey-checkpointrestart);
+additional likelihood nuisances remain explicit extensions.
+The initial stages 1–3 milestone is a reusable periodic implementation with exact
+linear verification, not a complete LEFTfield/BORG replacement.
+
+## Frontend backend selection (step 4, 14 November 2026)
+
+The four distributed examples (`framework_mpi`, `checkpoint_mpi`, `survey_mpi`,
+`survey_checkpoint_mpi`) and both survey-validation executables now select their
+backend at build time. Their existing CLI arguments and default slab choice remain.
+
+```sh
+make -C FML/FieldLevel/example clean
+make -C FML/FieldLevel/example USE_MPI=true USE_PENCIL_GRID=true \
+  framework_mpi checkpoint_mpi survey_mpi survey_checkpoint_mpi
+FML_PENCILS="2 2" mpirun -np 4 FML/FieldLevel/example/framework_mpi 2lpt
+FML_PENCILS="2 2" mpirun -np 4 FML/FieldLevel/example/survey_mpi poisson
+```
+
+Use matching local MPI/FFTW compiler/include/library settings. Clean when changing
+backend, MPI, compiler, OpenMP or precision flags. Pencil builds require MPI/FFTW
+and link `PencilGrid.cpp`; default builds retain FFTWGrid. The original serial
+`fieldlevel`, `calibration` and `framework` examples keep their single-rank APIs.
+
+`Frontend.h` defines frontend-only `LinearModel` / `LPTModel` / posterior aliases;
+explicit library `Distributed*Model` aliases still default to slabs. It sets the
+frontend domain once after FML setup. `FML_PENCILS="px py"` chooses a positive
+process grid with product NTasks; omitted values use MPI_Dims_create. Parsing and
+rank agreement are checked collectively. Boundaries are snapped to shared cells
+of both meshes (using their greatest common divisor), with positive widths and
+valid Fourier partitions. Unequal partitions are supported when tasks do not
+divide the initial mesh. The selected backend/process grid is printed at startup.
+Model-owned domains remain the source of later workspace/restart geometry.
+
+The survey driver now uses global cell IDs for its independent Fourier basis,
+mock/holdout/predictive RNGs and output labels. Validation snapshots use **schema 2**
+with per-axis start/count boxes. `analyze.py` reads those boxes and legacy schema-1
+slabs, rejects overlaps/gaps/truncated payloads, and assembles canonical cell order.
+This validation-output schema is independent of checkpoint identity schema 3.
+
+```sh
+make -C FML/FieldLevel/validation/survey clean
+make -C FML/FieldLevel/validation/survey USE_MPI=true USE_PENCIL_GRID=true
+mpirun -np 4 FML/FieldLevel/validation/survey/survey_reference --check-reference
+python3 FML/FieldLevel/validation/survey/run.py --smoke \
+  --bin-dir /path/to/serial-build --mpi-bin-dir /path/to/pencil-build \
+  --output /fresh/output --mpirun mpirun --mpi-ranks 1 2 4
+```
+
+The smoke runner uses two chains, 16 draws, four warmup steps and a fixed small
+step size for both Gaussian/Poisson and linear/2LPT cases, in full-grid and exact
+active-mode representations. It checks replay values and reader compatibility,
+then writes a standalone difference plot and JSON. It is **not** a calibrated
+posterior campaign: metadata retains convergence diagnostics, completion is marked
+SMOKE, and the calibration analyzer explicitly rejects smoke inputs. Normal runs
+keep their original sampling schedules and convergence gates. The full scientific
+campaign can use either backend, but its historical measured coverage/mixing
+results were not rerun as part of this port.
+
+See [tests/FRONTEND_GRID_RESULTS.md](validation/tests/FRONTEND_GRID_RESULTS.md) for bounded
+cross-backend evidence. Remaining work includes cached pencil resampling,
+performance/scaling studies and broader scientific calibration; the distributed
+framework port itself now covers the four planned steps. Original serial BAO
+compatibility and checkpoint repartitioning remain separate extensions.
+
+## Distributed linear inference (stage 4a, 12 November 2026)
+
+**Slab/pencil extension, step 1 (14 November 2026).** The distributed linear model
+is now `DistributedLinearModelT<GridType>`; `DistributedLinearModel` remains its
+`FFTWGrid<3>` alias. `DistributedLinearPosteriorT<GridType>` provides the generic
+posterior, with the original slab alias unchanged. The grid type must implement
+FML's common Fourier interface. PencilGrid needs MPI/FFTW and its implementation
+object (`PencilDomain/PencilGrid.cpp`) linked into the executable.
+
+```cpp
+#include <FML/PencilDomain/PencilGrid.h>
+#include <FML/FieldLevel/DistributedLinear.h>
+namespace FF = FML::FIELDLEVEL::FRAMEWORK;
+using Grid = FML::GRID::PencilGrid<3>;
+// After FML initialization, on 4 ranks with an even mesh compatible with these edges:
+auto domain = FML::Domain::uniform_pencil(2, 2);
+config.evolution = FF::Evolution::Linear;
+FF::DistributedLinearModelT<Grid> model(config, spectrum, {}, {}, domain);
+FF::DistributedLinearPosteriorT<Grid> posterior(model, local_data);
+auto workspace = model.workspace();
+```
+
+The optional final constructor argument is a replicated `FML::Domain`; its default
+is `FML::domain`. The model copies it and creates every workspace on that domain,
+independently of later global-domain changes. Domain kinds, edges and task counts
+are checked collectively before constructing FFT plans. Pencil edges must lie on
+mesh cells, with positive real x/y widths on every rank. Unequal partitions and
+meshes not divisible by the total task count are supported. Even meshes remain a
+FieldLevel restriction; this does not inherit PencilGrid's general odd-mesh support.
+Slabs retain the existing even/divisible/nonempty restriction. Pencil process grids
+also require `P0 <= N` and `P1 <= N/2+1`, so every task has Fourier storage.
+
+Global cell IDs are `(x*N+y)*N+z`. IC/mock white noise and HMC momenta retain the
+same counter RNG keys across backends, process grids and rank counts. Mode ownership
+is obtained from integer wavevectors, with backend-local storage indices and the
+shared Hermitian multiplicity. Scalar priors and global reductions are unchanged.
+Exact floating-point equality of FFT/posterior/HMC results is not promised.
+
+This step covers periodic **linear** inference, exact conditionals, metrics and
+linear reconstruction. Distributed LPT is now available in the step 2 extension
+below. Survey observations and same-layout checkpoint/restart are now available
+in step 3 below. Original serial BAO APIs remain separate. Backend selection for
+the distributed examples and calibration driver is available in step 4 below. No checkpoint
+migration across backends, layouts or rank counts is supported.
+
+Run `make -C FML/FieldLevel/tests USE_MPI=true framework-linear-grid-mpi` for the
+new cross-layout regression. [tests/LINEAR_GRID_RESULTS.md](validation/tests/LINEAR_GRID_RESULTS.md)
+records the measured checks and limits.
+
+
+Include `<FML/FieldLevel/DistributedLinear.h>` and set
+`Configuration::evolution = Evolution::Linear` explicitly. Construct
+`DistributedLinearModel` and `DistributedLinearPosterior`; use the same `map` and
+`sample` functions. [example/FrameworkMPI.cpp (archived)](ARCHIVE.md) is a minimal
+working example. This backend also runs in a serial build for comparison.
+
+The model implements the same normalized periodic linear prediction, generic
+spectrum derivatives, scalar priors, fixed Fourier response, Gaussian noise and
+plane-parallel RSD as `Model`. Its `workspace`, `white_noise`, `mock`, `predict`,
+`pullback`, `apply_field_metric` and `linear_conditional` operate collectively.
+`white_noise` generates the local owned field without communication; use the same seed
+and stream on every rank.
+`linear_conditional` returns the local mean/covariance and global log marginal;
+the `linear_log_marginal` convenience remains serial-only. Distributed
+reconstruction outputs are available in stage 4d below.
+
+- `cells()` is the number of **owned** real cells, in x/y/z order, with no FFT
+  padding. `layout()` supplies global cells, per-axis `local_starts`/`local_counts`,
+  checked `global_coordinate(q)` / `global_cell_id(q)`, and the legacy x-only
+  `local_start`/`local_width` aliases. The latent dimension and whitening factor
+  still use **global** N³. Fourier vectors contain only locally owned retained
+  modes, in the backend's Fourier-range order (slabs: local x/y/kz; pencils:
+  local ky/kz rows with kx along each row). A supplied response vector uses that
+  same local ordering; it must be rebuilt from physical wavevectors for a new layout. Zero and Nyquist
+  modes are excluded from the modeled band; unconstrained latent modes retain
+  their unit Gaussian prior.
+- Posterior values and scalar gradients are reduced globally; the scalar priors
+  enter once. `pullback` itself returns local field gradients and **local** scalar
+  contributions, which the posterior reduces. MAP reduces field slopes and norms.
+  `Execution<Forward>` supplies these hooks; serial/custom forwards keep identity
+  reductions unless they opt into a distributed specialization.
+- HMC keeps the field/momentum/mass operations local. It sums field kinetic energy
+  globally and counts replicated scalar kinetic energy once. Counter-based momentum
+  draws use global cell IDs and trajectory index, while the shared control RNG
+  handles scalar momenta, leapfrog jitter and acceptance. Step/mass adaptation and
+  scalar states remain replicated. The field mass is frozen at the initial scalar
+  parameters. `last` contains a local field followed by replicated scalars when
+  varied; recorded scalar rows and global potentials are replicated on all ranks.
+- All ranks in `FML::communicator` must call collective APIs in the same order.
+  Configurations, scalar parameters, seeds and inference controls must agree;
+  spectrum callbacks must implement the same deterministic function on every rank.
+  Config/parameter/control and local state-dimension checks reject collectively.
+  Data/response Hermitian checks use a distributed FFT round trip, including pairs
+  across rank boundaries. Callback exceptions/missing derivatives remain visible
+  errors; unrepresentable numerical proposals return infinite posterior potential.
+- Call the field sink on **every rank**. It receives a local field and replicated
+  parameters. Compute any reductions before a root-only output branch. FFT
+  workspaces and the model must remain alive; do not run collective chains
+  concurrently on the same communicator or construct workspaces in worker threads.
+- The current FFTWGrid contract requires an even mesh divisible by the communicator
+  size and nonempty FFTW slabs. `density_mesh` and bias smoothing do not participate
+  in linear evolution. Double-precision FFTW is the validated configuration.
+
+Build and run (use the local MPI compiler and FFTW-MPI paths as needed):
+
+```sh
+make -C FML/FieldLevel/tests USE_MPI=true framework-mpi
+make -C FML/FieldLevel/example USE_MPI=true framework_mpi
+mpirun -np 4 FML/FieldLevel/example/framework_mpi
+```
+
+The regression checks 1/2/4 ranks against a direct DFT, finite differences,
+adjoint products, exact MAP and exact Gaussian projection moments; a short joint
+field/spectrum/bias/noise chain checks synchronized scalar states. This establishes
+a linear distributed inference foundation, not nonlinear posterior calibration or
+a strong-scaling result. No full fields or mode arrays are gathered by the model.
+Small replicated metadata and repeated safety reductions still have overhead.
+
+Distributed 1LPT and 2LPT are available in stages 4b–4c below. Next:
+nonlinear inference validation and performance profiling. Same-rank checkpoint/restart is
+available in stage 4e below. Reconstruction outputs are
+available in stage 4d below. Initial Cartesian survey likelihoods are available
+in [stage 5a](SURVEY.md). MPI BAO compatibility and PM/COLA are not
+provided by this linear backend. The original single-rank safety checks remain.
+
+## Distributed 1LPT (stage 4b, 12 November 2026)
+
+**Slab/pencil extension, step 2 (14 November 2026).** Use
+`DistributedLPTModelT<GridType>` / `DistributedLPTPosteriorT<GridType>` for either
+Zeldovich or 2LPT evolution. The existing `DistributedLPTModel` and
+`DistributedLPTPosterior` remain the `FFTWGrid<3>` aliases. Both the forward model
+and its field/parameter adjoints use the selected backend.
+
+```cpp
+#include <FML/PencilDomain/PencilGrid.h>
+#include <FML/FieldLevel/DistributedLPT.h>
+namespace FF = FML::FIELDLEVEL::FRAMEWORK;
+using Grid = FML::GRID::PencilGrid<3>;
+// After FML initialization on 4 ranks; domain edges must align with both meshes:
+auto domain = FML::Domain::uniform_pencil(2, 2);
+c.evolution = FF::Evolution::LPT2;
+c.mesh = 8; c.density_mesh = 16; c.boxsize = 100;
+c.initial_cutoff = .115; c.bias_cutoff = .08; c.likelihood_cutoff = .10;
+FF::DistributedLPTModelT<Grid> model(c, spectrum, {}, {}, domain);
+auto work = model.workspace();
+```
+
+The optional final domain argument has the same copied/default-domain semantics
+as the linear backend. The fine density grid is made with `make_grid_like` on the
+actual initial-grid domain; workspace creation does not infer it again from the
+current global default. The initial and density meshes must be even, with
+`density_mesh >= mesh`; pencils need not divide the **total** task count. Domain
+edges must fall on cells of **both** meshes. This permits, for example, an 8→12
+transfer on quarter-aligned domains, while incompatible fine-grid edges fail
+collectively before fine-grid workspace construction. Arbitrary independently
+chosen initial/density domains are not part of this interface.
+
+Particle locations use all three global Lagrangian coordinates. Fourier derivative
+kernels use backend wavevectors, removing zero and every Nyquist plane as before.
+The full quadratic 2LPT source, EdS 3/7 coefficient, plane-parallel RSD factors,
+smoothed bias centering, kernel deconvolution, normalization and real-space
+reconstruction conventions are unchanged. Sparse assignment/reverse routes nodes
+through `CellOwners`, including distant owners and both split real-space axes.
+
+Transfers copy normalized Fourier coefficients, excluding the Nyquist cube
+boundary of the smaller mesh, with no volume rescaling. The reverse path retains
+the existing density-volume and Hermitian-weight factors; it is tested as an
+adjoint, rather than inferred from a successful forward transform. FFTWGrid keeps
+its cached `FourierResamplingPlan`. Pencils use the shared `copy_fourier_modes`
+implementation, which currently rebuilds ownership/staging records on each call;
+a reusable pencil transfer plan remains a performance follow-up. No full mesh or
+mode gather is introduced into production evolution or inference.
+
+The new `framework-lpt-grid-mpi` Make target checks slab/pencil prediction,
+posterior, adjoint, physical reconstruction, metric and short joint-HMC agreement,
+plus independent transfer/deposition dot products and analytic 2LPT solutions.
+See [tests/LPT_GRID_RESULTS.md](validation/tests/LPT_GRID_RESULTS.md). Survey observations and
+same-layout checkpoint/restart are now supported in step 3 below; original serial
+BAO APIs remain separate; frontend/calibration backend selection is available in
+step 4 below. This port does not add PM/COLA,
+non-EdS higher-order growth or new nonlinear posterior calibration.
+
+
+Include `<FML/FieldLevel/DistributedLPT.h>`, set `evolution=Evolution::Zeldovich`,
+and construct `DistributedLPTModel` / `DistributedLPTPosterior`. They use the same
+configuration, spectrum, prior specifications, smoothed Lagrangian bias conventions,
+plane-parallel RSD and full-Hermitian mode inner product as the single-rank `Model`.
+Supported scalar parameters are spectrum parameters followed by b1, b2, b_s2,
+b_laplacian and log noise power. The initial cutoff must remain strictly below
+half the initial-grid Nyquist; the density mesh must be even, at least the initial
+mesh, and (for FFTWGrid) divisible by the number of ranks. Pencils require a domain
+whose edges align with both meshes instead. Kernel widths 4/6/8 are supported.
+The backend now accepts `Zeldovich` and `LPT2`; stage 4c below documents the
+second-order source and adjoint extension.
+
+```cpp
+#include <FML/FieldLevel/DistributedLPT.h>
+namespace FF = FML::FIELDLEVEL::FRAMEWORK;
+// After FML::FMLSetup::init, on every rank:
+FF::Configuration c;
+c.evolution = FF::Evolution::Zeldovich;
+c.mesh = 8; c.density_mesh = 16; c.boxsize = 100;
+c.initial_cutoff = .115; c.bias_cutoff = .08; c.likelihood_cutoff = .10;
+FF::DistributedLPTModel model(c, FF::Spectrum::fixed([ (archived)](ARCHIVE.md) { return 200.; }));
+auto work = model.workspace();
+auto p = model.initial_parameters();
+auto data = model.mock(model.white_noise(10), p, 11, work); // Local modes
+FF::DistributedLPTPosterior posterior(model, data);
+auto fit = FF::map(posterior, model.white_noise(12), p, false);
+```
+
+The field/parameter ownership and collective-call rules from stage 4a still apply.
+Particles stay on their Lagrangian owners. Each forward pass computes distributed
+initial/bias fields, uses globally centered quadratic/tidal bias operators, and
+builds sparse contributions to density nodes on any rank. Node contributions are
+aggregated locally, routed to their mesh owners and summed there. The cached
+communication layout returns mesh cotangents to the same particle owners; interpolation
+and displacement/bias adjoints then reverse the forward map. Thus the method handles
+arbitrary periodic particle displacements without retaining a full density grid on
+every rank or assuming that particles stay within neighboring domains.
+
+Initial and density meshes have different Fourier ownership. Slabs use reusable
+`FourierResamplingPlan` objects; pencils use the shared normalized-mode copy.
+The reverse uses the corresponding upsampling map with the density FFT
+adjoint's N_density³ normalization. Smooth assignment and its Fourier correction
+match the original serial model. Nonfinite particle proposals reject before
+floating-point coordinates are converted to node indices. Routed key/count errors
+and invalid local states fail collectively; reverse communication requires a
+successful matching scatter.
+
+`map`, `sample`, `mock`, `predict`, `pullback`, `white_noise` and the frozen
+linear field metric are supported. There is no exact nonlinear conditional, and
+reconstruction outputs are available in stage 4d below. A nonlinear
+MAP is a local optimum; the short joint-HMC regression checks execution, not
+posterior calibration.
+
+```sh
+make -C FML/FieldLevel/tests USE_MPI=true framework-lpt-mpi
+make -C FML/FieldLevel/example USE_MPI=true framework_mpi
+mpirun -np 4 FML/FieldLevel/example/framework_mpi 1lpt
+```
+
+The new sparse exchange uses checked MPI-int counts/displacements and rejects an
+exchange exceeding INT_MAX entries on any rank. It is not a large-count transport
+implementation. Scratch is bounded by local particles, local grids and distinct
+routed stencil nodes (at most (kernel_width+1)³ nodes per local particle before
+deduplication), plus incoming requests. Highly clustered particles can concentrate
+requests on a rank; this is not a strict balanced-memory or strong-scaling guarantee.
+Sparse maps are rebuilt each prediction. Double FFTW and sequential collective
+chains are the validated configuration; no additional OpenMP speedup is claimed
+for the new routing/particle loops.
+
+Validation covers serial compatibility, actual 1/2/4-rank predictions/gradients,
+large displacements, independent sparse scatter/reverse dot products, nonlinear
+MAP, joint-HMC synchronization, sanitizers and MPI/OpenMP/manual initialization.
+Distributed 2LPT and reconstruction outputs are available in stages 4c–4d below.
+Same-rank checkpoint/restart is available in stage 4e below. Measured
+workspace/communication optimization and nonlinear scientific validation remain open.
+Initial Cartesian survey likelihoods are now available in [stage 5a](SURVEY.md).
+
+## Distributed 2LPT (stage 4c, 12 November 2026)
+
+The same `DistributedLPTModel` / `DistributedLPTPosterior` now also accept
+`Configuration::evolution = Evolution::LPT2`. Ownership, scalar parameter order,
+cutoff restrictions, Gaussian likelihood, sparse particle/mesh communication and
+MAP/HMC interfaces remain as in stage 4b. The example accepts `2lpt`:
+
+```sh
+make -C FML/FieldLevel/tests USE_MPI=true framework-lpt-mpi
+make -C FML/FieldLevel/example USE_MPI=true framework_mpi
+mpirun -np 4 FML/FieldLevel/example/framework_mpi 2lpt
+```
+
+The EdS-factorized second-order displacement uses the **unsmoothed initial field**:
+
+```
+T_ij = partial_i partial_j inverse_laplacian(delta_L)
+S2 = (delta_L^2 - sum_ij T_ij^2) / 2
+Psi2 = (3/7) D[S2],     D(k) = i k_box / k_box^2
+x = q + Psi1 + Psi2 + f zhat (Psi1_z + 2 Psi2_z)
+```
+
+Here displacements and q are in box units, so `k_box=2 pi n`. This is the same
+EdS growth factorization and fixed plane-parallel growth rate as the original
+periodic model, not a new general cosmological-growth implementation. Bias smoothing
+still affects only the Lagrangian bias operators, independently of the matter source.
+
+The source generates modes beyond the input cutoff. Its derivative/inverse-Laplacian
+operator therefore runs over the full distributed initial FFT grid, with the zero
+mode and all Nyquist planes removed to preserve the real/Hermitian convention.
+The strict initial cutoff below half Nyquist resolves the quadratic products;
+high-cutoff padded adjoints remain unsupported. The reverse uses `D^T=-D` and
+propagates S2 cotangents through both delta_L and all six independent tensor
+components, with the off-diagonal multiplicities. The second-order RSD factor is
+`1+2f` along z. Spectrum derivatives include this quadratic evolution path.
+
+Seven additional **local** fields (initial density and six matter tensors) are
+cached only for 2LPT, separately from the smoothed bias cache. The quadratic source
+and its reverse also need temporary local fields. This increment does not provide
+a recomputation-memory policy or a measured speed/scaling improvement.
+
+The combined LPT suite runs both orders on 1/2/4 ranks and checks serial compatibility,
+field/scalar finite differences, adjoint products, periodic crossings, MAP and short
+joint-HMC execution. Independent two-wave particle positions verify the EdS coefficient,
+sign and RSD factor; a single plane wave has zero second-order source. Assignment
+widths 4 and 8 receive additional field-adjoint checks alongside the main width-6
+cases. Fixed cutoffs and toy meshes do not establish production convergence or
+nonlinear posterior calibration.
+
+Distributed reconstruction outputs are available in stage 4d below.
+Same-rank checkpoint/restart is available in stage 4e below. Scientific nonlinear
+validation and workspace/communication profiling remain open. Initial Cartesian
+survey likelihoods are available in [stage 5a](SURVEY.md); #52 is not complete.
+
+## Distributed reconstruction outputs (stage 4d, 13 November 2026)
+
+`DistributedLinearModel` and `DistributedLPTModel` now provide the same
+`reconstruct(white,parameters,workspace,velocity_factor)` bundle as the serial
+model. Each call is collective and returns **owning local arrays**:
+
+- Initial linear density contrast on the initial mesh.
+- Unbiased, real-space matter contrast on the initial mesh, restricted to the
+  model's retained mode band (max of initial/likelihood cutoffs). Linear matter
+  equals the initial density. LPT matter uses unit particle weights and real-space
+  positions, with the same smooth assignment/deconvolution as the forward model.
+- Three displacement samples at Lagrangian q, in **box units**; multiply by L for
+  physical comoving lengths. They include Psi1 plus Psi2 where applicable, without
+  the tracer's redshift-space displacement.
+- Three velocity samples at Lagrangian q: `velocity_factor*Psi1` for linear/1LPT,
+  or `velocity_factor*(Psi1+2 Psi2)` for EdS 2LPT. Supply `a H f L` for peculiar
+  velocity units compatible with H and L. This conversion is explicit and separate
+  from the fixed RSD growth rate configured on the forward model.
+- Locally owned observed tracer modes, retaining the configured bias, RSD and
+  Fourier response. A zero response suppresses these modes without suppressing
+  the physical density/displacement/velocity products.
+
+Use `model.layout()` for the owned x start/width and global mesh. All real output
+vectors have `model.cells()` entries in x/y/z order; there is no FFT padding or
+all-gather. Matter is an Eulerian mesh field; displacements and velocities are
+Lagrangian samples, **not** volume- or mass-weighted Eulerian velocity meshes.
+Bias, noise, RSD and observation response do not enter the physical outputs;
+initial-spectrum parameters, the supplied velocity conversion and physical
+LPT order still do.
+
+```cpp
+auto work = model.workspace();
+auto products = model.reconstruct(local_white, parameters, work, a * H * f * L);
+// products.initial_density, matter_density, displacement[3], velocity[3], tracer
+```
+
+All ranks must call this in the same order with the same scalar parameters and
+finite velocity conversion. Per-rank conversion mismatches and nonfinite outputs
+fail collectively. The method reuses workspace scratch and, for LPT, performs an
+additional unbiased real-space deposition; it invalidates the previous pullback
+cache. Call `predict` again before `pullback`. A new posterior evaluation already
+performs that fresh prediction. Returned arrays remain owned by the caller.
+
+For fixed-parameter sampling, `sample(...,false)` returns a local white field in
+`chain.last`, so it may be passed directly to `reconstruct`. For joint sampling,
+`chain.last` also contains the replicated scalar block: split its first
+`model.cells()` entries from the parameter tail before reconstructing. A field sink
+may reconstruct samples using a separate workspace created outside worker threads;
+all ranks must participate before root-only printing or file output.
+
+The MPI example reconstructs its final field in linear/`1lpt`/`2lpt` mode and prints
+globally reduced density and velocity RMS summaries. Its velocity conversion of 1
+is explicitly a numerical toy. The focused test target is:
+
+```sh
+make -C FML/FieldLevel/tests USE_MPI=true framework-reconstruction-mpi
+```
+
+The bundle allocates eight owning real fields plus local tracer modes, in addition
+to the existing workspace and reconstruction temporaries. Output selection,
+recomputation-memory policies and parallel scientific-file export are not added
+here. The method does not run automatically inside force/posterior evaluations.
+Same-rank checkpoint/restart is now available in stage 4e below. Nonlinear scientific
+validation remains open; initial Cartesian survey observations are now documented
+in [stage 5a](SURVEY.md).
+
+## Checkpoint/restart (stage 4e, 13 November 2026)
+
+**Slab/pencil extension, step 3 (14 November 2026).** Cartesian Gaussian/Poisson
+survey observations now use the forward model's grid backend and copied domain.
+The initial observation mesh is checked against all local real-space ranges;
+packing/unpacking uses the backend's real-cell iterator, excluding FFT padding.
+Window callbacks use full global x/y/z coordinates. See [SURVEY.md](SURVEY.md).
+
+`sample_checkpointed` supports the generic linear and 1LPT/2LPT models on either
+backend, for periodic Gaussian, survey Gaussian and survey Poisson targets. Include
+`SurveyCheckpoint.h` for survey target fingerprints. Identity schema **3** records
+the explicit grid type, all three local starts/counts, full replicated slab/pencil
+partition (including process-grid shape and y edges), and Fourier storage indices,
+in addition to existing physics/data/build/sampler checks. Identity construction
+contains no MPI collectives: it remains safe inside the local exception-coordination
+phase used by checkpoint setup.
+
+Replica checks compare only shared scalar/control state; differing local field
+lengths and field values are excluded from that comparison. Each persisted shard
+still records and validates its actual local field dimension. This fixes the old
+implicit equal-slab-length assumption for unequal pencil partitions.
+
+Same-layout continuation rebuilds FFT workspaces from the model-owned domain.
+Different backends, rank counts, process grids or domain edges are rejected;
+checkpoint repartition/migration is not implemented. Earlier identity-schema-2
+checkpoints are deliberately incompatible with schema 3; retain the original code
+for those files. Shard framing and sampler-state encoding are otherwise unchanged.
+A versioned `problem_id` and the same executable/numerical environment remain
+required; the build tag is not a complete executable hash.
+
+[tests/SURVEY_GRID_RESULTS.md](validation/tests/SURVEY_GRID_RESULTS.md) records survey parity,
+independent adjoints/gradients and separate-process checkpoint verification. The
+new test targets are `survey-grid-mpi` and `checkpoint-grid-mpi`; existing slab
+frontends retain their names and now select either backend as documented in step 4.
+The existing scientific campaign measurements remain their original slab evidence;
+the port is verified by bounded frontend replays.
+
+
+Include `<FML/FieldLevel/Checkpoint.h>` and use `sample_checkpointed` with a
+Gaussian-field posterior. The validated targets are the built-in serial model and
+distributed linear/1LPT/2LPT models. This first implementation resumes with the
+**same MPI rank count, grid backend/layout, executable/numerical environment and thread
+configuration**, at complete trajectory boundaries. It does not repartition a
+checkpoint or resume midway through a leapfrog trajectory.
+
+```cpp
+FF::CheckpointOptions checkpoint;
+checkpoint.directory = "/shared/run/chain-1";
+checkpoint.problem_id = "dataset-version:callback-physics-version:code-revision";
+checkpoint.every = 25;             // Complete trajectories, including warmup.
+checkpoint.max_iterations = 100;   // This invocation's budget.
+auto part = FF::sample_checkpointed(posterior, local_white, parameters,
+                                    options, checkpoint, true, field_sink);
+// In a later process, rebuild the identical model/data and original HMC options:
+checkpoint.resume = true;
+auto next = FF::sample_checkpointed(posterior, {}, {}, options,
+                                    checkpoint, true, field_sink);
+```
+
+Keep the original **full** warmup/sample schedule and HMC controls unchanged;
+`max_iterations` changes only the current job's budget. A resumed call requires
+empty initial field/parameter arguments and obtains them from disk. `every=0`
+disables periodic saves; the final boundary is always saved, including a zero-
+trajectory call. Fixed-parameter sampling (`vary_parameters=false`) is supported.
+A completed chain returns no further rows when resumed; extending its planned
+sample count is not part of this initial interface.
+
+The checkpoint preserves the local field/scalar state and cached gradient/potential,
+control RNG **and normal-distribution cache**, adapted scalar masses, dual-averaging
+state, Welford moments/window, global trajectory index, cumulative acceptance and
+divergences. The **original frozen scalar parameters defining the field metric**
+are saved separately from the current sampled scalars. Workspace scratch is rebuilt.
+The retained force is checked against a fresh evaluation before it is reused.
+
+`problem_id` is mandatory and must version callback physics, custom numerical/code
+changes and external inputs that cannot be inspected through `std::function`.
+Automatic identity checks also cover model type/configuration, parameter priors,
+response, data/likelihood weights and normalization, rank/full grid geometry, precision,
+compiler/standard-library tag and thread count. The force check is an additional
+consistency check at one point, not proof that arbitrary callbacks are identical.
+The build tag is not an executable hash: the caller's versioned ID and same-build
+contract remain necessary for exact continuation.
+
+Files are written into a unique generation directory as one checksummed shard per
+rank, each bound to its rank and generation. After all ranks close and rename their
+complete shards, rank zero atomically replaces `CURRENT`. Failed shard writes do
+not publish a new manifest, and the previous checkpoint remains usable. Reads
+validate framing, bounded dimensions, checksums, generation/layout/target identity
+and replicated sampler state; errors propagate collectively before continuation.
+FNV-1a checksums detect accidental corruption and are not authentication.
+
+Use a dedicated directory for **one writer job**, on a shared filesystem supporting
+POSIX-style atomic rename. A checkpoint set may be copied to another shared path.
+Older and incomplete generations are intentionally retained; storage cleanup is
+caller-managed. No fsync/power-loss durability or automatic fallback from a damaged
+manifest is claimed. The tested failure case injects a one-rank write error before
+manifest publication; fresh-process restarts exercise normal process termination.
+
+Each call returns only its **new** recorded rows and potentials. `last` is the local
+final state; `completed_iterations` and `completed_samples`, acceptance, divergences,
+step size and masses refer to cumulative progress. Concatenate suffix rows for
+one chain before diagnostics; resumed chunks are not independent chains. Field
+sink indices continue globally across restarts. Earlier outputs are **not** stored
+in the checkpoint, and sink/file side effects are not transactional: applications
+must reconcile output indices when replaying work after the last published boundary.
+
+Fields and gradients remain local and are never gathered by checkpoint I/O. The
+state contains no full sample history. Serialization temporarily buffers local
+state, with additional per-call state/result storage; no peak-memory or I/O-scaling
+improvement is claimed. A trajectory budget also bounds returned per-call scalar
+history. PM inference uses the explicit [ParticleMeshCheckpoint.h](../ParticleMeshCheckpoint.h)
+adapter; see [same-layout PM restart](PM_CHECKPOINT.md). Survey likelihood identities
+are registered in `SurveyCheckpoint.h`;
+other custom likelihoods require explicit identity registration. Rank-changing restore, sample-
+schedule extension and automatic checkpoint pruning are future extensions.
+
+```sh
+make -C FML/FieldLevel/tests USE_MPI=true framework-checkpoint-mpi
+make -C FML/FieldLevel/example USE_MPI=true checkpoint_mpi
+mpirun -np 4 FML/FieldLevel/example/checkpoint_mpi /shared/toy-chain start 60
+mpirun -np 4 FML/FieldLevel/example/checkpoint_mpi /shared/toy-chain resume 90
+```
+
+The example keeps a 120-warmup/300-sample schedule across invocations. It reports
+cumulative progress, new rows and a reconstructed current-state matter summary.
+The shared HMC engine also exposes `HMCState`/`HMCRunControl` and a standard-library-
+only codec; see [MCMC/README.md](../../MCMC/README.md#hmc-checkpoint-state).
+
+This completes an initial periodic MPI engineering foundation, not production
+nonlinear calibration. Scientific nonlinear validation and performance/memory
+profiling remain open. The previously deferred survey likelihood has an initial
+Cartesian implementation in [stage 5a](SURVEY.md); #52 remains open.
+
+## Cartesian survey likelihoods (stage 5a, 13 November 2026)
+
+See [SURVEY.md](SURVEY.md) for masks, selection, coordinates, Gaussian voxel noise,
+positive-link Poisson counts, normalization, MPI adjoints and MAP/HMC examples.
+[Bounded nonlinear and survey validation](validation/tests/SURVEY_RESULTS.md) records the
+1/2/4-rank engineering evidence and the remaining scientific scope.
+
+
+## Survey checkpoints and identity schema 2 (13 November 2026)
+
+Historical milestone: the current pencil-capable version uses schema 3, documented
+above; schema-2 files require their original code.
+
+`sample_checkpointed` now accepts explicitly fingerprinted likelihood types;
+include [SurveyCheckpoint.h](../SurveyCheckpoint.h) for Cartesian Gaussian and
+Poisson survey targets. See [the survey restart guide](SURVEY.md#same-rank-survey-checkpointrestart).
+Schema 2 includes prior family and likelihood law/inputs. Older schema-1 periodic
+checkpoints require their original code/build and are rejected by this version;
+there is no silent legacy-prior assumption or automatic trajectory migration.
+The existing shard/manifest framing, full HMC state and MPI publication protocol
+are unchanged. New schema-2 periodic and survey restarts are tested separately.

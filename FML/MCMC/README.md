@@ -214,7 +214,7 @@ states periodically; changing `max_iterations` does not change the planned sched
 and exact RNG/distribution round trips using the standard library's stream format.
 It requires compatible IEEE double/build/standard-library state. Its `save/load`
 functions are low-level file codecs, not an atomic multi-file commit protocol.
-The field-level [checkpoint layer](../FieldLevel/FRAMEWORK.md#checkpointrestart-stage-4e-13-november-2026)
+The field-level [checkpoint layer](../FieldLevel/docs/FRAMEWORK.md#checkpointrestart-stage-4e-13-november-2026)
 adds target identity, frozen field metric, MPI shards and manifest publication.
 No function objects or MPI handles are serialized; the HMC core/codec remain
 independent of FML's MPI runtime. These are trusted application checkpoints,

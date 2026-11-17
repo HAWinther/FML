@@ -189,7 +189,7 @@ Common-timestep short-range forces are now enabled with the existing 1LPT/2LPT C
 |---|---|---|---|
 | 52 | Field-level forward model and Bayesian reconstruction (LEFTfield/BORG-style) | First expose a deterministic, reproducible map from whitened initial conditions and cosmological/bias parameters to matter/tracer fields. Reuse LPT initially, with a later PM/COLA option; specify cutoffs, assignment/dealiasing, growth, bias operators, stochasticity and real-/redshift-space conventions. Add survey observation operators for masks/selection, with distinct count/field likelihoods and explicit noise/normalization assumptions. Implement tangent/adjoint or equivalent differentiable operations through initial-field generation, evolution, deposition, bias and RSD; verify finite-difference directional gradients, adjoint dot products, zero/Hermitian modes and MPI consistency. Keep the forward/likelihood layer separate from inference: use MAP for debugging, then add prior-whitened field HMC, nuisance/cosmological inference, checkpointing and memory-controlled recomputation. Validate fixed-initial-condition predictions, mock-truth recovery, posterior predictive behavior and coverage. Distinguish LEFTfield-like perturbative bias modeling from BORG-like initial-condition posterior sampling; neither name implies native compatibility or a complete reimplementation. References: [LEFTfield](https://arxiv.org/abs/2409.10937), [BORG](https://arxiv.org/abs/1203.3639). | Very large |
 
-The general framework's architecture and staged implementation are saved in [FieldLevel/FRAMEWORK_PLAN.md](FieldLevel/FRAMEWORK_PLAN.md). Stages 1–3 now have an initial periodic implementation in [FieldLevel/FRAMEWORK.md](FieldLevel/FRAMEWORK.md): generic power spectra and scalar priors, exact linear conditionals/MAP, linear/1LPT/2LPT with distinct cutoffs and smoothed bias/RSD adjoints, normalized Gaussian noise inference, joint field/nuisance HMC and streamed/reconstructed fields. The BAO prototype remains a compatibility application. A first MPI increment now supports distributed linear predictions/adjoints, exact conditionals, MAP and joint field/spectrum/bias/noise HMC, with local FFT slabs and 1/2/4-rank validation. A second MPI increment adds distributed 1LPT evolution, sparse particle/mesh communication and its bias/RSD adjoints, MAP and joint-HMC execution. A third MPI increment adds the full-grid EdS 2LPT source and adjoint, including second-order RSD and spectrum derivatives. A fourth MPI increment adds owning local initial/matter density, Lagrangian displacement/velocity and observed tracer reconstruction products for linear/1LPT/2LPT, matching the serial conventions. A fifth MPI increment adds same-rank checkpoint/restart with complete HMC/adaptation/RNG state, a frozen-field-metric snapshot and checksummed generation files. This supplies the initial periodic MPI engineering foundation; nonlinear scientific validation and performance/memory profiling remain open. A bounded nonlinear ZA/2LPT field-inference pass now checks information, reconstruction and dispersed-chain diagnostics across 1/2/4 ranks. Initial [Cartesian survey likelihoods](FieldLevel/SURVEY.md) add masks/selection, normalized Gaussian voxel noise and a separate positive-link Poisson count model with MPI adjoints and MAP/HMC integration. These bounded checks and the first survey layer do not establish production coverage. Same-rank survey checkpoint/restart now registers full Gaussian/Poisson input identities, with bounded-memory voxel hashing and prior-family metadata; identity schema 2 rejects older schema-1 checkpoints, which require their original code/build. Wider survey calibration, likelihood nuisance/mean-density extensions, changed-rank restart, PM/COLA, high-cutoff padding and complete cosmological derivatives remain open. The existing BAO prototype's FL-1/FL-2 safety issues are resolved: pre-allocation single-rank rejection, once-only setup and checked field/filter dimensions. See [FieldLevel/KNOWN_ISSUES.md](FieldLevel/KNOWN_ISSUES.md) for evidence and the remaining deferred portable-gradient, scientific-validation and workspace work. Engineering #17 resolved frozen-chain diagnostics. The periodic milestone and resolved prerequisites do not mark item 52 complete.
+The general framework's architecture and staged implementation are saved in [FieldLevel/FRAMEWORK_PLAN.md](FieldLevel/docs/FRAMEWORK_PLAN.md). Stages 1–3 now have an initial periodic implementation in [FieldLevel/FRAMEWORK.md](FieldLevel/docs/FRAMEWORK.md): generic power spectra and scalar priors, exact linear conditionals/MAP, linear/1LPT/2LPT with distinct cutoffs and smoothed bias/RSD adjoints, normalized Gaussian noise inference, joint field/nuisance HMC and streamed/reconstructed fields. The BAO prototype remains a compatibility application. A first MPI increment now supports distributed linear predictions/adjoints, exact conditionals, MAP and joint field/spectrum/bias/noise HMC, with local FFT slabs and 1/2/4-rank validation. A second MPI increment adds distributed 1LPT evolution, sparse particle/mesh communication and its bias/RSD adjoints, MAP and joint-HMC execution. A third MPI increment adds the full-grid EdS 2LPT source and adjoint, including second-order RSD and spectrum derivatives. A fourth MPI increment adds owning local initial/matter density, Lagrangian displacement/velocity and observed tracer reconstruction products for linear/1LPT/2LPT, matching the serial conventions. A fifth MPI increment adds same-rank checkpoint/restart with complete HMC/adaptation/RNG state, a frozen-field-metric snapshot and checksummed generation files. This supplies the initial periodic MPI engineering foundation; nonlinear scientific validation and performance/memory profiling remain open. A bounded nonlinear ZA/2LPT field-inference pass now checks information, reconstruction and dispersed-chain diagnostics across 1/2/4 ranks. Initial [Cartesian survey likelihoods](FieldLevel/docs/SURVEY.md) add masks/selection, normalized Gaussian voxel noise and a separate positive-link Poisson count model with MPI adjoints and MAP/HMC integration. These bounded checks and the first survey layer do not establish production coverage. Same-rank survey checkpoint/restart now registers full Gaussian/Poisson input identities, with bounded-memory voxel hashing and prior-family metadata; identity schema 2 rejects older schema-1 checkpoints, which require their original code/build. Wider survey calibration, likelihood nuisance/mean-density extensions, changed-rank restart, PM/COLA, high-cutoff padding and complete cosmological derivatives remain open. The existing BAO prototype's FL-1/FL-2 safety issues are resolved: pre-allocation single-rank rejection, once-only setup and checked field/filter dimensions. See [FieldLevel/KNOWN_ISSUES.md](FieldLevel/docs/KNOWN_ISSUES.md) for evidence and the remaining deferred portable-gradient, scientific-validation and workspace work. Engineering #17 resolved frozen-chain diagnostics. The periodic milestone and resolved prerequisites do not mark item 52 complete.
 
 Item 49 now has an initial implementation in `WaveDarkMatter/`: full complex FFTW grids with nonempty/empty MPI slab support; reusable-buffer symmetric split-step Schrödinger–Poisson evolution; explicit axion-mass/code-unit conversion and comoving normalization; static or prescribed cosmological time integrals; density/phase and velocity-potential initializers; mass, static energy, spectral-tail and cosmological energy-balance diagnostics; external comoving-density and particle-acceleration hooks; and checksummed versioned checkpoints with changed-rank readback. Tests include independent direct DFTs and adaptive ODE evolution, analytic free waves/Poisson/interference, nonlinear second-order convergence, a separately solved radial soliton with mesh/volume checks, expanding energy balance, restart and corruption handling. See `WaveDarkMatter/README.md` and `tests/RESULTS.md` for units, allocation/FFT costs and limits. Self-consistent live-CDM integration, direct axion transfer-function IC preparation, production cosmological/halo calibration, self-interactions and isolated/absorbing boundaries remain extensions.
 
@@ -230,7 +230,7 @@ mock-cluster coverage intervals and selection/mesh convergence plots. This is
 a fixed-nuisance, 26-mode conditional experiment, not completion of #52.
 Coarse point-sampled survey boundaries show percent-level total-integral errors;
 volume-integrated observation modeling and wider nuisance/cosmological calibration
-remain open. See [FieldLevel/survey_validation/RESULTS.md](FieldLevel/survey_validation/RESULTS.md).
+remain open. See [FieldLevel/survey_validation/RESULTS.md](FieldLevel/docs/validation/studies/survey_validation/RESULTS.md).
 
 ### Item 50: initial conservative SPH (13 November 2026)
 
@@ -274,7 +274,7 @@ evolution from whitened real-space initial fields, with ZA growing starts, CIC
 forces, KDK evolution, local matter/particle outputs and scalar conservation
 diagnostics. It supports slabs/pencils and unequal pencil boxes using sparse
 mesh routing without full particle replication. See
-[the PM guide](FieldLevel/PARTICLE_MESH.md). Reverse derivatives, memory-controlled
+[the PM guide](FieldLevel/docs/PARTICLE_MESH.md). Reverse derivatives, memory-controlled
 trajectory checkpoint/recomputation, PM posterior/MAP/HMC integration and broader
 scientific calibration remain the next milestones; #52 remains open.
 
@@ -284,7 +284,7 @@ scientific calibration remain the next milestones; #52 remains open.
 fixed-background PM map, including both CIC position-dependence branches,
 spectral forces, KDK and the ZA start. Temporary midpoint checkpoints plus
 prefix recomputation bound retained particle states and report payload bytes
-and replay counts. See [the adjoint guide](FieldLevel/PM_ADJOINT.md).
+and replay counts. See [the adjoint guide](FieldLevel/docs/PM_ADJOINT.md).
 This is not yet a PM posterior: periodic likelihood/MAP integration and then
 small HMC validation are the next #52 milestones. Existing forward milestone
 artifacts and the bounded scientific-validation limits remain in place.
@@ -297,30 +297,30 @@ and MAP optimizer. Distinct IC/force observation layouts, global parameter-gradi
 reduction, deterministic noise and physical volume scaling are checked in serial
 and MPI/pencil builds. A bounded fixed-parameter mock converges and a short joint
 fit exercises spectrum/noise updates; broader-band line-search limits are retained.
-See [the periodic PM inference guide](FieldLevel/PM_POSTERIOR.md). Next is bounded
+See [the periodic PM inference guide](FieldLevel/docs/PM_POSTERIOR.md). Next is bounded
 HMC scientific validation; #52 remains open beyond these milestones.
 
 ### Item 52: bounded periodic PM HMC validation
 
-[The validation driver](FieldLevel/pm_hmc_validation/README.md) compares fixed-step and
+[The validation driver](FieldLevel/docs/validation/studies/pm_hmc_validation/README.md) compares fixed-step and
 adapted HMC with refined two-dimensional quadrature for two active IC modes,
 conditioning on the other white coordinates and scalar parameters. Both ensembles
 pass the recorded moment/Monte Carlo error checks with no post-warmup divergences.
 Energy/reversibility probes and serial/MPI/pencil/thread/sanitizer replays pass.
 Short full-field and joint spectrum/noise traces exercise the public sampler and
 canonical replay; they do not establish full-posterior mixing or calibration.
-See [results and limitations](FieldLevel/pm_hmc_validation/RESULTS.md). Larger fields, longer
+See [results and limitations](FieldLevel/docs/validation/studies/pm_hmc_validation/RESULTS.md). Larger fields, longer
 joint runs, posterior predictive checks, repeated-mock coverage and PM-specific
 restart/survey/tracer/cosmological derivatives remain separate; item 52 stays open.
 
 ### Item 52: bounded full-field PM posterior validation (15 November 2026)
 
-[The full-field campaign](FieldLevel/pm_full_validation/README.md) samples all 64 white
+[The full-field campaign](FieldLevel/docs/validation/studies/pm_full_validation/README.md) samples all 64 white
 coordinates in four dispersed fixed-parameter and four joint spectrum/noise chains.
 For this N=4/M=8 mock, six IC directions affect the likelihood and 58 have an exact
 unit-Gaussian posterior. All declared feature-mixing, analytic null-moment,
 normalization and posterior-predictive checks pass. Backend/thread/sanitizer replay
-also passes. [Results and plots](FieldLevel/pm_full_validation/RESULTS.md) separate latent
+also passes. [Results and plots](FieldLevel/docs/validation/studies/pm_full_validation/RESULTS.md) separate latent
 uncertainty from noisy predictions. This is bounded single-mock evidence;
 larger fields/mode support, repeated-mock coverage and numerical convergence remain
 open, along with PM checkpoint/restart, tracer/RSD/survey and cosmological derivatives.
@@ -336,14 +336,14 @@ RNG/adaptation and frozen-metric state is reused. Fixed and joint fresh-process
 continuation is bitwise exact on serial, 1/2/4-rank slabs and pencils (including
 unequal boxes), with sanitizer and incompatible-configuration/failure checks.
 Existing non-PM fingerprints/file schemas are preserved and old-serializer linear/
-LPT checkpoints resume under the new adapter. [The guide](FieldLevel/PM_CHECKPOINT.md) and
-[results](FieldLevel/tests/PM_CHECKPOINT_RESULTS.md) state the callback-versioning and same-build
+LPT checkpoints resume under the new adapter. [The guide](FieldLevel/docs/PM_CHECKPOINT.md) and
+[results](FieldLevel/docs/validation/tests/PM_CHECKPOINT_RESULTS.md) state the callback-versioning and same-build
 contract. Changed-layout restart, larger/multi-mock calibration and PM survey/tracer/
 RSD/cosmological extensions remain open; item 52 is not complete.
 
 ### Item 52: PM convergence and more active modes (15 November 2026)
 
-[The bounded resolution campaign](FieldLevel/pm_resolution_validation/README.md) matches one
+[The bounded resolution campaign](FieldLevel/docs/validation/studies/pm_resolution_validation/README.md) matches one
 physical 18-mode Fourier field across particle/force grids and time schedules.
 Time refinement and four directional derivative sweeps pass. Four joint chains
 on N=6/M=12 sample all 216 white coordinates and spectrum/noise; all 653 monitored
@@ -352,9 +352,9 @@ features pass the declared mixing checks with no post-warmup divergences.
 **Spatial accuracy remains unresolved:** four force/particle criteria fail, with
 last-refinement field/gradient differences of 21.9%/68.5% (force mesh) and
 16.8%/50.9% (particle lattice). Independent NumPy and native tiny-kick probes reproduce
-strong sparse-load/force-grid dependence. [PM-S1](FieldLevel/KNOWN_ISSUES.md) prioritizes dense
+strong sparse-load/force-grid dependence. [PM-S1](FieldLevel/docs/KNOWN_ISSUES.md) prioritizes dense
 particle support and controlled force/assignment investigation before accuracy or
-coverage claims. The numerical force law is unchanged. [Results and plots](FieldLevel/pm_resolution_validation/RESULTS.md)
+coverage claims. The numerical force law is unchanged. [Results and plots](FieldLevel/docs/validation/studies/pm_resolution_validation/RESULTS.md)
 retain the failed criteria. Item 52 remains open.
 
 ### Item 52: PM dense-particle sampling (15 November 2026)
@@ -363,7 +363,7 @@ Native N>M now supports more IC/particle cells than force cells, with initial
 support below both Nyquists and compatible slab/pencil geometry. The force law,
 adjoint and checkpoint codec are unchanged. Serial, 1/2/4-rank MPI, sanitizer,
 normalized posterior and fresh-process restart checks pass, including old PM
-checkpoint continuation. The [dense-sampling study](FieldLevel/pm_oversampling_validation/RESULTS.md)
+checkpoint continuation. The [dense-sampling study](FieldLevel/docs/validation/studies/pm_oversampling_validation/RESULTS.md)
 passes the original bounded finest-correction criteria: N=64, M=32 vs 64 changes
 density/gradient by 0.735%/6.198%; particle and time refinements also pass. This
 completes native oversampling support and this refinement experiment, not broad
@@ -373,7 +373,7 @@ Particle/white memory grows as N^3. Item 52 remains open.
 
 ### Item 52: many-mode PM accuracy and refined-data reconstruction (15 November 2026)
 
-[The broader PM campaign](FieldLevel/pm_nonlinear_validation/RESULTS.md) increases initial support to
+[The broader PM campaign](FieldLevel/docs/validation/studies/pm_nonlinear_validation/RESULTS.md) increases initial support to
 122 real directions and observations to 256 real degrees, using two seeds and
 three strength/time fixtures. Particle/time finest-correction checks and
 forward/adjoint/backend checks pass. Force-grid projected-gradient changes of
@@ -389,7 +389,7 @@ No force law, posterior, sampler or optimizer is changed. The original and dense
 
 ### Item 52: particle-sampled PM force reference (15 November 2026)
 
-[The controlled forward study](FieldLevel/pm_force_reference_validation/RESULTS.md) extends strong91 to
+[The controlled forward study](FieldLevel/docs/validation/studies/pm_force_reference_validation/RESULTS.md) extends strong91 to
 N64/96/128 on M32 and M64, with a N128/M64 timestep check. Particle corrections
 N96→N128 are 0.0648%/0.0424% in observed-band density; the N128 time correction
 is 0.0119%. Force M32→M64 at N128 still changes density by 3.7749% and 0.1063
@@ -407,7 +407,7 @@ controlled setup. Item 52 remains open.
 `PMForceWindow::CICCompensated` is an opt-in inverse squared CIC force window,
 with a matching discrete adjoint and PM checkpoint law tag 2. Default `None`
 retains tag-1 identity bytes and old numerical outputs/checkpoint compatibility.
-[The controlled comparison](FieldLevel/pm_window_validation/RESULTS.md) reduces the N128 M32→M64 raw density
+[The controlled comparison](FieldLevel/docs/validation/studies/pm_window_validation/RESULTS.md) reduces the N128 M32→M64 raw density
 correction from 3.775% to 1.768%; after smoothing outputs to a common observation
 window, the descriptive density correction falls from 2.068% to 0.0309%.
 The raw joint-gradient correction improves from 75.1% to 34.9% but still fails
@@ -420,7 +420,7 @@ PM survey/tracer/RSD/cosmological work remain open; item 52 is not complete.
 
 ### Item 52: fixed PM observation convention (15 November 2026)
 
-The [fixed-response study](FieldLevel/pm_observation_validation/RESULTS.md) now implements the
+The [fixed-response study](FieldLevel/docs/validation/studies/pm_observation_validation/RESULTS.md) now implements the
 actual signal response, transpose and checkpoint identity. With a common M32 CIC
 observation window, compensated M32→M64 density and joint-gradient corrections
 are 0.0309% and 0.476%, passing the original bounded criteria. The uncompensated
@@ -431,7 +431,7 @@ posterior calibration, MAP conditioning and PM survey/tracer/RSD work remain ope
 
 ### Item 52: refined-data compensated PM reconstruction (15 November 2026)
 
-The [new reconstruction study](FieldLevel/pm_reconstruction_validation/RESULTS.md) generates
+The [new reconstruction study](FieldLevel/docs/validation/studies/pm_reconstruction_validation/RESULTS.md) generates
 a compensated N128/M64/32-step mock and fits at N32/M16/16 steps with a common
 M16 observation window and fixed nuisance parameters. At 24 accepted iterations,
 initial coefficient error is 0.2696 of the zero-field baseline,
@@ -448,7 +448,7 @@ this is reconstruction validation, not posterior calibration. Item 52 remains op
 gradient descent; legacy `map()` is unchanged. `BasicPosterior::value` omits the
 forward-model adjoint while retaining the normalized target and priors. Distributed
 field/scalar reductions, controls, curvature and history limits are tested.
-[The frozen-data comparison](FieldLevel/pm_optimizer_validation/RESULTS.md) preserves legacy24
+[The frozen-data comparison](FieldLevel/docs/validation/studies/pm_optimizer_validation/RESULTS.md) preserves legacy24
 coefficients bitwise; value-only GD cuts pullbacks from 144 to 25.
 L-BFGS status is LineSearchFailed, raw gradient 0.000116038 at
 83 iterations with tolerance2e-5. Its recovery/error and work/memory
@@ -457,7 +457,7 @@ posterior calibration/PM survey/tracer/RSD work remains open.
 
 ### Item 52: stalled PM reconstruction diagnosis (16 November 2026)
 
-[Read-only stationarity probes](FieldLevel/pm_stationarity_validation/RESULTS.md) reproduce
+[Read-only stationarity probes](FieldLevel/docs/validation/studies/pm_stationarity_validation/RESULTS.md) reproduce
 iteration83 and capture its full state. Fresh/reused caches and replay budgets
 0/1/4/8 give identical gradients/values; three stencil-preserving directional
 checks pass. A particle lies3.19e-10 force cells from a final CIC face. Larger
@@ -473,7 +473,7 @@ refinement remains deferred; convergence and general calibration remain open.
 `BasicPosterior` gains an opt-in stable change API for likelihoods implementing
 local differences; Gaussian variance/normalization and field/scalar priors are
 included. Defaults and ordinary target evaluations remain unchanged.
-[The frozen-state/full-fit check](FieldLevel/pm_stable_armijo_validation/RESULTS.md) accepts
+[The frozen-state/full-fit check](FieldLevel/docs/validation/studies/pm_stable_armijo_validation/RESULTS.md) accepts
 the diagnosed hidden descent. Stable L-BFGS uses 594 value trials versus
 1311, but ends at iteration 98 with raw gradient 0.00013902
 and status LineSearchFailed: convergence remains unresolved. Stable GD
@@ -483,7 +483,7 @@ regularity/forward precision at the new endpoint before changing assignment.
 
 ### Item 52: stable endpoint regularity diagnostic (16 November 2026)
 
-[Iteration-98 probes](FieldLevel/pm_stable_stationarity_validation/RESULTS.md) reproduce the
+[Iteration-98 probes](FieldLevel/docs/validation/studies/pm_stable_stationarity_validation/RESULTS.md) reproduce the
 stable fit bitwise. A final-node CIC coordinate lies 7.47e-13 grid cells from a
 face. One-sided negative-gradient slopes differ across two stencil axes: the
 branch-preserving side agrees with the adjoint, while the nominal descent side
@@ -498,7 +498,7 @@ refinement/calibration remains deferred.
 
 ### Item 52: opt-in TSC PM assignment (16 November 2026)
 
-[Matched-assignment reconstruction](FieldLevel/pm_tsc_validation/RESULTS.md) converges in
+[Matched-assignment reconstruction](FieldLevel/docs/validation/studies/pm_tsc_validation/RESULTS.md) converges in
 16 iterations with raw gradient 5.6502e-06 at the unchanged
 2e-5 tolerance. TSC covers force deposition/gather, reported density, matching
 adjoint and optional force compensation. CIC defaults and checkpoint identities
@@ -509,7 +509,7 @@ remains deferred. Stable objective comparisons remain opt-in.
 
 ### Item 52: joint TSC MAP validation (16 November 2026)
 
-[Initial field, amplitude and noise](FieldLevel/pm_tsc_joint_validation/RESULTS.md) converge
+[Initial field, amplitude and noise](FieldLevel/docs/validation/studies/pm_tsc_joint_validation/RESULTS.md) converge
 jointly in 54 iterations with joint norm 9.84911e-06
 at tolerance 2e-5. Scalar gradient identities and six refined directional gates
 pass; serial/slab/pencil/sanitizer checks agree and fixed mode reproduces the
@@ -522,7 +522,7 @@ posterior inference, coverage and broader refinement remain deferred.
 
 ### Item 52: bounded TSC posterior pilot (16 November 2026)
 
-[Active-field/amplitude/noise HMC](FieldLevel/pm_tsc_posterior_validation/RESULTS.md) completes
+[Active-field/amplitude/noise HMC](FieldLevel/docs/validation/studies/pm_tsc_posterior_validation/RESULTS.md) completes
 four N16 particle chains on the frozen data, M16 force mesh and 16 time steps,
 as selected by the user. Exact inactive-Gaussian marginalization and physical
 coordinates include the 122*A/2 Jacobian; direct target/gradient checks pass.
@@ -533,3 +533,91 @@ and coverage remain unvalidated. A <=16-mesh bounded dense lookup reduces a shor
 case's CPU time about 21% with bitwise-identical outputs; larger meshes stay sparse.
 PM/LPT, MPI/pencil, sanitizer and old-checkpoint checks pass. Broader refinement
 remains deferred; more effective draws are needed before calibrated inference.
+
+### Item 52: alternating field/scalar posterior pilot (16 November 2026)
+
+[Optional field HMC plus conditional scalar updates](FieldLevel/docs/validation/studies/pm_tsc_posterior_validation/BLOCKED_RESULTS.md)
+uses the identical N16 target and original diagnostic thresholds. Conditional
+slice sweeps reuse the cached residual with zero additional PM evaluations;
+rejected-field cache restoration and HMC force refresh are checked. The report
+compares all 248 features by ESS per actual PM evaluation. Serial, slab/pencil
+MPI and sanitizer checks pass; the original joint sampler remains the default.
+This is fixture validation, with N32 mixing, coverage and a general production
+blocked adapter still outside its scope. See the report for measured efficiency
+and the unchanged strict mixing verdict.
+
+### Item 52: fixed field-metric pilot (16 November 2026)
+
+[The fixed-curvature pilot](FieldLevel/docs/validation/studies/pm_tsc_posterior_validation/METRIC_RESULTS.md)
+compares a frozen 122-dimensional field mass to the alternating and original
+samplers on the same N16 target. Hessian setup and all warmup/sampling evaluations
+are included in efficiency. Matrix positivity, derivatives, MPI slabs/pencils,
+malformed inputs, Gaussian moments and sanitized sampling are checked. The report
+preserves the original mixing verdict. This dense experiment does not provide
+a production full-grid metric; N32 mixing and coverage remain unvalidated.
+
+### Item 52: shorter trajectories at matched PM cost (16 November 2026)
+
+[The controlled trajectory experiment](FieldLevel/docs/validation/studies/pm_tsc_posterior_validation/TRAJECTORY_RESULTS.md)
+compares 2..4-step trajectories with 320 retained draws against 4..8 steps with
+128 draws, at the same expected total PM cost. Target, frozen metric, seeds,
+warmup and diagnostic criteria stay fixed. Actual PM costs include a fresh shared
+metric build; the report preserves all convergence failures. Native code and
+production defaults are unchanged. N32 mixing and repeated-mock coverage remain
+outside this experiment. Short trajectories clear the tail gate but leave 182
+bulk failures; an intermediate maximum 6-step schedule is the next candidate.
+
+### Item 52: intermediate trajectories at matched PM cost (16 November 2026)
+
+[The intermediate trajectory report](FieldLevel/docs/validation/studies/pm_tsc_posterior_validation/INTERMEDIATE_RESULTS.md)
+adds a maximum-6-step, 192-draw schedule at the same expected total PM cost as
+the preceding maximum 4/8 schedules. Target, metric, seeds, warmup and diagnostic
+thresholds remain fixed. Actual cost includes a fresh shared metric build, and
+all failures stay in the report. Native code and defaults are unchanged. The
+three-way comparison remains a bounded N16 experiment; N32 mixing and coverage
+are still open. The intermediate schedule retains 18 bulk failures and one
+tail failure (ESS 199.98); a longer fixed-schedule validation remains needed.
+
+### Item 52: longer fixed-schedule N16 validation (16 November 2026)
+
+[The 512-draw validation](FieldLevel/docs/validation/studies/pm_tsc_posterior_validation/LONG_VALIDATION_RESULTS.md)
+keeps the intermediate maximum 6-step sampler fixed and increases the declared
+budget about 2.2x. Target, matrix, seeds, warmup and convergence criteria stay
+unchanged. The pilot prefix, raw features, native diagnostics and saved analysis
+are replayed. All original N16 mixing gates now pass (max Rhat 1.0071,
+min bulk/tail ESS 471.1/726.0, zero divergences). No production default
+changes; N32 mixing and repeated-mock coverage remain open.
+
+### Item 52: independent same-model N16 posterior validation (17 November 2026)
+
+[New IC191/noise192 mock](FieldLevel/docs/validation/studies/pm_tsc_posterior_validation/INDEPENDENT_MOCK_RESULTS.md)
+passes the unchanged fixed-protocol four-chain 512-draw mixing gates for all
+248 features (max Rhat 1.0064, min bulk/tail ESS 463.9/552.9, no divergences).
+Generator and inference both use N16/M16/16 steps. Data-only MAP, fresh frozen
+metric and actual target checks precede sampling. Scalar truth inclusion and
+initial-field recovery are reported separately from mixing; one mock does not
+establish ensemble coverage. Serial/MPI slab/pencil/sanitizer engineering and
+legacy/replay checks pass. N32 mixing, physical convergence, repeated-mock
+coverage and a scalable full-grid metric remain deferred, not completed.
+
+### Item 52: repeated same-model N16 posterior validation (17 November 2026)
+
+[Results and plots](FieldLevel/docs/validation/studies/pm_tsc_posterior_validation/REPEATED_MOCK_RESULTS.md).
+
+The original same-model N16 plan declared IC/noise seeds 291/292, 391/392,
+491/492 and 591/592, excluding the previous 191/192 case. The user requested
+skipping the fourth after two results were known and the third was running.
+Three datasets participate; the fourth is user-skipped, not missing or failed. The frozen
+four-chain 64-warmup/512-retained schedule and all 248 strict feature gates stay
+unchanged. Completed: 3/3; mixing passes: 3/3;
+consistency passes: 3/3; campaign passed=True.
+No failed case is replaced, extended or dropped. Each dataset has a data-only
+MAP and a fresh metric frozen before sampling. The report separates individual
+mixing verdicts from scalar interval inclusion and field recovery. Three datasets
+give broad coverage uncertainty; correlated field-mode counts are not pooled.
+This is limited repeated-data recovery at fixed true hyperparameters, not SBC.
+Native sources/binaries remain unchanged; synthetic reporting and raw/aggregate
+replay checks are recorded. N32 mixing, physical convergence, larger calibration
+ensembles and scalable full-grid metrics remain open. This validation pilot
+buffers chain output until completion and has no mid-chain restart checkpoint;
+finished mocks are persistent, but interrupted unfinished chains must restart.

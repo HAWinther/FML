@@ -1,0 +1,9 @@
+{
+  "id": "2026-11-17_202326",
+  "bundle_sha256": "15a63f59e86ad9f765a83d8355e01841ad32067e54b4987abfc220a294abca22",
+  "manifest_sha256": "1041e27e02e42a15944a592313d7ec408f1d49a57bba7e2f711089ccb2667dfe",
+  "files": 1141,
+  "uncompressed_bytes": 171066790,
+  "compressed_bytes": 81135786,
+  "head": "c24a2d1c41574a3a3aaf4ef2136c9b79b8fdc768"
+}

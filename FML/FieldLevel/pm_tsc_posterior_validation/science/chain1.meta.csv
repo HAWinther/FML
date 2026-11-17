@@ -1,2 +1,0 @@
-id,warmup,draws,leapfrog,adapt,epsilon,acceptance,divergences,seed,seconds,evaluations,n,m,steps,active
-1,64,128,8,1,0.29770631372911083,0.91499390556014415,0,12001,1518.034753159,1154,16,16,16,122

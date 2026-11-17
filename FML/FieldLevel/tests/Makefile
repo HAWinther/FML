@@ -161,8 +161,8 @@ endif
 
 .PHONY: pm-hmc-smoke
 pm-hmc-smoke:
-	$(MAKE) -C ../pm_hmc_validation pm_hmc
-	python3 ../pm_hmc_validation/smoke.py --exe ../pm_hmc_validation/pm_hmc --mpi $(USE_MPI) --mpirun "$(MPIRUN)" --np-list "$(NP_LIST)"
+	$(MAKE) -C ../validation/pm/hmc pm_hmc
+	python3 ../validation/pm/hmc/smoke.py --exe ../validation/pm/hmc/pm_hmc --mpi $(USE_MPI) --mpirun "$(MPIRUN)" --np-list "$(NP_LIST)"
 run: pm-hmc-smoke
 
 PM_CHECKPOINT_BACKENDS := slab

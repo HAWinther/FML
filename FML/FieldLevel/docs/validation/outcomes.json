@@ -1,0 +1,690 @@
+{
+  "pm_tsc_posterior_validation/summary.json": {
+    "passed": false,
+    "consistency_passed": true,
+    "mixing_passed": false,
+    "diagnostic_extrema": {
+      "max_rhat": 1.0381020849471028,
+      "min_bulk_ess": 93.29085165218245,
+      "min_tail_ess": 180.85888599621757
+    },
+    "limits": [
+      "N16 particle pilot changes the N32 MAP discretization; N32 posterior mixing remains unvalidated.",
+      "Active posterior sampled in physical coordinates with the 122*A/2 Jacobian; inactive Gaussian white directions integrated exactly.",
+      "One finite reference and realization; posterior intervals are exploratory if mixing gates fail, not repeated-mock coverage.",
+      "No post-warmup thinning; predictive saves only use a stride."
+    ],
+    "posterior": {
+      "A": {
+        "mean": -0.1355866919767677,
+        "sd": 0.13814020032105195,
+        "quantile_025": -0.39487486168756186,
+        "median": -0.1378732680457318,
+        "quantile_975": 0.14625896803731522,
+        "rhat": 1.0109684949770779,
+        "ess_bulk": 358.36527681848463,
+        "ess_tail": 288.3886508003721
+      },
+      "N": {
+        "mean": -9.067069796017162,
+        "sd": 0.1117411369815514,
+        "quantile_025": -9.2723575329665,
+        "median": -9.065514340622535,
+        "quantile_975": -8.834572909793408,
+        "rhat": 1.021421380363472,
+        "ess_bulk": 183.9430376285136,
+        "ess_tail": 257.952742034746
+      },
+      "noise_power": {
+        "mean": 0.00011612820207441328,
+        "quantile_025": 9.398668666373801e-05,
+        "median": 0.000115583848352286,
+        "quantile_975": 0.00014561087152399515
+      }
+    },
+    "mean_physical_field": {
+      "relative_error": 0.2681119834343356,
+      "correlation": 0.9642474896327321
+    }
+  },
+  "pm_tsc_posterior_validation/long_validation/analysis/summary.json": {
+    "passed": true,
+    "consistency_passed": true,
+    "mixing_passed": true,
+    "diagnostic_extrema": {
+      "max_rhat": 1.007070263292763,
+      "min_bulk_ess": 471.1202175972615,
+      "min_tail_ess": 726.0430349094217
+    },
+    "limits": [
+      "N16 particle pilot changes the N32 MAP discretization; N32 posterior mixing remains unvalidated.",
+      "Active posterior sampled in physical coordinates with the 122*A/2 Jacobian; inactive Gaussian white directions integrated exactly.",
+      "One finite reference and realization; posterior intervals are exploratory if mixing gates fail, not repeated-mock coverage.",
+      "No post-warmup thinning; predictive saves only use a stride."
+    ],
+    "posterior": {
+      "A": {
+        "mean": -0.1271832154173942,
+        "sd": 0.13408375528968286,
+        "quantile_025": -0.38353793328122204,
+        "median": -0.1312938705833372,
+        "quantile_975": 0.14605722098418014,
+        "rhat": 0.9994877859996508,
+        "ess_bulk": 1663.995628544931,
+        "ess_tail": 1808.050037385815
+      },
+      "N": {
+        "mean": -9.08251842029244,
+        "sd": 0.12193357407815258,
+        "quantile_025": -9.307619655700389,
+        "median": -9.087019274316406,
+        "quantile_975": -8.821655020019776,
+        "rhat": 1.0020881380027744,
+        "ess_bulk": 576.5340846223964,
+        "ess_tail": 830.2550064162058
+      },
+      "noise_power": {
+        "mean": 0.00011449175288271623,
+        "quantile_025": 9.073025824630336e-05,
+        "median": 0.0001131247605546308,
+        "quantile_975": 0.0001475040389964522
+      }
+    },
+    "mean_physical_field": {
+      "relative_error": 0.265760579147719,
+      "correlation": 0.9650126551650351
+    }
+  },
+  "pm_tsc_posterior_validation/independent_mock/analysis/summary.json": {
+    "passed": true,
+    "consistency_passed": true,
+    "mixing_passed": true,
+    "diagnostic_extrema": {
+      "max_rhat": 1.0063925665535485,
+      "min_bulk_ess": 463.9095829972887,
+      "min_tail_ess": 552.8518518174116
+    },
+    "limits": [
+      "Independent same-model N16 realization; no N32 mixing or physical resolution claim.",
+      "Active posterior sampled in physical coordinates with the 122*A/2 Jacobian; inactive Gaussian white directions integrated exactly.",
+      "One independent mock; marginal recovery is descriptive, not an ensemble coverage or simulation-based calibration test.",
+      "No post-warmup thinning; predictive saves only use a stride."
+    ],
+    "posterior": {
+      "A": {
+        "mean": 0.027726426481142926,
+        "sd": 0.1348579470222708,
+        "quantile_025": -0.22983704371809466,
+        "median": 0.02544733123920445,
+        "quantile_975": 0.29586905564588806,
+        "rhat": 1.0000221718503806,
+        "ess_bulk": 1726.3210221064992,
+        "ess_tail": 1874.1948542964058
+      },
+      "N": {
+        "mean": -9.194278313138417,
+        "sd": 0.11768520545585977,
+        "quantile_025": -9.416112686255472,
+        "median": -9.196968360730601,
+        "quantile_975": -8.956812953000561,
+        "rhat": 1.00090279998724,
+        "ess_bulk": 612.3344037763219,
+        "ess_tail": 1233.775238516052
+      },
+      "noise_power": {
+        "mean": 0.00010232938357384341,
+        "quantile_025": 8.140189248833857e-05,
+        "median": 0.00010134618171842526,
+        "quantile_975": 0.000128856271584013
+      }
+    },
+    "recovery": {
+      "scalar_truth": {
+        "A": 0.0,
+        "N": -9.210340371976182,
+        "noise_power": 0.0001
+      },
+      "scalar_95_interval_contains_truth": {
+        "A": true,
+        "N": true,
+        "noise_power": true
+      },
+      "active_mode_95_interval_contains_truth_count": 118,
+      "active_mode_count": 122,
+      "active_mode_coverage_fraction": 0.9672131147540983,
+      "note": "Descriptive recovery on one mock. Modes are correlated; this is not an ensemble coverage estimate or a coverage gate."
+    },
+    "mean_physical_field": {
+      "relative_error": 0.2157089682012973,
+      "correlation": 0.9775040659072725
+    }
+  },
+  "pm_tsc_posterior_validation/repeated_mocks/mock1/analysis/summary.json": {
+    "passed": true,
+    "consistency_passed": true,
+    "mixing_passed": true,
+    "diagnostic_extrema": {
+      "max_rhat": 1.0062558300921602,
+      "min_bulk_ess": 530.1511825928758,
+      "min_tail_ess": 826.4770997163912
+    },
+    "limits": [
+      "Independent same-model N16 realization; no N32 mixing or physical resolution claim.",
+      "Active posterior sampled in physical coordinates with the 122*A/2 Jacobian; inactive Gaussian white directions integrated exactly.",
+      "One independent mock; marginal recovery is descriptive, not an ensemble coverage or simulation-based calibration test.",
+      "No post-warmup thinning; predictive saves only use a stride."
+    ],
+    "posterior": {
+      "A": {
+        "mean": 0.0468219237822576,
+        "sd": 0.1264694392228622,
+        "quantile_025": -0.19777263967102723,
+        "median": 0.044614120323750284,
+        "quantile_975": 0.29821174365868197,
+        "rhat": 1.0008215898993407,
+        "ess_bulk": 1670.6946710472635,
+        "ess_tail": 1917.8635856948697
+      },
+      "N": {
+        "mean": -9.202637570330893,
+        "sd": 0.12007635280725967,
+        "quantile_025": -9.426284280684913,
+        "median": -9.205157128784439,
+        "quantile_975": -8.963042274363671,
+        "rhat": 1.0012672372510638,
+        "ess_bulk": 580.8465494441218,
+        "ess_tail": 1104.605472384102
+      },
+      "noise_power": {
+        "mean": 0.00010150712674196502,
+        "quantile_025": 8.05780504093477e-05,
+        "median": 0.00010051967029094524,
+        "quantile_975": 0.00012805607957827275
+      }
+    },
+    "recovery": {
+      "scalar_truth": {
+        "A": 0.0,
+        "N": -9.210340371976182,
+        "noise_power": 0.0001
+      },
+      "scalar_95_interval_contains_truth": {
+        "A": true,
+        "N": true,
+        "noise_power": true
+      },
+      "active_mode_95_interval_contains_truth_count": 118,
+      "active_mode_count": 122,
+      "active_mode_coverage_fraction": 0.9672131147540983,
+      "note": "Descriptive recovery on one mock. Modes are correlated; this is not an ensemble coverage estimate or a coverage gate."
+    },
+    "mean_physical_field": {
+      "relative_error": 0.21380813074956184,
+      "correlation": 0.9769975593573571
+    }
+  },
+  "pm_tsc_posterior_validation/repeated_mocks/mock0/analysis/summary.json": {
+    "passed": true,
+    "consistency_passed": true,
+    "mixing_passed": true,
+    "diagnostic_extrema": {
+      "max_rhat": 1.007431069103988,
+      "min_bulk_ess": 454.7597319036457,
+      "min_tail_ess": 552.0904179948978
+    },
+    "limits": [
+      "Independent same-model N16 realization; no N32 mixing or physical resolution claim.",
+      "Active posterior sampled in physical coordinates with the 122*A/2 Jacobian; inactive Gaussian white directions integrated exactly.",
+      "One independent mock; marginal recovery is descriptive, not an ensemble coverage or simulation-based calibration test.",
+      "No post-warmup thinning; predictive saves only use a stride."
+    ],
+    "posterior": {
+      "A": {
+        "mean": 0.2658076389108721,
+        "sd": 0.12839407729103575,
+        "quantile_025": 0.021330596973110124,
+        "median": 0.2644720947533201,
+        "quantile_975": 0.5160617216096782,
+        "rhat": 1.0016525159884961,
+        "ess_bulk": 1672.9304533603008,
+        "ess_tail": 1763.3267784676475
+      },
+      "N": {
+        "mean": -9.147996092101518,
+        "sd": 0.12044139559867548,
+        "quantile_025": -9.366652298579368,
+        "median": -9.156661745069998,
+        "quantile_975": -8.90556009500453,
+        "rhat": 1.0010688716074556,
+        "ess_bulk": 598.9784795264012,
+        "ess_tail": 1120.4873851558561
+      },
+      "noise_power": {
+        "mean": 0.00010721457874625785,
+        "quantile_025": 8.552946221361573e-05,
+        "median": 0.00010551454533545954,
+        "quantile_975": 0.0001356326979083294
+      }
+    },
+    "recovery": {
+      "scalar_truth": {
+        "A": 0.0,
+        "N": -9.210340371976182,
+        "noise_power": 0.0001
+      },
+      "scalar_95_interval_contains_truth": {
+        "A": false,
+        "N": true,
+        "noise_power": true
+      },
+      "active_mode_95_interval_contains_truth_count": 116,
+      "active_mode_count": 122,
+      "active_mode_coverage_fraction": 0.9508196721311475,
+      "note": "Descriptive recovery on one mock. Modes are correlated; this is not an ensemble coverage estimate or a coverage gate."
+    },
+    "mean_physical_field": {
+      "relative_error": 0.2144295909117132,
+      "correlation": 0.976758957275418
+    }
+  },
+  "pm_tsc_posterior_validation/repeated_mocks/analysis/summary.json": {
+    "passed": true,
+    "consistency_passed": 3,
+    "mixing_passed": 3,
+    "limits": [
+      "Fresh datasets at fixed true A=0 and noise power=1e-4; limited repeated-data recovery, not prior-predictive SBC.",
+      "Every declared dataset and failure remains visible. Missing results are not successes; coverage of available intervals is unreliable if any case fails.",
+      "Wilson intervals use datasets as units. A and N estimates on the same datasets are correlated; N and noise_power interval inclusion are the same event.",
+      "122 field modes within each mock are correlated, so their interval-inclusion counts are not pooled as independent binomial trials.",
+      "Same-model N16 only; no N32 mixing, resolution convergence or broader cosmology/noise-regime claim.",
+      "HMC seeds are held fixed across datasets. Wilson intervals describe dataset-to-dataset variation and omit residual Monte Carlo error.",
+      "Original four-mock scope reduced to three at user request after two results were known and the third was running. The fourth is user-skipped, not missing or failed. Wilson and added exact binomial intervals are descriptive fixed-n nominal bounds, not an optional-stopping coverage guarantee. Exact bounds supplement the predeclared Wilson approximation because only three mocks remain."
+    ],
+    "declared": 3,
+    "completed": 3,
+    "user_skipped": [
+      {
+        "id": 3,
+        "directory": "mock3",
+        "ic_seed": 591,
+        "noise_seed": 592
+      }
+    ]
+  },
+  "pm_tsc_posterior_validation/repeated_mocks/mock2/analysis/summary.json": {
+    "passed": true,
+    "consistency_passed": true,
+    "mixing_passed": true,
+    "diagnostic_extrema": {
+      "max_rhat": 1.0064808899563609,
+      "min_bulk_ess": 532.1743220354426,
+      "min_tail_ess": 712.570615562545
+    },
+    "limits": [
+      "Independent same-model N16 realization; no N32 mixing or physical resolution claim.",
+      "Active posterior sampled in physical coordinates with the 122*A/2 Jacobian; inactive Gaussian white directions integrated exactly.",
+      "One independent mock; marginal recovery is descriptive, not an ensemble coverage or simulation-based calibration test.",
+      "No post-warmup thinning; predictive saves only use a stride."
+    ],
+    "posterior": {
+      "A": {
+        "mean": 0.09262430209507388,
+        "sd": 0.13115668316061974,
+        "quantile_025": -0.15715115668954652,
+        "median": 0.09261176252177591,
+        "quantile_975": 0.3487985727754328,
+        "rhat": 1.0009408043896422,
+        "ess_bulk": 1657.9153877883302,
+        "ess_tail": 1915.789433584263
+      },
+      "N": {
+        "mean": -9.211949958447097,
+        "sd": 0.11913073914003258,
+        "quantile_025": -9.43312003788096,
+        "median": -9.214544863688516,
+        "quantile_975": -8.968320693510478,
+        "rhat": 1.0026089212766534,
+        "ess_bulk": 656.9846564353008,
+        "ess_tail": 1125.0783039891157
+      },
+      "noise_power": {
+        "mean": 0.00010055408719726616,
+        "quantile_025": 8.00291214810047e-05,
+        "median": 9.958043418168165e-05,
+        "quantile_975": 0.0001273819273972056
+      }
+    },
+    "recovery": {
+      "scalar_truth": {
+        "A": 0.0,
+        "N": -9.210340371976182,
+        "noise_power": 0.0001
+      },
+      "scalar_95_interval_contains_truth": {
+        "A": true,
+        "N": true,
+        "noise_power": true
+      },
+      "active_mode_95_interval_contains_truth_count": 115,
+      "active_mode_count": 122,
+      "active_mode_coverage_fraction": 0.9426229508196722,
+      "note": "Descriptive recovery on one mock. Modes are correlated; this is not an ensemble coverage estimate or a coverage gate."
+    },
+    "mean_physical_field": {
+      "relative_error": 0.24323688477222954,
+      "correlation": 0.9700346089398685
+    }
+  },
+  "pm_tsc_posterior_validation/intermediate_trajectories/analysis/summary.json": {
+    "passed": false,
+    "consistency_passed": true,
+    "mixing_passed": false,
+    "diagnostic_extrema": {
+      "max_rhat": 1.019325226200843,
+      "min_bulk_ess": 189.73841628060532,
+      "min_tail_ess": 199.97972620550888
+    },
+    "limits": [
+      "N16 particle pilot changes the N32 MAP discretization; N32 posterior mixing remains unvalidated.",
+      "Active posterior sampled in physical coordinates with the 122*A/2 Jacobian; inactive Gaussian white directions integrated exactly.",
+      "One finite reference and realization; posterior intervals are exploratory if mixing gates fail, not repeated-mock coverage.",
+      "No post-warmup thinning; predictive saves only use a stride."
+    ],
+    "posterior": {
+      "A": {
+        "mean": -0.12349981908779405,
+        "sd": 0.13380413128640795,
+        "quantile_025": -0.37989248308916185,
+        "median": -0.1246319871152701,
+        "quantile_975": 0.15570088014775663,
+        "rhat": 1.0016633670446453,
+        "ess_bulk": 701.2516995896481,
+        "ess_tail": 704.3373804193227
+      },
+      "N": {
+        "mean": -9.085400252996228,
+        "sd": 0.11925370582153054,
+        "quantile_025": -9.309324819589362,
+        "median": -9.090473426437995,
+        "quantile_975": -8.827928468812274,
+        "rhat": 1.0118932711900859,
+        "ess_bulk": 238.81607232652374,
+        "ess_tail": 383.4029539637138
+      },
+      "noise_power": {
+        "mean": 0.00011412054314174998,
+        "quantile_025": 9.057567956795384e-05,
+        "median": 0.00011273468465034152,
+        "quantile_975": 0.0001465815735484566
+      }
+    },
+    "mean_physical_field": {
+      "relative_error": 0.26778244645397786,
+      "correlation": 0.9645337730988575
+    }
+  },
+  "pm_tsc_posterior_validation/preconditioned/analysis/summary.json": {
+    "passed": false,
+    "consistency_passed": true,
+    "mixing_passed": false,
+    "diagnostic_extrema": {
+      "max_rhat": 1.0361208147800172,
+      "min_bulk_ess": 110.11260023155648,
+      "min_tail_ess": 166.3199191394008
+    },
+    "limits": [
+      "N16 particle pilot changes the N32 MAP discretization; N32 posterior mixing remains unvalidated.",
+      "Active posterior sampled in physical coordinates with the 122*A/2 Jacobian; inactive Gaussian white directions integrated exactly.",
+      "One finite reference and realization; posterior intervals are exploratory if mixing gates fail, not repeated-mock coverage.",
+      "No post-warmup thinning; predictive saves only use a stride."
+    ],
+    "posterior": {
+      "A": {
+        "mean": -0.12104355781764282,
+        "sd": 0.13574332888525295,
+        "quantile_025": -0.3802157820209917,
+        "median": -0.12273020201586415,
+        "quantile_975": 0.13502242556194408,
+        "rhat": 1.0020777980083737,
+        "ess_bulk": 344.46716905529547,
+        "ess_tail": 364.67555705198293
+      },
+      "N": {
+        "mean": -9.072378847789148,
+        "sd": 0.11367609660154894,
+        "quantile_025": -9.30306607705763,
+        "median": -9.069753434966831,
+        "quantile_975": -8.849744680521612,
+        "rhat": 1.0184324074038904,
+        "ess_bulk": 170.7472804592003,
+        "ess_tail": 323.33314678416116
+      },
+      "noise_power": {
+        "mean": 0.00011553353575423386,
+        "quantile_025": 9.11443606717104e-05,
+        "median": 0.00011509492465573693,
+        "quantile_975": 0.00014341848074655162
+      }
+    },
+    "mean_physical_field": {
+      "relative_error": 0.26768912933290623,
+      "correlation": 0.9644273021396331
+    }
+  },
+  "pm_tsc_posterior_validation/short_trajectories/analysis/summary.json": {
+    "passed": false,
+    "consistency_passed": true,
+    "mixing_passed": false,
+    "diagnostic_extrema": {
+      "max_rhat": 1.0239448332153458,
+      "min_bulk_ess": 189.17273050954168,
+      "min_tail_ess": 264.729670595968
+    },
+    "limits": [
+      "N16 particle pilot changes the N32 MAP discretization; N32 posterior mixing remains unvalidated.",
+      "Active posterior sampled in physical coordinates with the 122*A/2 Jacobian; inactive Gaussian white directions integrated exactly.",
+      "One finite reference and realization; posterior intervals are exploratory if mixing gates fail, not repeated-mock coverage.",
+      "No post-warmup thinning; predictive saves only use a stride."
+    ],
+    "posterior": {
+      "A": {
+        "mean": -0.12405590340895303,
+        "sd": 0.13720309175150575,
+        "quantile_025": -0.38584429723099967,
+        "median": -0.1267849287411738,
+        "quantile_975": 0.14417867632100553,
+        "rhat": 1.005483990632187,
+        "ess_bulk": 757.6181981531176,
+        "ess_tail": 1007.8041153512099
+      },
+      "N": {
+        "mean": -9.082242510554218,
+        "sd": 0.12082124565954139,
+        "quantile_025": -9.309427055601391,
+        "median": -9.083582938062673,
+        "quantile_975": -8.840931185735272,
+        "rhat": 1.00365475777938,
+        "ess_bulk": 378.5583302464153,
+        "ess_tail": 678.9531311981074
+      },
+      "noise_power": {
+        "mean": 0.00011449995176994342,
+        "quantile_025": 9.05664200911109e-05,
+        "median": 0.00011351416545988911,
+        "quantile_975": 0.00014468807580565488
+      }
+    },
+    "mean_physical_field": {
+      "relative_error": 0.2679645160705483,
+      "correlation": 0.9644550990780263
+    }
+  },
+  "pm_tsc_posterior_validation/blocked/analysis/summary.json": {
+    "passed": false,
+    "consistency_passed": true,
+    "mixing_passed": false,
+    "diagnostic_extrema": {
+      "max_rhat": 1.0289000226357825,
+      "min_bulk_ess": 148.4403051213743,
+      "min_tail_ess": 158.24872187587502
+    },
+    "limits": [
+      "N16 particle pilot changes the N32 MAP discretization; N32 posterior mixing remains unvalidated.",
+      "Active posterior sampled in physical coordinates with the 122*A/2 Jacobian; inactive Gaussian white directions integrated exactly.",
+      "One finite reference and realization; posterior intervals are exploratory if mixing gates fail, not repeated-mock coverage.",
+      "No post-warmup thinning; predictive saves only use a stride."
+    ],
+    "posterior": {
+      "A": {
+        "mean": -0.1297453562178879,
+        "sd": 0.1359045802308342,
+        "quantile_025": -0.36076061567275713,
+        "median": -0.13849489269610737,
+        "quantile_975": 0.16585299056168085,
+        "rhat": 1.00737875144506,
+        "ess_bulk": 345.8468160741395,
+        "ess_tail": 427.6872085701559
+      },
+      "N": {
+        "mean": -9.088330173851237,
+        "sd": 0.11317623470625128,
+        "quantile_025": -9.290575407042425,
+        "median": -9.086459617483243,
+        "quantile_975": -8.870152711608549,
+        "rhat": 1.004555026475665,
+        "ess_bulk": 201.43040578471837,
+        "ess_tail": 291.12968105427075
+      },
+      "noise_power": {
+        "mean": 0.00011370366957531839,
+        "quantile_025": 9.229121188593247e-05,
+        "median": 0.0001131880926003811,
+        "quantile_975": 0.00014052157171761114
+      }
+    },
+    "mean_physical_field": {
+      "relative_error": 0.270046894927654,
+      "correlation": 0.9639081148286756
+    }
+  },
+  "pm_reconstruction_validation/summary.json": {
+    "passed": false,
+    "consistency_passed": true,
+    "limits": [
+      "One compensated mock and fixed nuisance parameters; broader refinement checks deferred.",
+      "Finite numerical reference, not continuum or independent physics.",
+      "Iteration-budget endpoints, not uncertainty or posterior coverage; raw grid gradient is resolution dependent."
+    ]
+  },
+  "pm_window_validation/summary.json": {
+    "passed": false,
+    "consistency_passed": true,
+    "limits": [
+      "One strong realization and a separate small linear-force control; finite references, no coverage/scaling claim.",
+      "Common-window density is postprocessing, not the raw-density likelihood or a new posterior-gradient validation.",
+      "CIC compensation does not remove aliasing or replace particle/time/cutoff checks; sparse-load behavior may be poor."
+    ]
+  },
+  "pm_observation_validation/summary.json": {
+    "passed": false,
+    "consistency_passed": true,
+    "limits": [
+      "One strong realization, fixed nuisance values and finite references; no coverage or global convergence proof.",
+      "Forward density uses N128, projected-gradient comparison uses finite N64. Further particle/gradient calibration remains useful.",
+      "No new MAP/HMC scientific chains, PM survey/tracer/RSD integration or cosmological derivatives."
+    ]
+  },
+  "pm_oversampling_validation/summary.json": {
+    "passed": true,
+    "consistency_passed": true,
+    "limits": [
+      "One weakly nonlinear realization, IC k<10 and observed k<15; no shell-crossing or high-cutoff claim.",
+      "Each family uses its own finite reference, not an exact continuum solution.",
+      "No MCMC or repeated-mock coverage study in this follow-up; no force-law change."
+    ]
+  },
+  "pm_tsc_validation/summary.json": {
+    "passed": true,
+    "consistency_passed": true,
+    "limits": [
+      "One fixed-parameter realization; broader refinement/calibration remains deferred.",
+      "CIC and TSC use matched assignment-specific reference mocks: different discrete targets, same seeds and physical ICs.",
+      "N128/M64/32-step reference is finite, not a continuum solution.",
+      "Wall times are indicative under uncontrolled host activity."
+    ]
+  },
+  "pm_force_reference_validation/summary.json": {
+    "passed": false,
+    "consistency_passed": true,
+    "limits": [
+      "One strong initial-field realization, fixed IC/observed support and finite references.",
+      "Field-only test; no new adjoint/gradient, optimization, posterior or coverage validation.",
+      "Finite particle/force/time corrections do not identify an exact continuum solution or optimal numerical law."
+    ]
+  },
+  "pm_optimizer_validation/summary.json": {
+    "passed": false,
+    "consistency_passed": true,
+    "limits": [
+      "One frozen compensated mock; broader refinement deferred.",
+      "Timing is indicative; same launcher/ranks/compiler, uncontrolled host activity.",
+      "sum_rank_peak_rss_bytes sums process high-water marks, not simultaneous cluster RSS. History bytes count retained vector payload only."
+    ]
+  },
+  "pm_stable_armijo_validation/summary.json": {
+    "passed": false,
+    "consistency_passed": true,
+    "limits": [
+      "Same single fixed-parameter mock; broader refinement remains deferred.",
+      "Wall times are indicative under uncontrolled host activity.",
+      "Gaussian difference support and scalar priors are tested; custom likelihoods require their own difference method."
+    ]
+  },
+  "pm_hmc_validation/summary.json": {
+    "passed": true,
+    "limits": "Two-mode conditional finite-grid reference, fixed spectrum/noise/other white directions. Full-field/joint runs are short integration/replay checks. No general posterior coverage or production calibration."
+  },
+  "pm_full_validation/summary.json": {
+    "passed": true,
+    "limits": [
+      "One same-model mock, N=4/M=8; six active IC directions and 58 exact-prior null directions.",
+      "Diagnostics are finite-chain checks, not convergence proofs or repeated-mock coverage.",
+      "Predictive draws use every eighth retained sample; diagnostics use every retained sample.",
+      "Latent density and noisy posterior predictive intervals are distinct; final density comparisons use observed Fourier support."
+    ]
+  },
+  "pm_tsc_joint_validation/summary.json": {
+    "passed": true,
+    "consistency_passed": true,
+    "limits": [
+      "Joint MAP is a density mode in whitened coordinates, not a marginalized parameter estimate.",
+      "Gaussian amplitude mean/scale are unchanged, but support is explicitly widened from [-1,1] to [-4,4].",
+      "One fixed realization; broader refinement, posterior sampling and coverage remain deferred."
+    ]
+  },
+  "pm_stable_stationarity_validation/summary.json": {
+    "passed": false,
+    "consistency_passed": true
+  },
+  "pm_resolution_validation/summary.json": {
+    "passed": false,
+    "limits": [
+      "One weakly nonlinear Fourier realization; separate finest references are not an exact continuum solution.",
+      "Larger inference is a separate same-model mock, not resolution-bias calibration or repeated-mock coverage.",
+      "CIC is piecewise differentiable; no universal convergence order is assumed.",
+      "Only observed k<15 and IC k<10 are tested; no high-cutoff/shell-crossing or production scaling claim."
+    ]
+  },
+  "pm_nonlinear_validation/summary.json": {
+    "passed": false,
+    "consistency_passed": true,
+    "limits": [
+      "Three prescribed fixtures, finite numerical references and fixed nuisance parameters.",
+      "Refined-data MAP is an optimization/recovery diagnostic, not posterior coverage or a global-optimum proof.",
+      "No external gravity reference, cosmological derivatives, tracer/RSD/survey PM, or production scaling claim."
+    ]
+  },
+  "pm_stationarity_validation/summary.json": {
+    "passed": true
+  }
+}

@@ -102,7 +102,7 @@ FML::PARTICLE::MPIParticles<Particle> part;     // takes FML::domain when create
 
 FieldLevel: periodic linear and 1LPT/2LPT inference support
 `DistributedLinearModelT<PencilGrid<3>>` / `DistributedLPTModelT<PencilGrid<3>>`,
-including adjoints and physical reconstruction; see [FieldLevel/FRAMEWORK.md](../FieldLevel/FRAMEWORK.md).
+including adjoints and physical reconstruction; see [FieldLevel/FRAMEWORK.md](../FieldLevel/docs/FRAMEWORK.md).
 Masked Gaussian/Poisson observations and same-layout checkpoint/restart are also
 supported. Distributed examples and the survey calibration driver select pencils
 with `USE_MPI=true USE_PENCIL_GRID=true` (`FML_PENCILS="px py"` optionally sets the

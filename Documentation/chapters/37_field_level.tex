@@ -11,8 +11,8 @@ masked Cartesian survey layer, a differentiable particle-mesh forward model, and
 \code{sample}, \code{linear_conditional}), \file{DistributedLinear.h}, \file{DistributedLPT.h}, \file{DistributedAssignment.h},
 \file{SurveyLikelihood.h}, \file{ParticleMesh.h}, \file{ParticleMeshAdjoint.h}, \file{ParticleMeshPosterior.h},
 \file{Checkpoint.h}, \file{SurveyCheckpoint.h}, \file{Frontend.h}; \nsp{FML::FIELDLEVEL}: \file{FieldLevelBAO.h}.\par
-Documentation: \file{FieldLevel/README.md}, \file{FRAMEWORK.md}, \file{SURVEY.md}, \file{PARTICLE_MESH.md}, \file{PM_ADJOINT.md},
-\file{PM_POSTERIOR.md}, \file{KNOWN_ISSUES.md}. Tests and validation records in \file{FieldLevel/tests} and \file{survey_validation}.
+Documentation: \file{FieldLevel/docs/BAO.md}, \file{docs/FRAMEWORK.md}, \file{docs/SURVEY.md}, \file{docs/PARTICLE_MESH.md}, \file{docs/PM_ADJOINT.md},
+\file{docs/PM_POSTERIOR.md}, \file{docs/KNOWN_ISSUES.md}. Tests and validation records in \file{FieldLevel/tests} and \file{FieldLevel/validation/survey}.
 \end{modulebox}
 
 \section{The probability model}\label{sec:fl-model}
@@ -84,7 +84,7 @@ $32^3$, $k_{\max}=0.095\hMpc$).
 \includegraphics[width=\textwidth]{fieldlevel_bao_calibration}
 \caption{Simulation-based calibration of field-level BAO inference with 2LPT, Lagrangian bias ($b=1.5$, $b_2=0.3$, $b_{\mathcal G_2}=-0.2$) and
 RSD ($f=0.7$) on $32^3$, $k_{\max}=0.095\hMpc$ (20 mocks, $\beta_{\rm true}$ drawn from the prior): the recovered scale, the $z$-scores against
-$\mathcal N(0,1)$ and the posterior quantiles of the true value (\file{FieldLevel/calibration.png}).}
+$\mathcal N(0,1)$ and the posterior quantiles of the true value (\file{FieldLevel/docs/images/calibration.png}).}
 \label{fig:fl-calibration}
 \end{figure}
 
@@ -94,6 +94,6 @@ Adjoint gradients against finite differences for all models (relative $\sim10^{-
 the 2LPT+bias+RSD prediction equals $(b+f\mu^2)\delta_L$ in the linear regime to 0.3\%; mock $\chi^2$ equal to the number of modes. Simulation-based calibration
 \cite{Talts2018}: for linear, 1LPT and the full 2LPT+bias+RSD model (20--30 mocks each) $z=(\bar\beta-\beta_{\rm true})/\sigma$ has mean consistent with zero and unit width and
 the posterior quantiles are uniform (KS $p=0.57$--0.85). The distributed backends agree with the serial ones for any decomposition; the survey layer is validated with
-dispersed 2LPT chains against exact active-mode and masked linear-Gaussian references (\file{survey_validation}). These checks establish the numerics and sampler, not
+dispersed 2LPT chains against exact active-mode and masked linear-Gaussian references (\file{FieldLevel/validation/survey}). These checks establish the numerics and sampler, not
 nonlinear accuracy against simulations or a production survey analysis.
 \end{validation}

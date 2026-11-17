@@ -1,8 +1,0 @@
-{
-  "bitwise": true,
-  "sparse_seconds": 71.810430207,
-  "dense_seconds": 57.256547114,
-  "evaluations": 7,
-  "sparse_cpu_seconds": 71.76926200000001,
-  "dense_cpu_seconds": 56.426651
-}
