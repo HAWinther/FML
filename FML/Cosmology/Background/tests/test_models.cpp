@@ -271,6 +271,23 @@ void test_limits_and_errors() {
         }
     check_local(err < 1e-6,
                 "coupled quintessence: drho/dx of every species = finite difference (max " + num(err, 2) + ")");
+    // The Fading Dark Sector (arXiv:2611.17422) is coupled quintessence with lambda = c, beta = c' (default: the
+    // paper's best fit c = -0.85, c' = 0.05, a potential that grows with phi)
+    {
+        auto fds = make_background("fading_dark_sector", p), ref = make_coupled_quintessence(p, -0.85, 0.05);
+        auto fds2 = make_background("fading_dark_sector", p, {{"fds_c", 0.7}, {"fds_cprime", -0.1}});
+        auto ref2 = make_coupled_quintessence(p, 0.7, -0.1);
+        double e = 0.0;
+        for (double x = -22.0; x <= 1.0; x += 0.37)
+            e = std::max({e,
+                          std::abs(fds->E(x) - ref->E(x)),
+                          std::abs(fds->Omega(Component::CDM, x) - ref->Omega(Component::CDM, x)),
+                          std::abs(fds->Omega(Component::DarkEnergy, x) - ref->Omega(Component::DarkEnergy, x)),
+                          std::abs(fds2->E(x) - ref2->E(x))});
+        check_local(e == 0.0 and std::abs(fds->Omega(Component::CDM, 0.0) - p.Omega_cdm) < 1e-10,
+                    "fading_dark_sector = coupled_quintessence with lambda = c, beta = c' (max difference " + num(e, 2) +
+                        ")");
+    }
     // Registry
     check_local(make_background("dark_scattering", p)->E(-1.0) == make_dark_scattering(p, -0.9)->E(-1.0) and
                     make_background("fr", p)->E(-1.0) == lcdm->E(-1.0) and
@@ -310,6 +327,7 @@ int main() {
     if (FML::ThisTask == 0) {
         make_jbd(planck(0.06), 1000.0)->info();
         make_coupled_quintessence(planck(0.06), 0.5, 0.05)->info();
+        make_background("fading_dark_sector", planck(0.06))->info();
     }
     return FML::TESTS::summary("Background models");
 }

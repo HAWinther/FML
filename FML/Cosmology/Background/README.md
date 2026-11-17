@@ -28,7 +28,7 @@ BackgroundModel_<name>.h   one model each, its species and make_ function:
 Presets.h                  the registry (name, description, parameters with defaults and descriptions) and
                            make_background(name, params, model params): lcdm, w0wa, dgp, quintessence
                            (_inverse_power_law, _pngb, _hilltop), ede, ede_zc, axion, jbd, coupled_quintessence,
-                           cubic_galileon, dark_scattering, ide, musigma, fr, symmetron, dilaton, mbeta, horndeski,
+                           fading_dark_sector (= coupled_quintessence with lambda = c, beta = c'), cubic_galileon, dark_scattering, ide, musigma, fr, symmetron, dilaton, mbeta, horndeski,
                            horndeski_table
 BackgroundModel_HorndeskiTable.h   horndeski_table: a reduced Horndeski theory from the table of
                            SimulationCode/scripts/horndeski_frontend.py (BackgroundParameters::model_file): its H(a)

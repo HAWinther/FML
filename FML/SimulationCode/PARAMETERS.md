@@ -27,7 +27,7 @@ Parameters marked *optional* take the default value if they are not in the param
 
 | Parameter | Type | Default | Used when | Description |
 |---|---|---|---|---|
-| `cosmology_model` | string | `"LCDM"` | always | The cosmology (background evolution). Options: `LCDM`, `w0waCDM`, `DGP`, `JBD`, `Quintessence`, `EDE`, `DarkScattering`, `CovariantDarkScattering`, `CoupledQuintessence`, `IDE`, `CubicGalileon`, `Horndeski`, `Tabulated` |
+| `cosmology_model` | string | `"LCDM"` | always | The cosmology (background evolution). Options: `LCDM`, `w0waCDM`, `DGP`, `JBD`, `Quintessence`, `EDE`, `DarkScattering`, `CovariantDarkScattering`, `CoupledQuintessence`, `FadingDarkSector`, `IDE`, `CubicGalileon`, `Horndeski`, `Tabulated` |
 | `cosmology_Omegab` | double | *required* | always | Baryon density parameter |
 | `cosmology_OmegaMNu` | double | `0` | always | Massive neutrino density parameter (3 equal masses; or use cosmology_neutrino_masses_eV) |
 | `cosmology_neutrino_masses_eV` | double list | `{}` | always | The masses of the (up to 3) neutrinos in eV, e.g. {0.0, 0.0086, 0.05} (0 or not listed: massless). Instead of cosmology_OmegaMNu (which then follows from the masses) |
@@ -61,6 +61,8 @@ Parameters marked *optional* take the default value if they are not in the param
 | `cosmology_ds_xi` | double | *required* | cosmology_model = DarkScattering | Dark scattering: xi = sigma_D / m_c in barn/GeV (0: wCDM). The dark matter feels the drag (1 + w) c xi rho_DE / H per ln a (the CDM+baryon particles f_c = OmegaCDM / OmegaCB of it) |
 | `cosmology_cq_lambda` | double | *required* | cosmology_model = CoupledQuintessence | Coupled quintessence: the slope lambda of the potential V ~ exp(-lambda phi) (phi in reduced Planck masses) |
 | `cosmology_cq_beta` | double | *required* | cosmology_model = CoupledQuintessence | Coupled quintessence: the coupling beta (Amendola's sqrt(2/3) beta): the CDM particles have the mass m ~ exp(-beta phi) and feel G (1 + 2 beta^2) from the CDM. 0: uncoupled |
+| `cosmology_fds_c` | double | *required* | cosmology_model = FadingDarkSector | Fading Dark Sector (arXiv:2611.17422): c of V_DE = V0 exp(-c phi) (phi in reduced Planck masses; = cosmology_cq_lambda). The paper's best fit: -0.85 |
+| `cosmology_fds_cprime` | double | *required* | cosmology_model = FadingDarkSector | Fading Dark Sector: c' of m_DM = m0 exp(-c' phi) (= cosmology_cq_beta): the CDM feels G (1 + 2 c'^2) from the CDM. The paper's best fit: 0.05 |
 | `cosmology_horndeski_filename` | string | *required* | cosmology_model = Horndeski | Generic reduced Horndeski: the _gravity.txt table of scripts/horndeski_frontend.py (its H(a), and the alphas for the internal Einstein-Boltzmann solver); use it with gravity_model = Horndeski |
 | `cosmology_ide_w` | double | *required* | cosmology_model = IDE | Interacting dark energy: the (constant) equation of state w of the dark energy (!= -1) |
 | `cosmology_ide_xi` | double | *required* | cosmology_model = IDE | Interacting dark energy: the coupling xi of the energy exchange Q = xi H rho_DE along the dark-matter 4-velocity (> 0: energy flows to the dark matter; 0: wCDM). Needs the doom factor xi / (3 (1 + w)) <= 0 (xi < 0 for w > -1, xi > 0 for w < -1) |
@@ -71,7 +73,7 @@ Parameters marked *optional* take the default value if they are not in the param
 
 | Parameter | Type | Default | Used when | Description |
 |---|---|---|---|---|
-| `gravity_model` | string | `"GR"` | always | The gravity model (growth of perturbations and forces). Options: `GR`, `f(R)`, `DGP`, `CubicGalileon`, `Horndeski`, `JBD`, `Symmetron`, `Dilaton`, `mbeta`, `mu`, `CoupledQuintessence` |
+| `gravity_model` | string | `"GR"` | always | The gravity model (growth of perturbations and forces). Options: `GR`, `f(R)`, `DGP`, `CubicGalileon`, `Horndeski`, `JBD`, `Symmetron`, `Dilaton`, `mbeta`, `mu`, `CoupledQuintessence`, `FadingDarkSector` |
 | `gravity_model_mu_parametrization` | string | *required* | gravity_model = mu | Poisson equation with G_eff/G = mu(a,k), no screening. DE: mu = 1 + mu0 Omega_DE(a)/Omega_DE(a=1). BZ: mu = (1 + beta1 lambda1^2 k^2 a^s) / (1 + lambda1^2 k^2 a^s) (Bertschinger & Zukin 2008). table: mu(a) or mu(a,k) from a file. Options: `DE`, `BZ`, `table` |
 | `gravity_model_mu_mu0` | double | *required* | gravity_model = mu and gravity_model_mu_parametrization = DE | mu0 in mu = 1 + mu0 Omega_DE(a)/Omega_DE(a=1) |
 | `gravity_model_mu_BZ_params` | double list | *required* | gravity_model = mu and gravity_model_mu_parametrization = BZ | {beta1, lambda1 (Mpc/h), s} in mu = (1 + beta1 lambda1^2 k^2 a^s) / (1 + lambda1^2 k^2 a^s) (k in h/Mpc) |

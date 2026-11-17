@@ -14,6 +14,8 @@
 //   axion                                  BackgroundModel_Axion.h                 make_axion
 //   jbd                                    BackgroundModel_BransDicke.h            make_jbd
 //   coupled_quintessence                   BackgroundModel_CoupledQuintessence.h   make_coupled_quintessence
+//   fading_dark_sector                     BackgroundModel_CoupledQuintessence.h   make_coupled_quintessence
+//                                          (lambda = fds_c, beta = fds_cprime)
 //   cubic_galileon                         BackgroundModel_CubicGalileon.h         make_cubic_galileon
 //   dark_scattering                        BackgroundModel_DarkScattering.h        make_dark_scattering
 //   covariant_dark_scattering              BackgroundModel_DarkScattering.h        make_dark_scattering (wCDM)
@@ -240,6 +242,16 @@ namespace FML::COSMOLOGY::BACKGROUND {
               {"cq_beta", 0.05, "coupling beta (Amendola's sqrt(2/3) beta); CDM feels G (1 + 2 beta^2)"}},
              [](const BackgroundParameters & p, const ModelParameters & m, BackgroundRange r) {
                  return make_coupled_quintessence(p, m.at("cq_lambda"), m.at("cq_beta"), r);
+             }},
+            {"fading_dark_sector",
+             "Fading Dark Sector (Obied, Vafa & Wu, arXiv:2611.17422): V = V0 exp(-c phi), m_DM ~ exp(-c' phi), i.e. "
+             "coupled_quintessence with lambda = c, beta = c'; V0 from closure, GR",
+             {{"fds_c", -0.85, "c of V_DE = V0 exp(-c phi) (phi in reduced Planck masses; the paper's best fit -0.85)"},
+              {"fds_cprime",
+               0.05,
+               "c' of m_DM = m0 exp(-c' phi); the CDM feels G (1 + 2 c'^2) (the paper's best fit 0.05)"}},
+             [](const BackgroundParameters & p, const ModelParameters & m, BackgroundRange r) {
+                 return make_coupled_quintessence(p, m.at("fds_c"), m.at("fds_cprime"), r, "fading_dark_sector");
              }},
             {"cubic_galileon",
              "Cubic Galileon on its tracker (flat, no Lambda): Omega_phi from closure, no free parameter",

@@ -5,6 +5,7 @@
 
 #include <iostream>
 #include <memory>
+#include <string>
 
 //=============================================================================
 /// Method reference: Amendola (2000), https://arxiv.org/abs/astro-ph/9908023.
@@ -22,15 +23,20 @@
 /// separate particles (particle_baryons) the PM force is gravity alone (GeffOverG_gravity = 1) and the CDM gets the
 /// fifth force from the CDM density in a second kick (NBodySimulation::kick_cdm_fifth_force) and its own steps
 /// (SpeciesTimeStepping.h). The varying CDM mass in the Poisson source is Cosmology::clustering_mass_factor
+/// gravity_model = FadingDarkSector is this model (with cosmology_model = FadingDarkSector: the Fading Dark Sector of
+/// Obied, Vafa & Wu, arXiv:2611.17422, V ~ exp(-c phi), m_DM ~ exp(-c' phi), i.e. lambda = c, beta = c')
 //=============================================================================
 template <int NDIM>
 class GravityModelCoupledQuintessence final : public GravityModel<NDIM> {
   public:
-    explicit GravityModelCoupledQuintessence(std::shared_ptr<Cosmology> cosmo)
-        : GravityModel<NDIM>(cosmo, "CoupledQuintessence") {
-        FML::assert_mpi(cosmo->get_name() == "CoupledQuintessence",
-                        "The CoupledQuintessence gravity model requires cosmology_model = CoupledQuintessence (it "
-                        "takes the coupling beta and phi(a) from the background)");
+    /// name: CoupledQuintessence, or FadingDarkSector (the same model with lambda = c, beta = c')
+    explicit GravityModelCoupledQuintessence(std::shared_ptr<Cosmology> cosmo,
+                                             const std::string & name = "CoupledQuintessence")
+        : GravityModel<NDIM>(cosmo, name) {
+        const std::string msg = "The " + name +
+                                " gravity model requires cosmology_model = CoupledQuintessence or FadingDarkSector (it "
+                                "takes the coupling beta and phi(a) from the background)";
+        FML::assert_mpi(cosmo->is_coupled_quintessence(), msg.c_str());
     }
 
     /// The CDM+baryon particles as one fluid: the momentum-weighted force f_c [(1 + 2 beta^2) f_c + f_b] + f_b
@@ -63,7 +69,10 @@ class GravityModelCoupledQuintessence final : public GravityModel<NDIM> {
     void info_model() const override {
         {
             const double beta = this->cosmo->cq_beta();
-            std::cout << "# Coupled quintessence: beta = " << beta << ", CDM-CDM G_eff/G = 1 + 2 beta^2 = "
+            std::cout << "# "
+                      << (this->get_name() == "FadingDarkSector" ? "Fading Dark Sector (c' = beta)" :
+                                                                   "Coupled quintessence")
+                      << ": beta = " << beta << ", CDM-CDM G_eff/G = 1 + 2 beta^2 = "
                       << 1.0 + 2.0 * beta * beta << ", CDM+baryons as one fluid G_eff/G(a = 1) = " << GeffOverG(1.0)
                       << "\n";
             std::cout << "# Velocity term of the CDM: Gamma = -beta dphi/dlna = " << velocity_friction_cdm(1.0)

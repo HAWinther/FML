@@ -65,6 +65,10 @@ namespace SIMCODE {
             {"mu", [](auto cosmo) { return std::make_shared<GravityModelMu<NDIM>>(cosmo); }},
             {"CoupledQuintessence",
              [](auto cosmo) { return std::make_shared<GravityModelCoupledQuintessence<NDIM>>(cosmo); }},
+            {"FadingDarkSector",
+             [](auto cosmo) {
+                 return std::make_shared<GravityModelCoupledQuintessence<NDIM>>(cosmo, "FadingDarkSector");
+             }},
         };
         return models;
     }

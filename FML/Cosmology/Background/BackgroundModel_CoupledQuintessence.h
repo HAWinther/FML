@@ -13,6 +13,8 @@
 // beta is Amendola's sqrt(2/3) beta. The field starts at rest at x = min(-25, x_min) (in the radiation era); V0 and
 // C are found by a Newton iteration so that rho_c(0) = Omega_cdm and rho_phi(0) = 1 - Omega_k - (the other species
 // today).
+// The Fading Dark Sector (Obied, Vafa & Wu, arXiv:2611.17422; V_DE = V0 e^{-c phi}, m_DM = m0 e^{-c' phi}, M_pl = 1)
+// is this model with lambda = c, beta = c' (registry name fading_dark_sector; best fit c = -0.85, c' = 0.05).
 // beta = 0 is uncoupled quintessence, beta = lambda = 0 is LCDM. The two species (CoupledCDMSpecies: Component::CDM,
 // CoupledFieldSpecies: Component::DarkEnergy) share the solution (CoupledDarkSector); the field equations are GR.
 // =====================================================================================================================
@@ -207,9 +209,13 @@ namespace FML::COSMOLOGY::BACKGROUND {
         std::shared_ptr<const CoupledDarkSector> d;
     };
 
-    /// Coupled quintessence: the standard species with coupled CDM (Omega_cdm today) + the field (closure), GR
-    inline ComponentBackgroundPtr
-    make_coupled_quintessence(const BackgroundParameters & p, double lambda, double beta, BackgroundRange r = {}) {
+    /// Coupled quintessence: the standard species with coupled CDM (Omega_cdm today) + the field (closure), GR. name: the
+    /// name of the background (fading_dark_sector for the Fading Dark Sector, lambda = c, beta = c')
+    inline ComponentBackgroundPtr make_coupled_quintessence(const BackgroundParameters & p,
+                                                            double lambda,
+                                                            double beta,
+                                                            BackgroundRange r = {},
+                                                            const std::string & name = "coupled_quintessence") {
         const auto standard = standard_species(p);
         ComponentBackground::SpeciesList others;
         for (const auto & s : standard)
@@ -221,7 +227,7 @@ namespace FML::COSMOLOGY::BACKGROUND {
         for (const auto & sp : standard)
             s.push_back(sp->component() == Component::CDM ? std::make_shared<CoupledCDMSpecies>(d) : sp);
         s.push_back(std::make_shared<CoupledFieldSpecies>(d));
-        return std::make_shared<const ComponentBackground>("coupled_quintessence",
+        return std::make_shared<const ComponentBackground>(name,
                                                            p,
                                                            s,
                                                            std::make_shared<GeneralRelativity>(),

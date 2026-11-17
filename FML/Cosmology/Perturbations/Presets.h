@@ -28,6 +28,7 @@
 //   axion                                  PerturbationModel_Axion.h
 //   jbd                                    PerturbationModel_BransDicke.h
 //   coupled_quintessence                   PerturbationModel_CoupledQuintessence.h
+//   fading_dark_sector                     PerturbationModel_CoupledQuintessence.h   (lambda = fds_c, beta = fds_cprime)
 //   cubic_galileon                         PerturbationModel_CubicGalileon.h
 //   dark_scattering                        PerturbationModel_DarkScattering.h        ds_xi, ds_cs2
 //   covariant_dark_scattering              PerturbationModel_DarkScattering.h        cds_alpha, ds_cs2
@@ -235,6 +236,10 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
              [](BG bg, M) { return std::make_shared<const PerturbationModel_BransDicke>(std::move(bg)); }},
             {"coupled_quintessence",
              "quintessence (V ~ exp(-lambda phi)) coupled to CDM (m ~ exp(-beta phi)); GR",
+             {},
+             [](BG bg, M) { return std::make_shared<const PerturbationModel_CoupledQuintessence>(std::move(bg)); }},
+            {"fading_dark_sector",
+             "Fading Dark Sector (arXiv:2611.17422): coupled_quintessence with lambda = c, beta = c'; GR",
              {},
              [](BG bg, M) { return std::make_shared<const PerturbationModel_CoupledQuintessence>(std::move(bg)); }},
             {"cubic_galileon",

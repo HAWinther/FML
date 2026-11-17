@@ -69,6 +69,7 @@ its parameter file in `params/` and in `./cmb --write-defaults`.
 | `quintessence` | `quint_lambda` | Scalar field with V ∝ e^(−λφ), thawing from rest, with its perturbations; λ = 0 is ΛCDM |
 | `jbd` | `bd_omega` | Jordan–Brans–Dicke + Λ: scalar-field background and perturbations; φ₀ gives the Newtonian G; flat |
 | `coupled_quintessence` | `cq_lambda`, `cq_beta` | Quintessence (V ∝ e^(−λφ)) coupled to CDM (m ∝ e^(−βφ)): energy exchange, fifth force G(1+2β²), drag |
+| `fading_dark_sector` | `fds_c`, `fds_cprime` | Fading Dark Sector (Obied, Vafa & Wu, arXiv:2611.17422): V ∝ e^(−cφ), m_DM ∝ e^(−c′φ); `coupled_quintessence` with λ = c, β = c′ (best fit c = −0.85, c′ = 0.05) |
 | `dark_scattering` | `ds_w`, `ds_xi`, `ds_cs2` | wCDM with a dark-energy fluid (perturbations, ĉ_s²) and elastic DM–DE scattering (momentum exchange, Simpson 2010); ξ = 0 is wCDM |
 | `cubic_galileon` | – | Cubic Galileon on its tracker (no Λ): E² = [ρ + √(ρ² + 4Ω_φ)]/2, w₀ ≈ −1.19, with the full (braided) scalar perturbations; flat |
 | `horndeski` | `hd_parametrization`, `hd_cK`, `hd_cB`, `hd_cM`, `hd_M2_ini`, `hd_w0`, `hd_wa`, `hd_stability_check` | Horndeski in the α parameterization of hi_class (α_T = 0): α_X = c_X f(a) with f = Ω_DE(a), a or 1, M*² from α_M; ΛCDM or w₀w_a expansion; full scalar perturbations; ghost, gradient and stiffness (c_s² ≤ 1e5) checks; α_K = α_B = 0 with α_M ≠ 0 is rejected; flat |
@@ -109,7 +110,7 @@ Each run writes `<output_dir>/params_used.ini` (re-readable) and `params.txt` (r
 | `params/twopoint.ini` | All two-point functions (perturbations to k = 1/Mpc), as in the report |
 | `params/isocurvature.ini` | Planck 2018 with a correlated CDM isocurvature mode (f = 0.3, c_ad = −0.2) |
 | `params/tensors.ini` | Planck 2018 with tensor modes, r = 0.05: lensed BB with the primordial B modes |
-| `params/musigma.ini`, `dgp.ini`, `quintessence.ini`, `jbd.ini`, `fr.ini`, `symmetron.ini`, `dilaton.ini`, `mbeta.ini`, `coupled_quintessence.ini`, `dark_scattering.ini`, `cubic_galileon.ini`, `horndeski.ini`, `horndeski_table.ini`, `ede.ini`, `axion.ini`, `ide.ini` | The models beyond ΛCDM, with their parameters |
+| `params/musigma.ini`, `dgp.ini`, `quintessence.ini`, `jbd.ini`, `fr.ini`, `symmetron.ini`, `dilaton.ini`, `mbeta.ini`, `coupled_quintessence.ini`, `fading_dark_sector.ini`, `dark_scattering.ini`, `cubic_galileon.ini`, `horndeski.ini`, `horndeski_table.ini`, `ede.ini`, `axion.ini`, `ide.ini` | The models beyond ΛCDM, with their parameters |
 
 ## Output
 

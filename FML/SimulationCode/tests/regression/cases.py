@@ -489,6 +489,22 @@ CASES = {
         ic_input_filename=INPUT + "/transfer_tables/coupled_quintessence.txt",
         ic_input_redshift=20.0,
     ),
+    # The Fading Dark Sector (arXiv:2611.17422; coupled quintessence with lambda = c, beta = c'), the paper's best fit:
+    # a potential growing with phi (c < 0), the CDM+baryon particles as one fluid
+    "fading_dark_sector_cola": dict(
+        cosmology_model="FadingDarkSector",
+        gravity_model="FadingDarkSector",
+        cosmology_fds_c=-0.85,
+        cosmology_fds_cprime=0.05,
+    ),
+    "fading_dark_sector_fastpm": dict(
+        cosmology_model="FadingDarkSector",
+        gravity_model="FadingDarkSector",
+        cosmology_fds_c=-0.85,
+        cosmology_fds_cprime=0.05,
+        simulation_use_cola=False,
+        timestep_method="FastPM",
+    ),
     # Interacting dark energy: the CDM+baryon particles as one fluid with their own masses (the energy exchange with the
     # change of their volume; the mass growth in the growth factors and the COLA frame), and CDM particles with
     # masses and baryon particles (no COLA, Quinn)

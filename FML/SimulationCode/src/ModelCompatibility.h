@@ -47,9 +47,12 @@ namespace SIMCODE {
         // Coupled quintessence: the background is the cosmology's and the force and velocity term of the CDM the gravity
         // model's (GravityModel_CoupledQuintessence: one fluid, or with particle_baryons a second kick of the CDM,
         // kick_cdm_fifth_force, and its own steps). The two go together
-        if (cosmo.is_coupled_quintessence() != (grav.get_name() == "CoupledQuintessence"))
-            fail("cosmology_model = CoupledQuintessence and gravity_model = CoupledQuintessence go together (the "
-                 "background of the coupled field and the force and velocity term of the coupled CDM)");
+        // (FadingDarkSector is the same model as CoupledQuintessence, with lambda = c, beta = c')
+        const bool cq_gravity = grav.get_name() == "CoupledQuintessence" or grav.get_name() == "FadingDarkSector";
+        if (cosmo.is_coupled_quintessence() != cq_gravity)
+            fail("cosmology_model = CoupledQuintessence or FadingDarkSector and gravity_model = CoupledQuintessence or "
+                 "FadingDarkSector go together (the background of the coupled field and the force and velocity term "
+                 "of the coupled CDM)");
         if (cosmo.is_coupled_quintessence()) {
             if (cosmo.get_OmegaMNu() != 0.0)
                 fail("cosmology_model = CoupledQuintessence is not implemented with massive neutrinos");

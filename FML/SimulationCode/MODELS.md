@@ -68,6 +68,12 @@ add a model is in [DEVELOPING.md](DEVELOPING.md#adding-a-model).
   source `clustering_mass_factor`). Needs `gravity_model = CoupledQuintessence` (the force and the velocity term of the
   CDM, below).
 
+* FadingDarkSector: the Fading Dark Sector of Obied, Vafa & Wu (arXiv:2611.17422), V_DE = V0 exp(-c phi), m_DM = m0
+  exp(-c' phi), the internal solver's `fading_dark_sector` (`cosmology_fds_c`, `cosmology_fds_cprime`). It is
+  CoupledQuintessence with lambda = c, beta = c' (the same background, IC and N-body code): the CDM feels G (1 + 2
+  c'^2) from the CDM and the drag -c' dphi/dlna. The paper's best fit (CMB + DESI DR1 full shape + DR2 BAO +
+  DES-Dovekie) is c = -0.85, c' = 0.05 (w0 ≈ -0.91, 2 c'^2 = 0.5%). Use it with `gravity_model = FadingDarkSector`.
+
 * IDE: interacting dark energy (Valiviita, Majerotto & Maartens 2008, arXiv:0804.0232), the internal solver's `ide`: a dark-energy
   fluid with a constant `cosmology_ide_w` (!= -1) and the energy exchange Q = xi H rho_DE along the dark-matter
   4-velocity (`cosmology_ide_xi`; > 0: energy flows to the dark matter; the doom factor xi / (3 (1 + w)) must be <= 0;
@@ -184,8 +190,8 @@ For Quintessence, EDE and Tabulated the dark energy is smooth (no perturbations)
   growth agrees with the quasi-static growth equation of the force here to 2e-4 (`test_quasistatic_models`). The IC of
   `ic_type_of_input = internal` follow `cosmology_model` (ΛCDM for these), as before.
 
-* CoupledQuintessence: the force and the velocity term of the CDM of the cosmology with the same name (and it needs
-  that cosmology, as JBD; it takes beta and phi(a) from the background). In the N-body equations (the sub-horizon limit
+* CoupledQuintessence (and FadingDarkSector, the same model): the force and the velocity term of the CDM of the
+  cosmology CoupledQuintessence or FadingDarkSector (and it needs one of them, as JBD; it takes beta and phi(a) from the background). In the N-body equations (the sub-horizon limit
   of those of the Einstein-Boltzmann solver) the CDM feels G (1 + 2 beta^2) from the CDM (the fifth force of the light
   field, unscreened and scale independent on N-body scales) and G from the baryons, and has the velocity term
   +beta phi' v (`velocity_friction_cdm` = -beta dphi/dlna, through the velocity-friction machinery of DarkScattering:

@@ -54,7 +54,7 @@ end
 -- Choose the cosmology 
 ------------------------------------------------------------
 -- Cosmology: LCDM, w0waCDM, DGP, JBD, Quintessence, EDE, DarkScattering, CovariantDarkScattering, CoupledQuintessence,
--- IDE, CubicGalileon, Horndeski, Tabulated ... add your own ...
+-- FadingDarkSector, IDE, CubicGalileon, Horndeski, Tabulated ... add your own ...
 cosmology_model = "LCDM"
 --- CDM density
 cosmology_OmegaCDM = 0.2685
@@ -135,6 +135,13 @@ if cosmology_model == "CoupledQuintessence" then
   cosmology_cq_lambda = 0.5
   cosmology_cq_beta = 0.05
 end
+if cosmology_model == "FadingDarkSector" then
+  -- The Fading Dark Sector (Obied, Vafa & Wu, arXiv:2611.17422): V_DE ~ exp(-c phi), m_DM ~ exp(-c' phi). The same
+  -- model as CoupledQuintessence with lambda = c, beta = c'. Needs gravity_model = "FadingDarkSector" (or
+  -- "CoupledQuintessence"). The paper's best fit (CMB + DESI + DES-Dovekie):
+  cosmology_fds_c = -0.85
+  cosmology_fds_cprime = 0.05
+end
 if cosmology_model == "IDE" then
   -- Interacting dark energy: the energy exchange Q = xi H rho_DE along the dark-matter 4-velocity (xi > 0: energy flows
   -- to the dark matter), a dark energy with constant w. Needs xi / (3 (1 + w)) <= 0. The CDM particles carry their own
@@ -185,10 +192,12 @@ end
 ------------------------------------------------------------
 -- Choose the gravity model
 ------------------------------------------------------------
--- Gravity model: GR, f(R), DGP, CubicGalileon, Horndeski, JBD, Symmetron, Dilaton, mbeta, mu, CoupledQuintessence ...
+-- Gravity model: GR, f(R), DGP, CubicGalileon, Horndeski, JBD, Symmetron, Dilaton, mbeta, mu, CoupledQuintessence,
+-- FadingDarkSector ...
 -- add your own ...
 -- (JBD needs cosmology_model = "JBD": it takes phi(a) from the background; CoupledQuintessence goes together with
--- cosmology_model = "CoupledQuintessence": the force and velocity term of the coupled CDM)
+-- cosmology_model = "CoupledQuintessence": the force and velocity term of the coupled CDM; FadingDarkSector is the
+-- same with cosmology_model = "FadingDarkSector")
 gravity_model = "GR"
 
 -- Poisson equation with G_eff/G = mu(a,k), no screening

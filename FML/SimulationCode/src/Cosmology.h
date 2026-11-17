@@ -51,6 +51,10 @@
 ///                    phi) coupled to the CDM, whose particles have the mass m ~ exp(-beta phi) (Wetterich 1995;
 ///                    Amendola 2000): the background, rho_c(a) = Omega_cdm cdm_mass_factor(a) a^-3. The force and the
 ///                    velocity term of the CDM are in the gravity model CoupledQuintessence (needs this cosmology)
+///   FadingDarkSector -> fading_dark_sector (cosmology_fds_c, _cprime): the Fading Dark Sector of Obied, Vafa & Wu
+///                    (arXiv:2611.17422), V ~ exp(-c phi), m_DM ~ exp(-c' phi): CoupledQuintessence with lambda = c,
+///                    beta = c' (the same background and code). Use it with gravity_model = FadingDarkSector (or
+///                    CoupledQuintessence, the same model)
 ///   IDE           -> ide (cosmology_ide_w, _xi, _cs2): interacting dark energy, the energy exchange Q = xi H rho_DE
 ///                    along the dark-matter 4-velocity (Valiviita, Majerotto & Maartens 2008, arXiv:0804.0232). The
 ///                    CDM particles have their own masses: each gains xi/3 rho_DE times the change of its physical volume
@@ -124,6 +128,7 @@ class Cosmology {
         double ds_w, ds_xi, ds_cs2;
         double cds_alpha;
         double cq_lambda, cq_beta;
+        double fds_c, fds_cprime;
         double ide_w, ide_xi, ide_cs2;
         std::string horndeski_filename;
         double As, ns, kpivot_mpc; // The primordial power-spectrum
@@ -265,6 +270,18 @@ class Cosmology {
                            "Coupled quintessence: the coupling beta (Amendola's sqrt(2/3) beta): the CDM particles have "
                            "the mass m ~ exp(-beta phi) and feel G (1 + 2 beta^2) from the CDM. 0: uncoupled");
             });
+            f.for_cosmology({"FadingDarkSector"}, [&]() {
+                f.required("cosmology_fds_c",
+                           fds_c,
+                           -0.85,
+                           "Fading Dark Sector (arXiv:2611.17422): c of V_DE = V0 exp(-c phi) (phi in reduced Planck "
+                           "masses; = cosmology_cq_lambda). The paper's best fit: -0.85");
+                f.required("cosmology_fds_cprime",
+                           fds_cprime,
+                           0.05,
+                           "Fading Dark Sector: c' of m_DM = m0 exp(-c' phi) (= cosmology_cq_beta): the CDM feels G (1 + "
+                           "2 c'^2) from the CDM. The paper's best fit: 0.05");
+            });
             f.for_cosmology({"Horndeski"}, [&]() {
                 f.required("cosmology_horndeski_filename",
                            horndeski_filename,
@@ -389,7 +406,7 @@ class Cosmology {
             bg = BG::make_background(registry_name, p, background_parameters, range);
         }
         cq_sector = nullptr;
-        if (registry_name == "coupled_quintessence")
+        if (registry_name == "coupled_quintessence" or registry_name == "fading_dark_sector")
             for (const auto & s : bg->species())
                 if (const auto * field = dynamic_cast<const BG::CoupledFieldSpecies *>(s.get()))
                     cq_sector = &field->sector();
@@ -737,6 +754,7 @@ class Cosmology {
             {"DarkScattering", &Cosmology::read_dark_scattering},
             {"CovariantDarkScattering", &Cosmology::read_covariant_dark_scattering},
             {"CoupledQuintessence", &Cosmology::read_coupled_quintessence},
+            {"FadingDarkSector", &Cosmology::read_fading_dark_sector},
             {"IDE", &Cosmology::read_ide},
             {"CubicGalileon", &Cosmology::read_cubic_galileon},
             {"Horndeski", &Cosmology::read_horndeski},
@@ -791,6 +809,13 @@ class Cosmology {
         if (not std::isfinite(settings.cq_lambda) or not std::isfinite(settings.cq_beta))
             throw std::runtime_error("CoupledQuintessence: need finite cosmology_cq_lambda and cosmology_cq_beta");
         model_parameters = {{"cq_lambda", settings.cq_lambda}, {"cq_beta", settings.cq_beta}};
+    }
+    /// The Fading Dark Sector: coupled quintessence with lambda = c, beta = c' (its own registry entry, the same model)
+    void read_fading_dark_sector() {
+        registry_name = "fading_dark_sector";
+        if (not std::isfinite(settings.fds_c) or not std::isfinite(settings.fds_cprime))
+            throw std::runtime_error("FadingDarkSector: need finite cosmology_fds_c and cosmology_fds_cprime");
+        model_parameters = {{"fds_c", settings.fds_c}, {"fds_cprime", settings.fds_cprime}};
     }
     void read_ide() {
         registry_name = "ide";

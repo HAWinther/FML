@@ -5,6 +5,20 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Fading Dark Sector (Obied, Vafa & Wu, arXiv:2611.17422)
+- V_DE = V0 exp(-c phi), m_DM = m0 exp(-c' phi): FML's coupled quintessence with lambda = c, beta = c' (same
+  equations and conventions, phi in reduced Planck masses). Added as a named model on top of that code:
+  - EBS: registry entry `fading_dark_sector` (`fds_c`, default -0.85; `fds_cprime`, default 0.05, the paper's best
+    fit) in the background and perturbation presets; `params/fading_dark_sector.ini`.
+  - SimulationCode: `cosmology_model = FadingDarkSector` (`cosmology_fds_c`, `cosmology_fds_cprime`) and
+    `gravity_model = FadingDarkSector` (GravityModel_CoupledQuintessence under that name; CoupledQuintessence also
+    accepts the FDS cosmology).
+- Tests: `fading_dark_sector` = `coupled_quintessence` with lambda = c, beta = c' (Background/tests/test_models: max
+  difference 0; EBS outputs byte-identical; SimulationCode outputs bit-identical, COLA + Quinn and FastPM). New regression
+  cases `fading_dark_sector_cola`, `fading_dark_sector_fastpm` (need references). The EBS CDM growth z = 54 -> 0 at k
+  = 0.1/Mpc, FDS/LCDM, agrees with an independent sub-horizon two-fluid integration of the paper's equations (A24-A25)
+  to 1e-6.
+
 ### AMR multigrid: exact injection of the coarse-grid correction
 - `AMRMultiGridSolver::prolong_correction`: the cells that exist on both levels get the coarse value instead of
   f + (f_c - Rf), which is the same in exact arithmetic but gives exactly 0 when a cell changes by more than 16 orders of
