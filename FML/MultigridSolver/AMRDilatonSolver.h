@@ -155,8 +155,11 @@ class AMRDilatonSolverCosmology {
             auto [lap, dlap] = sol.get_laplacian(level, i);
             const double w = sol.get_field(level, i);
             const double d = std::max(sol.get_external_field(id_delta, level, i), -1.0);
-            double T, dT;
-            Uniform::potential_term(std::log(w), Ea, s, p, T, dT);
+            // The cell update keeps w > 0; a value w <= 0 (a transient after a coarse-grid correction) gets T = 0
+            // (log(0) = -inf would give 0 * inf = NaN in the source)
+            double T = 0.0, dT = 0.0;
+            if (w > 0.0)
+                Uniform::potential_term(std::log(w), Ea, s, p, T, dT);
             const double S = (1.0 + d) * ainv3 - T;
             return std::pair<double, double>{lap - norm * w * S, dlap - norm * (S - dT)};
         };

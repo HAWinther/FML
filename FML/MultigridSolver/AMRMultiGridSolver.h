@@ -949,13 +949,16 @@ namespace FML {
             template <int NDIM>
             void AMRMultiGridSolver<NDIM>::prolong_correction(int coarse_level) {
                 // The correction e = f - Rf on the coarse level, prolonged linearly (with the gradient of e) to the
-                // children of the coarse cells and injected into the cells that exist on both levels
+                // children of the coarse cells. The cells that exist on both levels (relaxed on the coarse one) get
+                // the coarse value itself: f + (f_c - Rf) with Rf = f is the same in exact arithmetic but loses all the
+                // digits when the cell changed by many orders of magnitude (the dilaton: 1 + (1e-20 - 1) = 0)
                 auto & C = _levels[coarse_level];
                 auto & F = _levels[coarse_level - 1];
                 const IndexInt nc = C.grid.get_n_local();
                 struct Correction {
                     double e;
                     Vec g;
+                    double f;
                 };
                 std::vector<double> e, eghost;
                 std::vector<Correction> ce, fe;
@@ -968,7 +971,9 @@ namespace FML {
                     C.grid.communicate_ghosts(e, eghost);
                     ce.resize(nc);
                     for (auto j : _as->sel_list[coarse_level])
-                        ce[j] = {e[j], C.grid.get_cell(j).level == C.lfine ? cell_gradient(C, j, e, eghost, true) : Vec{}};
+                        ce[j] = {e[j],
+                                 C.grid.get_cell(j).level == C.lfine ? cell_gradient(C, j, e, eghost, true) : Vec{},
+                                 C.f[j]};
                     F.to_coarse.gather_from_coarse_selected(ce, fe, _as->act[coarse_level - 1], _as->gpairs[coarse_level - 1]);
                 } else {
                     e.resize(nc);
@@ -977,18 +982,22 @@ namespace FML {
                     C.grid.communicate_ghosts(e, eghost);
                     ce.resize(nc);
                     for (IndexInt j = 0; j < nc; j++)
-                        ce[j] = {e[j], C.grid.get_cell(j).level == C.lfine ? cell_gradient(C, j, e, eghost, true) : Vec{}};
+                        ce[j] = {e[j],
+                                 C.grid.get_cell(j).level == C.lfine ? cell_gradient(C, j, e, eghost, true) : Vec{},
+                                 C.f[j]};
                     F.to_coarse.gather_from_coarse(ce, fe);
                 }
 
                 auto correct = [&](IndexInt i) {
                     const Cell & c = F.grid.get_cell(i);
-                    double corr = fe[i].e;
-                    if (c.level > C.lfine) {
-                        const double h = Grid::get_cell_size(c.level);
-                        for (int d = 0; d < NDIM; d++)
-                            corr += fe[i].g[d] * (((c.anchor[d] >> (Grid::LMAX - c.level)) & 1) ? 0.5 : -0.5) * h;
+                    if (c.level <= C.lfine) {
+                        F.f[i] = fe[i].f;
+                        return;
                     }
+                    double corr = fe[i].e;
+                    const double h = Grid::get_cell_size(c.level);
+                    for (int d = 0; d < NDIM; d++)
+                        corr += fe[i].g[d] * (((c.anchor[d] >> (Grid::LMAX - c.level)) & 1) ? 0.5 : -0.5) * h;
                     F.f[i] += corr;
                 };
                 if (_as) {

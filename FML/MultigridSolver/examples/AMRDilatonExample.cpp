@@ -222,6 +222,62 @@ double compare_with_uniform(int level) {
     return maxdiff;
 }
 
+//==========================================================================================
+// A first solve from the background w = 1 in a strongly screened, dense object (models D4 and C4 of Brax et al.
+// 2012 at the redshift where AMRCode starts them; a narrow peak with 1 + delta ~ 2e4 at the centre, as a halo in an
+// N-body run), resolved at level 9 while a small region elsewhere goes to level 10, so the peak's leaves are relaxed
+// on a coarse multigrid level: w drops from 1 to ~e^-40 or below there in the first V-cycle. That value used to come
+// back to the leaves as the correction 1 + (e^-40 - 1) = 0 (exactly, in double precision) and the solve gave NaN; the
+// cells that exist on both levels now get the coarse value itself
+//==========================================================================================
+struct StrongResult {
+    bool converged;
+    long long nbad;
+    double umin;
+    int vcycles;
+};
+StrongResult strong_screening(double r_model, double xi_model, double a) {
+    const double box_s = 256.0, H0Box_s = box_s / FML::UTILS::SI::c_over_H0_mpch;
+    const double Ap = 7000.0, sp = 0.004;
+    const Vec other{0.2, 0.2, 0.2};
+    Grid grid(6, 10, {true, true, true});
+    for (int pass = 0; pass < 4; pass++) {
+        for (IndexInt i = 0; i < grid.get_n_local(); i++) {
+            const auto & c = grid.get_cell(i);
+            const auto x = grid.get_cell_center(c);
+            double r2 = 0.0;
+            for (int d = 0; d < NDIM; d++)
+                r2 += (x[d] - other[d]) * (x[d] - other[d]);
+            const bool refine = (radius(x) < 0.03 and c.level < 9) or r2 < 0.01 * 0.01 * 16;
+            grid.set_flag(i, refine ? Grid::REFINE : Grid::KEEP);
+        }
+        grid.adapt();
+        grid.load_balance();
+    }
+    std::vector<double> delta(grid.get_n_local());
+    for (IndexInt i = 0; i < grid.get_n_local(); i++) {
+        const double r = radius(grid.get_cell_center(grid.get_cell(i)));
+        delta[i] = Ap * std::exp(-r * r / (2 * sp * sp)) * (3.0 - r * r / (sp * sp));
+    }
+    Solver dil(OmegaM, 1e5, beta0, r_model, xi_model, H0Box_s, false);
+    dil.set_epsilon(1e-6);
+    dil.set_relative_criterion(true);
+    std::vector<double> phi;
+    const auto result = dil.solve(a, grid, delta, phi);
+    const auto & w = dil.get_field();
+    long long nbad = 0;
+    double umin = 1e300;
+    for (auto x : w) {
+        if (not(x > 0.0 and std::isfinite(x)))
+            nbad++;
+        else
+            umin = std::min(umin, std::log(x));
+    }
+    FML::SumOverTasks(&nbad);
+    FML::MinOverTasks(&umin);
+    return {result.converged(), nbad, umin, result.iterations};
+}
+
 int main(int argc, char ** argv) {
     const bool quick = argc > 1 and std::string(argv[1]) == "quick";
     auto print = [](std::string name, Result r) {
@@ -260,6 +316,20 @@ int main(int argc, char ** argv) {
                       << " (force: " << std::log2(amr.err_force / amr2.err_force) << ")\n";
         // The AMR solution is as accurate as the uniform grid at its finest level, and converges at second order
         if (amr.err_w > 1.5 * fine.err_w or order < 1.7)
+            nfail++;
+    }
+
+    // A first solve in a strongly screened peak resolved below the finest level (D4: r = 1, xi = 3e-3 at z = 1.2;
+    // C4: r = 0.4, xi = 1e-3 at z = 3.2)
+    if (FML::ThisTask == 0)
+        std::cout << "\nFirst solve from w = 1 in a peak with 1 + delta = 2e4 at level 9 (levels 6-10, 256 Mpc/h):\n";
+    for (auto [name, r_model, xi_model, a] : {std::tuple{"D4", 1.0, 3e-3, 0.46}, std::tuple{"C4", 0.4, 1e-3, 0.24}}) {
+        const auto res = strong_screening(r_model, xi_model, a);
+        if (FML::ThisTask == 0)
+            std::cout << "  " << name << ": " << (res.converged ? "converged" : "NOT converged") << " in " << res.vcycles
+                      << " V-cycles, " << res.nbad << " leaves with w not positive and finite, min ln w " << res.umin
+                      << "\n";
+        if (not res.converged or res.nbad > 0)
             nfail++;
     }
 

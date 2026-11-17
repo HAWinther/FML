@@ -184,6 +184,14 @@ Order 1.93 for `w`, 1.75 for the force (r = 3/2: 1.92, 1.73; the limiter changes
 smaller). Identical on 1, 2 and 4 tasks (12-digit checksums). On a uniform 32^3 grid with A2 = 5e6 at a = 0.5 (ln w
 from -0.03 to 10.1) `PhiF` equals that of `DilatonSolverCosmology` to 5e-14 (relative, max over the grid).
 
+A first solve from w = 1 in a dense peak (1 + delta = 2e4) resolved at level 9 while another region goes to level 10
+(models D4 and C4 at the redshifts where AMRCode starts them, 256 Mpc/h): the peak's leaves are relaxed on a coarse
+multigrid level, where w drops to ~e^-14 or below in the first V-cycle. The coarse-grid correction used to bring such a
+value back to the leaf as f + (f_c - Rf) = 1 + (e^-40 - 1), which is exactly 0 in double precision, and the solve
+failed with NaN after one V-cycle (C4; it is what stopped the AMRCode runs of C4 and D4). The cells that exist on both
+levels now get the coarse value itself (the same in exact arithmetic; the Poisson, DGP and symmetron examples give
+identical output). Both converge in 4 V-cycles.
+
 ## Tests (examples/AMRPoissonExample.cpp)
 
 `D^2 phi = delta` for a Gaussian `phi` (periodic) and `D^2 u - 500 u^3 = s` (Dirichlet, `u = u_exact` on the faces),
