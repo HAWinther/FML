@@ -192,6 +192,15 @@ failed with NaN after one V-cycle (C4; it is what stopped the AMRCode runs of C4
 levels now get the coarse value itself (the same in exact arithmetic; the Poisson, DGP and symmetron examples give
 identical output). Both converge in 4 V-cycles.
 
+The cell solve (`DilatonSolverCosmology::solve_cell_affine`, also used by the uniform solver) is a safeguarded Newton
+iteration that now bisects whenever a Newton step does not halve the step before it (as rtsafe). Before, a bisection
+into the side where `c e^-u` dominates (u ~ -350 for the bracket [-700, ~0]) was followed by Newton steps of only ~+1
+and the 200 iterations ran out ~150 e-folds from the root. It happened rarely, in cells next to dense haloes of later
+N-body steps, but then the multigrid stopped converging (C4 at z ~ 3 in 256 Mpc/h; 64^3 in 64 Mpc/h at z = 1.4) and
+the result depended on the number of tasks (the starting value of the cell differs slightly). The example checks the
+cell solve for the inputs of such a cell. A cell without a root in the bracket now keeps its value instead of going to
+the bound. The checksums of the other tests and test_multigrid are unchanged.
+
 ## Tests (examples/AMRPoissonExample.cpp)
 
 `D^2 phi = delta` for a Gaussian `phi` (periodic) and `D^2 u - 500 u^3 = s` (Dirichlet, `u = u_exact` on the faces),

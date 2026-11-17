@@ -186,6 +186,11 @@ class DilatonSolverCosmology {
         }
         double x = std::isfinite(u) ? std::clamp(u, ulo, uhi) : ulo;
         double maxstep = 1.0;
+        // Safeguarded Newton (as rtsafe): bisect when the Newton step leaves the bracket or does not halve the step
+        // before it. Without the second condition a bisection far into the side where c e^-u dominates (u ~ -350 for
+        // the bracket [-700, ~0]) is followed by Newton steps of only ~+1 each (F ~ e^-u), and the iterations ran out
+        // ~150 e-folds from the root
+        double dxold = std::isfinite(hi) ? hi - lo : std::numeric_limits<double>::infinity();
         for (int iter = 0; iter < 200; iter++) {
             eval(x, F, dF, Fscale);
             // Zero to round-off
@@ -200,9 +205,12 @@ class DilatonSolverCosmology {
                 // The upper side open: steps of at most maxstep (doubling)
                 xnew = x + std::min((std::isfinite(xnew) and xnew > x) ? xnew - x : maxstep, maxstep);
                 maxstep *= 2.0;
+            } else if (not(xnew > lo and xnew < hi) or std::abs(xnew - x) > 0.5 * std::abs(dxold)) {
+                xnew = 0.5 * (lo + hi);
             }
             if (not(xnew > lo and xnew < hi))
                 xnew = 0.5 * (lo + hi);
+            dxold = xnew - x;
             if (std::abs(xnew - x) <= 1e-15 * (1.0 + std::abs(x)))
                 return xnew;
             x = xnew;

@@ -175,8 +175,14 @@ class AMRDilatonSolverCosmology {
             const double d = std::max(sol.get_external_field(id_delta, level, i), -1.0);
             const double u = w > 0.0 ? std::log(w) : ulo;
             const double c = lap - dlap * w - source;
-            return std::exp(
-                Uniform::solve_cell_affine(u, c, 1.0, -dlap, (1.0 + d) * ainv3, norm, Ea, s, p, ulo, uhi));
+            const double unew =
+                Uniform::solve_cell_affine(u, c, 1.0, -dlap, (1.0 + d) * ainv3, norm, Ea, s, p, ulo, uhi);
+            // No root inside the bracket (a coarse level, where the FAS source can leave the cell equation without a
+            // positive solution: c <= 0): keep the cell as it is rather than set it to the bound. The bracket is
+            // wider than any solution of the fine equation, so a cell at a bound is never right
+            if ((unew <= ulo or unew >= uhi) and w > 0.0 and std::isfinite(w))
+                return w;
+            return std::exp(unew);
         };
     }
 

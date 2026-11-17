@@ -333,6 +333,27 @@ int main(int argc, char ** argv) {
             nfail++;
     }
 
+    // The cell solve (DilatonSolverCosmology::solve_cell_affine) for the inputs of a cell of a coarse multigrid level in
+    // a C4 N-body run (64^3 in 64 Mpc/h, z = 1.4), started next to its root with the bracket [-700, 1.86]: it used to
+    // bisect to u ~ -350 and run out of iterations (Newton steps of ~+1) at u = -153.3 instead of the root -2.59. The
+    // multigrid then did not converge (and depended on the number of tasks)
+    {
+        const double uroot = DilatonSolverCosmology<NDIM>::solve_cell_affine(-2.59184989785675457, 6.03550812143566436e+05, 1.0,
+                                                                            6.29145600000000000e+06, 2.53893772930385632e+05,
+                                                                            6.96864368637928067, -2.73972283981011788, 0.27,
+                                                                            -2.2, -700.0, 1.86245243947600470);
+        double T, dT;
+        DilatonSolverCosmology<NDIM>::potential_term(uroot, -2.73972283981011788, 0.27, -2.2, T, dT);
+        const double F = 6.03550812143566436e+05 * std::exp(-uroot) - 6.29145600000000000e+06 -
+                         6.96864368637928067 * (2.53893772930385632e+05 - T);
+        const bool ok = std::abs(uroot + 2.59185) < 1e-4 and std::abs(F) < 1e-6 * 6.29145600000000000e+06;
+        if (FML::ThisTask == 0)
+            std::cout << "\nCell solve far from the bracket edge: u = " << std::setprecision(10) << uroot
+                      << " (root -2.59185), F(u) = " << F << (ok ? "  OK" : "  FAILED") << std::defaultfloat << "\n";
+        if (not ok)
+            nfail++;
+    }
+
     if (FML::ThisTask == 0)
         std::cout << "\n" << (nfail == 0 ? "All tests passed" : std::to_string(nfail) + " tests FAILED") << "\n";
     return nfail == 0 ? 0 : 1;

@@ -19,6 +19,13 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
   = 0.1/Mpc, FDS/LCDM, agrees with an independent sub-horizon two-fluid integration of the paper's equations (A24-A25)
   to 1e-6.
 
+### Dilaton cell solve: safeguarded Newton
+- `DilatonSolverCosmology::solve_cell_affine` (uniform and AMR solvers) bisects when a Newton step does not halve the
+  previous one. A far bisection followed by Newton steps of ~+1 used to exhaust the iterations ~150 e-folds from the
+  root, so the AMR multigrid stopped converging in later steps of the C4 run (and depended on the number of tasks).
+  `AMRDilatonSolver.h`: a cell without a root in the bracket keeps its value. Test in `AMRDilatonExample.cpp`; the
+  checksums and test_multigrid are unchanged; a 64^3 C4 run converges in every solve to z = 1.
+
 ### AMR multigrid: exact injection of the coarse-grid correction
 - `AMRMultiGridSolver::prolong_correction`: the cells that exist on both levels get the coarse value instead of
   f + (f_c - Rf), which is the same in exact arithmetic but gives exactly 0 when a cell changes by more than 16 orders of
