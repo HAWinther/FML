@@ -31,3 +31,7 @@ $(TARGETS): %: %.o $(FIT_OBJS) $(MCMC_OBJS) $(COSMO_OBJS)
 .PHONY: run
 run: $(TARGETS)
 	@status=0; for t in $(TARGETS); do echo "=== $$t ==="; (cd .. && ./tests/$$t) || status=1; done; exit $$status
+
+# Not a test: EdS against exact-time two-fluid loop kernels for the Fading Dark Sector (README)
+check_fds_kernels: check_fds_kernels.o $(FIT_OBJS) $(MCMC_OBJS) $(COSMO_OBJS)
+	$(LINK_EXE)

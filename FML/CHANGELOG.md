@@ -27,6 +27,9 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
   `sn.desdovekie` (`python/fetch_sn_data.py desdovekie`); `SNIaLikelihood` takes an inverse covariance.
 - `params/mcmc_fds_cmb_desi_dovekie.ini`: the Fading Dark Sector (`model = fading_dark_sector`, `fds_c`,
   `fds_cprime`) with CamSpec PR4 + low-ell + ACT DR6 + Planck PR4 lensing, DESI DR2 BAO and DES-Dovekie (Obied, Vafa & Wu 2026).
+- `tests/check_fds_kernels` (with `python/fds_kernels_dchi2.py`): the one-loop P_cb and P_thetatheta of the Fading Dark
+  Sector with exact-time two-fluid kernels against EdS kernels; the difference changes the DESI DR1 full-shape chi^2 by
+  0.01 (0.001 after refitting the linear nuisance parameters), so EdS kernels suffice for the FDS fits.
 - `./mcmc`: an empty `sample_x=` or `gauss_x=` on the command line removes that entry of the file.
 
 ### NBody: force grid finer than the particle grid

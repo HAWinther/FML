@@ -29,6 +29,7 @@ Cosmology/Perturbations/tests/test_*
 CosmologyFitting/mcmc
 CosmologyFitting/tests/test_*
 !CosmologyFitting/tests/test_*.cpp
+CosmologyFitting/tests/check_fds_kernels
 MCMC/tests/test_*
 !MCMC/tests/test_*.cpp
 FriendsOfFriends/tests/test_*

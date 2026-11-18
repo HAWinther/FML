@@ -139,7 +139,22 @@ initially). Only the relative sign matters (φ → −φ), so c′ ≥ 0. `param
 CMB + DESI DR2 BAO + DES-Dovekie fit with Planck PR4 CamSpec, the Planck 2018 low-ℓ TT and EE and ACT DR6 + Planck
 PR4 lensing, as the paper (which adds the DESI DR1 full shape); its header has the ΛCDM variant
 (`model=lcdm sample_fds_c= sample_fds_cprime=`). An evaluation is about 15 s on 2 cores (`precision = fast`), as for
-ΛCDM.
+ΛCDM. `params/mcmc_fds_cmb_desi15_dovekie.ini` adds the DESI DR1 full shape (their main combination).
+
+*EdS loop kernels.* `desi_dr1_fs` uses EdS kernels with the model's linear P_cb, P_θθ and growth; the paper uses
+exact-time kernels for the two fluids (CDM with the fifth force and the drag, baryons without). `tests/check_fds_kernels`
+computes the one-loop real-space P_cb and P_θθ both ways for the same linear P_cb (two-fluid kernels integrated in
+ln a for every loop node on the model's background). At c = −0.85, c′ = 0.053 and z = 0.3–1.5, k ≤ 0.2 h/Mpc the
+exact-time δδ loop differs from the EdS one by ≤ 3×10⁻³ of P_L and the θθ loop by ≤ 1% of f²P_L, almost all of which
+is there in ΛCDM as well (the usual EdS approximation, ≤ 3×10⁻³ and 0.7%); the part due to the fifth force and the
+drag is ≤ 4×10⁻⁴ (δδ) and 3×10⁻³ (θθ). Mapped onto the DESI multipoles (Kaiser weights, window, covariance;
+`python/fds_kernels_dchi2.py`) the whole difference changes χ² by 0.011 summed over the six samples, 0.001 after
+refitting b1, α0, α2 and the shot noise, and the FDS-specific part by 0.001 (10⁻⁴ after refitting), against the
+Δχ² ≈ −14 to −20 of the model. EdS kernels are therefore enough for these fits. Not included in this estimate: the
+redshift-space loop terms beyond the Kaiser mapping (the δθ loop is taken as the mean of δδ and θθ) and the paper's
+two-fluid bias operators (a different bias expansion, not a kernel effect). (The exact-time and EdS branches of the
+authors' CLASS-PT-exp, qcdm_qscf_kernels = exact_qs and no, do not isolate the kernels: their real-space one-loop
+spectra differ by 3–20% of P at k = 0.1–0.2 h/Mpc already in ΛCDM, so the branches differ in more than the kernels.)
 
 ### Cosmic shear (KiDS-1000)
 
@@ -308,6 +323,7 @@ Validation:
 | `python/fetch_sn_data.py` | Downloads Pantheon+, DES-SN5YR and DES-Dovekie into `external/sn/` |
 | `python/fetch_planck_data.py` | Downloads the CamSpec PR4 and Planck 2018 low-ℓ data into `external/` |
 | `python/convert_desi_dr1_fullshape.py`, `python/generate_desi_fs_reference.py` | Converts DESI's DR1 full-shape likelihood files into `external/desi_dr1_fs/`; the test reference from DESI's code path |
+| `python/fds_kernels_dchi2.py`, `tests/check_fds_kernels.cpp` | EdS against exact-time two-fluid loop kernels for the Fading Dark Sector |
 | `python/convert_act_dr6_lensing.py` | Converts the ACT DR6 lensing likelihood data into `external/act_dr6_lensing/` |
 | `python/convert_kids1000.py` | Converts the KiDS-1000 data release into `external/kids1000/` |
 | `external/` | DESI DR1/DR2 BAO, DESI DR1 ShapeFit, BOSS DR12 and eBOSS DR16 BAO + RSD (`bao/`), Planck 2018 plik_lite (`planck2018_lite/`) and lensing (`planck2018_lensing/`), KiDS-1000 COSEBIs (`kids1000/`), supernovae (`sn/`: Union3; Pantheon+, DES-SN5YR and DES-Dovekie via the script), CamSpec PR4 and low-ℓ (via the script), binned JLA supernovae |
