@@ -18,7 +18,10 @@ table, the CLASS default; 2e-5 from CLASS, which uses ΔN = N_eff − 3.046 with
 selects gravity-only HMcode-2020 with cold-matter variances, neutrinos and BAO damping. Both use the same
 nonlinear output and lensing paths. HMcode-2020 supports `lcdm` and smooth `w0wa` backgrounds (with curvature)
 and rejects other models. `nonlinear = hmcode2016` selects HMcode-2016 (as CAMB `mead2016`, same backgrounds;
-the general halo model in `FML/HaloModel`). The original Halofit option remains unchanged. See
+the general halo model in `FML/HaloModel`); its baryonic feedback is set by `hmcode2016_A` (halo concentration
+amplitude, 3.13 = dark matter only) and `hmcode2016_eta0` (bloating η = η_0 − 0.3σ_8(z), 0.603), as CAMB's
+`HMCode_A_baryon`, `HMCode_eta_baryon` (0.06% from CAMB 2.0.5 at A = 2.6), or with `hmcode2016_eta0_from_A = true`
+η_0 = 0.98 − 0.12 A (the one-parameter model of KiDS-1000). The original Halofit option remains unchanged. See
 [nonlinear methods, library API and validation](../Spectra/NONLINEAR.md) for units, limits and reference tests.
 
 `nonlinear = react` is the halo-model reaction of ReACT (Cataneo et al. 2019; Bose et al. 2020, 2021) multiplied

@@ -19,7 +19,9 @@ namespace FML::COSMOLOGY::HALOMODEL {
                        double kmin,
                        double kmax,
                        int nk,
-                       int accuracy_boost) {
+                       int accuracy_boost,
+                       double A,
+                       double eta0) {
             check_background(bg);
             if (!Pm || !Pcb)
                 throw std::invalid_argument("HMcode-2016: P_m and P_cb are required");
@@ -29,6 +31,10 @@ namespace FML::COSMOLOGY::HALOMODEL {
             o.kmax = kmax;
             o.npts_k = nk;
             o.accuracy_boost = accuracy_boost;
+            if (!(A > 0) || !std::isfinite(eta0))
+                throw std::invalid_argument("HMcode-2016: invalid baryonic-feedback parameters A, eta0");
+            o.hmcode2016_A = A;
+            o.hmcode2016_eta0 = eta0;
             return HaloModel(cosmology_from_background(bg, Pm, Pcb), o);
         }
     } // namespace
@@ -44,7 +50,7 @@ namespace FML::COSMOLOGY::HALOMODEL {
         x_min = -std::log1p(opt.z_max);
         lnk_min = std::log(opt.k_min);
         lnk_max = std::log(opt.k_max);
-        auto hm = make(bg, Pm, Pcb, opt.k_min, opt.k_max, opt.n_k, opt.accuracy_boost);
+        auto hm = make(bg, Pm, Pcb, opt.k_min, opt.k_max, opt.n_k, opt.accuracy_boost, opt.A, opt.eta0);
         const auto xs = Utils::linspace(x_min, 0.0, opt.n_z);
         const auto lk = Utils::linspace(lnk_min, lnk_max, opt.n_k);
         std::vector<std::vector<double>> ratios;
@@ -64,7 +70,9 @@ namespace FML::COSMOLOGY::HALOMODEL {
                                              const LinearPower & Pm,
                                              const LinearPower & Pcb,
                                              double x,
-                                             const std::vector<double> & k) {
+                                             const std::vector<double> & k,
+                                             double A,
+                                             double eta0) {
         if (!std::isfinite(x) || x > 0.0 || k.empty())
             throw std::invalid_argument("HMcode-2016: require x <= 0 and at least one k");
         for (double kk : k)
@@ -72,7 +80,7 @@ namespace FML::COSMOLOGY::HALOMODEL {
                 throw std::invalid_argument("HMcode-2016: k must be finite and positive");
         const auto [kmin, kmax] = std::minmax_element(k.begin(), k.end());
         const double lo = *kmin * 0.99, hi = *kmax * 1.01;
-        auto hm = make(bg, Pm, Pcb, lo, hi, std::max(64, int(100 * std::log(hi / lo))), 1);
+        auto hm = make(bg, Pm, Pcb, lo, hi, std::max(64, int(100 * std::log(hi / lo))), 1, A, eta0);
         hm.compute_at_redshift(std::max(std::expm1(-x), 0.0));
         Spectrum out;
         for (double kk : k) {

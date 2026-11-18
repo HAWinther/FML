@@ -13,7 +13,7 @@ namespace FML::COSMOLOGY::FITTING {
 
     const std::set<std::string> & SampledParameterMap::aliases() {
         static const std::set<std::string> a =
-            {"H0", "omega_b", "omega_cdm", "Omega_m", "logA", "tau_reio", "theta_MC_100"};
+            {"H0", "omega_b", "omega_cdm", "Omega_m", "logA", "tau_reio", "theta_MC_100", "log10_bd_omega", "inv_bd_omega"};
         return a;
     }
 
@@ -35,6 +35,8 @@ namespace FML::COSMOLOGY::FITTING {
             throw std::invalid_argument("sample logA or A_s, not both");
         if (s.count("tau_reio") && s.count("z_reion"))
             throw std::invalid_argument("sample tau_reio or z_reion, not both");
+        if (s.count("log10_bd_omega") + s.count("inv_bd_omega") + s.count("bd_omega") > 1)
+            throw std::invalid_argument("sample one of bd_omega, log10_bd_omega and inv_bd_omega");
         if (s.count("Omega_m") && (s.count("omega_cdm") || s.count("OmegaCDM")))
             throw std::invalid_argument("Omega_m sets OmegaCDM: do not also sample omega_cdm or OmegaCDM");
         ParameterFile::read("", fixed); // checks the fixed parameters
@@ -56,6 +58,14 @@ namespace FML::COSMOLOGY::FITTING {
             ov.push_back("h=" + fmt(v["H0"] / 100.0));
         if (v.count("logA"))
             ov.push_back("A_s=" + fmt(1e-10 * std::exp(v["logA"])));
+        // Brans-Dicke: omega = 10^log10_bd_omega or 1/inv_bd_omega (inv_bd_omega = 0 is GR, taken as omega = 1e12)
+        if (v.count("log10_bd_omega"))
+            ov.push_back("bd_omega=" + fmt(std::pow(10.0, v["log10_bd_omega"])));
+        if (v.count("inv_bd_omega")) {
+            if (v["inv_bd_omega"] < 0.0)
+                throw std::invalid_argument("inv_bd_omega must be >= 0");
+            ov.push_back("bd_omega=" + fmt(v["inv_bd_omega"] > 1e-12 ? 1.0 / v["inv_bd_omega"] : 1e12));
+        }
         for (const auto & [n, val] : v)
             if (!aliases().count(n) && !nuis.count(n))
                 ov.push_back(n + "=" + fmt(val));

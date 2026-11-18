@@ -24,6 +24,8 @@ namespace FML::COSMOLOGY::HALOMODEL {
             int n_k = 512;
             double k_min = 1e-5, k_max = 100.0; // output table [h/Mpc]
             int accuracy_boost = 1;
+            // Baryonic feedback (CAMB HMCode_A_baryon, HMCode_eta_baryon; defaults: dark matter only)
+            double A = 3.13, eta0 = 0.603;
         };
 
         // Both callbacks take (x=ln a, k[1/m]) and return P[k] in m^3, including extrapolation.
@@ -41,7 +43,9 @@ namespace FML::COSMOLOGY::HALOMODEL {
                                  const LinearPower & P_m,
                                  const LinearPower & P_cb,
                                  double x,
-                                 const std::vector<double> & k);
+                                 const std::vector<double> & k,
+                                 double A = 3.13,
+                                 double eta0 = 0.603);
 
       private:
         double x_min{}, lnk_min{}, lnk_max{}, h{};

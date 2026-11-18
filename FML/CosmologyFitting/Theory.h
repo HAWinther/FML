@@ -58,6 +58,17 @@ namespace FML::COSMOLOGY::FITTING {
         double rec_x_start = -11.0;
         double rec_relerr = 1e-8; // RECFAST ODE tolerance (1e-10 in a normal run; r_d changes by < 1e-8, 2x faster)
         int cmb_ell_max = 2508;   // highest multipole of the lensed CMB spectra (cmb())
+        // Does any likelihood need the CMB spectra? If not, the matter power spectrum for sigma8(z), fsigma8(z) is
+        // computed without the C_ell (compute_cells = false)
+        bool cmb = true;
+        // The redshifts of sigma8(z) and fsigma8(z) (computed together, with the perturbations, the first time one
+        // of them, or the CMB, is needed)
+        std::vector<double> growth_z;
+        // The redshifts of the linear P_cb(k) tables (pk_cb) on pk_k_grid() (computed with the growth)
+        std::vector<double> pk_z;
+        // The redshifts of the nonlinear total-matter P(k) tables (pk_nl, on pk_nl_k_grid(); the nonlinear method of
+        // the RunSettings, e.g. nonlinear = hmcode2016) and the linear growth factor D(z) (computed with the growth)
+        std::vector<double> pk_nl_z;
     };
 
     // Lensed CMB spectra D_ell = ell (ell+1) C_ell / 2 pi [muK^2], index = ell (0 and 1 unused), and
@@ -99,6 +110,32 @@ namespace FML::COSMOLOGY::FITTING {
         const RecombinationHistory & recombination_reionized() const; // as in ./cmb (with reionization)
         double tau_reio() const; // optical depth to z_reion + 8 delta_z_reion (CLASS tau_reio)
         double sigma8() const;   // linear sigma_8 today (accuracy limited by pert_k_max, see Theory.cpp)
+        // At the redshifts of Options::growth_z (throws for others): sigma_8 of the CDM + baryons and f sigma_8 =
+        // sigma_8,vd^2/sigma_8 (CAMB's definition; PowerSpectrum::get_fsigma8), linear
+        double sigma8_cb(double z) const;
+        double fsigma8(double z) const;
+        // sigma_8 of the velocity divergence (in units of -aH) of the CDM + baryons at the redshifts of growth_z:
+        // f = sigma8_theta / sigma8_cb is the growth rate of the ShapeFit compression
+        double sigma8_theta(double z) const;
+        // The linear CDM + baryon power spectrum [(Mpc/h)^3] on pk_k_grid() [h/Mpc] at the redshifts of pk_z (h of the
+        // model). The grid is that of cosmoprimo's BAO filters: 1024 points log-spaced from 1e-7 to 100 h/Mpc
+        static const std::vector<double> & pk_k_grid();
+        const std::vector<double> & pk_cb(double z) const;
+        // The nonlinear total-matter power spectrum [(Mpc/h)^3] on pk_nl_k_grid() [h/Mpc] at the redshifts of pk_nl_z
+        // (= linear without a nonlinear method). The grid: 400 points log-spaced from 1e-5 to 100 h/Mpc
+        static const std::vector<double> & pk_nl_k_grid();
+        const std::vector<double> & pk_nl(double z) const;
+        // At the redshifts of pk_nl_z: the linear growth of the total matter on large scales, D(z)/D(0) =
+        // sqrt(P_L(k, z)/P_L(k, 0)) at k = 1e-4 h/Mpc (as CosmoSIS' intrinsic-alignment module), and the comoving
+        // distance chi(z) [Mpc/h] (radial; for the flat models of cosmic-shear likelihoods = D_M)
+        double growth_D(double z) const;
+        // Sigma(z) = G_light/G_* of the lensing (Weyl) potential in the quasi-static limit, k^2 (Phi + Psi) = -8 pi G_*
+        // a^2 Sigma rho Delta (QuasiStaticGravity.h; G_* that of the density parameters): g/phi(a) for jbd,
+        // 1 + Sigma0 Omega_DE(a)/Omega_DE,0 for musigma, mu for cubic_galileon, 1/(1 + f_R) for fr; 1 for the models
+        // without modified lensing (GR, dark energy, DGP, conformally coupled scalars). Throws for horndeski and
+        // horndeski_table (not implemented)
+        double lensing_Sigma(double z) const;
+        double chi_mpch(double z) const { return bg->comoving_distance_of_x(-std::log1p(z)) / Constants::Mpc * s.cosmo.h; }
 
         // Nuisance parameters
         void set_nuisance(const std::string & name, double value) { nuis[name] = value; }
@@ -128,6 +165,16 @@ namespace FML::COSMOLOGY::FITTING {
         mutable double R_c = -1.0, lA_c = -1.0;
         mutable std::unique_ptr<CMBSpectra> spectra;
         mutable double sigma8_ = 0.0;
+        mutable bool growth_done = false;
+        mutable std::vector<double> sigma8cb_z, fsigma8_z, sigma8th_z; // at opt.growth_z
+        mutable std::vector<std::vector<double>> pk_tables;           // at opt.pk_z
+        mutable std::vector<std::vector<double>> pk_nl_tables;        // at opt.pk_nl_z
+        mutable std::vector<double> growth_D_z;                       // at opt.pk_nl_z
+        size_t pk_nl_index(double z) const;
+        void compute_growth() const;                        // from the solved power spectrum
+        void solve_matter() const;                          // the perturbations without the CMB (opt.cmb = false)
+        size_t growth_index(double z) const;
+        void ensure_growth() const;
         std::map<std::string, double> nuis;
     };
 

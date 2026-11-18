@@ -1,6 +1,10 @@
 #include <FML/CosmologyFitting/Theory.h>
 #include <FML/Cosmology/EinsteinBoltzmannSolver/EinsteinBoltzmannSolver.h>
 #include <FML/Cosmology/Common.h>
+#include <FML/Cosmology/Perturbations/QuasiStaticGravity_BransDicke.h>
+#include <FML/Cosmology/Perturbations/QuasiStaticGravity_CubicGalileon.h>
+#include <FML/Cosmology/Perturbations/QuasiStaticGravity_HuSawicky.h>
+#include <FML/Cosmology/Perturbations/QuasiStaticGravity_MuSigma.h>
 
 #include <cmath>
 #include <stdexcept>
@@ -10,9 +14,9 @@ namespace FML::COSMOLOGY::FITTING {
     using namespace Constants;
 
     Theory::Theory(const RunSettings & settings, Options options) : s(settings), opt(options) {
-        RunSettings run = s; // the CMB is always computed, lensed, to cmb_ell_max
-        run.compute_cells = true;
-        run.ps.lensing = true;
+        RunSettings run = s; // the CMB is computed, lensed, to cmb_ell_max (only P(k) if no likelihood needs it)
+        run.compute_cells = opt.cmb;
+        run.ps.lensing = opt.cmb;
         run.ps.ell_max = opt.cmb_ell_max;
         ebs = std::make_unique<EinsteinBoltzmannSolver>(run);
         ebs->set_verbose(false);
@@ -187,6 +191,8 @@ namespace FML::COSMOLOGY::FITTING {
     const CMBSpectra & Theory::cmb() const {
         if (spectra)
             return *spectra;
+        if (!opt.cmb)
+            throw std::logic_error("Theory::cmb: the theory was set up without the CMB (TheoryOptions::cmb = false)");
         ebs->solve();
         const auto & ps = ebs->power_spectrum();
         auto c = std::make_unique<CMBSpectra>();
@@ -203,6 +209,7 @@ namespace FML::COSMOLOGY::FITTING {
             c->pp[l] = ll * ll * ps.get_Cell_phiphi(l) / (2.0 * M_PI);
         }
         sigma8_ = ps.get_sigma8(0.0);
+        compute_growth();
         spectra = std::move(c);
         // the spectra are all that is needed: free the perturbations (the theory may be cached by the sampler)
         ebs->reset(EinsteinBoltzmannSolver::Stage::Perturbations);
@@ -213,8 +220,158 @@ namespace FML::COSMOLOGY::FITTING {
     // extrapolated (PowerSpectrum::get_sigma_R); at the Planck best fit with precision = fast sigma_8 = 0.8114
     // (Planck 0.8111 +- 0.0060, tests/test_fitting.cpp).
     double Theory::sigma8() const {
-        cmb();
+        if (opt.cmb)
+            cmb();
+        else
+            solve_matter();
         return sigma8_;
+    }
+
+    // --- growth: sigma_8(z) and f sigma_8(z) ---------------------------------------------------------------------
+    void Theory::compute_growth() const {
+        if (growth_done)
+            return;
+        const auto & ps = ebs->power_spectrum();
+        sigma8cb_z.clear();
+        fsigma8_z.clear();
+        sigma8th_z.clear();
+        for (double z : opt.growth_z) {
+            const double x = -std::log1p(z);
+            sigma8cb_z.push_back(ps.get_sigma8_cb(x));
+            fsigma8_z.push_back(ps.get_fsigma8(x));
+            sigma8th_z.push_back(ps.get_sigma8_theta(x));
+        }
+        pk_tables.clear();
+        const double h = s.cosmo.h, unit = Mpc / h; // k [h/Mpc] -> [1/m]: k h/Mpc; P [m^3] -> [(Mpc/h)^3]
+        for (double z : opt.pk_z) {
+            const double x = -std::log1p(z);
+            std::vector<double> P;
+            for (double k : pk_k_grid())
+                P.push_back(ps.get_matter_power_spectrum_cb_extrapolated(x, k / unit) / (unit * unit * unit));
+            pk_tables.push_back(P);
+        }
+        pk_nl_tables.clear();
+        growth_D_z.clear();
+        const double k_D = 1e-4 / unit, P0 = ps.get_matter_power_spectrum_extrapolated(0.0, k_D);
+        for (double z : opt.pk_nl_z) {
+            const double x = -std::log1p(z);
+            std::vector<double> P;
+            for (double k : pk_nl_k_grid())
+                P.push_back(ps.get_matter_power_spectrum_nonlinear(x, k / unit) / (unit * unit * unit));
+            pk_nl_tables.push_back(P);
+            growth_D_z.push_back(std::sqrt(ps.get_matter_power_spectrum_extrapolated(x, k_D) / P0));
+        }
+        growth_done = true;
+    }
+
+    // Without the CMB: the perturbations and P(k) (compute_cells = false), the growth, then free the perturbations
+    void Theory::solve_matter() const {
+        if (growth_done)
+            return;
+        ebs->solve();
+        sigma8_ = ebs->power_spectrum().get_sigma8(0.0);
+        compute_growth();
+        ebs->reset(EinsteinBoltzmannSolver::Stage::Perturbations);
+    }
+
+    size_t Theory::growth_index(double z) const {
+        for (size_t i = 0; i < opt.growth_z.size(); i++)
+            if (std::abs(opt.growth_z[i] - z) < 1e-9)
+                return i;
+        throw std::logic_error("Theory: sigma8(z) / fsigma8(z) at z = " + std::to_string(z) +
+                               " which is not in TheoryOptions::growth_z");
+    }
+
+    void Theory::ensure_growth() const {
+        if (opt.cmb)
+            cmb();
+        else
+            solve_matter();
+    }
+
+    double Theory::sigma8_cb(double z) const {
+        const size_t i = growth_index(z);
+        ensure_growth();
+        return sigma8cb_z[i];
+    }
+
+    double Theory::fsigma8(double z) const {
+        const size_t i = growth_index(z);
+        ensure_growth();
+        return fsigma8_z[i];
+    }
+
+    double Theory::sigma8_theta(double z) const {
+        const size_t i = growth_index(z);
+        ensure_growth();
+        return sigma8th_z[i];
+    }
+
+    const std::vector<double> & Theory::pk_k_grid() {
+        static const std::vector<double> k = [] {
+            std::vector<double> v(1024);
+            for (int i = 0; i < 1024; i++)
+                v[i] = std::pow(10.0, -7.0 + 9.0 * i / 1023.0);
+            return v;
+        }();
+        return k;
+    }
+
+    double Theory::lensing_Sigma(double z) const {
+        namespace P = PERTURBATIONS;
+        const double x = -std::log1p(z);
+        const std::string & m = s.cosmo.model;
+        const auto & b = bg->background();
+        if (m == "jbd")
+            return P::QuasiStaticGravity_BransDicke(b).Sigma(x, 0.0);
+        if (m == "musigma")
+            return P::QuasiStaticGravity_MuSigma(b, s.cosmo.model_param("mu0"), s.cosmo.model_param("Sigma0")).Sigma(x, 0.0);
+        if (m == "cubic_galileon")
+            return P::QuasiStaticGravity_CubicGalileon(b).Sigma(x, 0.0);
+        if (m == "fr")
+            return P::QuasiStaticGravity_HuSawicky(b, s.cosmo.model_param("fR0"), s.cosmo.model_param("fR_n")).Sigma(x, 0.0);
+        if (m == "horndeski" || m == "horndeski_table")
+            throw std::invalid_argument("Theory::lensing_Sigma: not implemented for " + m);
+        return 1.0;
+    }
+
+    const std::vector<double> & Theory::pk_nl_k_grid() {
+        static const std::vector<double> k = [] {
+            std::vector<double> v(400);
+            for (int i = 0; i < 400; i++)
+                v[i] = std::pow(10.0, -5.0 + 7.0 * i / 399.0);
+            return v;
+        }();
+        return k;
+    }
+
+    size_t Theory::pk_nl_index(double z) const {
+        for (size_t i = 0; i < opt.pk_nl_z.size(); i++)
+            if (std::abs(opt.pk_nl_z[i] - z) < 1e-9)
+                return i;
+        throw std::logic_error("Theory: pk_nl / growth_D at z = " + std::to_string(z) +
+                               " which is not in TheoryOptions::pk_nl_z");
+    }
+
+    const std::vector<double> & Theory::pk_nl(double z) const {
+        const size_t i = pk_nl_index(z);
+        ensure_growth();
+        return pk_nl_tables[i];
+    }
+
+    double Theory::growth_D(double z) const {
+        const size_t i = pk_nl_index(z);
+        ensure_growth();
+        return growth_D_z[i];
+    }
+
+    const std::vector<double> & Theory::pk_cb(double z) const {
+        for (size_t i = 0; i < opt.pk_z.size(); i++)
+            if (std::abs(opt.pk_z[i] - z) < 1e-9) {
+                ensure_growth();
+                return pk_tables[i];
+            }
+        throw std::logic_error("Theory::pk_cb at z = " + std::to_string(z) + " which is not in TheoryOptions::pk_z");
     }
 
 } // namespace FML::COSMOLOGY::FITTING

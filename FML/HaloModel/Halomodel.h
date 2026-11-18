@@ -157,6 +157,14 @@ namespace FML {
                 double concentration_multiplier{1.0};
 
                 //======================================
+                // HMcode-2016 baryonic feedback (Mead et al. 2015, sec. 5; CAMB's HMCode_A_baryon, HMCode_eta_baryon):
+                // the concentration amplitude A (3.13: dark matter only) and eta0 of the halo bloating
+                // eta = eta0 - 0.3 sigma_8(z) (0.603). KiDS-1000 sample A with eta0 = 0.98 - 0.12 A.
+                //======================================
+                double hmcode2016_A{3.13};
+                double hmcode2016_eta0{0.603};
+
+                //======================================
                 // HMcode-like modifications of the Standard model (HMcode2016 sets its own at each redshift)
                 //======================================
                 /// One-halo damping 1 - exp(-(k/kstar)^2) (0: none; 0.01 h/Mpc avoids a constant P_1h at low k)

@@ -44,10 +44,15 @@ int main() {
     Utils::verbose = false;
     const double h = 0.67, length = Mpc / h, volume = length * length * length;
     const double xs[3] = {-std::log(3.0), -std::log(2.0), 0.0};
-    for (const std::string name : {"lcdm", "nu", "w0wa"}) {
+    for (const std::string name : {"lcdm", "nu", "w0wa", "baryon"}) {
         CosmologyParameters p;
         if (name == "nu")
             p.m_nu = 0.3;
+        // baryonic feedback (KiDS-1000's one-parameter model, A = 2.6) with m_nu = 0.06 eV
+        const bool baryon = name == "baryon";
+        const double A = baryon ? 2.6 : 3.13, eta0 = baryon ? 0.98 - 0.12 * 2.6 : 0.603;
+        if (baryon)
+            p.m_nu = 0.06;
         if (name == "w0wa") {
             p.model = "w0wa";
             p.model_params = {{"w0", -0.8}, {"wa", 0.2}};
@@ -85,6 +90,8 @@ int main() {
         options.kmin = 1e-3;
         options.kmax = 20.0;
         options.npts_k = 300;
+        options.hmcode2016_A = A;
+        options.hmcode2016_eta0 = eta0;
         HM::HaloModel hm(cosmology, options);
         for (int iz = 0; iz < 3; iz++) {
             const double z = 2 - iz;
@@ -103,7 +110,7 @@ int main() {
                 std::vector<double> k;
                 for (const auto & row : ref)
                     k.push_back(row[0]);
-                const auto direct = HM::HMcode2016::spectrum(bg, Pm, Pcb, 0.0, k);
+                const auto direct = HM::HMcode2016::spectrum(bg, Pm, Pcb, 0.0, k, A, eta0);
                 double diff = 0;
                 for (size_t i = 0; i < k.size(); i++)
                     diff = std::max(diff, std::abs(direct.nonlinear[i] / ref[i][3] - 1));
@@ -132,6 +139,10 @@ int main() {
     {
         const auto settings = ParameterFile::read("", {"nonlinear=hmcode2016"});
         check(settings.ps.nonlinear == PowerSpectrumOptions::Nonlinear::HMcode2016, "parse nonlinear = hmcode2016");
+        const auto kids = ParameterFile::read("", {"nonlinear=hmcode2016", "hmcode2016_A=2.5", "hmcode2016_eta0_from_A=true"});
+        check(std::abs(kids.ps.hmcode2016_eta0_value() - (0.98 - 0.12 * 2.5)) < 1e-15 &&
+                  ParameterFile::read("", {"hmcode2016_eta0=0.7"}).ps.hmcode2016_eta0_value() == 0.7,
+              "parse hmcode2016_A, hmcode2016_eta0, hmcode2016_eta0_from_A");
         CosmologyParameters p;
         p.model = "musigma";
         BackgroundCosmology bg(p);

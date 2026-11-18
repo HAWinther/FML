@@ -708,9 +708,12 @@ namespace FML::COSMOLOGY {
                 std::cerr << "Warning: Halofit (Takahashi 2012) has no massive-neutrino correction (Bird et al. 2012): "
                              "use nonlinear = halofit_bird to include it\n";
         } else if (options.nonlinear == N::HMcode2016) {
+            HALOMODEL::HMcode2016::Options o;
+            o.A = options.hmcode2016_A;
+            o.eta0 = options.hmcode2016_eta0_value();
             hmcode2016 = std::make_unique<HALOMODEL::HMcode2016>(cosmo,
                 [this](double x, double k) { return get_matter_power_spectrum_extrapolated(x, k); },
-                [this](double x, double k) { return get_matter_power_spectrum_cb_extrapolated(x, k); });
+                [this](double x, double k) { return get_matter_power_spectrum_cb_extrapolated(x, k); }, o);
         } else if (options.nonlinear == N::HMcode2020) {
             hmcode = std::make_unique<HALOMODEL::HMcode2020>(cosmo,
                 [this](double x, double k) { return get_matter_power_spectrum_extrapolated(x, k); },

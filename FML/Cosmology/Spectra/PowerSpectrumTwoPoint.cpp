@@ -96,6 +96,75 @@ namespace FML::COSMOLOGY {
 
     double PowerSpectrum::get_sigma8(double x) const { return get_sigma_R(x, 8.0 * Mpc / cosmo.get_params().h); }
 
+    namespace {
+        // int dk/k Delta_cb^2 f(k)^power W^2(k R8): sigma_8,cb^2 (power 0), sigma_8,vd^2 (1) or sigma_8,thetatheta^2
+        // (2), Delta_cb^2 = the dimensionless power of the CDM + baryons (all components)
+        double sigma8_cb_squared(const PowerSpectrum & ps,
+                                 const Perturbations & pert,
+                                 double x,
+                                 double R8,
+                                 int ncomp,
+                                 int power) {
+            const bool vd = power > 0;
+            const auto & kp = pert.get_k_array();
+            const auto & xp = pert.get_x_array();
+            const double xmin = xp.front(), xmax = xp.back();
+            // dDelta/dx by central differences (h = 2e-3). Within 0.05 of the ends of the time grid (x = 0 today) the
+            // spline of the perturbations is less accurate on the scale of its knots (the end conditions): there a
+            // one-sided 5-point formula with steps of 0.05, a few knots of the spline (f sigma_8 today within 1e-4 of CAMB
+            // with precision = fast, 200 x-points in [-6, 0]; 0.5% with steps of 0.02)
+            const double h = 2e-3, H = 0.05;
+            auto dDelta = [&](double xx, double k, int cc) {
+                if (xx + 0.05 <= xmax and xx - 0.05 >= xmin)
+                    return (ps.get_Delta_cb(xx + h, k, cc) - ps.get_Delta_cb(xx - h, k, cc)) / (2.0 * h);
+                const double s = xx + 0.05 > xmax ? -1.0 : 1.0;
+                const double c[5] = {-25.0, 48.0, -36.0, 16.0, -3.0};
+                double d = 0.0;
+                for (int j = 0; j < 5; j++)
+                    d += c[j] * ps.get_Delta_cb(std::clamp(xx + s * j * H, xmin, xmax), k, cc);
+                return s * d / (12.0 * H);
+            };
+            std::vector<double> k, P;
+            for (double kk = 1e-5 / Mpc; kk < 100.0 / Mpc;
+                 kk += (kk < 1.0 / Mpc ? std::min(0.002 * kk, 5e-4 / Mpc) : 0.002 * kk))
+                k.push_back(kk);
+            k.push_back(100.0 / Mpc);
+            P.resize(k.size());
+            for (size_t i = 0; i < k.size(); i++) {
+                const double anchor = std::clamp(k[i], kp.front(), kp.back());
+                double D2 = 0.0, D2f = 0.0, D2ff = 0.0;
+                for (int cc = 0; cc < ncomp; cc++) {
+                    const double D = ps.get_Delta_cb(x, anchor, cc);
+                    D2 += D * D;
+                    if (vd) {
+                        const double dD = dDelta(x, anchor, cc);
+                        D2f += D * dD;
+                        D2ff += dD * dD;
+                    }
+                }
+                const double ratio = !vd ? 1.0 : (D2 > 0.0 ? (power == 1 ? D2f : D2ff) / D2 : 0.0);
+                P[i] = ps.get_matter_power_spectrum_cb_extrapolated(x, k[i]) * ratio;
+            }
+            const double s = TwoPoint::sigma_R(k, P, R8);
+            return s * s;
+        }
+    } // namespace
+
+    double PowerSpectrum::get_sigma8_cb(double x) const {
+        return std::sqrt(sigma8_cb_squared(*this, pert, x, 8.0 * Mpc / cosmo.get_params().h, int(comps.size()), 0));
+    }
+
+    double PowerSpectrum::get_sigma8_theta(double x) const {
+        return std::sqrt(sigma8_cb_squared(*this, pert, x, 8.0 * Mpc / cosmo.get_params().h, int(comps.size()), 2));
+    }
+
+    double PowerSpectrum::get_fsigma8(double x) const {
+        const double R8 = 8.0 * Mpc / cosmo.get_params().h;
+        const double vd = sigma8_cb_squared(*this, pert, x, R8, int(comps.size()), 1);
+        const double dd = sigma8_cb_squared(*this, pert, x, R8, int(comps.size()), 0);
+        return vd / std::sqrt(dd);
+    }
+
     // =============================================================================
     // Projected matter density
     // =============================================================================

@@ -173,13 +173,14 @@ namespace FML {
                 static double Delta_v(double Omega_m, double f_nu) {
                     return 418.0 * std::pow(Omega_m, -0.352) * (1.0 + 0.916 * f_nu);
                 }
-                static double eta(double sigma8) { return 0.603 - 0.3 * sigma8; }
+                /// eta0 = 0.603 (dark matter only) or the baryonic-feedback value (CAMB HMCode_eta_baryon)
+                static double eta(double sigma8, double eta0 = 0.603) { return eta0 - 0.3 * sigma8; }
                 static double f_damp(double sigma_v100) {
                     return std::max(std::min(0.0095 * std::pow(sigma_v100, 1.37), 0.99), 1e-3);
                 }
                 static double kstar(double sigma_v) { return 0.584 / sigma_v; }
                 static double alpha(double n_eff) { return std::clamp(3.24 * std::pow(1.85, n_eff), 0.5, 2.0); }
-                static constexpr double concentration_A = 3.13;
+                static constexpr double concentration_A = 3.13; // dark matter only (CAMB HMCode_A_baryon)
                 /// The Dolag et al. (2004) concentration correction for dark energy, with the power 1.5 of Mead et al.
                 /// (2016): (g(z=10) / g_LCDM(z=10))^1.5 with the growth g of the model and of LCDM (same Omega_m)
                 static double dolag_factor(double growth_ratio_z10) { return std::pow(growth_ratio_z10, 1.5); }

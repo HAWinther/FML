@@ -313,7 +313,17 @@ int main(int argc, char ** argv) {
             }
             for (const auto & nn : likes.back()->nuisance_parameters())
                 nuisance_names.insert(nn);
+            for (double z : likes.back()->growth_redshifts())
+                if (std::find(topt.growth_z.begin(), topt.growth_z.end(), z) == topt.growth_z.end())
+                    topt.growth_z.push_back(z);
+            for (double z : likes.back()->pk_redshifts())
+                if (std::find(topt.pk_z.begin(), topt.pk_z.end(), z) == topt.pk_z.end())
+                    topt.pk_z.push_back(z);
+            for (double z : likes.back()->pk_nl_redshifts())
+                if (std::find(topt.pk_nl_z.begin(), topt.pk_nl_z.end(), z) == topt.pk_nl_z.end())
+                    topt.pk_nl_z.push_back(z);
         }
+        topt.cmb = need_cmb; // without CMB likelihoods sigma8 and f sigma8 come from P(k) alone
         if (!like_opts.empty() && std::find(like_names.begin(), like_names.end(), "cmb_mock") == like_names.end())
             throw std::invalid_argument("cmb_mock_* options given without the cmb_mock likelihood");
         for (const auto & [k, v] : base_kv) {
@@ -355,11 +365,26 @@ int main(int argc, char ** argv) {
     std::vector<std::string> dn = {"H0", "omega_b", "omega_cdm", "Omega_m", "Omega_DE", "age", "Yp"};
     std::vector<std::string> dl =
         {"H_0", "\\omega_b", "\\omega_c", "\\Omega_m", "\\Omega_{\\rm DE}", "t_0\\,[{\\rm Gyr}]", "Y_p"};
+    // Brans-Dicke: omega when sampled through an alias
+    bool deriv_bd = false;
+    for (const auto & p : params)
+        deriv_bd = deriv_bd || p.name == "log10_bd_omega" || p.name == "inv_bd_omega";
+    if (deriv_bd) {
+        dn.push_back("bd_omega");
+        dl.push_back("\\omega_{\\rm BD}");
+    }
     const bool deriv_rec = need_rec || need_cmb;
     if (deriv_rec) {
         for (const auto & n : {"r_drag", "hr_drag", "z_star", "theta_star_100"})
             dn.push_back(n);
         for (const auto & l : {"r_d\\,[{\\rm Mpc}]", "hr_d\\,[{\\rm Mpc}]", "z_*", "100\\theta_*"})
+            dl.push_back(l);
+    }
+    const bool need_growth = !topt.growth_z.empty() || !topt.pk_nl_z.empty();
+    if (need_growth && !need_cmb) {
+        for (const auto & n : {"sigma8", "S8"})
+            dn.push_back(n);
+        for (const auto & l : {"\\sigma_8", "S_8"})
             dl.push_back(l);
     }
     if (need_cmb) {
@@ -413,9 +438,15 @@ int main(int argc, char ** argv) {
         const double Om = c.OmegaM() + c.OmegaNcdm();
         std::vector<double> d =
             {100.0 * c.h, c.OmegaB * h2, c.OmegaCDM * h2, Om, b.OmegaDE_of_x(0.0), b.t0() / Gyr, c.helium_fraction()};
+        if (deriv_bd)
+            d.push_back(c.model_param("bd_omega"));
         if (deriv_rec) {
             const double rd = t->r_drag();
             d.insert(d.end(), {rd, rd * c.h, t->z_star(), t->theta_star()});
+        }
+        if (need_growth && !need_cmb) {
+            const double s8 = t->sigma8();
+            d.insert(d.end(), {s8, s8 * std::sqrt(Om / 0.3)});
         }
         if (need_cmb) {
             const double tau = t->tau_reio(), s8 = t->sigma8();

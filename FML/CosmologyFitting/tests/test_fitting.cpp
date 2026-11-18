@@ -7,10 +7,22 @@
 //     for r_d against the recombination value
 //   * Likelihoods: the analytic marginalization over the supernova amplitude; the BAO model vector; plik_lite
 //     against planck-lite-py (4 variants, 1e-8); the mock CMB likelihood
+//   * BAO + RSD: the BOSS DR12 / eBOSS DR16 model vectors (r_d,fid scaling, H r_d); sigma_8 and f sigma_8 (CAMB's
+//     definition, sigma_8,vd^2/sigma_8 of the CDM + baryons) against CAMB 2.0.5 (AccuracyBoost 2) for the planck2018
+//     preset with m_nu = 0.06 (precision = fast: 3e-4 for f sigma_8; 4e-5 at the default precision); the same from
+//     the run with the CMB; Brans-Dicke with omega = 1e7 = LCDM
+//   * DESI DR1 ShapeFit + BAO: the theory vector (q_iso, q_ap, df, dm; q_par, q_per) against DESI's Cobaya likelihood
+//     desi_shapefit_bao_all evaluated with cosmoprimo 1.0.0 (CAMB 2.0.5) for two cosmologies away from the fiducial
+//     (precision = fast); chi^2 at the fiducial (theory = 1, 0)
+//   * KiDS-1000 COSEBIs: chi^2 at the maximum posterior of the KiDS chain (CosmoSIS/kcap with CAMB HMcode-2016)
+//     and the delta_z prior against the chain's uncorrelated parameters
+//   * Theory::lensing_Sigma against the Weyl potential of the full perturbations (LCDM, Brans-Dicke omega = 50); the
+//     log10_bd_omega and inv_bd_omega aliases
 //   * Parameter aliases: theta_MC_100 -> h and tau_reio -> z_reion round trips; the Planck 2018 best fit with
 //     precision = fast: 100 theta_*, plik_lite chi^2, sigma_8
 // =============================================================================
 
+#include <FML/Cosmology/EinsteinBoltzmannSolver/EinsteinBoltzmannSolver.h>
 #include <FML/Cosmology/Recombination/RecombinationHistory.h>
 #include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
@@ -282,6 +294,213 @@ int main() {
         check_rel(M.loglike(tt, te, ee, pp), -23.153578141104, 1e-11, "ln L = Cobaya (CMB-marginalized)");
         check(L.nuisance_parameters().size() == 1 && M.nuisance_parameters().empty(),
               "A_planck is its nuisance parameter (not of the marginalized one)");
+    }
+
+    std::cout << "BAO + RSD (BOSS DR12, eBOSS DR16) and f sigma_8\n";
+    {
+        RunSettings s = ParameterFile::read("", {"preset=planck2018", "m_nu=0.06", "precision=fast"});
+        TheoryOptions o;
+        o.cmb = false;
+        o.growth_z = {0.0, 0.38, 0.51, 0.61, 0.698, 1.48};
+        Theory t(s, o);
+        // CAMB 2.0.5 (AccuracyBoost = 2) for the same parameters (h = 0.6766, omega_b = 0.02242, omega_c = 0.11933,
+        // one massive neutrino of 0.06 eV, N_eff = 3.046, Y_p = 0.2454, A_s = 2.105209e-9, n_s = 0.9665):
+        // get_fsigma8() and get_sigmaR(8, delta_nonu)
+        const double camb_fs8[] = {0.424699, 0.474930, 0.473577, 0.468638, 0.462262, 0.377847};
+        const double camb_s8cb[] = {0.813674, 0.666596, 0.623849, 0.593622, 0.568843, 0.408141};
+        double emax_f = 0.0, emax_s = 0.0;
+        for (size_t i = 0; i < o.growth_z.size(); i++) {
+            emax_f = std::max(emax_f, std::fabs(t.fsigma8(o.growth_z[i]) / camb_fs8[i] - 1.0));
+            emax_s = std::max(emax_s, std::fabs(t.sigma8_cb(o.growth_z[i]) / camb_s8cb[i] - 1.0));
+        }
+        std::cout << std::setprecision(3) << "  f sigma_8, sigma_8,cb against CAMB at z = 0-1.48: max " << emax_f << ", "
+                  << emax_s << "\n";
+        check(emax_f < 5e-4, "f sigma_8 = CAMB's to 5e-4 (z = 0-1.48; 4e-5 at the default precision)");
+        check(emax_s < 2e-4, "sigma_8 of the CDM + baryons = CAMB's to 2e-4");
+        check(throws([&] { t.fsigma8(0.3); }), "f sigma_8 at a redshift not in growth_z is an error");
+        check(throws([&] { t.cmb(); }), "cmb() with TheoryOptions::cmb = false is an error");
+
+        auto boss = Likelihoods::create("boss_dr12");
+        auto * b = dynamic_cast<BAOLikelihood *>(boss.get());
+        const auto m = b->model(t);
+        check(boss->n_data() == 9 && boss->growth_redshifts() == std::vector<double>{0.38, 0.51, 0.61},
+              "boss_dr12: 9 values, f sigma_8 at z = 0.38, 0.51, 0.61");
+        check_rel(m[0], t.D_M(0.38) * 147.78 / t.r_drag(), 1e-14, "D_M (r_d,fid/r_d) at z = 0.38");
+        check_rel(m[1], c / 1e3 / t.D_H(0.38) * t.r_drag() / 147.78, 1e-14, "H (r_d/r_d,fid) at z = 0.38");
+        check_rel(m[2], t.fsigma8(0.38), 1e-14, "f sigma_8 at z = 0.38");
+        const double chi2 = -2.0 * boss->loglike(t);
+        auto lrg = Likelihoods::create("eboss_dr16_lrg"), qso = Likelihoods::create("eboss_dr16_qso");
+        auto * bl = dynamic_cast<BAOLikelihood *>(lrg.get());
+        check_rel(bl->model(t)[7], t.D_H(0.698) / t.r_drag(), 1e-14, "eboss_dr16_lrg: D_H/r_d at z = 0.698");
+        std::cout << "  chi^2 for this Planck cosmology: boss_dr12 " << chi2 << " (9), boss_dr12_bao "
+                  << -2.0 * Likelihoods::create("boss_dr12_bao")->loglike(t) << " (6), eboss_dr16_lrg "
+                  << -2.0 * lrg->loglike(t) << " (9), eboss_dr16_qso " << -2.0 * qso->loglike(t) << " (3)\n";
+        check(chi2 < 15.0, "boss_dr12 chi^2 for Planck LCDM is reasonable (< 15 for 9 values)");
+        check(throws([] { BAOLikelihood("x", "external/bao/sdss_DR12Consensus_final.dat",
+                                        "external/bao/final_consensus_covtot_dM_Hz_fsig.txt"); }),
+              "bao_Hz_rs without rs_fid is an error");
+
+        // The same from the run with the CMB (cmb() computes the growth before freeing the perturbations)
+        TheoryOptions oc;
+        oc.growth_z = {0.38};
+        Theory tc(s, oc);
+        check_rel(tc.fsigma8(0.38), t.fsigma8(0.38), 1e-3, "f sigma_8 from the CMB run = from P(k) alone (1e-3)");
+
+        // Brans-Dicke with omega -> infinity is LCDM
+        RunSettings sj =
+            ParameterFile::read("", {"preset=planck2018", "m_nu=0.06", "precision=fast", "model=jbd", "bd_omega=1e7"});
+        Theory tj(sj, o);
+        check_rel(tj.fsigma8(0.51), t.fsigma8(0.51), 1e-5, "Brans-Dicke omega = 1e7: f sigma_8 = LCDM (1e-5)");
+    }
+
+    std::cout << "DESI DR1 ShapeFit + BAO against DESI's likelihood (cosmoprimo)\n";
+    {
+        DESIShapeFitLikelihood L("external/bao/desi_dr1_shapefit_mean.txt", "external/bao/desi_dr1_shapefit_cov.txt");
+        check(L.n_data() == 26 && L.growth_redshifts().size() == 6, "26 values, ShapeFit at 6 redshifts");
+        const RunSettings base = ParameterFile::read("", {"precision=fast"});
+        struct Case {
+            const char * name;
+            double h, ob, oc, As, mnu, chi2;
+            std::vector<double> ref; // desi_shapefit_bao_all with cosmoprimo 1.0.0, engine camb (CAMB 2.0.5)
+        };
+        const std::vector<Case> cases = {
+            {"h = 0.70, omega_cdm = 0.115",
+             0.70, 0.02237, 0.115, 2.083e-9, 0.06, 36.64674444441464,
+             {0.9628578, 1.0073951, 0.933496,  -0.035978,  0.9687711, 1.0119119, 0.9474341, -0.0359796, 0.9733283,
+              1.0150733, 0.9575932, -0.03598,  0.9773687,  1.0175139, 0.9661098, -0.0359796, 0.9828858, 1.0200361,
+              0.9768097, -0.0359777, 0.9846575, 1.0205758, 0.9799597, -0.0359765, 1.0039151, 0.9832435}},
+            {"omega_b = 0.0222, m_nu = 0.12 eV, A_s = 2.2e-9",
+             0.6736, 0.0222, 0.12, 2.2e-9, 0.12, 30.662663895449267,
+             {0.9985567, 0.9997747, 1.0167898, -0.0046061, 0.9983727, 0.9996422, 1.0164252, -0.0043927, 0.9982336,
+              0.9995519, 1.0161847, -0.0042049, 0.9981123, 0.9994838, 1.0160079, -0.0040114, 0.9979491, 0.9994159,
+              1.015842,  -0.0036808, 0.9978974, 0.9994021, 1.0158148, -0.0035493, 0.9973372, 0.9979418}}};
+        for (const auto & c : cases) {
+            RunSettings s = DESIShapeFitLikelihood::fiducial_settings(base);
+            s.cosmo.h = c.h;
+            s.cosmo.OmegaB = c.ob / (c.h * c.h);
+            s.cosmo.OmegaCDM = c.oc / (c.h * c.h);
+            s.cosmo.A_s = c.As;
+            s.cosmo.m_nu = c.mnu;
+            TheoryOptions o;
+            o.cmb = false;
+            o.growth_z = L.growth_redshifts();
+            o.pk_z = L.pk_redshifts();
+            Theory t(s, o);
+            const auto m = L.model(t);
+            double eq = 0.0, edf = 0.0, edm = 0.0;
+            for (size_t i = 0; i < m.size(); i++) {
+                const double d = std::fabs(m[i] - c.ref[i]);
+                if (i < 24 && i % 4 == 2)
+                    edf = std::max(edf, d);
+                else if (i < 24 && i % 4 == 3)
+                    edm = std::max(edm, d);
+                else
+                    eq = std::max(eq, d);
+            }
+            const double chi2 = -2.0 * L.loglike(t);
+            std::cout << std::setprecision(3) << "  " << c.name << ": max |difference| q " << eq << ", df " << edf
+                      << ", dm " << edm << "; chi^2 " << std::setprecision(6) << chi2 << " (DESI " << c.chi2 << ")\n";
+            check(eq < 1e-5 && edf < 5e-4 && edm < 1e-3,
+                  std::string(c.name) + ": q to 1e-5, df to 5e-4, dm to 1e-3 of DESI's likelihood");
+            check(std::fabs(chi2 - c.chi2) < 0.1, std::string(c.name) + ": chi^2 to 0.1 of DESI's likelihood");
+        }
+        RunSettings sf = DESIShapeFitLikelihood::fiducial_settings(base);
+        TheoryOptions o;
+        o.cmb = false;
+        o.growth_z = L.growth_redshifts();
+        o.pk_z = L.pk_redshifts();
+        Theory tf(sf, o);
+        check_close(-2.0 * L.loglike(tf), 32.80514750176213, 1e-6, "fiducial: chi^2 of the data alone (theory 1, 0)");
+    }
+
+    std::cout << "KiDS-1000 COSEBIs against the KiDS chain\n";
+    {
+        // The maximum posterior of the release's COSEBIs chain (maxpost_multinest_start_C.txt, last row): omch2, ombh2,
+        // h, n_s, A_s, HMcode A, A_IA, the shifts bias_1..5, and the uncorrelated parameters u_1..5 of the shifts
+        // (gaussian priors with means mu_u and unit variance); like = -chi^2/2 = -41.12300 (data only)
+        const double omch2 = 0.11813, ombh2 = 0.02594, h = 0.76666, ns = 0.90077, As = 2.42206e-9, Ab = 2.85930,
+                     AIA = 0.26447;
+        const double bias[5] = {1.74311e-03, 8.93466e-03, -1.41311e-02, -1.55053e-02, 7.09853e-03};
+        const double u[5] = {0.16470, 0.77302, -1.52139, -1.77832, 1.58341},
+                     mu_u[5] = {0.000, -0.181, -1.110, -1.395, 1.265};
+        KiDS1000COSEBIsLikelihood L(Utils::fml_file("CosmologyFitting/external/kids1000"));
+        std::ostringstream os;
+        os << std::setprecision(10);
+        auto str = [&](double x) {
+            os.str("");
+            os << x;
+            return os.str();
+        };
+        RunSettings s = ParameterFile::read("",
+                                            {"precision=fast",
+                                             "m_nu=0.06",
+                                             "h=" + str(h),
+                                             "OmegaB=" + str(ombh2 / (h * h)),
+                                             "OmegaCDM=" + str(omch2 / (h * h)),
+                                             "n_s=" + str(ns),
+                                             "A_s=" + str(As),
+                                             "nonlinear=hmcode2016",
+                                             "hmcode2016_A=" + str(Ab),
+                                             "hmcode2016_eta0_from_A=true"});
+        TheoryOptions o;
+        o.cmb = false;
+        o.pk_nl_z = L.pk_nl_redshifts();
+        Theory t(s, o);
+        t.set_nuisance("kids_A_IA", AIA);
+        for (int i = 0; i < 5; i++)
+            t.set_nuisance("kids_dz" + std::to_string(i + 1), bias[i]);
+        const double chi2 = L.chi2_data(t);
+        std::cout << "  chi^2 " << chi2 << " (KiDS 82.24600), sigma_8 " << t.sigma8() << " (KiDS 0.83797)\n";
+        check(std::fabs(chi2 - 82.24600) < 0.15, "maximum posterior: chi^2 of the data to 0.15 of the KiDS chain");
+        check_rel(t.sigma8(), 0.83797, 3e-4, "maximum posterior: sigma_8 of the KiDS chain");
+        double pu = 0;
+        for (int i = 0; i < 5; i++)
+            pu += (u[i] - mu_u[i]) * (u[i] - mu_u[i]);
+        check_close(L.chi2_dz_prior(t), pu, 2e-4, "delta_z prior: chi^2 = that of the chain's uncorrelated shifts");
+        check_close(-2.0 * L.loglike(t), chi2 + L.chi2_dz_prior(t), 1e-8, "ln L = -(chi^2 + delta_z prior)/2");
+    }
+
+    std::cout << "Modified lensing Sigma(z) and the Brans-Dicke aliases\n";
+    {
+        // Sigma = -k^2 (Psi - Phi) / (8 pi G_* a^2 rho_m Delta_M) of the full perturbations at sub-horizon k against
+        // Theory::lensing_Sigma (the quasi-static g/phi of Brans-Dicke); 1 for LCDM
+        for (const std::string m : {"lcdm", "jbd"}) {
+            std::vector<std::string> kv = {"precision=fast", "compute_cells=false", "pert_k_max=1"};
+            if (m == "jbd") {
+                kv.push_back("model=jbd");
+                kv.push_back("bd_omega=50");
+            }
+            const RunSettings s = ParameterFile::read("", kv);
+            EinsteinBoltzmannSolver e(s);
+            e.set_verbose(false);
+            e.solve();
+            TheoryOptions o;
+            o.cmb = false;
+            Theory t(s, o);
+            const double Om = s.cosmo.OmegaB + s.cosmo.OmegaCDM, H0 = e.background().get_H0();
+            double err = 0, dev = 0;
+            for (double z : {0.0, 1.0, 3.0})
+                for (double kMpc : {0.1, 0.5}) {
+                    const double x = -std::log1p(z), k = kMpc / Mpc;
+                    const double W = e.perturbations().get_Psi(x, k) - e.perturbations().get_Phi(x, k);
+                    const double S = -(c * k) * (c * k) * W /
+                                     (3.0 * H0 * H0 * Om * std::exp(-x) * e.power_spectrum().get_Delta_M(x, k));
+                    err = std::max(err, std::fabs(S / t.lensing_Sigma(z) - 1.0));
+                    dev = std::max(dev, std::fabs(t.lensing_Sigma(z) - 1.0));
+                }
+            std::cout << "  " << m << ": max |Sigma - 1| = " << dev << ", perturbations vs quasi-static " << err << "\n";
+            check(err < 1e-4 && (m == "lcdm" ? dev == 0.0 : dev > 0.01),
+                  m + ": Sigma(z) of the lensing kernel = that of the full perturbations (1e-4)");
+        }
+        SampledParameterMap pm({"model=jbd"}, {"log10_bd_omega", "bd_GeffG_today"});
+        check_rel(pm.settings({3.5, 0.97}).cosmo.model_param("bd_omega"), std::pow(10.0, 3.5), 1e-14,
+                  "log10_bd_omega sets bd_omega");
+        SampledParameterMap pi({"model=jbd"}, {"inv_bd_omega"});
+        check_rel(pi.settings({0.002}).cosmo.model_param("bd_omega"), 500.0, 1e-14, "inv_bd_omega sets bd_omega = 1/x");
+        check(pi.settings({0.0}).cosmo.model_param("bd_omega") == 1e12 && throws([&] { pi.settings({-0.1}); }),
+              "inv_bd_omega = 0 is GR (bd_omega = 1e12), < 0 rejected");
+        check(throws([&] { SampledParameterMap({"model=jbd"}, {"inv_bd_omega", "bd_omega"}); }),
+              "bd_omega sampled once");
     }
 
     return FML::TESTS::summary("CosmologyFitting fitting");

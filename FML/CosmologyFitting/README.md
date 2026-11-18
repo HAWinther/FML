@@ -29,8 +29,8 @@ MCMC-specific entries are:
 
 | Entry | Meaning |
 |---|---|
-| `likelihoods = desi_dr2, planck_dp, pantheonplus` | Data: supernovae `pantheonplus` (Pantheon+, 1590 light curves with z > 0.01, STAT+SYS covariance), `desy5` (DES-SN5YR, 1829), `union3` (Union3, 22 bins), each with the absolute magnitude marginalized analytically (as Cobaya; `sn`, `sn_free_amplitude`: the binned JLA data of the course), `desi_dr2`, `desi_dr1` (BAO with full covariance), `planck_dp` (Planck 2018 R, l_A, ω_b of Chen, Huang & Wang 2019, LCDM-type early universe), `bbn` (ω_b = 0.02218 ± 0.00055); CMB: `planck_lite_TTTEEE`, `planck_lite_TT` (+ `_lowl`), `planck_lensing`, `planck_lensing_marged`, `cmb_mock` (below) |
-| `sample_<name> = start, min, max, step [, label]` | Sampled parameter with a flat prior on [min, max]. Valid names are any `./cmb` parameter, a model parameter such as `w0`, a nuisance parameter (`A_planck`), or the aliases `H0`, `omega_b`, `omega_cdm`, `Omega_m`, `logA` = ln(10¹⁰A_s), `tau_reio` (sets z_reion) and `theta_MC_100` (sets h) |
+| `likelihoods = desi_dr2, planck_dp, pantheonplus` | Data: supernovae `pantheonplus` (Pantheon+, 1590 light curves with z > 0.01, STAT+SYS covariance), `desy5` (DES-SN5YR, 1829), `union3` (Union3, 22 bins), each with the absolute magnitude marginalized analytically (as Cobaya; `sn`, `sn_free_amplitude`: the binned JLA data of the course), `desi_dr2`, `desi_dr1` (BAO with full covariance), `boss_dr12` (BOSS DR12 consensus BAO + full shape: D_M, H and fσ_8 at z = 0.38, 0.51, 0.61), `boss_dr12_bao` (its BAO only), `eboss_dr16_lrg`, `eboss_dr16_qso` (SDSS DR16 BAO + RSD of the LRGs, including BOSS DR12 at z = 0.38, 0.51, and of the quasars; do not combine `eboss_dr16_lrg` with `boss_dr12`), `desi_dr1_shapefit` (DESI DR1 full shape, ShapeFit compression + BAO; not with `desi_dr1`), `kids1000_cosebis` (KiDS-1000 cosmic shear, COSEBIs; needs `nonlinear`, see below), `planck_dp` (Planck 2018 R, l_A, ω_b of Chen, Huang & Wang 2019, LCDM-type early universe), `bbn` (ω_b = 0.02218 ± 0.00055); CMB: `planck_lite_TTTEEE`, `planck_lite_TT` (+ `_lowl`), `planck_lensing`, `planck_lensing_marged`, `cmb_mock` (below) |
+| `sample_<name> = start, min, max, step [, label]` | Sampled parameter with a flat prior on [min, max]. Valid names are any `./cmb` parameter, a model parameter such as `w0`, a nuisance parameter (`A_planck`, `kids_A_IA`, `kids_dz1`..`kids_dz5`), or the aliases `H0`, `omega_b`, `omega_cdm`, `Omega_m`, `logA` = ln(10¹⁰A_s), `tau_reio` (sets z_reion), `theta_MC_100` (sets h), and for Brans–Dicke `log10_bd_omega` and `inv_bd_omega` = 1/ω (0 = GR) |
 | `gauss_<name> = mean, sigma` | Additional Gaussian prior on a sampled parameter |
 | `mcmc_chains`, `mcmc_burn_in`, `mcmc_adapt_every`, `mcmc_min_samples`, `mcmc_max_steps`, `mcmc_Rminus1`, `mcmc_check_every`, `mcmc_seed`, `mcmc_threads`, `mcmc_output` | Sampler settings (defaults 4, 2000, 100, 4000, 100000, 0.01, 1000, 1, one thread per chain (1 with CMB likelihoods), `chains/run`) |
 | `mcmc_resume = true` | Continue an interrupted run from its checkpoints (`<root>_<i>.checkpoint`, written with the chains after every round of `mcmc_check_every` steps; `mcmc_checkpoint = false` turns them off). Works with any number of MPI processes |
@@ -68,7 +68,66 @@ With several likelihoods the χ² = −2 ln L of each is also a derived paramete
 
 The derived parameters are H0, ω_b, ω_c, Ω_m, Ω_DE and the age, plus r_d, h·r_d, z_* and 100θ_* when the
 recombination history is computed, and 100θ_MC, τ, z_re, ln(10¹⁰A_s), 10⁹A_s e^(−2τ), σ_8 and
-S_8 = σ_8 (Ω_m/0.3)^½ with CMB likelihoods.
+S_8 = σ_8 (Ω_m/0.3)^½ with CMB likelihoods (σ_8 and S_8 also with fσ_8 data).
+
+### Redshift-space distortions (fσ_8)
+The BOSS DR12 and eBOSS DR16 likelihoods measure fσ_8 as defined in CAMB (and used by CosmoMC and Cobaya):
+fσ_8 = σ_8,vd²/σ_8 of the CDM + baryons, with σ_8,vd² = ∫ dk/k Δ_cb²(k) f(k) W²(k R_8) and the linear growth rate
+f(k) = dln Δ_cb/dln a (`PowerSpectrum::get_fsigma8`; equal to f σ_8 for scale-independent growth, and correct for
+scale-dependent growth such as massive neutrinos or modified gravity). The redshifts are collected from the
+likelihoods (`TheoryOptions::growth_z`). With CMB likelihoods the values come from the same perturbation run; without
+them only the matter power spectrum is computed (no C_ℓ; ~5 s per point with `precision = fast` on 2 cores). Against
+CAMB 2.0.5 (Planck cosmology, one massive neutrino) fσ_8 agrees to 4e-5 at the default precision and 3e-4 with
+`precision = fast` for z = 0–1.5, and σ_8 of the CDM + baryons to 2e-4 (`tests/test_fitting`). For Brans–Dicke with
+ω = 10⁷ it equals ΛCDM to 4e-7. At the Planck 2018 cosmology (`preset = planck2018`, m_ν = 0.06 eV) χ² = 6.7
+(`boss_dr12`, 9 values), 4.5 (`boss_dr12_bao`, 6), 5.2 (`eboss_dr16_lrg`, 9) and 10.0 (`eboss_dr16_qso`, 3).
+
+`desi_dr1_shapefit` is DESI's DR1 full-shape likelihood in the ShapeFit compression (DESI 2024 V, arXiv:2411.12021),
+as DESI's Cobaya likelihood `desi_shapefit_bao_all` (github.com/cosmodesi/desi-kp-cosmological-likelihoods): for BGS,
+LRG1–3, ELG2 and QSO the BAO scalings q_iso, q_ap relative to the DESI fiducial cosmology, df = f√A_p over its fiducial
+value and dm = m − m_fid, and q_∥, q_⊥ for Lyman-α (26 values; the means and covariances of the DESI likelihood files,
+converted to `external/bao/desi_dr1_shapefit_*.txt`). The theory follows that likelihood: f = σ_8,θθ/σ_8,cb,
+A_p = P_cb(k_p)/s³ and m = dln P_nw/dln k at k_p = 0.03/s h/Mpc with s = h r_d/(h r_d)_fid, and P_nw from cosmoprimo's
+`peakaverage` BAO filter (ported: the envelopes of the extrema of P/P_EH,nw at the fiducial positions rescaled by
+s). The fiducial (Planck 2018 ΛCDM of `cosmoprimo.fiducial.DESI`) is computed once, with the precision of the run.
+Against DESI's likelihood with cosmoprimo 1.0.0 and CAMB 2.0.5 (`tests/test_fitting`, `precision = fast`): the q to
+1e-6, df to 3e-4 and dm to 7e-4 (σ(dm) = 0.05–0.13) for two cosmologies away from the fiducial (one with
+m_ν = 0.12 eV), χ² to 0.04 (36.61 against 36.65, 30.70 against 30.66); at the fiducial χ² = 32.805 (26 values).
+~6 s per point with `precision = fast` on 2 cores.
+
+### Brans–Dicke
+
+`model = jbd` with `bd_omega` sampled directly or through `log10_bd_omega` (flat in log ω) or `inv_bd_omega` = 1/ω
+(0 = GR, ω = 10¹²); ω is then a derived parameter. `bd_GeffG_today` (G_eff/G today, Joudaki et al.'s G_matter/G) can
+be sampled as any model parameter. `params/mcmc_jbd_planck_boss_pantheonplus.ini` is the CMB + SN + BOSS fit of
+Joudaki, Ferreira, Lima & Winther (2022, arXiv:2010.15278) with plik_lite + lensing, Pantheon+ and BOSS DR12 (BAO +
+fσ_8), the neutrino mass free and `nonlinear = jbd_boost`; its header lists the DESI ShapeFit and KiDS-1000 variants.
+~22 s per slow point on 2 cores.
+
+### Cosmic shear (KiDS-1000)
+
+`kids1000_cosebis` is the KiDS-1000 COSEBIs likelihood of Asgari et al. (2021, arXiv:2007.15633) with the data of the
+KiDS release (`external/kids1000/`, made by `python/convert_kids1000.py`): E_n, n = 1–5, of the 15 pairs of the 5
+tomographic bins, θ = 0.5′–300′, the release's covariance (which includes the shear-calibration uncertainty) and SOM
+n(z). The theory is that of the release's CosmoSIS pipeline: Limber C_ℓ of shear and NLA intrinsic alignments
+(`FML/WeakLensing/CosmicShear.h`; C1ρ_crit = 5·10⁻¹⁴ρ_crit = 0.01388, D(z) from the linear P at large scales) on the
+nonlinear total-matter P(k, z) of the run (`Theory::pk_nl`, 400 k from 10⁻⁵ to 100 h/Mpc at z = 0–6.1 every 0.05),
+COSEBIs from C_ℓ for ℓ = 2–10⁵, and the photo-z shifts applied as CosmoSIS does (cubic interpolation of the shifted
+histograms, then a cubic spline). Nuisance parameters `kids_A_IA` (0 if not sampled) and `kids_dz1`–`kids_dz5` (their
+prior mean if not sampled); the correlated Gaussian prior of the shifts is part of ln L. Baryonic feedback as KiDS:
+`nonlinear = hmcode2016`, `hmcode2016_eta0_from_A = true` and `sample_hmcode2016_A` (η_0 = 0.98 − 0.12 A); any other
+nonlinear method works (e.g. `jbd_boost` with `jbd_boost_gr = hmcode2016`, which passes A on to the GR universe).
+Modified lensing enters through `Theory::lensing_Sigma(z)`, the quasi-static Σ = G_light/G_* of the Weyl potential
+(Brans–Dicke g/φ(a), μ–Σ, cubic Galileon, f(R); 1 otherwise, an error for Horndeski): for Brans–Dicke with ω = 50
+it differs from 1 by up to 2.3% and equals that of the full perturbations to 2e-7; with ω = 10⁷ (and `jbd_boost`)
+χ² at the KiDS maximum posterior is that of ΛCDM. `params/mcmc_kids1000_lcdm.ini` has KiDS' priors (with
+ln 10¹⁰A_s in place of S_8).
+
+Against the KiDS chain (CosmoSIS/kcap, CAMB HMcode-2016; `tests/test_fitting`, `precision = fast`): at the maximum
+posterior χ² = 82.19 against 82.25 and σ_8 = 0.83803 against 0.83797. At 14 chain points (8 posterior draws and the
+extremes in A_IA, S_8, A and ω_c) |Δχ²| ≤ 0.14 except at Ω_m = 0.50 and 0.55 (0.25, 0.69; at the edge of the
+posterior). The δ_z prior equals the chain's prior of its uncorrelated shift parameters. ~12 s per slow point on 2
+cores (6 s for P(k), 6 s for the HMcode table); A_IA and the shifts are fast (0.06 s).
 
 ### Best fits and profile likelihoods
 
@@ -178,14 +237,15 @@ Validation:
 
 | File | Contents |
 |---|---|
-| `Theory.h/.cpp` | Distances, r_d, z_*, distance-prior quantities, θ_MC, θ_*, lensed CMB spectra, τ, σ_8 (each computed only when needed); nuisance parameters |
-| `Likelihoods.h/.cpp` | SN (Pantheon+, DES-SN5YR, Union3, JLA bins), BAO (DESI DR1/DR2), Planck distance priors, BBN, Planck 2018 plik_lite and lensing, mock CMB |
+| `Theory.h/.cpp` | Distances, r_d, z_*, distance-prior quantities, θ_MC, θ_*, lensed CMB spectra, τ, σ_8, σ_8(z) and fσ_8(z), linear P_cb(k, z), nonlinear P(k, z) and D(z) (each computed only when needed); nuisance parameters |
+| `Likelihoods.h/.cpp` | SN (Pantheon+, DES-SN5YR, Union3, JLA bins), BAO (DESI DR1/DR2), BAO + RSD (BOSS DR12, eBOSS DR16), DESI DR1 ShapeFit, KiDS-1000 COSEBIs, Planck distance priors, BBN, Planck 2018 plik_lite and lensing, mock CMB |
 | `SampledParameterMap.h/.cpp` | A sampled point → `RunSettings`, with the aliases (H0, omega_b, omega_cdm, Omega_m, logA, tau_reio, theta_MC_100) |
 | `Main.cpp` | `./mcmc`: MCMC, best fits, profiles and Hessians from a parameter file |
 | `params/` | `mcmc_*.ini` and the Planck proposal covmat |
 | `python/plot_chains.py` | Triangle plots and marginalized limits of `./mcmc` chains (GetDist) |
 | `python/fetch_sn_data.py` | Downloads Pantheon+ and DES-SN5YR into `external/sn/` |
-| `external/` | DESI DR1/DR2 BAO (`bao/`), Planck 2018 plik_lite (`planck2018_lite/`) and lensing (`planck2018_lensing/`), supernovae (`sn/`: Union3; Pantheon+ and DES-SN5YR via the script), binned JLA supernovae |
+| `python/convert_kids1000.py` | Converts the KiDS-1000 data release into `external/kids1000/` |
+| `external/` | DESI DR1/DR2 BAO, DESI DR1 ShapeFit, BOSS DR12 and eBOSS DR16 BAO + RSD (`bao/`), Planck 2018 plik_lite (`planck2018_lite/`) and lensing (`planck2018_lensing/`), KiDS-1000 COSEBIs (`kids1000/`), supernovae (`sn/`: Union3; Pantheon+ and DES-SN5YR via the script), binned JLA supernovae |
 | `chains/` | Summaries and plots of the runs quoted above |
 | `tests/` | `test_fitting`: theory and likelihoods |
 

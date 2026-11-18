@@ -15,6 +15,9 @@
 //   tau_reio      sets z_reion such that the optical depth of the reionization model
 //                 (RecombinationHistory::tau_reionization_model, to z_reion + 8 delta_z_reion) is tau_reio
 //                 (the full tau of the run, with the residual ionization after recombination, is slightly higher)
+//   log10_bd_omega   sets the Brans-Dicke bd_omega = 10^log10_bd_omega (model = jbd)
+//   inv_bd_omega     sets bd_omega = 1/inv_bd_omega (0: GR, taken as bd_omega = 1e12); a flat prior on 1/omega
+//                    reaches GR at the edge of its range
 // The fixed parameters are "name=value" strings for ParameterFile::read (cosmology, model, precision).
 // =============================================================================
 

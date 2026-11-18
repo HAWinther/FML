@@ -381,9 +381,9 @@ namespace FML {
                 }
                 s.kstar = HMcode2016Fits::kstar(s.sigmav);
                 s.f_damp = HMcode2016Fits::f_damp(s.sigmav100);
-                s.eta = HMcode2016Fits::eta(s.sigma8_m);
+                s.eta = HMcode2016Fits::eta(s.sigma8_m, options.hmcode2016_eta0);
                 s.alpha = HMcode2016Fits::alpha(s.neff);
-                s.concentration_A = HMcode2016Fits::concentration_A * dolag_2016 * options.concentration_multiplier;
+                s.concentration_A = options.hmcode2016_A * dolag_2016 * options.concentration_multiplier;
                 s.rho_mean = critical_density() * cosmology.Omega_m;
                 return s;
             }
@@ -480,9 +480,9 @@ namespace FML {
                 if (hmcode) {
                     s.kstar = HMcode2016Fits::kstar(s.sigmav);
                     s.f_damp = HMcode2016Fits::f_damp(s.sigmav100);
-                    s.eta = HMcode2016Fits::eta(s.sigma8_m);
+                    s.eta = HMcode2016Fits::eta(s.sigma8_m, options.hmcode2016_eta0);
                     s.alpha = HMcode2016Fits::alpha(s.neff);
-                    s.concentration_A = HMcode2016Fits::concentration_A * dolag_2016;
+                    s.concentration_A = options.hmcode2016_A * dolag_2016;
                 } else {
                     s.kstar = options.kstar;
                     s.f_damp = options.f_damp;

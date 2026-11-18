@@ -16,9 +16,17 @@ h, ob, oc, ns, As = .67, .05, .267, .965, 2.1e-9
 zs = [2., 1., 0.]
 kh = np.geomspace(1e-5, 1e7, 1001)
 kr = np.geomspace(.01, 10., 31)
-for name, mnu, w, wa, ok in [("lcdm", 0., -1., 0., 0.),
-                              ("nu", .3, -1., 0., 0.),
-                              ("w0wa", 0., -.8, .2, .02)]:
+# baryon: HMcode-2016 baryonic feedback with KiDS-1000's one-parameter model A = 2.6, eta0 = 0.98 - 0.12 A, and
+# m_nu = 0.06 eV
+cases = [("lcdm", 0., -1., 0., 0., 3.13, 0.603),
+         ("nu", .3, -1., 0., 0., 3.13, 0.603),
+         ("w0wa", 0., -.8, .2, .02, 3.13, 0.603),
+         ("baryon", .06, -1., 0., 0., 2.6, 0.98 - 0.12 * 2.6)]
+import sys
+only = sys.argv[1:]  # e.g. "baryon" to regenerate one fixture
+for name, mnu, w, wa, ok, A, eta0 in cases:
+    if only and name not in only:
+        continue
     p = camb.CAMBparams()
     p.set_cosmology(H0=100*h, ombh2=ob*h*h, omch2=oc*h*h, mnu=mnu,
                     nnu=3.046, omk=ok, TCMB=2.7255)
@@ -27,14 +35,14 @@ for name, mnu, w, wa, ok in [("lcdm", 0., -1., 0., 0.),
     p.set_matter_power(redshifts=zs, kmax=100., k_per_logint=20)
     p.WantCls = False
     p.NonLinear = camb.model.NonLinear_pk
-    p.NonLinearModel.set_params(halofit_version='mead2016')
+    p.NonLinearModel.set_params(halofit_version='mead2016', HMCode_A_baryon=A, HMCode_eta_baryon=eta0)
     r = camb.get_results(p)
     pm = r.get_matter_power_interpolator(nonlinear=False, extrap_kmax=1e7)
     pcb = r.get_matter_power_interpolator(nonlinear=False, var1='delta_nonu', var2='delta_nonu',
                                          extrap_kmax=1e7)
     pnl = r.get_matter_power_interpolator(nonlinear=True)
     # Metadata: reference package/version and cosmology; all k in h/Mpc, all P in (Mpc/h)^3.
-    header = f"CAMB {camb.__version__}, mead2016; h={h} Ob={ob} Oc={oc} mnu={mnu} w={w} wa={wa} Ok={ok}"
+    header = f"CAMB {camb.__version__}, mead2016; h={h} Ob={ob} Oc={oc} mnu={mnu} w={w} wa={wa} Ok={ok} A={A} eta0={eta0}"
     np.savetxt(out / f"{name}_linear.txt", np.column_stack([kh] +
                [v for z in zs for v in (pm.P(z, kh), pcb.P(z, kh))]),
                fmt='%.10e', header=header + "\nk Pm_z2 Pcb_z2 Pm_z1 Pcb_z1 Pm_z0 Pcb_z0")

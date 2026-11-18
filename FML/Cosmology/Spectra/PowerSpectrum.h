@@ -111,6 +111,13 @@ namespace FML::COSMOLOGY {
         // FML/AxionHMcode/AxionHMcode.h for the mixed axion dark matter of model axion)
         enum class Nonlinear { None, Halofit, HalofitBird, HMcode2016, HMcode2020, ReACT, AxionHMcode, EE2, JBDBoost };
         Nonlinear nonlinear = Nonlinear::None;
+        // HMcode-2016 baryonic feedback (CAMB HMCode_A_baryon, HMCode_eta_baryon; also for jbd_boost_gr = hmcode2016):
+        // concentration amplitude A and bloating eta = eta0 - 0.3 sigma_8(z). Defaults: dark matter only. With
+        // hmcode2016_eta0_from_A, eta0 = 0.98 - 0.12 A (the one-parameter model of KiDS-1000, Joachimi et al. 2021)
+        double hmcode2016_A = 3.13;
+        double hmcode2016_eta0 = 0.603;
+        bool hmcode2016_eta0_from_A = false;
+        double hmcode2016_eta0_value() const { return hmcode2016_eta0_from_A ? 0.98 - 0.12 * hmcode2016_A : hmcode2016_eta0; }
         // EE2: the EuclidEmulator2 boost (Euclid Collaboration: Knabenhans et al. 2021; lcdm and w0wa, flat; its
         // parameter ranges), tabulated at ee2_n_z redshifts in [0, 10] (uniform in ln a); linear above z = 10.
         int ee2_n_z = 40;
@@ -256,6 +263,16 @@ namespace FML::COSMOLOGY {
         std::vector<double> get_xi_matter(double x, const std::vector<double> & r, double R_smooth = 0.0) const;
         double get_sigma_R(double x, double R) const; // rms of Delta_M in top-hat spheres of radius R [m]
         double get_sigma8(double x = 0.0) const;      // R = 8 Mpc/h
+        // sigma_8 of the CDM + baryon density (Delta_cb) and f sigma_8 = sigma_8,vd^2 / sigma_8,cb (CAMB's
+        // definition, used for the redshift-space distortion measurements): sigma_8,vd^2 = int dk/k Delta_cb^2 f(k)
+        // W^2(k R_8), with the growth rate f(k) = dln Delta_cb/dx (the velocity divergence over -aH in linear theory;
+        // equal to f sigma_8 for scale-independent growth). f(k) is held at the ends of the computed k-range (the
+        // extrapolation of Delta_cb there does not depend on x)
+        double get_sigma8_cb(double x = 0.0) const;
+        double get_fsigma8(double x = 0.0) const;
+        // sigma_8 of the velocity divergence of the CDM + baryons in units of -aH (int dk/k Delta_cb^2 f(k)^2 W^2):
+        // sigma_8,thetatheta / sigma_8,cb is the growth rate f of the ShapeFit compression (DESI)
+        double get_sigma8_theta(double x = 0.0) const;
         // Angular power spectrum of the projected matter/galaxy density for the given ells (C_ell, dimensionless)
         // Auto: exact for ell < ell_limber, Limber above (Limber error ~0.4% at ell = 100, ~0.1-0.2% at 200, for
         // sigma_z = 0.1)

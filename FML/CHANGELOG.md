@@ -5,6 +5,49 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### CosmologyFitting: Brans-Dicke fits
+- `Theory::lensing_Sigma(z)`: Sigma = G_light/G_* of the Weyl potential (quasi-static; Brans-Dicke g/phi, mu-Sigma, cubic
+  Galileon, f(R)), used by `kids1000_cosebis` for the lensing kernel; equal to the full perturbations to 2e-7.
+- Sampling aliases `log10_bd_omega`, `inv_bd_omega` (= 1/omega, 0 = GR) with bd_omega derived;
+  `params/mcmc_jbd_planck_boss_pantheonplus.ini` (Joudaki et al. 2022: Planck + Pantheon+ + BOSS DR12, omega, G_eff/G
+  today and m_nu free).
+
+### CosmologyFitting: KiDS-1000 cosmic shear (COSEBIs)
+- Likelihood `kids1000_cosebis` (Asgari et al. 2021): E_n, n = 1..5, of the 15 bin pairs with the release's covariance and
+  SOM n(z) (`external/kids1000/`, from the KiDS data release with `python/convert_kids1000.py`; the delta_z covariance
+  recovered from the release's chain), the CosmoSIS treatment of the photo-z shifts, NLA intrinsic alignments
+  (`kids_A_IA`) and the shifts `kids_dz1..5` with their correlated Gaussian prior; theory from
+  `WeakLensing/CosmicShear.h`. Against the KiDS chain: chi^2 = 82.19 vs 82.25 at the maximum posterior, |Delta chi^2|
+  <= 0.14 at posterior draws. `params/mcmc_kids1000_lcdm.ini`.
+- `Theory::pk_nl(z)`, `growth_D(z)`, `chi_mpch(z)` (`TheoryOptions::pk_nl_z`; `Likelihood::pk_nl_redshifts`).
+- HMcode-2016 baryonic feedback: `hmcode2016_A`, `hmcode2016_eta0` (CAMB HMCode_A_baryon, HMCode_eta_baryon; 0.06%
+  from CAMB at A = 2.6) and `hmcode2016_eta0_from_A` (KiDS' eta0 = 0.98 - 0.12 A); `HaloModelOptions::hmcode2016_A`,
+  `hmcode2016_eta0`.
+- `WeakLensing::NLA`: C1 rho_crit = 5e-14 rho_crit = 0.013877 (CosmoSIS and CCL; was 0.0134).
+
+### WeakLensing: tomographic cosmic shear (`CosmicShear.h`)
+- `shear_spectra`: Limber C_ell of shear and NLA intrinsic alignments (GG, GI, II) for tomographic n(z), with
+  photo-z shifts n(z - delta_z), multiplicative bias (1 + m_i)(1 + m_j), an optional Sigma(z) on the lensing kernel
+  (modified gravity) and the optional spin factor (ell+2)!/(ell-2)!/(ell+1/2)^4. Against QUADPACK 1e-5, CCL 3e-4.
+- `shear_correlation`, `shear_correlation_binned`, `hankel`: flat-sky xi_+-(theta) (6e-8 against QUADPACK).
+- `LogCOSEBIs`: logarithmic COSEBIs of Schneider, Eifler & Krause (2010) as KiDS-1000: T_+-n (in an orthonormal
+  polynomial basis instead of SEK10's 40-digit monomials; = SEK10 in 60 digits to 1e-14), N_n and roots, W_n(ell)
+  tabulated once (asymptotic J_0 + Filon), E_n from C_ell, E_n and B_n from xi_+-. Test `tests/test_cosmic_shear`.
+
+### CosmologyFitting: BOSS DR12 and eBOSS DR16 BAO + RSD, f sigma_8
+- Likelihoods `boss_dr12` (BOSS DR12 consensus BAO + full shape: D_M, H, f sigma_8 at z = 0.38, 0.51, 0.61),
+  `boss_dr12_bao`, `eboss_dr16_lrg` and `eboss_dr16_qso` (data from Cobaya's bao_data in `external/bao/`).
+  `BAOLikelihood` reads `bao_Hz_rs` and `f_sigma8` and scales by `rs_fid`.
+- `PowerSpectrum::get_fsigma8(x)`, `get_sigma8_cb(x)`: CAMB's f sigma_8 = sigma_8,vd^2/sigma_8 of the CDM + baryons
+  with f(k) = dln Delta_cb/dln a (scale-dependent growth included). `Theory::fsigma8(z)`, `sigma8_cb(z)` at the
+  redshifts the likelihoods ask for (`TheoryOptions::growth_z`); without CMB likelihoods only P(k) is computed
+  (`TheoryOptions::cmb = false`). Against CAMB 4e-5 (3e-4 with precision = fast); Brans-Dicke omega = 1e7 = LCDM.
+- `desi_dr1_shapefit`: DESI DR1 full shape in the ShapeFit compression + BAO (DESI 2024 V; q_iso, q_ap, df, dm of six
+  samples, q_par, q_per of Lyman-alpha), as DESI's Cobaya likelihood desi_shapefit_bao_all, with cosmoprimo's
+  peakaverage BAO filter ported and the DESI fiducial computed in FML. `Theory::sigma8_theta(z)`, `pk_cb(z)` (linear
+  P_cb on cosmoprimo's grid; `TheoryOptions::pk_z`). Against DESI's likelihood (cosmoprimo 1.0.0, CAMB 2.0.5): q to
+  1e-6, df to 3e-4, dm to 7e-4, chi^2 to 0.04.
+
 ### SimulationCode: halos on the lightcone
 - `plc_halos` (and `plc_halos_nmin_per_halo`, `plc_halos_linking_length`, `plc_halos_buffer_mpch`,
   `plc_halos_shell_only`): friends-of-friends at every lightcone step on the particles near the shell of the step;

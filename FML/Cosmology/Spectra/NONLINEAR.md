@@ -7,7 +7,7 @@ The Einstein--Boltzmann solver accepts:
 | `none` | Linear power (default) |
 | `halofit` | Existing Takahashi et al. (2012) Halofit |
 | `halofit_bird` | Takahashi Halofit plus the updated Bird neutrino correction used by CLASS |
-| `hmcode2016` | HMcode-2016 (as CAMB `mead2016`), including massive neutrinos |
+| `hmcode2016` | HMcode-2016 (as CAMB `mead2016`), including massive neutrinos and the baryonic-feedback parameters A, η_0 (`hmcode2016_A`, `hmcode2016_eta0`) |
 | `hmcode2020` | Gravity-only HMcode-2020, including massive neutrinos |
 | `react` | The ReACT halo-model reaction (computed natively) times HMcode-2020 of the matched GR pseudo cosmology |
 | `ee2` | EuclidEmulator2 boost (flat `lcdm`, `w0wa`, within its parameter ranges) |
@@ -120,7 +120,8 @@ maximum difference is 0.075%. Doubling both mass and integration resolutions cha
 z=0 result by 0.036%. Bird agrees with CLASS (classy 3.2.0) within 0.051% at the same redshifts
 and k points, using identical linear input. The test also checks the exact massless-neutrino limit.
 `test_hmcode2016` checks HMcode-2016 (FML/HaloModel, built from the background with `HaloModelBackground.h`) against
-CAMB 2.0.5 `mead2016` for the same three cosmologies (0.1% tolerance, at most 0.060%); fixtures from
+CAMB 2.0.5 `mead2016` for the same three cosmologies and one with baryonic feedback (A = 2.6, η_0 = 0.668,
+m_ν = 0.06 eV; 0.1% tolerance, at most 0.060%); fixtures from
 `python/generate_hmcode2016_reference.py`. `test_nonlinear` exercises the solver's tables and output.
 
 To regenerate the fixtures (requires CAMB, classy and NumPy):

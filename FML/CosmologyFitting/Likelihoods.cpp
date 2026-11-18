@@ -1,9 +1,12 @@
 #include <FML/CosmologyFitting/Likelihoods.h>
+#include <FML/WeakLensing/CosmicShear.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
+#include <iomanip>
 #include <limits>
 #include <sstream>
 #include <stdexcept>
@@ -312,8 +315,9 @@ namespace FML::COSMOLOGY::FITTING {
 
     BAOLikelihood::BAOLikelihood(const std::string & label_in,
                                  const std::string & mean_file,
-                                 const std::string & cov_file)
-        : label(label_in) {
+                                 const std::string & cov_file,
+                                 double rs_fid_in)
+        : label(label_in), rs_fid(rs_fid_in) {
         std::ifstream in(mean_file);
         if (!in)
             throw std::runtime_error("cannot open data file " + mean_file + "");
@@ -335,25 +339,49 @@ namespace FML::COSMOLOGY::FITTING {
                 q.push_back(Quantity::DM_over_rd);
             else if (name == "DH_over_rs")
                 q.push_back(Quantity::DH_over_rd);
+            else if (name == "bao_Hz_rs" && rs_fid > 0.0)
+                q.push_back(Quantity::H_rd);
+            else if (name == "f_sigma8")
+                q.push_back(Quantity::fsigma8);
             else
-                throw std::runtime_error("BAO data: unknown quantity " + name + " in " + mean_file);
+                throw std::runtime_error("BAO data: unknown quantity " + name + " in " + mean_file +
+                                         (name == "bao_Hz_rs" ? " (bao_Hz_rs needs rs_fid)" : ""));
         }
-        data.set(mean, read_rows(cov_file));
+        const auto cov = read_rows(cov_file);
+        if (cov.size() != mean.size())
+            throw std::runtime_error("BAO data: the covariance " + cov_file + " does not match " + mean_file);
+        data.set(mean, cov);
+    }
+
+    std::vector<double> BAOLikelihood::growth_redshifts() const {
+        std::vector<double> zz;
+        for (size_t i = 0; i < z.size(); i++)
+            if (q[i] == Quantity::fsigma8)
+                zz.push_back(z[i]);
+        return zz;
     }
 
     std::vector<double> BAOLikelihood::model(const Theory & t) const {
         const double rd = t.r_drag();
+        const double scale = rs_fid > 0.0 ? rs_fid : 1.0; // distances in Mpc when scaled by rs_fid
+        const double c_kms = Constants::c / 1e3;
         std::vector<double> m(z.size());
         for (size_t i = 0; i < z.size(); i++) {
             switch (q[i]) {
                 case Quantity::DV_over_rd:
-                    m[i] = t.D_V(z[i]) / rd;
+                    m[i] = t.D_V(z[i]) / rd * scale;
                     break;
                 case Quantity::DM_over_rd:
-                    m[i] = t.D_M(z[i]) / rd;
+                    m[i] = t.D_M(z[i]) / rd * scale;
                     break;
                 case Quantity::DH_over_rd:
-                    m[i] = t.D_H(z[i]) / rd;
+                    m[i] = t.D_H(z[i]) / rd * scale;
+                    break;
+                case Quantity::H_rd: // H(z) r_d / rs_fid [km/s/Mpc], H = c / D_H
+                    m[i] = c_kms / t.D_H(z[i]) * rd / rs_fid;
+                    break;
+                case Quantity::fsigma8:
+                    m[i] = t.fsigma8(z[i]);
                     break;
             }
         }
@@ -674,6 +702,493 @@ namespace FML::COSMOLOGY::FITTING {
 
     // =============================================================================
 
+    // =============================================================================
+    // DESI DR1 ShapeFit + BAO
+    // =============================================================================
+
+    namespace {
+        // Natural cubic spline (as scipy's CubicSpline(bc_type='natural'), which cosmoprimo uses); outside the nodes
+        // the end polynomials are extrapolated
+        class NaturalSpline {
+          public:
+            NaturalSpline(std::vector<double> x_in, std::vector<double> y_in) : x(std::move(x_in)), y(std::move(y_in)) {
+                const size_t n = x.size();
+                if (n < 3 || y.size() != n)
+                    throw std::runtime_error("NaturalSpline: need at least 3 points");
+                y2.assign(n, 0.0);
+                std::vector<double> u(n, 0.0);
+                for (size_t i = 1; i + 1 < n; i++) {
+                    const double sig = (x[i] - x[i - 1]) / (x[i + 1] - x[i - 1]);
+                    const double p = sig * y2[i - 1] + 2.0;
+                    y2[i] = (sig - 1.0) / p;
+                    const double d = (y[i + 1] - y[i]) / (x[i + 1] - x[i]) - (y[i] - y[i - 1]) / (x[i] - x[i - 1]);
+                    u[i] = (6.0 * d / (x[i + 1] - x[i - 1]) - sig * u[i - 1]) / p;
+                }
+                y2[n - 1] = 0.0;
+                for (size_t k = n - 1; k-- > 0;)
+                    y2[k] = y2[k] * y2[k + 1] + u[k];
+            }
+            double operator()(double xx) const {
+                const size_t n = x.size();
+                size_t hi = std::upper_bound(x.begin(), x.end(), xx) - x.begin();
+                hi = std::clamp<size_t>(hi, 1, n - 1);
+                const size_t lo = hi - 1;
+                const double h = x[hi] - x[lo];
+                const double a = (x[hi] - xx) / h, b = (xx - x[lo]) / h;
+                return a * y[lo] + b * y[hi] + ((a * a * a - a) * y2[lo] + (b * b * b - b) * y2[hi]) * h * h / 6.0;
+            }
+
+          private:
+            std::vector<double> x, y, y2;
+        };
+
+        // Eisenstein & Hu (1998) no-wiggle P(k) shape k^n_s T^2 as cosmoprimo's eisenstein_hu_nowiggle engine
+        // (omega_m = omega_cdm + omega_b, z_drag of Hu & Sugiyama 1996 E1); k in h/Mpc
+        struct EHNoWiggle {
+            double omega_b, omega_m, h, theta, n_s, rs, alpha_gamma;
+            EHNoWiggle(double ob, double oc, double h_, double TCMB, double ns)
+                : omega_b(ob), omega_m(ob + oc), h(h_), theta(TCMB / 2.7), n_s(ns) {
+                const double z_eq = 2.5e4 * omega_m * std::pow(theta, -4) - 1.0;
+                const double k_eq = 0.0746 * omega_m * std::pow(theta, -2);
+                const double b1 = 0.313 * std::pow(omega_m, -0.419) * (1.0 + 0.607 * std::pow(omega_m, 0.674));
+                const double b2 = 0.238 * std::pow(omega_m, 0.223);
+                const double z_drag = 1345.0 * std::pow(omega_m, 0.251) / (1.0 + 0.659 * std::pow(omega_m, 0.828)) *
+                                      (1.0 + b1 * std::pow(omega_b, b2));
+                const double R_drag = 31.5 * omega_b * std::pow(theta, -4) * (1000.0 / (1.0 + z_drag));
+                const double R_eq = 31.5 * omega_b * std::pow(theta, -4) * (1000.0 / (1.0 + z_eq));
+                rs = 2.0 / (3.0 * k_eq) * std::sqrt(6.0 / R_eq) *
+                     std::log((std::sqrt(1.0 + R_drag) + std::sqrt(R_drag + R_eq)) / (1.0 + std::sqrt(R_eq)));
+                const double fb = omega_b / omega_m;
+                alpha_gamma = 1.0 - 0.328 * std::log(431.0 * omega_m) * fb + 0.38 * std::log(22.3 * omega_m) * fb * fb;
+            }
+            double operator()(double k_hMpc) const {
+                const double k = k_hMpc * h, ks = k * rs;
+                const double gamma = omega_m * (alpha_gamma + (1.0 - alpha_gamma) / (1.0 + std::pow(0.43 * ks, 4)));
+                const double q = k * theta * theta / gamma;
+                const double L0 = std::log(2.0 * M_E + 1.8 * q), C0 = 14.2 + 731.0 / (1.0 + 62.5 * q);
+                const double T = L0 / (L0 + C0 * q * q);
+                return std::pow(k_hMpc, n_s) * T * T;
+            }
+        };
+
+        EHNoWiggle eh_of(const RunSettings & r) {
+            const auto & c = r.cosmo;
+            return EHNoWiggle(c.OmegaB * c.h * c.h, c.OmegaCDM * c.h * c.h, c.h, c.TCMB, c.n_s);
+        }
+    } // namespace
+
+    DESIShapeFitLikelihood::DESIShapeFitLikelihood(const std::string & mean_file, const std::string & cov_file) {
+        std::ifstream in(mean_file);
+        if (!in)
+            throw std::runtime_error("cannot open data file " + mean_file);
+        std::vector<double> mean;
+        std::string line;
+        while (std::getline(in, line)) {
+            if (line.empty() || line[0] == '#')
+                continue;
+            std::istringstream is(line);
+            double zz, v;
+            std::string name;
+            if (!(is >> zz >> v >> name))
+                continue;
+            z.push_back(zz);
+            mean.push_back(v);
+            if (name == "qiso")
+                q.push_back(Quantity::qiso);
+            else if (name == "qap")
+                q.push_back(Quantity::qap);
+            else if (name == "qpar")
+                q.push_back(Quantity::qpar);
+            else if (name == "qper")
+                q.push_back(Quantity::qper);
+            else if (name == "df")
+                q.push_back(Quantity::df);
+            else if (name == "dm")
+                q.push_back(Quantity::dm);
+            else
+                throw std::runtime_error("ShapeFit data: unknown quantity " + name + " in " + mean_file);
+            if ((name == "df" || name == "dm") && std::find(zs.begin(), zs.end(), zz) == zs.end())
+                zs.push_back(zz);
+        }
+        const auto cov = read_rows(cov_file);
+        if (cov.size() != mean.size())
+            throw std::runtime_error("ShapeFit data: the covariance " + cov_file + " does not match " + mean_file);
+        data.set(mean, cov);
+    }
+
+    RunSettings DESIShapeFitLikelihood::fiducial_settings(const RunSettings & settings) {
+        // cosmoprimo.fiducial.DESI(): Planck 2018 LCDM (h = 0.6736, omega_b = 0.02237, omega_cdm = 0.12, one massive
+        // neutrino of 0.06 eV, N_eff = 3.046, A_s = 2.083e-9, n_s = 0.9649, T_cmb = 2.7255 K, BBN helium)
+        RunSettings f = settings;
+        const double h = 0.6736;
+        auto fmt = [](double v) {
+            std::ostringstream o;
+            o << std::setprecision(17) << v;
+            return o.str();
+        };
+        f.cosmo = ParameterFile::read("",
+                                      {"h=0.6736",
+                                       "OmegaB=" + fmt(0.02237 / (h * h)),
+                                       "OmegaCDM=" + fmt(0.12 / (h * h)),
+                                       "m_nu=0.06",
+                                       "Neff=3.046",
+                                       "A_s=2.083e-9",
+                                       "n_s=0.9649",
+                                       "TCMB=2.7255"})
+                      .cosmo;
+        return f;
+    }
+
+    void DESIShapeFitLikelihood::setup_fiducial(const Theory & t) const {
+        TheoryOptions o;
+        o.cmb = false;
+        o.growth_z = zs;
+        o.pk_z = zs;
+        o.pk_z.push_back(0.0);
+        const RunSettings fs = fiducial_settings(t.settings());
+        Theory tf(fs, o);
+        const double rd = tf.r_drag();
+        fid.hrd = fs.cosmo.h * rd;
+        for (double zz : z) {
+            fid.dm_rd.push_back(tf.D_M(zz) / rd);
+            fid.dh_rd.push_back(tf.D_H(zz) / rd);
+        }
+
+        // The nodes of cosmoprimo's PeakAveragePowerSpectrumBAOFilter: the extrema of P/P_EH of the fiducial at z = 0
+        // for 1e-2 < k < 1 h/Mpc (after dividing by the smooth trend a/k + b + c k + d k^2 with the values and first
+        // differences of P/P_EH at both ends of 1e-3 <= k <= 1), plus all grid points below 1e-3 h/Mpc and from the
+        // last point below 1 h/Mpc on
+        const auto & k = Theory::pk_k_grid();
+        const auto & P0 = tf.pk_cb(0.0);
+        const EHNoWiggle eh = eh_of(fs);
+        std::vector<int> index;
+        for (int i = 0; i < int(k.size()); i++)
+            if (k[i] >= 1e-3 && k[i] <= 1.0)
+                index.push_back(i);
+        const int n = int(index.size());
+        std::vector<double> kf(n), ratio(n);
+        for (int j = 0; j < n; j++) {
+            kf[j] = k[index[j]];
+            ratio[j] = P0[index[j]] / eh(kf[j]);
+        }
+        auto basis = [](double kk, int i) { return std::pow(kk, i - 1); };
+        double A[16], b[4] = {ratio[0], ratio[1] - ratio[0], ratio[n - 1], ratio[n - 2] - ratio[n - 1]};
+        for (int i = 0; i < 4; i++) {
+            A[0 * 4 + i] = basis(kf[0], i);
+            A[1 * 4 + i] = basis(kf[1], i) - basis(kf[0], i);
+            A[2 * 4 + i] = basis(kf[n - 1], i);
+            A[3 * 4 + i] = basis(kf[n - 2], i) - basis(kf[n - 1], i);
+        }
+        gsl_matrix_view Am = gsl_matrix_view_array(A, 4, 4);
+        gsl_vector_view bv = gsl_vector_view_array(b, 4);
+        gsl_vector * c = gsl_vector_alloc(4);
+        gsl_permutation * perm = gsl_permutation_alloc(4);
+        int sgn;
+        gsl_linalg_LU_decomp(&Am.matrix, perm, &sgn);
+        gsl_linalg_LU_solve(&Am.matrix, perm, &bv.vector, c);
+        std::vector<double> detrended(n);
+        for (int j = 0; j < n; j++) {
+            double corr = 0.0;
+            for (int i = 0; i < 4; i++)
+                corr += gsl_vector_get(c, i) * basis(kf[j], i);
+            detrended[j] = ratio[j] / corr;
+        }
+        gsl_vector_free(c);
+        gsl_permutation_free(perm);
+        const int ik0 = int(std::upper_bound(kf.begin(), kf.end(), 1e-2) - kf.begin()) + 1;
+        const int N = int(k.size());
+        for (int set = 0; set < 2; set++) {
+            const double sign = set == 0 ? 1.0 : -1.0; // maxima, minima (scipy.signal.find_peaks)
+            std::vector<int> ik;
+            for (int j = ik0 + 1; j + 1 < n; j++)
+                if (sign * detrended[j] > sign * detrended[j - 1] && sign * detrended[j] > sign * detrended[j + 1])
+                    ik.push_back(j + index[0]);
+            if (ik.empty())
+                throw std::runtime_error("desi_dr1_shapefit: no BAO extrema found in the fiducial P(k)");
+            const int npadlow = index[0];
+            const int ikmax = std::max(index[n - 1], ik.back() + 1);
+            auto & nodes = fid.nodes[set];
+            for (int i = 0; i < npadlow; i++)
+                nodes.push_back(i);
+            nodes.insert(nodes.end(), ik.begin(), ik.end());
+            for (int i = ikmax; i < N; i++)
+                nodes.push_back(i);
+            fid.npad_low[set] = npadlow;
+            fid.npeaks[set] = int(ik.size());
+            fid.npad_high[set] = N - ikmax;
+        }
+        for (double zz : zs) {
+            const auto [m, fA] = shapefit_impl(tf, zz, 1.0);
+            fid.m.push_back(m);
+            fid.fA.push_back(fA);
+        }
+    }
+
+    std::pair<double, double> DESIShapeFitLikelihood::shapefit(const Theory & t, double zz, double s) const {
+        std::call_once(fid_once, [&] { setup_fiducial(t); });
+        return shapefit_impl(t, zz, s);
+    }
+
+    // The no-wiggle P(k) of the PeakAverage filter: P_EH times the mean of the two envelopes of P/P_EH through its
+    // maxima and minima (and the padding), each a natural cubic spline in log10 k of ln(P/P_EH) at the fiducial node
+    // positions divided by s (s rising linearly from 1 over the low-k padding and falling back to 1 over the high-k
+    // padding); ln(P/P_EH) at those positions from a natural spline over the whole grid. Then m = dln P_nw/dln k and
+    // A_p = P(k_p)/s^3 at k_p = 0.03/s h/Mpc (log-log natural splines of P_nw and P on the grid, as cosmoprimo's
+    // PowerSpectrumInterpolator1D), and f = sigma_8,thetatheta/sigma_8,cb
+    std::pair<double, double> DESIShapeFitLikelihood::shapefit_impl(const Theory & t, double zz, double s) const {
+        const auto & k = Theory::pk_k_grid();
+        const auto & P = t.pk_cb(zz);
+        const EHNoWiggle eh = eh_of(t.settings());
+        const size_t N = k.size();
+        std::vector<double> lk(N), lny(N), ehk(N);
+        for (size_t i = 0; i < N; i++) {
+            lk[i] = std::log10(k[i]);
+            ehk[i] = eh(k[i]);
+            lny[i] = std::log(P[i] / ehk[i]);
+        }
+        const NaturalSpline lnratio(lk, lny);
+        std::vector<double> env(N, 0.0);
+        for (int set = 0; set < 2; set++) {
+            const auto & nodes = fid.nodes[set];
+            const int nl = fid.npad_low[set], np = fid.npeaks[set], nh = fid.npad_high[set];
+            std::vector<double> xx, yy;
+            for (int j = 0; j < int(nodes.size()); j++) {
+                double r;
+                if (j < nl)
+                    r = nl > 1 ? 1.0 + (s - 1.0) * j / (nl - 1.0) : s;
+                else if (j < nl + np)
+                    r = s;
+                else
+                    r = nh > 1 ? s + (1.0 - s) * (j - nl - np) / (nh - 1.0) : s;
+                const double lx = std::log10(k[nodes[j]] / r);
+                xx.push_back(lx);
+                yy.push_back(lnratio(lx));
+            }
+            const NaturalSpline envelope(xx, yy);
+            for (size_t i = 0; i < N; i++)
+                env[i] += 0.5 * std::exp(envelope(lk[i]));
+        }
+        std::vector<double> lpnw(N), lp(N);
+        for (size_t i = 0; i < N; i++) {
+            lpnw[i] = std::log10(env[i] * ehk[i]);
+            lp[i] = std::log10(P[i]);
+        }
+        const NaturalSpline pnw(lk, lpnw), pk(lk, lp);
+        const double kp = 0.03 / s, k1 = kp * 0.99, k2 = kp * 1.01;
+        const double m = (pnw(std::log10(k2)) - pnw(std::log10(k1))) / (std::log10(k2) - std::log10(k1));
+        const double Ap = std::pow(10.0, pk(std::log10(kp))) / (s * s * s);
+        const double f = t.sigma8_theta(zz) / t.sigma8_cb(zz);
+        return {m, f * std::sqrt(Ap)};
+    }
+
+    std::vector<double> DESIShapeFitLikelihood::model(const Theory & t) const {
+        const double rd = t.r_drag();
+        std::call_once(fid_once, [&] { setup_fiducial(t); });
+        const double sr = t.settings().cosmo.h * rd / fid.hrd;
+        std::vector<std::pair<double, double>> sf(zs.size());
+        for (size_t j = 0; j < zs.size(); j++)
+            sf[j] = shapefit_impl(t, zs[j], sr);
+        std::vector<double> m(z.size());
+        for (size_t i = 0; i < z.size(); i++) {
+            const double apar = t.D_H(z[i]) / rd / fid.dh_rd[i], aper = t.D_M(z[i]) / rd / fid.dm_rd[i];
+            const size_t j = std::find(zs.begin(), zs.end(), z[i]) - zs.begin();
+            switch (q[i]) {
+                case Quantity::qiso:
+                    m[i] = std::cbrt(apar * aper * aper);
+                    break;
+                case Quantity::qap:
+                    m[i] = apar / aper;
+                    break;
+                case Quantity::qpar:
+                    m[i] = apar;
+                    break;
+                case Quantity::qper:
+                    m[i] = aper;
+                    break;
+                case Quantity::df:
+                    m[i] = sf[j].second / fid.fA[j];
+                    break;
+                case Quantity::dm:
+                    m[i] = sf[j].first - fid.m[j];
+                    break;
+            }
+        }
+        return m;
+    }
+
+    double DESIShapeFitLikelihood::loglike(const Theory & t) const { return -0.5 * data.chi2(model(t)); }
+
+    // =============================================================================
+    // KiDS-1000 COSEBIs
+    // =============================================================================
+
+    struct KiDS1000COSEBIsLikelihood::Impl {
+        std::unique_ptr<WEAKLENSING::LogCOSEBIs> cosebis;
+        std::vector<double> ell; // of the C_ell
+    };
+
+    KiDS1000COSEBIsLikelihood::~KiDS1000COSEBIsLikelihood() = default;
+
+    KiDS1000COSEBIsLikelihood::KiDS1000COSEBIsLikelihood(const std::string & dir) : impl(std::make_unique<Impl>()) {
+        const auto rows = read_rows(dir + "/cosebis_En.txt");
+        std::vector<double> mean;
+        for (const auto & r : rows) {
+            if (r.size() != 4)
+                throw std::runtime_error("kids1000_cosebis: cosebis_En.txt needs bin1 bin2 n E_n");
+            const int i = int(r[0]) - 1, j = int(r[1]) - 1, n = int(r[2]);
+            if (i < 0 || j < i || j > 4 || n < 1 || n > 5)
+                throw std::runtime_error("kids1000_cosebis: bad bin pair or n in cosebis_En.txt");
+            pair_index.push_back(i * 5 - i * (i + 1) / 2 + j);
+            n_index.push_back(n - 1);
+            mean.push_back(r[3]);
+        }
+        const auto cov = read_rows(dir + "/cosebis_cov.txt");
+        if (cov.size() != mean.size())
+            throw std::runtime_error("kids1000_cosebis: covariance and data differ in size");
+        data.set(mean, cov);
+        // n(z): histograms at z_mid, with n = 0 at z = 0 (as CosmoSIS' load_nz_fits)
+        const auto nzr = read_rows(dir + "/nz_source.txt");
+        zmid = {0.0};
+        nz.assign(5, std::vector<double>{0.0});
+        for (const auto & r : nzr) {
+            if (r.size() != 8)
+                throw std::runtime_error("kids1000_cosebis: nz_source.txt needs z_low z_mid z_high n_1..n_5");
+            zmid.push_back(r[1]);
+            for (int b = 0; b < 5; b++)
+                nz[b].push_back(r[3 + b]);
+        }
+        const auto dz = read_rows(dir + "/dz_prior.txt");
+        if (dz.size() != 6)
+            throw std::runtime_error("kids1000_cosebis: dz_prior.txt needs the mean and the 5 x 5 covariance");
+        dz_mean = dz[0];
+        {
+            gsl_matrix * c = gsl_matrix_alloc(5, 5);
+            gsl_matrix * ci = gsl_matrix_alloc(5, 5);
+            gsl_permutation * perm = gsl_permutation_alloc(5);
+            for (int a = 0; a < 5; a++)
+                for (int b = 0; b < 5; b++)
+                    gsl_matrix_set(c, a, b, dz[1 + a].at(b));
+            int sign = 0;
+            gsl_linalg_LU_decomp(c, perm, &sign);
+            gsl_linalg_LU_invert(c, perm, ci);
+            dz_icov.assign(5, std::vector<double>(5, 0.0));
+            for (int a = 0; a < 5; a++)
+                for (int b = 0; b < 5; b++)
+                    dz_icov[a][b] = gsl_matrix_get(ci, a, b);
+            gsl_permutation_free(perm);
+            gsl_matrix_free(ci);
+            gsl_matrix_free(c);
+        }
+        for (int i = 0; i <= 122; i++)
+            zgrid.push_back(0.05 * i);
+        for (int i = 0; i < 80; i++)
+            impl->ell.push_back(2.0 * std::pow(5e4, i / 79.0)); // 2 - 1e5
+        const double arcmin = M_PI / 180.0 / 60.0;
+        impl->cosebis = std::make_unique<WEAKLENSING::LogCOSEBIs>(0.5 * arcmin, 300.0 * arcmin, 5, 2.0, 1e5);
+    }
+
+    double KiDS1000COSEBIsLikelihood::chi2_dz_prior(const Theory & t) const {
+        std::vector<double> d(5);
+        for (int i = 0; i < 5; i++)
+            d[i] = t.nuisance("kids_dz" + std::to_string(i + 1), dz_mean[i]) - dz_mean[i];
+        double c2 = 0;
+        for (int a = 0; a < 5; a++)
+            for (int b = 0; b < 5; b++)
+                c2 += d[a] * dz_icov[a][b] * d[b];
+        return c2;
+    }
+
+    std::vector<double> KiDS1000COSEBIsLikelihood::model(const Theory & t) const {
+        namespace WL = WEAKLENSING;
+        const double h = t.settings().cosmo.h;
+        // Background tables
+        std::vector<double> chi, D;
+        for (double z : zgrid) {
+            chi.push_back(t.chi_mpch(z));
+            D.push_back(t.growth_D(z));
+        }
+        WL::detail::CubicSpline chi_of_z(zgrid, chi), z_of_chi(chi, zgrid), D_of_z(zgrid, D);
+        // ln P(z, ln k)
+        const auto & kg = Theory::pk_nl_k_grid();
+        std::vector<double> lk;
+        for (double k : kg)
+            lk.push_back(std::log(k));
+        std::vector<std::vector<double>> lnP;
+        for (double z : zgrid) {
+            std::vector<double> r;
+            for (double P : t.pk_nl(z))
+                r.push_back(std::log(P));
+            lnP.push_back(r);
+        }
+        Spline2D lnP_spline;
+        lnP_spline.create(zgrid, lk, lnP, "kids1000_cosebis ln P_NL(z, ln k)");
+
+        WL::ShearModel m;
+        m.geometry.omega_m = t.omega_m() / (h * h);
+        m.geometry.z_of_chi = [&](double c) { return std::max(0.0, z_of_chi(c)); };
+        m.chi_of_z = [&](double z) { return chi_of_z(z); };
+        m.growth = [&](double z) { return D_of_z(z); };
+        // Modified lensing (Brans-Dicke: G/phi): Sigma(z) on the kernel; the prefactor uses Omega_m of the model's
+        // density parameters (G_*)
+        std::vector<double> sig;
+        bool gr = true;
+        for (double z : zgrid) {
+            sig.push_back(t.lensing_Sigma(z));
+            gr = gr && sig.back() == 1.0;
+        }
+        WL::detail::CubicSpline Sigma_of_z(zgrid, sig);
+        if (!gr)
+            m.lensing_strength = [&](double z) { return Sigma_of_z(z); };
+        m.power.value = [&](double k, double z) { return std::exp(lnP_spline(z, std::log(k))); };
+        m.power.k_min = kg.front();
+        m.power.k_max = kg.back();
+        m.power.z_min = 0.0;
+        m.power.z_max = zgrid.back();
+
+        WL::ShearSystematics sys;
+        sys.ia.A = t.nuisance("kids_A_IA", 0.0);
+        sys.ia.eta = 0.0;
+        // C1 rho_crit = 5e-14 h^-2 M_sun^-1 Mpc^3 rho_crit (CosmoSIS, the default of WL::NLA)
+        std::vector<WL::RedshiftDistribution> dist;
+        for (int b = 0; b < 5; b++) {
+            const double dz = t.nuisance("kids_dz" + std::to_string(b + 1), dz_mean[b]);
+            // As CosmoSIS (photoz_bias with interpolation = cubic, then a cubic spline of n(z) in the projection):
+            // the shifted histogram n(z_k - dz) at the nodes z_k by cubic interpolation, then a cubic spline through
+            // the nodes, sampled every 0.002 (negative overshoots set to 0). With linear interpolation (CosmicShear's
+            // shifted_distribution) chi^2 changes by ~0.1
+            sys.delta_z.push_back(0.0);
+            WL::detail::CubicSpline S(zmid, nz[b]);
+            std::vector<double> ns;
+            for (double z : zmid) {
+                const double zz = z - dz;
+                ns.push_back(zz < zmid.front() || zz > zmid.back() ? 0.0 : S(zz));
+            }
+            WL::detail::CubicSpline S2(zmid, ns);
+            WL::RedshiftDistribution d;
+            const int nf = int(std::ceil(zmid.back() / 0.002));
+            for (int i = 0; i <= nf; i++) {
+                const double z = zmid.back() * i / nf;
+                d.z.push_back(z);
+                d.n.push_back(std::max(0.0, S2(z)));
+            }
+            dist.push_back(d);
+        }
+        const auto cl = WL::shear_spectra(dist, m, sys, impl->ell);
+        const auto E = impl->cosebis->E(cl);
+        std::vector<double> out;
+        for (size_t i = 0; i < pair_index.size(); i++)
+            out.push_back(E[pair_index[i]][n_index[i]]);
+        return out;
+    }
+
+    double KiDS1000COSEBIsLikelihood::loglike(const Theory & t) const {
+        if (t.settings().ps.nonlinear == PowerSpectrumOptions::Nonlinear::None)
+            throw std::invalid_argument("kids1000_cosebis needs a nonlinear P(k) (e.g. nonlinear = hmcode2016)");
+        return -0.5 * (data.chi2(model(t)) + chi2_dz_prior(t));
+    }
+
+    // =============================================================================
+
     namespace Likelihoods {
         std::vector<std::string> names() {
             return {"sn",
@@ -683,6 +1198,12 @@ namespace FML::COSMOLOGY::FITTING {
                     "union3",
                     "desi_dr2",
                     "desi_dr1",
+                    "boss_dr12",
+                    "boss_dr12_bao",
+                    "eboss_dr16_lrg",
+                    "eboss_dr16_qso",
+                    "desi_dr1_shapefit",
+                    "kids1000_cosebis",
                     "planck_dp",
                     "bbn",
                     "planck_lite_TTTEEE",
@@ -733,6 +1254,30 @@ namespace FML::COSMOLOGY::FITTING {
                     "desi_dr1",
                     Utils::fml_file("CosmologyFitting/external/bao/desi_dr1_mean.txt"),
                     Utils::fml_file("CosmologyFitting/external/bao/desi_dr1_cov.txt"));
+            const std::string bao = Utils::fml_file("CosmologyFitting/external/bao/");
+            if (n == "boss_dr12")
+                return std::make_unique<BAOLikelihood>("boss_dr12",
+                                                       bao + "sdss_DR12Consensus_final.dat",
+                                                       bao + "final_consensus_covtot_dM_Hz_fsig.txt",
+                                                       147.78);
+            if (n == "boss_dr12_bao")
+                return std::make_unique<BAOLikelihood>("boss_dr12_bao",
+                                                       bao + "sdss_DR12Consensus_bao.dat",
+                                                       bao + "BAO_consensus_covtot_dM_Hz.txt",
+                                                       147.78);
+            if (n == "eboss_dr16_lrg")
+                return std::make_unique<BAOLikelihood>("eboss_dr16_lrg",
+                                                       bao + "sdss_DR16_BAOplus_LRG_FSBAO_DMDHfs8.dat",
+                                                       bao + "sdss_DR16_BAOplus_LRG_FSBAO_DMDHfs8_covtot.txt");
+            if (n == "eboss_dr16_qso")
+                return std::make_unique<BAOLikelihood>("eboss_dr16_qso",
+                                                       bao + "sdss_DR16_BAOplus_QSO_FSBAO_DMDHfs8.dat",
+                                                       bao + "sdss_DR16_BAOplus_QSO_FSBAO_DMDHfs8_covtot.txt");
+            if (n == "desi_dr1_shapefit")
+                return std::make_unique<DESIShapeFitLikelihood>(bao + "desi_dr1_shapefit_mean.txt",
+                                                                bao + "desi_dr1_shapefit_cov.txt");
+            if (n == "kids1000_cosebis")
+                return std::make_unique<KiDS1000COSEBIsLikelihood>(Utils::fml_file("CosmologyFitting/external/kids1000"));
             if (n == "planck_dp")
                 return std::make_unique<PlanckDistancePriors>();
             if (n == "bbn")
