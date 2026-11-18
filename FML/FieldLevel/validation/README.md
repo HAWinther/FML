@@ -60,3 +60,9 @@ all gates and failures; the original joint campaign stays separate.
 - [Posterior numerical refinement](../docs/validation/studies/posterior_refinement/RESULTS.md): **PASS**, six settings on all 8192 cold states, exact source replay and correlation-aware importance-sensitivity checks.
 
 - [Independent fixed-truth mocks](../docs/validation/studies/independent_mocks/RESULTS.md): two fresh four-chain budgets complete; computational gate **PASS**, descriptive recovery only; no coverage calibration claim.
+
+[Prior sensitivity](galaxy/prior_sensitivity/README.md) reweights all three completed synthetic datasets under four predeclared prior cases. All overlap/mean-shift precision screens pass; this is not SBC or alternative-prior MCMC validation.
+
+[Prior-predictive truth controls](galaxy/tempering/PRIOR_PREDICTIVE.md) add independent prior truths and an auditable target, with exact legacy/restart checks and analytic SBC controls. A full nonlinear calibration campaign remains unstarted.
+
+[Calibration study runner](galaxy/calibration/README.md) adds frozen independent mocks, cumulative sampling-time accounting and twelve-coordinate diagnostics including likelihood Q. Controls pass; the eight-dataset nonlinear pilot is frozen but unstarted.

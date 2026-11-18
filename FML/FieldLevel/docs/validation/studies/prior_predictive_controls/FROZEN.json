@@ -1,0 +1,43 @@
+{
+  "scope": "Bounded prior-predictive generation/restart smoke only; no mixing or calibration claim",
+  "plan_sha256": "e4255df0d6f8aba5406a77c25077d44dbec1edd05d0dbb817e0307d579c8663b",
+  "binary_sha256": "642ddbc6b82a3b82f1a174bf307a43afb1d82498a472e7ca92adda89c7f5feb8",
+  "sources": {
+    "plan_bridge.json": "f6f3b5868c8eaf7b0af5e0faeb73c09ba6516c4a1aacb461508b9ef61829387c",
+    "run.py": "5e3c3e1cec8d03a86dd6304360e5ca2188534fcbb3ebfcd0a4aaa4be434b7d93",
+    "run_mocks.py": "adaa508e2581468415c27956665642bd3aa1240e6ee508189bd370bddcd553bf",
+    "plan_mock2.json": "1c0bc4336e62072aa1ea6de16b2de52fcfce3bbec156a2c416f9206e6d29d4cd",
+    "plan.json": "6de0c06e5a05246ffa04c700b7a5f5615a1bf19787c37879c957318998a5a731",
+    "NEXT_STEPS.md": "d45ab5bbed084f4086c5bbffaad9d1161f75ba0d92a3ed69ed3a979c5bc10b3f",
+    "MockTest.cpp": "bafad6811611b2f6dd20b7ed420b6582b8c39d394e321e6096f584a41d71d167",
+    "Makefile": "643c05db2ddfb007dee32db9e28fac3885b54f4c134e5b3f1b20833a164bc360",
+    "sbc_ranks.py": "62025923f73fb1c1864d036d7c3b919354651e38753f94b8487c2594ae6c78e1",
+    "extend.py": "c0a435ce493871bb2319f1c76a2459027463d82c93753d56ddb36778512c6076",
+    "Test.cpp": "45cc3cb3d81c17b3a57c8127576305b8f3d53637987e20796a2b1435194d9a70",
+    "check_prior.py": "6d37859b23c77eaa29b046b823d3beb15c1f850b15d27a57d9346e4375b0cd30",
+    "Diagnostics.cpp": "3b3caa8780f1de91e89e75eea7d523de20198fa39f25ddfa2840cf79ea9b24e0",
+    "check_sbc.py": "a9598978d60d30c93f8570e54768cc3ed290be84e2ba5ee98e14c57db44a7524",
+    "plan_posterior.json": "807b6dae5a020a283f42e1af695b8bae933d44babfc404748343a86569a12f95",
+    "README.md": "845e70b7468dc9d3f07c29ac8ca56b5dace53f3805e11fcdc505e96c77933c73",
+    "PriorTest.cpp": "1207ff26fc292573f3b6c0442708075a5310c551e63c42ffd8830da7d1692760",
+    "MockSettings.h": "7d46f0e2624926f17f76175774edb97bd186af04f4d6da7b3185e3fd2eb5d24b",
+    "PriorPredictive.h": "888604f21cafb412d939ba8f95eb7b712aeab156692579d25bec2c905913eb0b",
+    "recover_mocks.py": "06fc606bb88b2db8c7c30c9fd9c928a01dde81ac2cb23448c8cec67990db5b7b",
+    "posterior.py": "1eae8a0e68a7094db6afe135354fea42e852f0b4274ad640212d090813318808",
+    "Exchange.h": "881601655daefc32c533b1524dfffd9f329049aa7d7928cd2c8bf622a745b2b3",
+    "plan_long.json": "a6fee75b677ab3efb27052a9a9689772a231d01272c007bbace1e0545ffbf98b",
+    "Main.cpp": "090a98af00f95748785dad7019b7ab2c5acda061984d0befaee8ff4d76b1aaa1",
+    "plan_mock1.json": "cf0e1f74605fc1536cb758d5a02830fbc6ac32971c9a46f9cd3f0c0fea0bb432",
+    "plan_mocks.json": "f802cad5719f7d46243a91d1d3fd49dbc5f3c33921fa918738639c27dfd89f16",
+    "analyze.py": "78ef0b6169890565b05b6291c47d9a42731dd5e8492bb639af31be26a47b8ec8"
+  },
+  "cases": {
+    "base": "0 64 4 3\nFML_MOCK_2 101 7101 7102 7103 7107\n",
+    "scalar": "0 64 4 3\nFML_MOCK_2 101 7101 7102 7103 7108\n",
+    "white": "0 64 4 3\nFML_MOCK_2 101 7111 7102 7103 7107\n",
+    "noise": "0 64 4 3\nFML_MOCK_2 101 7101 7112 7103 7107\n",
+    "initial": "0 64 4 3\nFML_MOCK_2 101 7101 7102 7123 7107\n",
+    "mock": "0 64 4 3\nFML_MOCK_2 102 7101 7102 7103 7107\n"
+  },
+  "declared": "Before any native preflight outcomes; 64-sweep smoke, no nonlinear SBC campaign"
+}

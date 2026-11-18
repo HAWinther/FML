@@ -7,7 +7,7 @@ def main():
     ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('output',type=Path);ap.add_argument('--exe',type=Path,default=Path(__file__).resolve().parent/'tempering_pilot');ap.add_argument('--workers',type=int,default=2,choices=[1,2,3,4]);ap.add_argument('--plan',type=Path,default=Path(__file__).resolve().parent/'plan.json');ap.add_argument('--max-chunks',type=int,help='Pause each ensemble after this many additional checkpoint chunks');ap.add_argument('--resume',action='store_true',help='Clear the task-owned PAUSE marker and resume');args=ap.parse_args()
     root=args.output.resolve();exe=args.exe.resolve();root.mkdir(parents=True,exist_ok=True);planpath=args.plan.resolve();plan=json.loads(planpath.read_text());identity=dict(plan_sha256=hashlib.sha256(planpath.read_bytes()).hexdigest(),binary_sha256=hashlib.sha256(exe.read_bytes()).hexdigest())
     reference=json.loads((Path(__file__).resolve().parent/'plan.json').read_text())
-    variable={'version','scope','betas','exchange_passes','swaps','roundtrip','comparison','limits','stopping','ensembles','warmup','samples','initial_parameters','local_seeds','swap_seed','replay','truth_seed','noise_seed','initial_seed_base'}
+    variable={'version','scope','betas','exchange_passes','swaps','roundtrip','comparison','limits','stopping','ensembles','warmup','samples','initial_parameters','local_seeds','swap_seed','replay','truth_seed','noise_seed','initial_seed_base','truth_parameters'}
     for key,value in reference.items():
         if key not in variable and plan.get(key)!=value:raise RuntimeError('Compiled fixture/control differs from selected plan: '+key)
     if args.max_chunks is not None and args.max_chunks<1:raise RuntimeError('max-chunks must be positive')
@@ -21,13 +21,22 @@ def main():
     if isinstance(replay_start,bool) or not isinstance(replay_start,int) or replay_start<0 or replay_start%16 or replay_start+16>samples:raise RuntimeError('Invalid declared replay interval')
     settings_text=f'{warmup} {samples} {ensembles} {seed_layout}\n'
     mock_metadata=None
+    truth_mode=plan.get('truth_mode','fixed')
+    if truth_mode not in ['fixed','prior_predictive_v1']:raise RuntimeError('Unknown truth generation mode')
+    prior_predictive=truth_mode=='prior_predictive_v1'
+    if prior_predictive and (seed_layout!=3 or plan.get('truth_parameters') is not None):raise RuntimeError('Prior-predictive truth requires layout 3 and no fixed truth')
+    if not prior_predictive and (plan.get('truth_parameters')!=reference['truth_parameters'] or 'scalar_truth_seed' in plan):raise RuntimeError('Fixed-truth settings differ from compiled fixture')
     if seed_layout==3:
         fields=[plan.get(k) for k in ['mock_id','truth_seed','noise_seed','initial_seed_base']]
         if any(isinstance(v,bool) or not isinstance(v,int) for v in fields):raise RuntimeError('Integer mock identity/seeds required')
         mid,truth_seed,noise_seed,initial_seed=fields
         if not 1<=mid<=65535 or not 1<=truth_seed<=2**32-1 or not 1<=noise_seed<=2**32-1 or not 1<=initial_seed<=2**32-ensembles or len(set([truth_seed,noise_seed,*range(initial_seed,initial_seed+ensembles)]))!=ensembles+2 or 'prefix' in plan:raise RuntimeError('Invalid mock seeds or forbidden prefix reuse')
         mock_metadata=dict(id=mid,truth_seed=truth_seed,noise_seed=noise_seed,initial_seed_base=initial_seed)
-        settings_text+=f'FML_MOCK_1 {mid} {truth_seed} {noise_seed} {initial_seed}\n'
+        if prior_predictive:
+            scalar_seed=plan.get('scalar_truth_seed')
+            if isinstance(scalar_seed,bool) or not isinstance(scalar_seed,int) or not 1<=scalar_seed<=2**32-1 or mid<3 or scalar_seed in [truth_seed,noise_seed,*range(initial_seed,initial_seed+ensembles)]:raise RuntimeError('Invalid scalar truth seed or reserved prior-predictive mock ID')
+            settings_text+=f'FML_MOCK_2 {mid} {truth_seed} {noise_seed} {initial_seed} {scalar_seed}\n'
+        else:settings_text+=f'FML_MOCK_1 {mid} {truth_seed} {noise_seed} {initial_seed}\n'
     elif 'mock_id' in plan or (plan.get('truth_seed'),plan.get('noise_seed'),plan.get('initial_seed_base'))!=(4101,4102,4103):raise RuntimeError('Changed mock seeds require layout 3')
     pause=threading.Event()
     def pause_request(signum,frame):
@@ -63,6 +72,7 @@ def main():
         with (root/(label+'.log')).open('w') as log:subprocess.run(cmd,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=600,start_new_session=True,pass_fds=(writer_lock.fileno(),),env=dict(os.environ,OMP_NUM_THREADS='1',OMP_WAIT_POLICY='passive'))
         s=json.loads((directory/'summary.json').read_text())
         if mock_metadata is not None and s.get('mock')!=mock_metadata:raise RuntimeError('Native mock metadata differs from selected plan')
+        if prior_predictive and (s.get('truth_mode')!=truth_mode or s.get('scalar_truth_seed')!=plan['scalar_truth_seed']):raise RuntimeError('Native truth generation differs from selected plan')
         if s['betas']!=beta or s.get('exchange_passes',1)!=passes or s['warmup']!=plan['warmup'] or s['samples']!=plan['samples']:raise RuntimeError('Native controls differ from selected plan')
         (root/(label+'.command.json')).write_text(json.dumps(dict(argv=cmd,seconds=time.monotonic()-start,summary=s),indent=2)+'\n');return s
     def replay(primary,branch):

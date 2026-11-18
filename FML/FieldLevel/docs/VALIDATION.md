@@ -204,3 +204,31 @@ prototype, not a production MPI blocked-sampler API or scientific calibration.
 ### Independent fixed-truth mock recovery (18 November 2026)
 
 [Both predeclared independent-mock budgets](validation/studies/independent_mocks/RESULTS.md) complete four fresh 256/2048 chains. Computational gate: **PASS**; all outcomes and interval misses preserved. Exact namespace, legacy, data-seed, whole-study pause and eight-chain final checkpoint checks pass. Recovery/interval ranks are descriptive; two fixed-truth mocks are not prior-predictive SBC or coverage calibration.
+
+### Bounded prior sensitivity (18 November 2026)
+
+[Four frozen prior cases on all three completed datasets](validation/studies/prior_sensitivity/RESULTS.md)
+pass every overlap/mean-shift precision screen. Amplitude mean shifts are -0.23 to
+-0.27 baseline SD for log-amplitude priors, +0.12 to +0.41 SD for nonlinear-bias
+regularization. Source chains/checkpoints are unchanged. This measures prior
+sensitivity, not coverage; prior-predictive truth controls and a separately frozen
+calibration campaign are next.
+
+### Prior-predictive truth controls (18 November 2026)
+
+[Opt-in prior-predictive generation controls](validation/studies/prior_predictive_controls/RESULTS.md)
+pass independent scalar/white/noise references, actual Fourier noise/target checks,
+three-layout byte-exact legacy trajectories, actual completed-checkpoint reloads
+and a four-chain 64-sweep pause/replay smoke. Analytic SBC controls include a
+data-ignoring counterexample detected by a likelihood quantity. No long nonlinear
+SBC campaign is started; campaign orchestration/Q diagnostics and frozen budgets
+are next. No production MPI orchestration or coverage claim.
+
+### Bounded calibration orchestration (18 November 2026)
+
+[Study orchestration and likelihood-Q diagnostics](validation/studies/calibration_runner/RESULTS.md)
+pass fresh two-dataset 4x48 controls, actual SIGTERM/lock/resume, immutable identity
+and crash/time-budget checks. Both short datasets retain all twelve failed mixing
+gates and provisional ranks. The full eight-dataset four-chain 256/2048 pilot is
+frozen with a cumulative 16-hour sampling cap, but is **not started**. Next: run
+that exact pilot; no nonlinear calibration or production MPI claim yet.

@@ -1,5 +1,6 @@
 #include "Exchange.h"
 #include "MockSettings.h"
+#include "PriorPredictive.h"
 #include <FML/FieldLevel/EulerianCheckpoint.h>
 #include <FML/FieldLevel/FixedIC.h>
 #include <FML/FieldLevel/validation/galaxy/interweave/Rescaling.h>
@@ -388,6 +389,8 @@ static void summary(const FS::path & root, const Ensemble & s) {
     if (SeedLayout == 3)
         out << ",\"mock\":{\"id\":" << mock.id << ",\"truth_seed\":" << mock.truth << ",\"noise_seed\":" << mock.noise
             << ",\"initial_seed_base\":" << mock.initial << '}';
+    if (mock.prior_predictive)
+        out << ",\"truth_mode\":\"prior_predictive_v1\",\"scalar_truth_seed\":" << mock.scalar_truth;
     out << "}\n";
     out.close();
     if (!out)
@@ -561,8 +564,10 @@ int main(int argc, char ** argv) {
                                               {"b_laplacian", 7, 0, 1, -100, 100, FF::Prior::Uniform}}};
         Model model(c, FF::sigma8_spectrum([](double k) { return 20000 * std::exp(-5 * k); }), bias);
         auto work = model.workspace();
-        const auto truth = model.initial_parameters();
-        const auto data = model.mock(model.white_noise(mock.truth), truth, 1000, mock.noise, work);
+        const auto truth = mock.prior_predictive ? MOCK::prior_parameters(model.parameters(), mock.generation_key(1)) :
+                                                   model.initial_parameters();
+        const auto truth_white = model.white_noise(mock.generation_key(0));
+        const auto data = model.mock(truth_white, truth, 1000, mock.generation_key(2), work);
         const auto base = FF::fixed_noise_posterior(model, data, 1000.);
         const auto weights = base.likelihood().weights();
         std::vector<Posterior> targets;
@@ -600,6 +605,18 @@ int main(int argc, char ** argv) {
                     config.integer(v);
                 problem += ":mock=" + std::to_string(CP::Codec::checksum(config.bytes));
             }
+            if (mock.prior_predictive) {
+                CP::Codec::Encoder config;
+                config.text("FML prior predictive truth 1: uniform physical scalars, Gaussian white and noise");
+                config.integer(mock.scalar_truth);
+                config.vector(truth);
+                for (const auto & p : model.parameters()) {
+                    config.text(p.name);
+                    config.real(p.lower);
+                    config.real(p.upper);
+                }
+                problem += ":prior_predictive=" + std::to_string(CP::Codec::checksum(config.bytes));
+            }
             return CP::identity(base, problem);
         };
         const auto identity = checkpoint_identity();
@@ -624,14 +641,14 @@ int main(int argc, char ** argv) {
             }
         } else {
             for (size_t j = 0; j < betas.size(); ++j) {
-                s.states[j].white = model.white_noise(mock.initial + ensemble);
+                s.states[j].white = model.white_noise(mock.generation_key(3, unsigned(ensemble)));
                 s.states[j].parameters = frozen;
                 s.states[j].label = j;
                 s.states[j].quadratic = quadratic(model, data, weights, s.states[j], work);
             }
             std::ofstream out(root / "target.json");
             out << std::setprecision(17) << "{\"truth_white\":";
-            array(out, model.white_noise(mock.truth));
+            array(out, truth_white);
             out << ",\"data\":[";
             for (size_t j = 0; j < data.size(); ++j) {
                 if (j)
@@ -656,6 +673,44 @@ int main(int argc, char ** argv) {
                 array(out, truth);
                 out << ",\"mock\":{\"id\":" << mock.id << ",\"truth_seed\":" << mock.truth
                     << ",\"noise_seed\":" << mock.noise << ",\"initial_seed_base\":" << mock.initial << '}';
+            }
+            if (mock.prior_predictive) {
+                out << ",\"truth_mode\":\"prior_predictive_v1\",\"scalar_truth_seed\":" << mock.scalar_truth;
+                out << ",\"scalar_priors\":[";
+                for (size_t j = 0; j < model.parameters().size(); ++j) {
+                    if (j)
+                        out << ',';
+                    const auto & p = model.parameters()[j];
+                    out << "{\"name\":\"" << p.name << "\",\"kind\":\"uniform\",\"lower\":" << p.lower
+                        << ",\"upper\":" << p.upper << '}';
+                }
+                out << "],\"generation_keys\":[";
+                for (unsigned role = 0; role < 4; ++role) {
+                    if (role)
+                        out << ',';
+                    out << '\"' << mock.generation_key(role) << '\"';
+                }
+                out << "],\"noise_white\":";
+                array(out, model.white_noise(mock.generation_key(2)));
+                out << ",\"truth_prediction\":[";
+                const auto & prediction = model.predict(truth_white, truth, work);
+                for (size_t j = 0; j < prediction.size(); ++j) {
+                    if (j)
+                        out << ',';
+                    out << '[' << prediction[j].real() << ',' << prediction[j].imag() << ']';
+                }
+                out << "],\"mode_n\":[";
+                for (size_t j = 0; j < model.modes().size(); ++j) {
+                    if (j)
+                        out << ',';
+                    const auto & n = model.modes()[j].n;
+                    out << '[' << n[0] << ',' << n[1] << ',' << n[2] << ']';
+                }
+                out << ']';
+                EXCHANGE::PhysicalState generating;
+                generating.white = truth_white;
+                generating.parameters = truth;
+                out << ",\"truth_quadratic\":" << quadratic(model, data, weights, generating, work);
             }
             out << "}\n";
             out.close();

@@ -87,3 +87,6 @@ example/catalog_to_modes
 /validation/galaxy/tempering/tempering_diagnostics
 /validation/galaxy/refinement/refinement_predict
 /validation/galaxy/tempering/tempering_mock_test
+
+/validation/galaxy/tempering/tempering_prior_test
+/validation/galaxy/calibration/calibration_diagnostics

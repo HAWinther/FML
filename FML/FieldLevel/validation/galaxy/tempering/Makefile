@@ -2,7 +2,7 @@ USE_MPI ?= false
 USE_OMP ?= false
 USE_FFTW ?= true
 USE_PENCIL_GRID ?= false
-TARGETS := tempering_pilot tempering_test tempering_diagnostics tempering_mock_test
+TARGETS := tempering_pilot tempering_test tempering_diagnostics tempering_mock_test tempering_prior_test
 ifeq ($(USE_PENCIL_GRID),true)
 ifneq ($(USE_MPI),true)
 $(error USE_PENCIL_GRID=true requires USE_MPI=true)
@@ -26,4 +26,7 @@ tempering_diagnostics: Diagnostics.o
 	$(LINK_EXE)
 
 tempering_mock_test: MockTest.o
+	$(LINK_EXE)
+
+tempering_prior_test: PriorTest.o Global.o $(PENCIL_OBJECT)
 	$(LINK_EXE)

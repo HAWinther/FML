@@ -1,0 +1,161 @@
+{
+  "scope": "Bounded prior-predictive truth-generation and checkpoint controls; not nonlinear SBC",
+  "controls": {
+    "passed": true,
+    "scope": "Bounded prior-predictive generation/restart smoke only; no mixing or calibration claim",
+    "complete_native_prior_reference": true,
+    "truth_and_noise_controls_independent": true,
+    "all_four_ensemble_targets_equal": true,
+    "changed_controls_and_mode_reject_restart": true,
+    "legacy_trajectories": [
+      {
+        "layout": 1,
+        "completed_sweeps": 4,
+        "checkpoint_summary_target_and_draws_equal": true
+      },
+      {
+        "layout": 2,
+        "completed_sweeps": 4,
+        "checkpoint_summary_target_and_draws_equal": true
+      },
+      {
+        "layout": 3,
+        "completed_sweeps": 4,
+        "checkpoint_summary_target_and_draws_equal": true
+      }
+    ],
+    "actual_final_checkpoint_reloads": [
+      "original",
+      "mock1",
+      "mock2"
+    ],
+    "runner_fixed_sweeps": 64,
+    "runner_chains": 4,
+    "runner_chunk_pause_resume": true,
+    "exact_16_draw_full_ensemble_replay": true,
+    "all_four_final_smoke_reloads_exact": true,
+    "measured_positive_beta_divergences": 0,
+    "limits": [
+      "Generation/control validation only, no mixing or coverage claim",
+      "Serial validation; production MPI orchestration remains open"
+    ]
+  },
+  "prior_reference": {
+    "passed": true,
+    "draws": {
+      "draws": 1024,
+      "all_native_values_match_reference": true,
+      "max_scaled_reference_error": 0,
+      "scalar_uniform_max_cdf_distance": 0.04719075602343026,
+      "max_white_noise_covariance_error": 0.14147993607022857,
+      "max_unit_noise_fourier_power_error": 0.08350613757508207
+    },
+    "targets": [
+      {
+        "target": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-prior-predictive/fixture-base/target.json",
+        "reference_scalar_white_noise_match": true,
+        "max_fourier_noise_error": 2.525795506525166e-17,
+        "truth_quadratic": 15.659510232556329
+      },
+      {
+        "target": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-prior-predictive/fixture-scalar/target.json",
+        "reference_scalar_white_noise_match": true,
+        "max_fourier_noise_error": 2.0816681711721685e-17,
+        "truth_quadratic": 15.659510232556329
+      },
+      {
+        "target": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-prior-predictive/fixture-white/target.json",
+        "reference_scalar_white_noise_match": true,
+        "max_fourier_noise_error": 2.797157557069881e-17,
+        "truth_quadratic": 15.659510232556329
+      },
+      {
+        "target": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-prior-predictive/fixture-noise/target.json",
+        "reference_scalar_white_noise_match": true,
+        "max_fourier_noise_error": 2.797157557069881e-17,
+        "truth_quadratic": 16.02275438887763
+      },
+      {
+        "target": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-prior-predictive/fixture-initial/target.json",
+        "reference_scalar_white_noise_match": true,
+        "max_fourier_noise_error": 2.525795506525166e-17,
+        "truth_quadratic": 15.659510232556329
+      },
+      {
+        "target": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-prior-predictive/fixture-mock/target.json",
+        "reference_scalar_white_noise_match": true,
+        "max_fourier_noise_error": 2.4099548727191468e-17,
+        "truth_quadratic": 17.061276534775597
+      }
+    ]
+  },
+  "analytic_sbc_control": {
+    "passed": true,
+    "datasets": 4096,
+    "independent_posterior_endpoints": 4,
+    "histograms": {
+      "exact_parameter": {
+        "counts": [
+          838,
+          767,
+          777,
+          873,
+          841
+        ],
+        "within_fixture_six_sigma_screen": true
+      },
+      "exact_likelihood_Q": {
+        "counts": [
+          834,
+          798,
+          815,
+          809,
+          840
+        ],
+        "within_fixture_six_sigma_screen": true
+      },
+      "ignores_data_parameter": {
+        "counts": [
+          861,
+          808,
+          809,
+          808,
+          810
+        ],
+        "within_fixture_six_sigma_screen": true
+      },
+      "ignores_data_likelihood_Q": {
+        "counts": [
+          2104,
+          1121,
+          584,
+          237,
+          50
+        ],
+        "within_fixture_six_sigma_screen": false
+      }
+    },
+    "ties_and_invalid_inputs_checked": true,
+    "scope": "Analytic rank-control fixture only; not FML nonlinear posterior calibration"
+  },
+  "runner_guards": {
+    "passed": true,
+    "rejected": [
+      "unknown-mode",
+      "fixed-truth-in-prior",
+      "missing-scalar",
+      "zero-scalar",
+      "colliding-scalar",
+      "reserved-id",
+      "prior-on-layout2"
+    ],
+    "native_batches_started": false
+  },
+  "cold_likelihood_records": {
+    "draws_checked": 256,
+    "max_scaled_quadratic_error": 5.299569902783154e-16
+  },
+  "compiled_native_sources_match_current": true,
+  "executable_source_hashes_match_preflight_freeze": true,
+  "nonlinear_calibration_campaign_started": false
+}

@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "scope": "Bounded prior-sensitivity importance analysis of all three completed small synthetic datasets; not SBC",
+  "datasets": ["original", "mock1", "mock2"],
+  "chains": 4,
+  "samples": 2048,
+  "parameters": ["sigma8_ratio", "b_delta", "b_delta2", "b_K2", "b_laplacian", "cos100", "sin100", "cos110", "sin110", "cos001", "sin001"],
+  "baseline_scalar_bounds": [[0.5, 1.5], [0, 4], [-4, 4], [-4, 4], [-100, 100]],
+  "baseline_prior": "Independent bounded uniforms for physical scalars, standard Gaussian for all 64 white coordinates",
+  "cases": [
+    {"name": "baseline", "log_amplitude": false, "nuisance_scales": null},
+    {"name": "log_amplitude", "log_amplitude": true, "nuisance_scales": null},
+    {"name": "regularized_nuisance", "log_amplitude": false, "nuisance_scales": [2, 2, 50]},
+    {"name": "combined", "log_amplitude": true, "nuisance_scales": [2, 2, 50]}
+  ],
+  "prior_choices": "Same support in every case. Log-amplitude means density proportional to 1/alpha. Independent zero-mean truncated Gaussians for b_delta2, b_K2, b_laplacian use scales half the baseline half-widths. b_delta and white priors unchanged. Choices precede evaluation and are not fitted to generating truths.",
+  "batch_lengths": [64, 128, 256],
+  "reliability_screen": {
+    "min_overlap_fraction_per_chain_and_pooled": 0.5,
+    "max_weight_relative_to_uniform": 10,
+    "max_paired_shift_mcse_in_baseline_sd": 0.1
+  },
+  "interval_probabilities": [0.5, 0.9, 0.95],
+  "policy": "Report every dataset/case, including overlap/precision failures. Never pool datasets or discard chains, choose priors by truth recovery, replace a failed case, or extend chains until pass. Sensitivity size has no pass/fail threshold. Failed reliability screens require new separately declared sampling; no automatic rerun.",
+  "limits": [
+    "Reweighted existing chains, not newly validated alternative-prior MCMC",
+    "Importance overlap is not autocorrelation-corrected MCMC ESS",
+    "Paired batch/chain MCSE estimates mean-shift uncertainty only; weighted intervals have no certified tail precision",
+    "An overlap/precision screen cannot rule out unsampled alternative-prior modes",
+    "All supports remain fixed; this does not test broader priors",
+    "Three fixed-truth realizations are not prior-predictive SBC or a coverage estimate",
+    "Small synthetic same-model target, no real catalog or production MPI replica orchestration"
+  ]
+}

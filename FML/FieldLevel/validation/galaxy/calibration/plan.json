@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "role": "nonlinear_pilot",
+  "scope": "Eight separately frozen prior-predictive synthetic datasets; bounded computational calibration pilot, not precise coverage",
+  "warmup": 256,
+  "samples": 2048,
+  "endpoint_index": 2047,
+  "workers": 4,
+  "analysis_seed": 930501,
+  "sampling_wall_seconds": 57600,
+  "batch_reservation_seconds": 2400,
+  "posterior_gates": {
+    "max_rhat": 1.01,
+    "min_bulk_ess": 400,
+    "min_tail_ess": 400
+  },
+  "interval_probabilities": [
+    0.5,
+    0.9,
+    0.95
+  ],
+  "mocks": [
+    {
+      "id": 201,
+      "truth_seed": 31001,
+      "noise_seed": 31002,
+      "initial_seed_base": 31003,
+      "scalar_truth_seed": 31007
+    },
+    {
+      "id": 202,
+      "truth_seed": 31101,
+      "noise_seed": 31102,
+      "initial_seed_base": 31103,
+      "scalar_truth_seed": 31107
+    },
+    {
+      "id": 203,
+      "truth_seed": 31201,
+      "noise_seed": 31202,
+      "initial_seed_base": 31203,
+      "scalar_truth_seed": 31207
+    },
+    {
+      "id": 204,
+      "truth_seed": 31301,
+      "noise_seed": 31302,
+      "initial_seed_base": 31303,
+      "scalar_truth_seed": 31307
+    },
+    {
+      "id": 205,
+      "truth_seed": 31401,
+      "noise_seed": 31402,
+      "initial_seed_base": 31403,
+      "scalar_truth_seed": 31407
+    },
+    {
+      "id": 206,
+      "truth_seed": 31501,
+      "noise_seed": 31502,
+      "initial_seed_base": 31503,
+      "scalar_truth_seed": 31507
+    },
+    {
+      "id": 207,
+      "truth_seed": 31601,
+      "noise_seed": 31602,
+      "initial_seed_base": 31603,
+      "scalar_truth_seed": 31607
+    },
+    {
+      "id": 208,
+      "truth_seed": 31701,
+      "noise_seed": 31702,
+      "initial_seed_base": 31703,
+      "scalar_truth_seed": 31707
+    }
+  ],
+  "stopping": "Exactly eight four-chain 256/2048 budgets, one dataset at a time. No truth/seed replacement, exclusions, adaptive budgets or extension until pass. Stop launching batches when a full 2400-second reservation does not fit the remaining cumulative 16-hour sampling wall budget. Idle paused time is free; crashed/unacknowledged batches keep the entire reservation.",
+  "ranks": "One final retained endpoint per independent chain; ranks 0..4. Tie RNG domain [0x55,analysis_seed,mock_id,coordinate]. Five scalar, six fixed field projections and likelihood Q; no asymptotic uniformity test or passing-subset calibration claim.",
+  "runtime": "Budget covers runner sampling, refresh and replay wall time across invocations. Measured successful batches refund unused reservations. An active final batch may finish past its reservation; any overrun is charged. Analysis is separate. Graceful SIGTERM/PAUSE drains checkpoints. Preserve partial mocks when capped."
+}

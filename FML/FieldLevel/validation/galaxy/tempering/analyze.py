@@ -18,7 +18,12 @@ def main():
     assert json.loads((root/'restart-replay.json').read_text())['passed']
     target_bytes=((baseline/'chain0/target.json') if baseline else (root/'ensemble0/target.json')).read_bytes();target=json.loads(target_bytes);
     if plan.get('seed_layout')==3:
-        assert target['mock']==dict(id=plan['mock_id'],truth_seed=plan['truth_seed'],noise_seed=plan['noise_seed'],initial_seed_base=plan['initial_seed_base']) and target['truth_parameters']==plan['truth_parameters']
+        assert target['mock']==dict(id=plan['mock_id'],truth_seed=plan['truth_seed'],noise_seed=plan['noise_seed'],initial_seed_base=plan['initial_seed_base'])
+        if plan.get('truth_mode')=='prior_predictive_v1':
+            assert target['truth_mode']=='prior_predictive_v1' and target['scalar_truth_seed']==plan['scalar_truth_seed'] and plan['truth_parameters'] is None
+            from check_prior import check_target
+            check_target(root/'ensemble0/target.json')
+        else:assert target['truth_parameters']==plan['truth_parameters']
     z=np.array(target['data']);data=z[:,0]+1j*z[:,1];weights=np.array(target['weights']);variance=plan['noise_power']/plan['boxsize']**3
     histories=[];times=[];amplitudes=[];energies=[];attempts=[];accepted=[];trips=[];gate_rows=[];prior_energies=[];worst_quad=0
     for e,s in enumerate(summaries):
@@ -93,7 +98,7 @@ def main():
     ax.axhline(.05,color='black',ls='--',label='Pooled-rate gate');ax.set_xticks(edge,edge_labels,rotation=45,ha='right');ax.set_ylim(0,1.15);ax.set(ylabel='Measured exchange acceptance',title='Adjacent exchanges');ax.legend(fontsize=8)
     ax=axes[1,0]
     for e in range(plan['ensembles']):ax.plot(np.arange(plan['samples'])+1,amplitudes[e],lw=.8,color=colors[2*e],label=f'Cold ensemble {e+1}')
-    ax.axhline(1,color='black',ls='--',lw=.8);ax.set(xlabel='Measured sweep',ylabel='sigma8 / reference sigma8',title='Cold amplitude traces; no convergence claim');ax.legend(fontsize=8)
+    ax.axhline(target.get('truth_parameters',plan['truth_parameters'])[0],color='black',ls='--',lw=.8);ax.set(xlabel='Measured sweep',ylabel='sigma8 / reference sigma8',title='Cold amplitude traces; no convergence claim');ax.legend(fontsize=8)
     for e,ax in enumerate(axes[:plan['ensembles'],1]):
         positions=np.argsort(histories[e],axis=1)
         for label in range(k):ax.step(times[e],positions[:,label],where='mid',lw=.7,color=colors[label%len(colors)])

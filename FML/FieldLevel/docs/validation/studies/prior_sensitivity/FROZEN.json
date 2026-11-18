@@ -1,0 +1,80 @@
+{
+  "plan_sha256": "17e951905e04d6d967b78bb47ad9737eb19cdb4439d395f32d04914b56ac597a",
+  "sources": {
+    "original": {
+      "path": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-long/campaign",
+      "files": {
+        "plan.json": "a6fee75b677ab3efb27052a9a9689772a231d01272c007bbace1e0545ffbf98b",
+        "posterior-summary.json": "38d8a32aec65db8250bb9b95a2b9a11012a2fe724b6ddfbffd756daf53be1b1b",
+        "target.json": "5a0467a78e3537e916ca7f523a04fac2b13da61b605a6b3c158f66cf3cfd3319",
+        "completed.json": "bec49ac0869c7c318b3907916ad5a65b80f604f047edd3d86b52138d2b8814f9",
+        "joint.chain0.csv": "3bb3430c8bb6e6064702f789b8208c8e5659cfcbfd8d94126c8b917362684396",
+        "joint.chain1.csv": "dda47f992115e1d4905aa3e3da7745e2e2eb17b6b99d9450a7543bc708121410",
+        "joint.chain2.csv": "839be4f94e6197ecab904d83ba4334acec1124f7f8f72c29ab8ce3a13171b5a9",
+        "joint.chain3.csv": "fa3b07faade5237fd3859e757997b610c8762bc92eda3c864b8a5fd239b081c2",
+        "CURRENT0": "df1d74f6f8dd87f7c5a9f658adebdab27428461ef7a345757b4ba7455cd114a5",
+        "CURRENT1": "2f9506ef509e4552d352d298848fa82c96f5cb827f4eead7050ba0869e6afabc",
+        "CURRENT2": "dbc9599e140c0565aba31ebd3d8f5865ccb6e454510451865324bfc10faa7068",
+        "CURRENT3": "a66a64c91a35428a4b291f5557379342dd5726d0cacc6189f1ce6dc76725e237"
+      },
+      "mapping": {
+        "target.json": "ensemble0/target.json",
+        "CURRENT0": "ensemble0/CURRENT",
+        "CURRENT1": "ensemble1/CURRENT",
+        "CURRENT2": "ensemble2/CURRENT",
+        "CURRENT3": "ensemble3/CURRENT"
+      }
+    },
+    "mock1": {
+      "path": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-independent-mocks/campaign/mock1",
+      "files": {
+        "plan.json": "cf0e1f74605fc1536cb758d5a02830fbc6ac32971c9a46f9cd3f0c0fea0bb432",
+        "posterior-summary.json": "c527078833d9f0b63d703d6b91ace7ea21785d3eebf66e4c298837eb31b25ec2",
+        "target.json": "4572a4a3b99a77eb195b19e9467af7ab69484af6badeeeeaeb074d238c7d8b6b",
+        "completed.json": "da303ce08444b674cd946dc4ced36c8f08005169f9e91f175943eea8aeb5f6d5",
+        "joint.chain0.csv": "e60769280ffaeb656cffda81986440a6c0de8d61e04b63f215bc9b04966e8b07",
+        "joint.chain1.csv": "e6cd7371151c2653549bc2562fd6153089bdade07552c59c8096ff1b8a813862",
+        "joint.chain2.csv": "88ed436de421bbffd95ebb8f6d244d547c6b2f66bd4678b821f77e6facbd74db",
+        "joint.chain3.csv": "490f802b6dfe86dbc5220843436bc8975e15a8601734b9bea2e59ba3985348e8",
+        "CURRENT0": "83b4e68d587836cb45b63573b3a9fc674f6cba599242e0ba6f1bb59227e78b1b",
+        "CURRENT1": "536b0df7f5a2e11bad16da391308eab81c5079a1cb542824181aea242bb80962",
+        "CURRENT2": "bf104539d909524afabf2484f75cbaadaaecef8f760afefa814b7c21d60e4e25",
+        "CURRENT3": "cdb8b53c7ce2aa68534a210c206d9c2c9b244d1420926d0162221ea403accd65"
+      },
+      "mapping": {
+        "target.json": "ensemble0/target.json",
+        "CURRENT0": "ensemble0/CURRENT",
+        "CURRENT1": "ensemble1/CURRENT",
+        "CURRENT2": "ensemble2/CURRENT",
+        "CURRENT3": "ensemble3/CURRENT"
+      }
+    },
+    "mock2": {
+      "path": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-independent-mocks/campaign/mock2",
+      "files": {
+        "plan.json": "1c0bc4336e62072aa1ea6de16b2de52fcfce3bbec156a2c416f9206e6d29d4cd",
+        "posterior-summary.json": "5f63aedead17bbf94477ce2bf301b9c0599ecde42893a91e0210ad960c9241d3",
+        "target.json": "c534a33ed1ad8f42c53113944810f41c6d8c718c69bc8ac822e4a0939915ab2f",
+        "completed.json": "20cd03449e8a3f050c45b09fb0d245409af26f52ee93e252ea302f4e584cd64a",
+        "joint.chain0.csv": "9143c72d7599a68e26b051fa781b64272431a2b3f974402e478237cce9436256",
+        "joint.chain1.csv": "92b1ba2505e30ec3894855b039a839e751287ae932349749ff4ce293d68bd772",
+        "joint.chain2.csv": "e468e30b9a3f7df7819c3b41a3735aeb8c96b0a1bcc26bbd93c841be8cf96df6",
+        "joint.chain3.csv": "7c046422e0303c3aaa4d877b8c8fc282a46dec63f3f80ca56717f79d62566196",
+        "CURRENT0": "077962a51aac5219c34c59f29759039cbc4b6901197b13ecf1d62d46131244fd",
+        "CURRENT1": "33f5bbd9e36f25dd7e8ddcbf7a7ded22a4b04ce356a2005bedb97157b0043e2b",
+        "CURRENT2": "d04ffea05b6995144335e44657c4bc94f315ab58544013d7f844d0e0821181a1",
+        "CURRENT3": "173a2819654175b3bd7db82b46161d3f8ab9d9ddd6c7328014e599b4c2dd49bb"
+      },
+      "mapping": {
+        "target.json": "ensemble0/target.json",
+        "CURRENT0": "ensemble0/CURRENT",
+        "CURRENT1": "ensemble1/CURRENT",
+        "CURRENT2": "ensemble2/CURRENT",
+        "CURRENT3": "ensemble3/CURRENT"
+      }
+    }
+  },
+  "analysis_sha256": "cd742784d6538e7784de85fc59c019cd9012245eaf1df8792acf97e1e63337f0",
+  "weights_sha256": "dd751b51a22098f187549b96013e81f52ccc846c0eaf73d797f099d3ffd62da9",
+  "status": "Frozen before sensitivity evaluation"
+}

@@ -265,3 +265,11 @@ is not an automatic failure, and two mocks are not a coverage determination or
 prior-predictive SBC. Failed-mixing recovery summaries remain provisional. Fitted
 data residuals are not independent predictive checks. Computational convergence
 and recovery/calibration claims are explicitly separated in recovery-summary.json.
+
+## Opt-in prior-predictive truths
+
+[Prior-predictive controls](PRIOR_PREDICTIVE.md) draw scalar truths from the fitted
+bounded-uniform priors with independent white/noise/initial/sampler domains. The
+new FML_MOCK_2 metadata and exact prior/truth enter checkpoint identity. Existing
+fixed-truth formats remain compatible. Native prior/noise and analytic SBC
+controls are separate from the long nonlinear calibration campaign.
