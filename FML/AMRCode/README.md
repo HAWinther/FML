@@ -21,6 +21,9 @@ set in `../Makefile.config` / `Makefile.local` as for the rest of FML.
    CAMB-format file `k [h/Mpc]  P [(Mpc/h)^3]`, or Eisenstein & Hu no-wiggle normalized to `sigma8`). Velocities
    `v = a^2 E f_n Psi_n` with the 1LPT/2LPT growth rates of the flat LCDM background (`LCDM`, growth factors from
    an ODE; checked against CAMB to 5e-4).
+   The random field is generated as in N-GenIC (line seeding); `random_generator = GSL` (default:
+   `gsl_rng_ranlxd1`, the generator of N-GenIC, 2LPTic and L-PICOLA, so the same seed gives their IC) or `MT19937`
+   (`std::mt19937`, the default before November 2026).
 2. **Grid.** Base level `levelmin` (usually `log2(Npart_1D)`), refined up to `levelmax`. A leaf is refined when it
    holds more than `n_refine` particles (cloud-in-cell mass, as RAMSES), and a family of leaves is merged when
    together they hold at most `n_refine`. Done once per coarse step, then load balanced (weight: 1 + particles);

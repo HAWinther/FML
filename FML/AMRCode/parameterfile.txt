@@ -15,6 +15,7 @@ Npart_1D   = 32
 Nmesh_ic   = 32        # Grid for the initial conditions
 LPT_order  = 2
 seed       = 1234
+random_generator = GSL # GSL (ranlxd1, as N-GenIC/2LPTic/L-PICOLA) or MT19937
 fix_amplitude = false
 zini       = 49.0
 

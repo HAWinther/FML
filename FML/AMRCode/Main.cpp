@@ -23,6 +23,8 @@
 #include <FML/Visualization/Visualization.h>
 
 #include <fstream>
+#include <memory>
+#include <stdexcept>
 #include <map>
 #include <set>
 #include <sstream>
@@ -286,6 +288,8 @@ int main(int argc, char ** argv) {
     const int Nmesh_ic = pf.get("Nmesh_ic", Npart_1D);
     const int LPT_order = pf.get("LPT_order", 2);
     const unsigned int seed = (unsigned int)pf.get("seed", 1234);
+    // GSL (gsl_rng_ranlxd1, as N-GenIC/2LPTic/L-PICOLA: the same IC for the same seed) or MT19937 (std::mt19937)
+    const std::string random_generator = pf.get("random_generator", std::string("GSL"));
     const bool fix_amplitude = pf.get("fix_amplitude", false);
     const double zini = pf.get("zini", 49.0);
     const int nsteps = pf.get("nsteps", 50);
@@ -311,7 +315,14 @@ int main(int argc, char ** argv) {
     const double growth_ini = cosmo.D1(aini) / cosmo.D1(1.0);
     FML::PARTICLE::MPIParticles<AMRParticle> part;
     {
-        FML::RANDOM::RandomGenerator rng(seed);
+        std::unique_ptr<FML::RANDOM::RandomGenerator> rng;
+        if (random_generator == "GSL")
+            rng = std::make_unique<FML::RANDOM::GSLRandomGenerator>();
+        else if (random_generator == "MT19937")
+            rng = std::make_unique<FML::RANDOM::RandomGenerator>();
+        else
+            throw std::invalid_argument("random_generator must be GSL or MT19937");
+        rng->set_seed(seed);
         auto Pofk_over_volume = [&](double kBox) {
             const double k = kBox / box;
             return pk(k) * growth_ini * growth_ini / (box * box * box);
@@ -325,7 +336,7 @@ int main(int argc, char ** argv) {
                                                            1.5,
                                                            Nmesh_ic,
                                                            fix_amplitude,
-                                                           &rng,
+                                                           rng.get(),
                                                            one,
                                                            Pofk_over_volume,
                                                            LPT_order,

@@ -5,6 +5,11 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### AMRCode: N-GenIC random generator
+- `random_generator = GSL` (new default: gsl_rng_ranlxd1, as N-GenIC/2LPTic/L-PICOLA and SimulationCode's
+  `ic_random_generator = GSL`) or `MT19937` (std::mt19937, the previous behaviour). The same seed now gives different
+  initial conditions than before unless `random_generator = MT19937`.
+
 ### CosmologyFitting: Brans-Dicke fits
 - `Theory::lensing_Sigma(z)`: Sigma = G_light/G_* of the Weyl potential (quasi-static; Brans-Dicke g/phi, mu-Sigma, cubic
   Galileon, f(R)), used by `kids1000_cosebis` for the lensing kernel; equal to the full perturbations to 2e-7.
