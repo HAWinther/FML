@@ -5,6 +5,15 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: halos on the lightcone
+- `plc_halos` (and `plc_halos_nmin_per_halo`, `plc_halos_linking_length`, `plc_halos_buffer_mpch`,
+  `plc_halos_shell_only`): friends-of-friends at every lightcone step on the particles near the shell of the step;
+  each halo is recorded once where its center of mass crosses the lightcone (moving with the mean velocity of its
+  particles, in every replica), in `lightcone_<name>/halos_lightcone.txt`. The same catalogue as FoF on all the
+  particles (also on 1 and 2 tasks); against FoF on the particle lightcone the halo counts per shell agree to 2% and
+  the masses are 1% lower (median). Test `tests/check_lightcone.py halos`. Cost in a 192^3, 1 Gpc/h, z < 1 octant run:
+  16 s of 132 s.
+
 ### Fading Dark Sector (Obied, Vafa & Wu, arXiv:2611.17422)
 - V_DE = V0 exp(-c phi), m_DM = m0 exp(-c' phi): FML's coupled quintessence with lambda = c, beta = c' (same
   equations and conventions, phi in reduced Planck masses). Added as a named model on top of that code:

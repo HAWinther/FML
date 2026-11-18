@@ -7,6 +7,7 @@
 #include "LightconeCrossing.h"
 #include "Lightcone_Healpix.h"
 #include "Lightcone_Replicas.h"
+#include <FML/FriendsOfFriends/FoF.h>
 #include <FML/GadgetUtils/GadgetUtils.h>
 #include <FML/GadgetUtils/GadgetUtilsHDF5.h>
 #include <FML/Global/Global.h>
@@ -18,6 +19,9 @@
 #include <FML/WeakLensing/WeakLensing.h>
 
 #include <cmath>
+#include <ctime>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <map>
 
@@ -125,6 +129,17 @@ class Lightcone {
     // will realloc which is expensive memory-wise!
     const double particle_allocation_factor{1.2};
 
+    // Friends-of-friends halos on the lightcone (plc_halos)
+    bool halos_on{false};
+    int halos_nmin_per_halo{20};
+    double halos_linking_length{0.2};
+    double halos_buffer_mpch{0.0};
+    bool halos_shell_only{true};
+    double halos_shell_boundary_mpch{20.0};
+    std::string halos_filename;
+    size_t halos_total{0};
+    double halos_time_total{0.0};
+
   private:
     // Comoving distance (in units of the box) from the background and its inverse
     double get_distance(double a) const;
@@ -187,6 +202,13 @@ class Lightcone {
                           const std::string & interpolation_method = "CIC");
 
     bool lightcone_active() const { return lightcone_on; }
+
+    /// Friends-of-friends halos on the lightcone (plc_halos). Called right after create_lightcone for the same step,
+    /// with the particles at apos with their true velocities (as for create_lightcone). FoF on the particles near the
+    /// lightcone shell of the step (plc_halos_shell_only) or on all of them; each halo moves with the mean velocity
+    /// of its particles over the step and is recorded (once) where its center of mass crosses the lightcone, in each
+    /// replica, as the particles are. Appends to lightcone_<name>/halos_lightcone.txt
+    void create_halo_lightcone(MPIParticles<T> & part, double apos, double apos_new, double avel, double delta_time_drift);
 
     /// Is the direction n (unit vector) at distance r (units of the box) from the observer inside the region
     /// covered by the lightcone, i.e. by the box and its replicas (a point on the boundary is outside)? Without
@@ -265,6 +287,14 @@ class Lightcone {
 };
 
 // The settings of the lightcone (read and checked in SimulationParameters), also for the maps and replicas
+inline double MPI_Wtime_or_clock() {
+#ifdef USE_MPI
+    return MPI_Wtime();
+#else
+    return double(std::clock()) / CLOCKS_PER_SEC;
+#endif
+}
+
 template <int NDIM, class T, class U>
 void Lightcone<NDIM, T, U>::set_parameters(const SIMCODE::SimulationParameters & params) {
     const auto & plc = params.lightcone;
@@ -288,6 +318,13 @@ void Lightcone<NDIM, T, U>::set_parameters(const SIMCODE::SimulationParameters &
     if (FML::ThisTask == 0 and relativistic_effects and output_gadgetfile)
         std::cout << "# NB: the potential and observed redshift are only written to the HDF5 and ascii files\n";
     replicas.set_parameters(plc.use_replicas, plc.boundary_mpch, boxsize, plc.pos_observer, plc.ndim_rep);
+
+    halos_on = plc.halos;
+    halos_nmin_per_halo = plc.halos_nmin_per_halo;
+    halos_linking_length = plc.halos_linking_length;
+    halos_buffer_mpch = plc.halos_buffer_mpch;
+    halos_shell_only = plc.halos_shell_only;
+    halos_shell_boundary_mpch = plc.boundary_mpch;
 
     // Only allocate for cb now
     if (make_onion_density_maps)
@@ -332,6 +369,26 @@ void Lightcone<NDIM, T, U>::init(std::vector<std::string> & particle_types) {
 
     // Init the replicas
     replicas.init(plc_a_init, get_distance(plc_a_init), pos_observer);
+
+    // The halo catalogue (appended to at every step)
+    if (halos_on) {
+        halos_filename = plc_folder + "/halos_lightcone.txt";
+        if (FML::ThisTask == 0) {
+            std::ofstream fp(halos_filename);
+            if (not fp.good())
+                throw std::runtime_error("Failed to open " + halos_filename);
+            fp << "# Friends-of-friends halos on the lightcone of " << simulation_name << " (linking length "
+               << halos_linking_length << ", at least " << halos_nmin_per_halo
+               << " particles). Each halo is recorded where its center of mass crosses the lightcone; the halo is "
+                  "found at the start of the step it crosses in\n";
+            fp << "# Observer at (" << pos_observer[0] * boxsize;
+            for (int idim = 1; idim < NDIM; idim++)
+                fp << ", " << pos_observer[idim] * boxsize;
+            fp << ") Mpc/h in the box; positions relative to the observer\n";
+            fp << "# x y z (Mpc/h)  vx vy vz (peculiar, km/s)  z_cosmological  r (Mpc/h)  Npart  M_fof (Msun/h)  "
+                  "sigma_v (km/s, 1D)  a_found\n";
+        }
+    }
 }
 
 // Creates the lightcone every step
@@ -761,6 +818,215 @@ void Lightcone<NDIM, T, U>::create_lightcone(MPIParticles<T> & part,
     }
 
 } // create_lightcone
+
+template <int NDIM, class T, class U>
+void Lightcone<NDIM, T, U>::create_halo_lightcone(MPIParticles<T> & part,
+                                                  double apos,
+                                                  double apos_new,
+                                                  double avel,
+                                                  double delta_time_drift) {
+    if (not lightcone_on or not halos_on)
+        return;
+    // The same conditions as create_lightcone
+    if (std::abs(apos_new / apos - 1.0) < 1e-6)
+        return;
+    if (apos_new < plc_a_init + 1e-3 or apos > plc_a_finish - 1e-3)
+        return;
+    const double time_start = MPI_Wtime_or_clock();
+
+    const auto r_lc_of_a = [this](double a) { return get_distance(a); };
+    const LightconeStep s = make_lightcone_step(apos, apos_new, plc_a_init, plc_a_finish, r_lc_of_a);
+    const size_t n_replicas_total = replicas.get_n_replicas();
+
+    // The particles to link: position and (true) velocity
+    struct HaloParticle {
+        double pos[NDIM];
+        double vel[NDIM];
+        double * get_pos() { return pos; }
+        double * get_vel() { return vel; }
+        constexpr int get_ndim() const { return NDIM; }
+    };
+    double max_disp = 0.0;
+    for (auto & p : part) {
+        const auto * vel = FML::PARTICLE::GetVel(p);
+        for (int idim = 0; idim < NDIM; idim++)
+            max_disp = std::max(max_disp, std::abs(double(vel[idim]) * delta_time_drift));
+    }
+    FML::MaxOverTasks(&max_disp);
+    // Particles that can be in a halo whose center crosses during the step: within the shell r_lc_new < r < r_lc_old
+    // widened by plc_boundary_mpch (more than the size of a halo) and the largest displacement, in any replica in use
+    const double widen = halos_shell_boundary_mpch / boxsize + std::sqrt(double(NDIM)) * max_disp;
+    const double rmin = std::max(s.r_lc_new - widen, 0.0), rmax = s.r_lc_old + widen;
+    std::vector<HaloParticle> fofpart;
+    fofpart.reserve(halos_shell_only ? part.get_npart() / 8 + 1 : part.get_npart());
+    // A halo can straddle a face of the box (periodic): a particle within widen of a face is also tested at its
+    // periodic image on the other side (a halo at x ~ 0 in the octant has members at x ~ 1 in the box)
+    std::vector<std::array<double, NDIM>> images;
+    for (auto & p : part) {
+        const auto * pos = FML::PARTICLE::GetPos(p);
+        const auto * vel = FML::PARTICLE::GetVel(p);
+        bool keep = not halos_shell_only;
+        if (not keep) {
+            images.assign(1, std::array<double, NDIM>{});
+            for (int idim = 0; idim < NDIM; idim++)
+                images[0][idim] = double(pos[idim]) - pos_observer[idim];
+            for (int idim = 0; idim < NDIM; idim++) {
+                const double other = pos[idim] < widen ? 1.0 : (pos[idim] > 1.0 - widen ? -1.0 : 0.0);
+                if (other == 0.0)
+                    continue;
+                const size_t n = images.size();
+                for (size_t k = 0; k < n; k++) {
+                    auto im = images[k];
+                    im[idim] += other;
+                    images.push_back(im);
+                }
+            }
+        }
+        for (size_t i = 0; i < n_replicas_total and not keep; i++) {
+            const auto shift = replicas.get_replica_position(i);
+            if (not replicas.is_flagged_in_use(replicas.get_coord_of_replica(shift)))
+                continue;
+            for (const auto & im : images) {
+                double r2 = 0.0;
+                for (int idim = 0; idim < NDIM; idim++) {
+                    const double x = im[idim] + shift[idim];
+                    r2 += x * x;
+                }
+                if (r2 >= rmin * rmin and r2 <= rmax * rmax) {
+                    keep = true;
+                    break;
+                }
+            }
+        }
+        if (not keep)
+            continue;
+        HaloParticle q;
+        for (int idim = 0; idim < NDIM; idim++) {
+            q.pos[idim] = pos[idim];
+            q.vel[idim] = vel[idim];
+        }
+        fofpart.push_back(q);
+    }
+    size_t nlinked = fofpart.size();
+    FML::SumOverTasks(&nlinked);
+    const double time_selected = MPI_Wtime_or_clock();
+
+    // FoF with the linking length in units of the mean separation of all the particles
+    const size_t npart_total = part.get_npart_total();
+    const double mean_separation = 1.0 / std::pow(double(npart_total), 1.0 / NDIM);
+    std::vector<FML::FOF::FoFHalo<HaloParticle, NDIM>> groups;
+    const bool verbose = FML::FOF::FoF_verbose;
+    FML::FOF::FoF_verbose = false;
+    const double buffer = halos_buffer_mpch > 0.0 ? halos_buffer_mpch / boxsize
+                                                  : std::max(3.0 / boxsize, 10.0 * halos_linking_length * mean_separation);
+    FML::FOF::FriendsOfFriends<HaloParticle, NDIM>(fofpart.data(),
+                                                   fofpart.size(),
+                                                   halos_linking_length,
+                                                   halos_nmin_per_halo,
+                                                   true,
+                                                   buffer,
+                                                   groups,
+                                                   FML::FOF::FoF_Ngrid_max,
+                                                   mean_separation);
+    FML::FOF::FoF_verbose = verbose;
+    const double time_fof = MPI_Wtime_or_clock() - time_selected;
+    size_t ngroups = groups.size();
+    FML::SumOverTasks(&ngroups);
+    size_t nreaching = FML::FOF::FoF_number_of_groups_reaching_buffer_edge;
+    std::vector<HaloParticle>().swap(fofpart);
+
+    // The mass of a particle (Msun/h) and the velocity unit (code -> peculiar km/s)
+    const double particle_mass_msunh = 3.0 * (cosmo->get_Omegab() + cosmo->get_OmegaCDM()) *
+                                       FML::UTILS::SI::MplMpl_over_H0_msunh *
+                                       std::pow(boxsize / FML::UTILS::SI::c_over_H0_mpch, 3) / double(npart_total) *
+                                       cosmo->cb_mass_factor(apos);
+    const double vel_norm = 100 * boxsize / avel;
+
+    // The crossings: the center of mass moves with the mean velocity of the particles
+    constexpr int ncols = 2 * NDIM + 6;
+    std::vector<double> rows;
+    for (auto & g : groups) {
+        Point pos_rel0, delta_pos;
+        for (int idim = 0; idim < NDIM; idim++) {
+            pos_rel0[idim] = g.pos[idim] - pos_observer[idim];
+            delta_pos[idim] = g.vel[idim] * delta_time_drift;
+        }
+        double sigma2 = 0.0;
+        for (int idim = 0; idim < NDIM; idim++)
+            sigma2 += std::max(g.vel_rms[idim] * g.vel_rms[idim], 0.0);
+        const double sigma_v = std::sqrt(sigma2 / NDIM) * vel_norm;
+        for (size_t i = 0; i < n_replicas_total; i++) {
+            const auto shift = replicas.get_replica_position(i);
+            if (not replicas.is_flagged_in_use(replicas.get_coord_of_replica(shift)))
+                continue;
+            Point pos_rel;
+            for (int idim = 0; idim < NDIM; idim++)
+                pos_rel[idim] = pos_rel0[idim] + shift[idim];
+            double a_cross{}, fraction{};
+            if (not lightcone_crossing<NDIM>(pos_rel, delta_pos, s, r_lc_of_a, fraction, a_cross))
+                continue;
+            double r2 = 0.0;
+            for (int idim = 0; idim < NDIM; idim++) {
+                const double x = (pos_rel[idim] + delta_pos[idim] * fraction) * boxsize;
+                rows.push_back(x);
+                r2 += x * x;
+            }
+            for (int idim = 0; idim < NDIM; idim++)
+                rows.push_back(g.vel[idim] * vel_norm);
+            rows.push_back(1.0 / a_cross - 1.0);
+            rows.push_back(std::sqrt(r2));
+            rows.push_back(double(g.np));
+            rows.push_back(double(g.np) * particle_mass_msunh);
+            rows.push_back(sigma_v);
+            rows.push_back(apos);
+        }
+    }
+
+    // Gather on task 0 and append to the catalogue
+    std::vector<double> all = rows;
+#ifdef USE_MPI
+    int nlocal = int(rows.size());
+    std::vector<int> counts(FML::NTasks), offsets(FML::NTasks, 0);
+    MPI_Gather(&nlocal, 1, MPI_INT, counts.data(), 1, MPI_INT, 0, FML::communicator);
+    if (FML::ThisTask == 0) {
+        for (int t = 1; t < FML::NTasks; t++)
+            offsets[t] = offsets[t - 1] + counts[t - 1];
+        all.resize(offsets.back() + counts.back());
+    }
+    MPI_Gatherv(rows.data(),
+                nlocal,
+                MPI_DOUBLE,
+                all.data(),
+                counts.data(),
+                offsets.data(),
+                MPI_DOUBLE,
+                0,
+                FML::communicator);
+#endif
+    const size_t ncrossed = all.size() / ncols;
+    if (FML::ThisTask == 0) {
+        std::ofstream fp(halos_filename, std::ios::app);
+        if (not fp.good())
+            throw std::runtime_error("Failed to open " + halos_filename);
+        fp << std::setprecision(7);
+        for (size_t i = 0; i < ncrossed; i++) {
+            const double * r = &all[i * ncols];
+            for (int c = 0; c < ncols; c++)
+                fp << (c == 2 * NDIM + 4 ? std::setw(9) : std::setw(15))
+                   << (c == 2 * NDIM + 2 ? double(std::llround(r[c])) : r[c]) << (c + 1 < ncols ? " " : "\n");
+        }
+    }
+    halos_total += ncrossed;
+    const double time_used = MPI_Wtime_or_clock() - time_start;
+    halos_time_total += time_used;
+    if (FML::ThisTask == 0)
+        std::cout << "# Lightcone halos: FoF on " << nlinked << " particles (" << 100.0 * nlinked / double(npart_total)
+                  << "% of all), " << ngroups << " halos, " << ncrossed << " crossed the lightcone (" << halos_total
+                  << " so far); " << time_used << " s (selection " << time_selected - time_start << " s, FoF "
+                  << time_fof << " s; " << halos_time_total << " s so far)"
+                  << (nreaching > 0 ? "; " + std::to_string(nreaching) + " halos reached the FoF buffer edge" : "")
+                  << "\n";
+}
 
 template <int NDIM, class T, class U>
 void Lightcone<NDIM, T, U>::make_potential_maps([[maybe_unused]] const SimulationGrid<NDIM> & potential_grid,

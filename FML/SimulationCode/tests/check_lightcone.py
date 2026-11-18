@@ -16,6 +16,13 @@
 #             approximation of r(a), here 89 - 113 Mpc/h)
 #  coverage : without replicas an observer at (0.5, 0.5, 0.5) and R(z_init) > 0.5 boxsize gives an incomplete
 #             octant: must be an error
+#  halos    : plc_halos (64^3 particles in 128 Mpc/h, an octant with replicas to z = 0.12, 30 steps). FoF on the
+#             particles near the shell of each step (plc_halos_shell_only, the default) must give the same catalogue as
+#             FoF on all of them (a halo can straddle a face of the box: the members at x ~ 1 of a halo at x ~ 0 in the
+#             octant were left out), on 1 and 2 tasks. Against FoF run afterwards on the particle lightcone (scipy,
+#             halos > 8 Mpc/h from the edges of the octant): the same number of halos per radial shell (to 5%), >= 97%
+#             of the halos with >= 50 particles matched within 2 Mpc/h and median mass ratio 1 to 3% (the halos are
+#             found at the start of the step they cross in; measured 0.99)
 #  healpix  : (if compiled with USE_HEALPIX, needs healpy) the onion density maps of an octant (no replicas)
 #             compared with the full sky (replicas): delta = 0 outside the octant (pixel centers), zero mean and
 #             the same delta as the full sky map (up to the mean) inside, and the C_ell are those of the full sky
@@ -44,7 +51,7 @@ sys.path.insert(0, os.path.join(here, "regression"))
 import cases  # noqa: E402
 
 exe, outdir = os.path.abspath(sys.argv[1]), os.path.abspath(sys.argv[2])
-tests = sys.argv[3:] or ["cola", "batches", "zfinish", "coverage", "healpix"]
+tests = sys.argv[3:] or ["cola", "batches", "zfinish", "coverage", "halos", "healpix"]
 mpirun = os.environ.get("MPIRUN", "mpirun -np 2").split()
 
 
@@ -214,6 +221,65 @@ if "coverage" in tests:
     report(rc != 0 and "will not be complete" in log and "Drifting particles" not in log,
            "coverage: no replicas, observer at (0.5, 0.5, 0.5) and R(z_init) = 0.91 boxsize > 0.5 is an error "
            f"before the first lightcone step (exit code {rc})")
+
+if "halos" in tests:
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    nh, boxh = 64, 128.0
+    halo_params = dict(particle_Npart_1D=nh, ic_nmesh=nh, force_nmesh=2 * nh, pofk_nmesh=nh, simulation_boxsize=boxh,
+                       plc_z_init=0.12, plc_use_replicas=True, plc_ndim_rep=0, timestep_nsteps=[30], plc_halos=True,
+                       plc_halos_nmin_per_halo=20, plc_halos_linking_length=0.2, plc_halos_buffer_mpch=0.0,
+                       plc_halos_shell_only=True)
+    cats = {}
+    for name, over, launcher in [("halos_shell", {}, None),
+                                 ("halos_all", dict(plc_halos_shell_only=False, plc_output_asciifile=False), None),
+                                 ("halos_np1", dict(plc_output_asciifile=False), mpirun[:-1] + ["1"])]:
+        d, _ = run(name, dict(halo_params, **over), launcher=launcher)
+        cats[name] = np.loadtxt(os.path.join(d, "output", "lightcone_Reg", "halos_lightcone.txt"), ndmin=2)
+    a = cats["halos_shell"]
+    for other in ["halos_all", "halos_np1"]:
+        b = cats[other]
+        same = len(a) == len(b) and len(a) > 0
+        if same:
+            dist, j = cKDTree(b[:, :3]).query(a[:, :3])
+            same = dist.max() < 1e-3 and np.all(a[:, 8] == b[j, 8])
+        report(same, f"halos: shell-only FoF ({len(a)} halos) gives the same catalogue as {other} ({len(b)})")
+    # FoF afterwards on the particle lightcone
+    x = lightcone_ascii(os.path.join(outdir, "halos_shell"))
+    pairs = cKDTree(x).query_pairs(0.2 * boxh / nh, output_type="ndarray")
+    _, lab = connected_components(coo_matrix((np.ones(len(pairs)), (pairs[:, 0], pairs[:, 1])),
+                                             shape=(len(x), len(x))), directed=False)
+    cnt = np.bincount(lab)
+    keep = np.isin(lab, np.where(cnt >= 20)[0])
+    lb, xs = lab[keep], x[keep]
+    order = np.argsort(lb)
+    lb, xs = lb[order], xs[order]
+    _, start, num = np.unique(lb, return_index=True, return_counts=True)
+    com = np.add.reduceat(xs, start, axis=0) / num[:, None]
+    rmax = 0.0
+    for f in glob.glob(os.path.join(outdir, "halos_shell", "output", "lightcone_Reg", "lightcone_cb_ascii_step*")):
+        m = re.search(r"distances is in \[([\d.e+-]+) -> ([\d.e+-]+)\]", open(f).read(600))
+        if m:
+            rmax = max(rmax, float(m.group(2)))
+
+    def inside(p):
+        r = np.linalg.norm(p, axis=1)
+        return (p.min(1) > 8.0) & (r > 30.0) & (r < rmax - 8.0)
+
+    A, B = inside(com), inside(a[:, :3])
+    for r0, r1 in [(30.0, 150.0), (150.0, 250.0), (250.0, rmax - 8.0)]:
+        na = np.sum(A & (np.linalg.norm(com, axis=1) >= r0) & (np.linalg.norm(com, axis=1) < r1))
+        nb = np.sum(B & (a[:, 7] >= r0) & (a[:, 7] < r1))
+        report(abs(nb / na - 1) < 0.05, f"halos: {nb} halos with {r0:.0f} <= r < {r1:.0f} Mpc/h, {na} from FoF on the "
+               f"particle lightcone (to 5%)")
+    dist, j = cKDTree(a[:, :3]).query(com[A], distance_upper_bound=2.0)
+    big = num[A] >= 50
+    found = np.isfinite(dist) & big
+    ratio = a[j[found], 8] / num[A][found]
+    report(found.sum() / big.sum() >= 0.97 and abs(np.median(ratio) - 1) < 0.03,
+           f"halos: {found.sum()} of {big.sum()} halos with >= 50 particles of the particle lightcone matched within "
+           f"2 Mpc/h (>= 97%), median mass ratio {np.median(ratio):.3f} (1 to 3%)")
 
 if "healpix" in tests:
     features = subprocess.run(mpirun + [exe, "--features"], capture_output=True, text=True, env=env).stdout

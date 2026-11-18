@@ -40,7 +40,7 @@ snapshots from other simulations. There is more documentation on [the website](h
   - Redshift-space multipoles and bispectra.
   - Hybrid-bias spectra (real and redshift space) with Zel'dovich and one-loop predictions.
   - FoF and spherical-overdensity halos with mass functions.
-  - Lightcones with HEALPix maps.
+  - Lightcones with HEALPix maps and friends-of-friends halos.
   - Baryonification.
   - GADGET binary or HDF5 snapshots.
 
@@ -114,7 +114,7 @@ Everything goes to `output_folder`, labelled with `simulation_name`:
   - hybrid-bias spectra and their redshift-space multipoles
   - halo catalogues and mass functions
   - baryonified spectra
-- lightcone particles and maps
+- lightcone particles, maps and halos
 
 [ANALYSIS.md](ANALYSIS.md) describes the files and their conventions.
 

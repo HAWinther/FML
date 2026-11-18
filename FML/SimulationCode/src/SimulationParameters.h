@@ -1273,6 +1273,11 @@ namespace SIMCODE {
         double da_maps;               // Roughly the size of the bins in a for the maps
         bool use_chunkpix;            // Store the maps with chunkpix
         int nside_chunks;             // Healpix nside of the chunks
+        bool halos{false};            // Friends-of-friends halos on the lightcone
+        int halos_nmin_per_halo{20};
+        double halos_linking_length{0.2};
+        double halos_buffer_mpch{0.0};
+        bool halos_shell_only{true};
 
         /// The parameters (see ParameterFields.h)
         template <class F>
@@ -1319,6 +1324,38 @@ namespace SIMCODE {
                     "of Phi/c^2 at the shells. Phi from the Poisson equation with the density used for the "
                     "force (the GR potential also for modified gravity models). Costs one extra FFT per "
                     "step while recording the lightcone");
+                f.always_optional(
+                    "plc_halos",
+                    halos,
+                    false,
+                    "Friends-of-friends halos on the lightcone: at every step that records the lightcone, FoF on the "
+                    "particles near the lightcone shell of the step (with their true velocities); each halo is "
+                    "recorded once, when its center of mass crosses the lightcone (moving with the mean velocity of "
+                    "its particles, as the particles do), in lightcone_<name>/halos_lightcone.txt");
+                f.if_true("plc_halos", [&]() {
+                    f.always_optional("plc_halos_nmin_per_halo",
+                                      halos_nmin_per_halo,
+                                      20,
+                                      "Minimum number of particles per lightcone halo",
+                                      check::positive());
+                    f.always_optional("plc_halos_linking_length",
+                                      halos_linking_length,
+                                      0.2,
+                                      "Linking length of the lightcone halos in units of the mean particle separation",
+                                      check::positive());
+                    f.always_optional("plc_halos_buffer_mpch",
+                                      halos_buffer_mpch,
+                                      0.0,
+                                      "FoF buffer region from neighbor tasks for the lightcone halos (Mpc/h; larger "
+                                      "than the largest halo). 0: the larger of 3 Mpc/h and 10 linking lengths",
+                                      check::non_negative());
+                    f.always_optional("plc_halos_shell_only",
+                                      halos_shell_only,
+                                      true,
+                                      "Link only the particles within plc_boundary_mpch (plus the largest "
+                                      "displacement of the step) of the lightcone shell of the step (in any "
+                                      "replica). false: all the particles every step (for tests; the same halos)");
+                });
                 f.optional("plc_make_onion_density_maps",
                            make_onion_density_maps,
                            false,

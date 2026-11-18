@@ -398,6 +398,10 @@ void NBodySimulation<NDIM, T>::drift_and_lightcone(const Step & s) {
         lightcone->create_lightcone(
             part, s.apos, s.apos_new, s.avel_new, s.delta_time_drift, current_force.density_assignment_method);
         timer.EndTiming("Lightcone");
+        // Friends-of-friends halos on the lightcone (plc_halos)
+        timer.StartTiming("LightconeHalos");
+        lightcone->create_halo_lightcone(part, s.apos, s.apos_new, s.avel_new, s.delta_time_drift);
+        timer.EndTiming("LightconeHalos");
     }
     if (cola.enabled and make_lightcone) {
         timer.StartTiming("COLA");
