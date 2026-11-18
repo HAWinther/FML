@@ -18,6 +18,17 @@ namespace FML::COSMOLOGY::FITTING {
         run.compute_cells = opt.cmb;
         run.ps.lensing = opt.cmb;
         run.ps.ell_max = opt.cmb_ell_max;
+        if (opt.cmb) {
+            // The line-of-sight integrals need k_max r_* > 1.05 ell for the largest ell of the unlensed spectra,
+            // ell_max + lensing_delta_ell (r_* ~ 13900 Mpc): raise k_max with 10% margin if needed (ell_max ~ 3000
+            // for ACT lensing; unchanged for ell_max = 2508)
+            const int dl = run.ps.lensing_delta_ell >= 0 ? run.ps.lensing_delta_ell : std::max(500, run.ps.ell_max / 3);
+            const double k_need = 1.1 * 1.05 * (run.ps.ell_max + dl) / (13900.0 * Mpc);
+            if (run.pert.k_values.empty() && run.pert.k_max < k_need)
+                run.pert.k_max = k_need;
+        }
+        if (opt.pk_k_max > 0.0 && run.pert.k_values.empty())
+            run.pert.k_max = std::max(run.pert.k_max, opt.pk_k_max * s.cosmo.h / Mpc);
         ebs = std::make_unique<EinsteinBoltzmannSolver>(run);
         ebs->set_verbose(false);
         ebs->solve(EinsteinBoltzmannSolver::Stage::Background);
@@ -250,6 +261,15 @@ namespace FML::COSMOLOGY::FITTING {
                 P.push_back(ps.get_matter_power_spectrum_cb_extrapolated(x, k / unit) / (unit * unit * unit));
             pk_tables.push_back(P);
         }
+        pk_theta_tables.clear();
+        if (opt.pk_theta)
+            for (double z : opt.pk_z) {
+                const double x = -std::log1p(z);
+                std::vector<double> P;
+                for (double k : pk_k_grid())
+                    P.push_back(ps.get_matter_power_spectrum_theta_cb_extrapolated(x, k / unit) / (unit * unit * unit));
+                pk_theta_tables.push_back(P);
+            }
         pk_nl_tables.clear();
         growth_D_z.clear();
         const double k_D = 1e-4 / unit, P0 = ps.get_matter_power_spectrum_extrapolated(0.0, k_D);
@@ -372,6 +392,17 @@ namespace FML::COSMOLOGY::FITTING {
                 return pk_tables[i];
             }
         throw std::logic_error("Theory::pk_cb at z = " + std::to_string(z) + " which is not in TheoryOptions::pk_z");
+    }
+
+    const std::vector<double> & Theory::pk_theta(double z) const {
+        if (!opt.pk_theta)
+            throw std::logic_error("Theory::pk_theta needs TheoryOptions::pk_theta = true");
+        for (size_t i = 0; i < opt.pk_z.size(); i++)
+            if (std::abs(opt.pk_z[i] - z) < 1e-9) {
+                ensure_growth();
+                return pk_theta_tables[i];
+            }
+        throw std::logic_error("Theory::pk_theta at z = " + std::to_string(z) + " which is not in TheoryOptions::pk_z");
     }
 
 } // namespace FML::COSMOLOGY::FITTING

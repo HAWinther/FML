@@ -59,10 +59,17 @@ start, min, max, step} samples it (also the aliases \code{H0}, \code{omega_b}, \
 the likelihoods need: the background for supernovae; the recombination history for BAO and distance priors ($r_d$, $z_*$); the full lensed CMB spectra for the
 CMB likelihoods. The likelihoods:
 \begin{itemize}
-\item supernovae: Pantheon+ \cite{Brout2022}, DES-SN5YR \cite{DESY5} and Union3 \cite{Rubin2023}, with the absolute magnitude marginalised analytically;
+\item supernovae: Pantheon+ \cite{Brout2022}, DES-SN5YR \cite{DESY5}, DES-Dovekie \cite{Popovic2025} and Union3 \cite{Rubin2023}, with the absolute magnitude
+      marginalised analytically;
 \item BAO: DESI DR1 and DR2 with full covariance \cite{DESI2025}; BBN $\omega_b$;
+\item DESI DR1 full shape \cite{DESI2024VII}: the rotated $P_0$, $P_2$ of the six samples with their window and systematics, as DESI's own likelihood: velocileptors'
+      REPT with the loops of the linear $P_{cb}$ at the first redshift scaled by $D^4$, the linear terms and $f(k)=(P_{\theta\theta}/P_{cb})^{1/2}$ at each redshift
+      (\cref{ch:perturbation-theory}), the peak-average no-wiggle filter, AP, the physical bias basis and the counterterms and stochastic terms marginalised analytically;
 \item CMB: Planck 2018 distance priors \cite{Chen2019DP}, plik\_lite TTTEEE/TT with the low-$\ell$ TT compressed \cite{Planck2018spectra,PrinceDunkley2019}, the Planck 2018
-      lensing likelihood \cite{Planck2018lensing} (also CMB-marginalised), and an exact mock Gaussian likelihood of TT, TE, EE (and BB) for forecasts and tests.
+      lensing likelihood \cite{Planck2018lensing} (also CMB-marginalised), Planck 2018's low-$\ell$ TT (Commander) and EE (SimAll) likelihoods
+      \cite{Planck2018spectra} and the high-$\ell$ CamSpec PR4 (NPIPE) TTTEEE likelihood \cite{Rosenberg2022} with its foreground residuals and calibrations (ported from
+      Cobaya), the ACT DR6 (+ Planck PR4) lensing likelihood \cite{Madhavacheril2023,Qu2023} with its CMB-dependent normalisation and $N_1$ corrections
+      (linear in the spectra, precomputed as matrices on the bandpowers), and an exact mock Gaussian likelihood of TT, TE, EE (and BB) for forecasts and tests.
 \end{itemize}
 With several likelihoods each $\chi^2$ is a derived parameter, as are $H_0$, $\Om$, the age, $r_d$, $\theta_*$, $\sigma_8$ and $S_8$.
 
@@ -81,7 +88,8 @@ mcmc_output = chains/w0wa
 \begin{validation}[Validation: cosmology fitting]
 Distances against independent integrals, $r_d$ against CLASS to $10^{-4}$, the distance priors at the Planck best fit within $0.3\sigma$; plik\_lite equal to planck-lite-py
 to $10^{-13}$ in $\ln L$ and the lensing likelihood equal to Cobaya's to $10^{-14}$; supernova likelihoods equal to an independent Python implementation to $10^{-5}$ in
-$\chi^2$. DESI DR2 + BBN gives $\Om=0.2975\pm0.0085$, $hr_d=101.53\pm0.72$\,Mpc, $H_0=68.53\pm0.60$, as the DESI analysis. DESI DR2 + distance priors + Pantheon+ in $w_0w_a$:
+$\chi^2$; the Planck low-$\ell$ TT and EE likelihoods equal to Cobaya's to $10^{-14}$ in $\ln L$ and CamSpec PR4 to $10^{-8}$ (relative) in $\chi^2$, ACT DR6 lensing equal to act\_dr6\_lenslike to $10^{-14}$; DESI DR1 full shape equal to DESI's code path (velocileptors) to $10^{-7}$ in $\ln L$ for the same
+linear inputs, whose $P_{cb}$ agrees with CAMB's to $10^{-4}$. DESI DR2 + BBN gives $\Om=0.2975\pm0.0085$, $hr_d=101.53\pm0.72$\,Mpc, $H_0=68.53\pm0.60$, as the DESI analysis. DESI DR2 + distance priors + Pantheon+ in $w_0w_a$:
 $w_0=-0.848\pm0.054$, $w_a=-0.55\pm0.22$, $\Delta\chi^2=-7.6$ against $\Lambda$CDM. The plik\_lite (+ lensing) best fit agrees with the Planck 2018 best-fit parameters to a
 fraction of $\sigma$; mock CMB fits with isocurvature, tensors or ultralight axions recover the fiducial values.
 \end{validation}

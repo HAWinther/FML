@@ -32,7 +32,8 @@
 //   <mcmc_output>.profile_<name>.txt The starts and the profile points are spread over MPI processes (and OpenMP
 //   threads, as the chains). cmb_mock_file, cmb_mock_lmax, cmb_mock_fsky, cmb_mock_noise, cmb_mock_beam   options of
 //   cmb_mock
-// Entries on the command line replace those of the file (also sample_* and gauss_*).
+// Entries on the command line replace those of the file (also sample_* and gauss_*; an empty value, sample_x=,
+// removes it).
 // Every other name is a parameter of ./cmb (cosmology, model and its parameters, precision) and fixes it, or a
 // nuisance parameter of a likelihood (A_planck) fixed to that value.
 //
@@ -243,6 +244,8 @@ int main(int argc, char ** argv) {
                     throw std::invalid_argument("mcmc_sound_horizon must be recombination or fit");
             } else if (lopt.count(k)) {
                 like_opts[k] = v;
+            } else if ((k.rfind("sample_", 0) == 0 || k.rfind("gauss_", 0) == 0) && trim(v).empty()) {
+                continue; // "sample_x=" on the command line removes sample_x of the file
             } else if (k.rfind("sample_", 0) == 0) {
                 const auto t = split(v);
                 if (t.size() < 4)
@@ -319,13 +322,19 @@ int main(int argc, char ** argv) {
             for (double z : likes.back()->pk_redshifts())
                 if (std::find(topt.pk_z.begin(), topt.pk_z.end(), z) == topt.pk_z.end())
                     topt.pk_z.push_back(z);
+            topt.pk_theta = topt.pk_theta || likes.back()->needs_pk_theta();
+            topt.pk_k_max = std::max(topt.pk_k_max, likes.back()->pk_k_max());
             for (double z : likes.back()->pk_nl_redshifts())
                 if (std::find(topt.pk_nl_z.begin(), topt.pk_nl_z.end(), z) == topt.pk_nl_z.end())
                     topt.pk_nl_z.push_back(z);
         }
         topt.cmb = need_cmb; // without CMB likelihoods sigma8 and f sigma8 come from P(k) alone
-        if (!like_opts.empty() && std::find(like_names.begin(), like_names.end(), "cmb_mock") == like_names.end())
-            throw std::invalid_argument("cmb_mock_* options given without the cmb_mock likelihood");
+        for (const auto & [k, v] : like_opts) {
+            const bool desi = k.rfind("desi_fs_", 0) == 0;
+            const std::string needs = desi ? "desi_dr1_fs" : "cmb_mock";
+            if (std::none_of(like_names.begin(), like_names.end(), [&](const std::string & n) { return n.rfind(needs, 0) == 0; }))
+                throw std::invalid_argument(k + " given without the " + needs + " likelihood");
+        }
         for (const auto & [k, v] : base_kv) {
             if (nuisance_names.count(k))
                 fixed_nuisance[k] = std::stod(v);

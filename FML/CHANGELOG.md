@@ -5,6 +5,30 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### CosmologyFitting: DESI DR1 full shape, Planck PR4 CamSpec, Planck low-ell, ACT DR6 lensing, DES-Dovekie, Fading Dark Sector
+- `planck_lowl_TT` (Commander) and `planck_lowl_EE` (SimAll), Planck 2018's low-ell likelihoods, and
+  `planck_camspec_npipe_TTTEEE` (also `_TT`, `_TE`, `_EE`, `_TTTE`), the high-ell CamSpec PR4 (NPIPE) likelihood
+  with its power-law foreground residuals and calibrations (PlanckLikelihoods.h), ported from Cobaya's native
+  versions and equal to them (ln L to 1e-14; CamSpec chi^2 to 1e-8 relative). Data: `python/fetch_planck_data.py`.
+- `act_dr6_lensing_actplanck`, `act_dr6_lensing` (+ `_extended`): ACT DR6 (+ Planck PR4) lensing as
+  act_dr6_lenslike 1.2.1 with its CMB-dependent corrections, precomputed as matrices by
+  `python/convert_act_dr6_lensing.py`; equal to act_dr6_lenslike to 1e-14. Theory raises the perturbation k_max
+  when the CMB spectra are needed beyond ell ~ 2700.
+- `desi_dr1_fs` (and `desi_dr1_fs_<SAMPLE>`): DESI's DR1 full-shape power-spectrum likelihood (DESIFullShape.h) as
+  DESI's Cobaya likelihood with velocileptors' REPT (varyDz_nu: loops scaled by D^4, linear terms and f(k) at each
+  redshift), DESI's physical bias basis and the analytic marginalization of the counterterms and stochastic terms
+  (`desi_fs_solve = marg | best`); equal to DESI's code path to 1e-7 for the same inputs.
+  `python/convert_desi_dr1_fullshape.py`, `params/mcmc_lcdm_desi_fs_bbn.ini`. Theory: `pk_theta` (P_thetatheta of the
+  CDM + baryons, `PowerSpectrum::get_matter_power_spectrum_theta_cb_extrapolated`), `pk_k_max`, and `cached()` for
+  likelihood products kept with a theory. `PeakAverageBAOFilter` (from the ShapeFit likelihood) is reusable.
+- PerturbationTheory: `EPTRedshiftSpace::table_at_mu_scaled` and `multipole_components_scaled` (velocileptors'
+  ept_fullresum_varyDz_nu_fftw), equal to velocileptors to 1e-8.
+- `desdovekie`: the DES-Dovekie supernovae (DES-SN5YR recalibrated, Popovic et al. 2025), as Cobaya's
+  `sn.desdovekie` (`python/fetch_sn_data.py desdovekie`); `SNIaLikelihood` takes an inverse covariance.
+- `params/mcmc_fds_cmb_desi_dovekie.ini`: the Fading Dark Sector (`model = fading_dark_sector`, `fds_c`,
+  `fds_cprime`) with CamSpec PR4 + low-ell + ACT DR6 + Planck PR4 lensing, DESI DR2 BAO and DES-Dovekie (Obied, Vafa & Wu 2026).
+- `./mcmc`: an empty `sample_x=` or `gauss_x=` on the command line removes that entry of the file.
+
 ### NBody: force grid finer than the particle grid
 - Warning in `ForceOptions.h`/`ForceOptions.md` and the book (sec. on the force grid and the lattice): with
   Nmesh = m Npart_1D the lattice of `NBodyInitialConditions` sits on grid nodes, and CIC with the default continuous

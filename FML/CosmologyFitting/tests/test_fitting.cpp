@@ -5,8 +5,12 @@
 //   * Theory: D_M, D_H against independent integrals of 1/H; the sound horizon at the drag epoch against
 //     CLASS; the Planck 2018 distance priors at the Planck best fit (R, l_A within 1 sigma); the fitting formula
 //     for r_d against the recombination value
+//   * Supernovae: the inverse-covariance constructor; DES-Dovekie chi^2 against numpy with Cobaya's formula
 //   * Likelihoods: the analytic marginalization over the supernova amplitude; the BAO model vector; plik_lite
-//     against planck-lite-py (4 variants, 1e-8); the mock CMB likelihood
+//     against planck-lite-py (4 variants, 1e-8); Planck low-ell TT (Commander), EE (SimAll) and CamSpec PR4 TTTEEE, TT
+//     against Cobaya 3.6.2 (if the data are downloaded); the not-a-knot spline; ACT DR6 lensing (4 variants)
+//     against act_dr6_lenslike 1.2.1 (if converted); DESI DR1 full shape against DESI's code path (velocileptors) for
+//     the same REPT inputs (if converted); the mock CMB likelihood
 //   * BAO + RSD: the BOSS DR12 / eBOSS DR16 model vectors (r_d,fid scaling, H r_d); sigma_8 and f sigma_8 (CAMB's
 //     definition, sigma_8,vd^2/sigma_8 of the CDM + baryons) against CAMB 2.0.5 (AccuracyBoost 2) for the planck2018
 //     preset with m_nu = 0.06 (precision = fast: 3e-4 for f sigma_8; 4e-5 at the default precision); the same from
@@ -27,9 +31,13 @@
 #include <FML/tests/TestHelpers.h>
 #include <FML/Cosmology/Common.h>
 #include <FML/CosmologyFitting/Likelihoods.h>
+#include <FML/CosmologyFitting/PlanckLikelihoods.h>
+#include <FML/CosmologyFitting/DESIFullShape.h>
 #include <FML/MCMC/Sampler.h>
 #include <FML/CosmologyFitting/SampledParameterMap.h>
 #include <FML/CosmologyFitting/Theory.h>
+
+#include <gsl/gsl_linalg.h>
 
 #include <cmath>
 #include <filesystem>
@@ -92,6 +100,37 @@ int main() {
         check_close((tp.z_star() - 1089.95) / 0.27, 0.0, 1.0, "z_* (tau = 1) = Planck's 1089.95 +- 0.27");
         PlanckDistancePriors dp;
         check(-2.0 * dp.loglike(tp) < 2.0, "distance-prior chi^2 < 2 at the Planck mean");
+    }
+
+    std::cout << "Supernovae: the inverse-covariance constructor; DES-Dovekie\n";
+    {
+        // a 3 x 3 covariance and its inverse give the same ln L
+        const std::vector<double> z{0.1, 0.5, 1.0}, m{38.3, 42.3, 44.1}, mu{38.0, 42.0, 43.85};
+        const std::vector<double> C{0.04, 0.01, 0.0, 0.01, 0.05, 0.02, 0.0, 0.02, 0.09};
+        gsl_matrix * A = gsl_matrix_alloc(3, 3);
+        for (int i = 0; i < 9; i++)
+            A->data[i] = C[i];
+        gsl_linalg_cholesky_decomp1(A);
+        gsl_linalg_cholesky_invert(A);
+        const std::vector<double> iC(A->data, A->data + 9);
+        gsl_matrix_free(A);
+        SNIaLikelihood a("a", z, z, m, C), b("b", z, z, m, iC, SNIaLikelihood::InverseCovariance{});
+        check_close(a.loglike_mu(mu), b.loglike_mu(mu), 1e-12, "ln L from C and from C^-1 agree");
+        check(throws([&] {
+                  SNIaLikelihood("c", z, z, m, std::vector<double>(9, 0.0), SNIaLikelihood::InverseCovariance{});
+              }),
+              "a zero inverse covariance is an error");
+        // DES-Dovekie (python3 python/fetch_sn_data.py desdovekie) at the Planck 2018 cosmology: chi^2 of numpy with
+        // Cobaya's sn.desdovekie (M marginalized) + ln(sum C^-1 / 2 pi), from the same D_M
+        if (std::filesystem::exists("external/sn/DES-Dovekie/covtot_inv_000.txt")) {
+            RunSettings s = ParameterFile::read("", {"preset=planck2018"});
+            Theory t(s);
+            auto L = SNIaLikelihood::desdovekie();
+            check(L->n_data() == 1820, "DES-Dovekie: 1820 SNe");
+            check_close(-2.0 * L->loglike(t), 1642.139543, 1e-5, "DES-Dovekie chi^2 at Planck 2018 = numpy (Cobaya)");
+        } else {
+            std::cout << "  (DES-Dovekie data not downloaded: skipped)\n";
+        }
     }
 
     std::cout << "Likelihoods\n";
@@ -178,6 +217,188 @@ int main() {
         check(L.n_data() == 613, "613 bins");
         // calibration: C -> C/A^2; A = 1.0025 shifts ln L
         check(std::fabs(L.loglike(tt, te, ee, 1.0025) - L.loglike(tt, te, ee)) > 0.1, "A_planck changes ln L");
+    }
+
+    std::cout << "Planck low-ell TT, EE and CamSpec PR4 against Cobaya\n";
+    if (std::filesystem::exists("external/planck_npipe_camspec/like_NPIPE_12.6_unified_cov.bin") &&
+        std::filesystem::exists("external/planck2018_lowT/cov.txt") &&
+        std::filesystem::exists("external/planck2018_lowE/prob_table.txt")) {
+        // the same D_ell as above; references from Cobaya 3.6.2 (planck_2018_lowl.TT, .EE and
+        // planck_NPIPE_highl_CamSpec.TTTEEE, .TT with use_cache = False)
+        std::vector<double> tt(2509, 0.0), te(2509, 0.0), ee(2509, 0.0);
+        {
+            std::ifstream f("tests/reference/Dl_planck2015fit.dat");
+            std::string line;
+            while (std::getline(f, line)) {
+                if (line.empty() || line[0] == '#')
+                    continue;
+                std::istringstream is(line);
+                double l, a, b, c;
+                if (is >> l >> a >> b >> c && l < 2509) {
+                    tt[int(l)] = a;
+                    te[int(l)] = b;
+                    ee[int(l)] = c;
+                }
+            }
+        }
+        PlanckLowlTTLikelihood T("external/planck2018_lowT");
+        PlanckLowlEELikelihood E("external/planck2018_lowE");
+        check_close(T.loglike(tt), -12.080985788052402, 1e-10, "low-ell TT: ln L = Cobaya's");
+        check_close(T.loglike(tt, 1.0025), -11.876258969999583, 1e-10, "low-ell TT, A_planck = 1.0025: ln L = Cobaya's");
+        check_close(E.loglike(ee), -203.86769611663505, 1e-10, "low-ell EE: ln L = Cobaya's");
+        check_close(E.loglike(ee, 1.0025), -203.81589184914785, 1e-10, "low-ell EE, A_planck = 1.0025: ln L = Cobaya's");
+        std::vector<double> big(tt);
+        for (auto & v : big)
+            v *= 100.0;
+        check(std::isinf(T.loglike(big)) && std::isinf(E.loglike(big)), "outside the tables: ln L = -inf");
+        CamSpecNPIPELikelihood::Nuisance p;
+        p.amp_143 = 12.0, p.amp_217 = 25.0, p.amp_143x217 = 9.0, p.n_143 = 1.1, p.n_217 = 0.9, p.n_143x217 = 1.3;
+        p.A_planck = 1.001, p.calTE = 0.995, p.calEE = 1.01;
+        CamSpecNPIPELikelihood C("external/planck_npipe_camspec", {"143x143", "217x217", "143x217", "TE", "EE"}, "x");
+        check(C.n_data() == 9915, "CamSpec PR4 TTTEEE: 9915 multipoles");
+        // (Cobaya inverts the covariance, here it is Cholesky-factorized: 8e-5 of chi^2 ~ 1e4)
+        check_close(C.chi2(tt, te, ee, p), 11791.419389986238, 2e-4, "CamSpec PR4 TTTEEE: chi^2 = Cobaya's");
+        CamSpecNPIPELikelihood C2("external/planck_npipe_camspec", {"143x143", "217x217", "143x217"}, "x");
+        check_close(C2.chi2(tt, te, ee, p), 7643.645901945453, 1e-5, "CamSpec PR4 TT: chi^2 = Cobaya's");
+        NotAKnotSpline s({0.0, 1.0, 2.5, 3.0, 4.5}, {1.0, 2.0, -1.0, 0.5, 3.0});
+        // a not-a-knot spline through the points of a cubic is that cubic
+        auto cub = [](double x) { return 1.0 - 2.0 * x + 0.5 * x * x * x; };
+        NotAKnotSpline sc({0.0, 1.0, 2.5, 3.0, 4.5}, {cub(0.0), cub(1.0), cub(2.5), cub(3.0), cub(4.5)});
+        check_close(sc(1.7), cub(1.7), 1e-12, "not-a-knot spline: exact for a cubic");
+        check_close(sc.derivative(3.7), -2.0 + 1.5 * 3.7 * 3.7, 1e-11, "... and its derivative");
+        check_close(s(2.5), -1.0, 1e-14, "not-a-knot spline: through the nodes");
+    } else {
+        std::cout << "  (Planck data not downloaded, python3 python/fetch_planck_data.py: skipped)\n";
+    }
+
+    std::cout << "DESI DR1 full shape against DESI's pipeline (velocileptors)\n";
+    if (std::filesystem::exists("external/desi_dr1_fs/LRG_z0_window.txt")) {
+        // Fixed REPT inputs (tests/reference/desi_fs_rept_inputs.txt) through DESI's code path (reptvelocileptors with
+        // velocileptors 3.1, desi_fs_bao_all.logp: python/generate_desi_fs_reference.py) and through ours
+        DESIDR1FullShapeLikelihood L(
+            "external/desi_dr1_fs", {"BGS_z0", "LRG_z0", "LRG_z1", "LRG_z2", "ELG_z1", "QSO_z0"}, "desi_dr1_fs");
+        DESIDR1FullShapeLikelihood::LinearInputs in;
+        std::vector<double> s8, f;
+        {
+            std::ifstream fi("tests/reference/desi_fs_rept_inputs.txt");
+            std::string line;
+            while (std::getline(fi, line)) {
+                std::istringstream is(line);
+                std::string a, b;
+                if (line.rfind("# z ", 0) == 0) {
+                    double z, qp, qe, s, st;
+                    is >> a >> b >> z >> a >> qp >> a >> qe >> a >> s >> a >> st;
+                    in.qpar.push_back(qp);
+                    in.qper.push_back(qe);
+                    s8.push_back(s);
+                    f.push_back(st / s);
+                    in.pdd.emplace_back();
+                    in.pnw.emplace_back();
+                    in.ptt.emplace_back();
+                    continue;
+                }
+                if (line.empty() || line[0] == '#')
+                    continue;
+                double k;
+                is >> k;
+                in.k.push_back(k);
+                for (size_t i = 0; i < in.pdd.size(); i++) {
+                    double a1, a2, a3;
+                    is >> a1 >> a2 >> a3;
+                    in.pdd[i].push_back(a1);
+                    in.pnw[i].push_back(a2);
+                    in.ptt[i].push_back(a3);
+                }
+            }
+        }
+        const std::vector<std::vector<double>> bias{{1.0627, 0.5317, -0.2066},
+                                                    {1.0879, -0.5214, -0.4183},
+                                                    {1.1893, -0.6044, 0.0337},
+                                                    {1.0164, -0.2913, 0.0727},
+                                                    {0.5153, -0.0597, 0.2002},
+                                                    {0.7917, 0.0974, 0.1014}};
+        const double ref[6] = {-36.623299671667, -35.005076304835, -34.802694227409,
+                               -45.919308274373, -66.754234848113, -55.525085029679};
+        const auto ll = L.loglike_samples(in, s8, f, bias);
+        double err = 0.0;
+        for (int i = 0; i < 6; i++)
+            err = std::max(err, std::abs(ll[i] - ref[i]));
+        check(in.k.size() == 500 && ll.size() == 6, "REPT inputs read (500 k, 6 redshifts)");
+        check_close(err, 0.0, 1e-5, "ln L of the 6 samples = DESI's code path for the same inputs");
+        check(L.n_data() == 432 && L.nuisance_parameters().size() == 18, "432 data points, 18 bias parameters");
+        // With a Theory: the planck2018 cosmology of the inputs gives ln L close to the reference (the theory-side
+        // inputs agree with the fixture to the precision of the run)
+        RunSettings s = ParameterFile::read("", {"preset=planck2018", "m_nu=0.06", "precision=fast"});
+        TheoryOptions o;
+        o.cmb = false;
+        o.pk_z = L.pk_redshifts();
+        o.growth_z = L.growth_redshifts();
+        o.pk_theta = L.needs_pk_theta();
+        Theory t(s, o);
+        const char * names[6] = {"BGS_z0", "LRG_z0", "LRG_z1", "LRG_z2", "ELG_z1", "QSO_z0"};
+        double sum = 0.0, sumref = 0.0;
+        for (int i = 0; i < 6; i++) {
+            const std::string p = std::string("desi_") + names[i] + "_";
+            t.set_nuisance(p + "b1p", bias[i][0]);
+            t.set_nuisance(p + "b2p", bias[i][1]);
+            t.set_nuisance(p + "bsp", bias[i][2]);
+            sumref += ref[i];
+        }
+        sum = L.loglike(t);
+        std::cout << std::setprecision(8) << "  planck2018, precision = fast: ln L = " << sum << " (fixture, default precision: " << sumref << ")\n";
+        check(std::abs(sum - sumref) < 0.3, "ln L from the Theory (precision = fast) within 0.3 of that of the fixture inputs");
+        DESIDR1FullShapeLikelihood Lb("external/desi_dr1_fs", {"LRG_z0"}, "x", false);
+        DESIDR1FullShapeLikelihood Lm("external/desi_dr1_fs", {"LRG_z0"}, "x", true);
+        check(Lb.loglike(t) > Lm.loglike(t), "solve = best (maximum over the linear parameters) > marg");
+    } else {
+        std::cout << "  (DESI DR1 full-shape data not converted, python3 python/convert_desi_dr1_fullshape.py: skipped)\n";
+    }
+
+    std::cout << "ACT DR6 lensing against act_dr6_lenslike\n";
+    if (std::filesystem::exists("external/act_dr6_lensing/actplanck_baseline_kk.txt")) {
+        // The fiducial spectra of the likelihood (written by python/convert_act_dr6_lensing.py) and perturbed ones;
+        // references: act_dr6_lenslike 1.2.1 generic_lnlike (nsims_act = 792, nsims_planck = 400, as its Cobaya class)
+        std::vector<double> tt, ee, bb, te, kk, tt2, ee2, bb2, te2, kk2;
+        for (const auto & r : [] {
+                 std::vector<std::vector<double>> rows;
+                 std::ifstream f("external/act_dr6_lensing/fiducial_cls.txt");
+                 std::string line;
+                 while (std::getline(f, line)) {
+                     if (line.empty() || line[0] == '#')
+                         continue;
+                     std::istringstream is(line);
+                     std::vector<double> v(6);
+                     for (auto & x : v)
+                         is >> x;
+                     rows.push_back(v);
+                 }
+                 return rows;
+             }()) {
+            const double L = r[0];
+            tt.push_back(r[1]), ee.push_back(r[2]), bb.push_back(r[3]), te.push_back(r[4]), kk.push_back(r[5]);
+            tt2.push_back(r[1] * (1.0 + 0.02 * std::sin(L / 300.0)));
+            ee2.push_back(r[2] * 1.03);
+            bb2.push_back(r[3] * 0.95);
+            te2.push_back(r[4] * (1.0 + 0.01 * std::cos(L / 200.0)));
+            kk2.push_back(r[5] * (1.06 - 0.00002 * L));
+        }
+        struct Case {
+            const char * variant;
+            double fid, pert;
+        };
+        for (const Case & c : {Case{"act_baseline", -7.065248914780352, -14.809044696425994},
+                               Case{"actplanck_baseline", -10.730899650224053, -21.91559533771759},
+                               Case{"act_extended", -8.859003766115874, -16.55636365343838},
+                               Case{"actplanck_extended", -12.373117046808918, -23.42215850167934}}) {
+            ACTDR6LensingLikelihood L("external/act_dr6_lensing", c.variant, c.variant);
+            check_close(L.loglike_cl(tt, ee, bb, te, kk), c.fid, 1e-8, std::string(c.variant) + ": ln L (fiducial)");
+            check_close(L.loglike_cl(tt2, ee2, bb2, te2, kk2),
+                        c.pert,
+                        1e-8,
+                        std::string(c.variant) + ": ln L (perturbed spectra)");
+        }
+    } else {
+        std::cout << "  (ACT DR6 lensing data not converted, python3 python/convert_act_dr6_lensing.py: skipped)\n";
     }
 
     std::cout << "Parameter aliases (SampledParameterMap)\n";

@@ -1,4 +1,6 @@
 #include <FML/CosmologyFitting/Likelihoods.h>
+#include <FML/CosmologyFitting/PlanckLikelihoods.h>
+#include <FML/CosmologyFitting/DESIFullShape.h>
 #include <FML/WeakLensing/CosmicShear.h>
 
 #include <algorithm>
@@ -214,13 +216,39 @@ namespace FML::COSMOLOGY::FITTING {
         }
         gsl_linalg_cholesky_invert(A);
         icov.resize(n * n);
+        for (size_t i = 0; i < n; i++)
+            for (size_t j = 0; j < n; j++)
+                icov[i * n + j] = gsl_matrix_get(A, i, j);
+        gsl_matrix_free(A);
+        set_row_sums();
+    }
+
+    SNIaLikelihood::SNIaLikelihood(std::string name,
+                                   std::vector<double> z_cmb,
+                                   std::vector<double> z_hel,
+                                   std::vector<double> mag,
+                                   std::vector<double> inverse_cov,
+                                   InverseCovariance)
+        : label(std::move(name)), zc(std::move(z_cmb)), zh(std::move(z_hel)), m(std::move(mag)),
+          icov(std::move(inverse_cov)) {
+        const size_t n = zc.size();
+        if (zh.size() != n || m.size() != n || icov.size() != n * n)
+            throw std::invalid_argument(label + ": inconsistent data sizes");
+        for (size_t i = 0; i < n; i++)
+            for (size_t j = 0; j < i; j++)
+                icov[i * n + j] = icov[j * n + i] = 0.5 * (icov[i * n + j] + icov[j * n + i]);
+        set_row_sums();
+        if (!(e > 0.0))
+            throw std::invalid_argument(label + ": the inverse covariance is not positive definite");
+    }
+
+    void SNIaLikelihood::set_row_sums() {
+        const size_t n = zc.size();
         rowsum.assign(n, 0.0);
         for (size_t i = 0; i < n; i++)
-            for (size_t j = 0; j < n; j++) {
-                icov[i * n + j] = gsl_matrix_get(A, i, j);
+            for (size_t j = 0; j < n; j++)
                 rowsum[i] += icov[i * n + j];
-            }
-        gsl_matrix_free(A);
+        e = 0.0;
         for (double r : rowsum)
             e += r;
     }
@@ -291,6 +319,32 @@ namespace FML::COSMOLOGY::FITTING {
             c[i * N + i] += std::pow(std::stod(t.rows[i][ie]), 2);
         }
         return std::make_unique<SNIaLikelihood>("desy5", z, zh, m, c);
+    }
+
+    std::unique_ptr<SNIaLikelihood> SNIaLikelihood::desdovekie(const std::string & dir) {
+        // As Cobaya's sn.desdovekie: MU at zHD (D_M) and zHEL, the inverse of the total covariance (python/
+        // fetch_sn_data.py writes it as n and the upper triangle, row-major), all SNe (z > 0.025)
+        const std::string f = dir + "/DES-Dovekie_HD.csv";
+        const Table t = read_table(f);
+        const size_t iz = t.col("zHD", f), ih = t.col("zHEL", f), im = t.col("MU", f);
+        const size_t N = t.rows.size();
+        const std::string fc = dir + "/covtot_inv_000.txt";
+        const auto v = read_numbers(fc);
+        if (v.empty() || size_t(v[0]) != N || v.size() != 1 + N * (N + 1) / 2)
+            throw std::runtime_error("inverse covariance " + fc + ": expected " + std::to_string(N) +
+                                     " and the upper triangle (run python3 python/fetch_sn_data.py desdovekie)");
+        std::vector<double> ic(N * N);
+        size_t k = 1;
+        for (size_t i = 0; i < N; i++)
+            for (size_t j = i; j < N; j++, k++)
+                ic[i * N + j] = ic[j * N + i] = v[k];
+        std::vector<double> z, zh, m;
+        for (size_t i = 0; i < N; i++) {
+            z.push_back(std::stod(t.rows[i][iz]));
+            zh.push_back(std::stod(t.rows[i][ih]));
+            m.push_back(std::stod(t.rows[i][im]));
+        }
+        return std::make_unique<SNIaLikelihood>("desdovekie", z, zh, m, std::move(ic), InverseCovariance{});
     }
 
     std::unique_ptr<SNIaLikelihood> SNIaLikelihood::union3(const std::string & dir) {
@@ -816,51 +870,14 @@ namespace FML::COSMOLOGY::FITTING {
         data.set(mean, cov);
     }
 
-    RunSettings DESIShapeFitLikelihood::fiducial_settings(const RunSettings & settings) {
-        // cosmoprimo.fiducial.DESI(): Planck 2018 LCDM (h = 0.6736, omega_b = 0.02237, omega_cdm = 0.12, one massive
-        // neutrino of 0.06 eV, N_eff = 3.046, A_s = 2.083e-9, n_s = 0.9649, T_cmb = 2.7255 K, BBN helium)
-        RunSettings f = settings;
-        const double h = 0.6736;
-        auto fmt = [](double v) {
-            std::ostringstream o;
-            o << std::setprecision(17) << v;
-            return o.str();
-        };
-        f.cosmo = ParameterFile::read("",
-                                      {"h=0.6736",
-                                       "OmegaB=" + fmt(0.02237 / (h * h)),
-                                       "OmegaCDM=" + fmt(0.12 / (h * h)),
-                                       "m_nu=0.06",
-                                       "Neff=3.046",
-                                       "A_s=2.083e-9",
-                                       "n_s=0.9649",
-                                       "TCMB=2.7255"})
-                      .cosmo;
-        return f;
-    }
-
-    void DESIShapeFitLikelihood::setup_fiducial(const Theory & t) const {
-        TheoryOptions o;
-        o.cmb = false;
-        o.growth_z = zs;
-        o.pk_z = zs;
-        o.pk_z.push_back(0.0);
-        const RunSettings fs = fiducial_settings(t.settings());
-        Theory tf(fs, o);
-        const double rd = tf.r_drag();
-        fid.hrd = fs.cosmo.h * rd;
-        for (double zz : z) {
-            fid.dm_rd.push_back(tf.D_M(zz) / rd);
-            fid.dh_rd.push_back(tf.D_H(zz) / rd);
-        }
-
+    PeakAverageBAOFilter::PeakAverageBAOFilter(const Theory & tf) {
         // The nodes of cosmoprimo's PeakAveragePowerSpectrumBAOFilter: the extrema of P/P_EH of the fiducial at z = 0
         // for 1e-2 < k < 1 h/Mpc (after dividing by the smooth trend a/k + b + c k + d k^2 with the values and first
         // differences of P/P_EH at both ends of 1e-3 <= k <= 1), plus all grid points below 1e-3 h/Mpc and from the
         // last point below 1 h/Mpc on
         const auto & k = Theory::pk_k_grid();
         const auto & P0 = tf.pk_cb(0.0);
-        const EHNoWiggle eh = eh_of(fs);
+        const EHNoWiggle eh = eh_of(tf.settings());
         std::vector<int> index;
         for (int i = 0; i < int(k.size()); i++)
             if (k[i] >= 1e-3 && k[i] <= 1.0)
@@ -904,19 +921,99 @@ namespace FML::COSMOLOGY::FITTING {
                 if (sign * detrended[j] > sign * detrended[j - 1] && sign * detrended[j] > sign * detrended[j + 1])
                     ik.push_back(j + index[0]);
             if (ik.empty())
-                throw std::runtime_error("desi_dr1_shapefit: no BAO extrema found in the fiducial P(k)");
+                throw std::runtime_error("PeakAverageBAOFilter: no BAO extrema found in the fiducial P(k)");
             const int npadlow = index[0];
             const int ikmax = std::max(index[n - 1], ik.back() + 1);
-            auto & nodes = fid.nodes[set];
+            auto & nds = nodes[set];
             for (int i = 0; i < npadlow; i++)
-                nodes.push_back(i);
-            nodes.insert(nodes.end(), ik.begin(), ik.end());
+                nds.push_back(i);
+            nds.insert(nds.end(), ik.begin(), ik.end());
             for (int i = ikmax; i < N; i++)
-                nodes.push_back(i);
-            fid.npad_low[set] = npadlow;
-            fid.npeaks[set] = int(ik.size());
-            fid.npad_high[set] = N - ikmax;
+                nds.push_back(i);
+            npad_low[set] = npadlow;
+            npeaks[set] = int(ik.size());
+            npad_high[set] = N - ikmax;
         }
+    }
+
+    std::vector<double> PeakAverageBAOFilter::nowiggle(const std::vector<double> & P, const RunSettings & settings, double s) const {
+        const auto & k = Theory::pk_k_grid();
+        const EHNoWiggle eh = eh_of(settings);
+        const size_t N = k.size();
+        if (P.size() != N)
+            throw std::invalid_argument("PeakAverageBAOFilter: P must be given on Theory::pk_k_grid()");
+        std::vector<double> lk(N), lny(N), ehk(N);
+        for (size_t i = 0; i < N; i++) {
+            lk[i] = std::log10(k[i]);
+            ehk[i] = eh(k[i]);
+            lny[i] = std::log(P[i] / ehk[i]);
+        }
+        const NaturalSpline lnratio(lk, lny);
+        std::vector<double> env(N, 0.0);
+        for (int set = 0; set < 2; set++) {
+            const auto & nds = nodes[set];
+            const int nl = npad_low[set], np = npeaks[set], nh = npad_high[set];
+            std::vector<double> xx, yy;
+            for (int j = 0; j < int(nds.size()); j++) {
+                double r;
+                if (j < nl)
+                    r = nl > 1 ? 1.0 + (s - 1.0) * j / (nl - 1.0) : s;
+                else if (j < nl + np)
+                    r = s;
+                else
+                    r = nh > 1 ? s + (1.0 - s) * (j - nl - np) / (nh - 1.0) : s;
+                const double lx = std::log10(k[nds[j]] / r);
+                xx.push_back(lx);
+                yy.push_back(lnratio(lx));
+            }
+            const NaturalSpline envelope(xx, yy);
+            for (size_t i = 0; i < N; i++)
+                env[i] += 0.5 * std::exp(envelope(lk[i]));
+        }
+        for (size_t i = 0; i < N; i++)
+            env[i] *= ehk[i];
+        return env;
+    }
+
+    RunSettings DESIShapeFitLikelihood::fiducial_settings(const RunSettings & settings) {
+        // cosmoprimo.fiducial.DESI(): Planck 2018 LCDM (h = 0.6736, omega_b = 0.02237, omega_cdm = 0.12, one massive
+        // neutrino of 0.06 eV, N_eff = 3.046, A_s = 2.083e-9, n_s = 0.9649, T_cmb = 2.7255 K, BBN helium)
+        RunSettings f = settings;
+        const double h = 0.6736;
+        auto fmt = [](double v) {
+            std::ostringstream o;
+            o << std::setprecision(17) << v;
+            return o.str();
+        };
+        f.cosmo = ParameterFile::read("",
+                                      {"h=0.6736",
+                                       "OmegaB=" + fmt(0.02237 / (h * h)),
+                                       "OmegaCDM=" + fmt(0.12 / (h * h)),
+                                       "m_nu=0.06",
+                                       "Neff=3.046",
+                                       "A_s=2.083e-9",
+                                       "n_s=0.9649",
+                                       "TCMB=2.7255"})
+                      .cosmo;
+        return f;
+    }
+
+    void DESIShapeFitLikelihood::setup_fiducial(const Theory & t) const {
+        TheoryOptions o;
+        o.cmb = false;
+        o.growth_z = zs;
+        o.pk_z = zs;
+        o.pk_z.push_back(0.0);
+        const RunSettings fs = fiducial_settings(t.settings());
+        Theory tf(fs, o);
+        const double rd = tf.r_drag();
+        fid.hrd = fs.cosmo.h * rd;
+        for (double zz : z) {
+            fid.dm_rd.push_back(tf.D_M(zz) / rd);
+            fid.dh_rd.push_back(tf.D_H(zz) / rd);
+        }
+
+        fid.filter = PeakAverageBAOFilter(tf);
         for (double zz : zs) {
             const auto [m, fA] = shapefit_impl(tf, zz, 1.0);
             fid.m.push_back(m);
@@ -938,39 +1035,12 @@ namespace FML::COSMOLOGY::FITTING {
     std::pair<double, double> DESIShapeFitLikelihood::shapefit_impl(const Theory & t, double zz, double s) const {
         const auto & k = Theory::pk_k_grid();
         const auto & P = t.pk_cb(zz);
-        const EHNoWiggle eh = eh_of(t.settings());
+        const auto Pnw = fid.filter.nowiggle(P, t.settings(), s);
         const size_t N = k.size();
-        std::vector<double> lk(N), lny(N), ehk(N);
+        std::vector<double> lk(N), lpnw(N), lp(N);
         for (size_t i = 0; i < N; i++) {
             lk[i] = std::log10(k[i]);
-            ehk[i] = eh(k[i]);
-            lny[i] = std::log(P[i] / ehk[i]);
-        }
-        const NaturalSpline lnratio(lk, lny);
-        std::vector<double> env(N, 0.0);
-        for (int set = 0; set < 2; set++) {
-            const auto & nodes = fid.nodes[set];
-            const int nl = fid.npad_low[set], np = fid.npeaks[set], nh = fid.npad_high[set];
-            std::vector<double> xx, yy;
-            for (int j = 0; j < int(nodes.size()); j++) {
-                double r;
-                if (j < nl)
-                    r = nl > 1 ? 1.0 + (s - 1.0) * j / (nl - 1.0) : s;
-                else if (j < nl + np)
-                    r = s;
-                else
-                    r = nh > 1 ? s + (1.0 - s) * (j - nl - np) / (nh - 1.0) : s;
-                const double lx = std::log10(k[nodes[j]] / r);
-                xx.push_back(lx);
-                yy.push_back(lnratio(lx));
-            }
-            const NaturalSpline envelope(xx, yy);
-            for (size_t i = 0; i < N; i++)
-                env[i] += 0.5 * std::exp(envelope(lk[i]));
-        }
-        std::vector<double> lpnw(N), lp(N);
-        for (size_t i = 0; i < N; i++) {
-            lpnw[i] = std::log10(env[i] * ehk[i]);
+            lpnw[i] = std::log10(Pnw[i]);
             lp[i] = std::log10(P[i]);
         }
         const NaturalSpline pnw(lk, lpnw), pk(lk, lp);
@@ -1195,6 +1265,7 @@ namespace FML::COSMOLOGY::FITTING {
                     "sn_free_amplitude",
                     "pantheonplus",
                     "desy5",
+                    "desdovekie",
                     "union3",
                     "desi_dr2",
                     "desi_dr1",
@@ -1203,6 +1274,13 @@ namespace FML::COSMOLOGY::FITTING {
                     "eboss_dr16_lrg",
                     "eboss_dr16_qso",
                     "desi_dr1_shapefit",
+                    "desi_dr1_fs",
+                    "desi_dr1_fs_BGS_z0",
+                    "desi_dr1_fs_LRG_z0",
+                    "desi_dr1_fs_LRG_z1",
+                    "desi_dr1_fs_LRG_z2",
+                    "desi_dr1_fs_ELG_z1",
+                    "desi_dr1_fs_QSO_z0",
                     "kids1000_cosebis",
                     "planck_dp",
                     "bbn",
@@ -1212,6 +1290,17 @@ namespace FML::COSMOLOGY::FITTING {
                     "planck_lite_TT_lowl",
                     "planck_lensing",
                     "planck_lensing_marged",
+                    "planck_lowl_TT",
+                    "planck_lowl_EE",
+                    "planck_camspec_npipe_TTTEEE",
+                    "planck_camspec_npipe_TTTE",
+                    "planck_camspec_npipe_TT",
+                    "planck_camspec_npipe_TE",
+                    "planck_camspec_npipe_EE",
+                    "act_dr6_lensing",
+                    "act_dr6_lensing_extended",
+                    "act_dr6_lensing_actplanck",
+                    "act_dr6_lensing_actplanck_extended",
                     "cmb_mock"};
         }
         std::vector<std::string> option_names() {
@@ -1220,7 +1309,8 @@ namespace FML::COSMOLOGY::FITTING {
                     "cmb_mock_fsky",
                     "cmb_mock_noise",
                     "cmb_mock_beam",
-                    "cmb_mock_bb"};
+                    "cmb_mock_bb",
+                    "desi_fs_solve"};
         }
 
         std::unique_ptr<Likelihood> create(const std::string & n, const std::map<std::string, std::string> & o) {
@@ -1238,6 +1328,49 @@ namespace FML::COSMOLOGY::FITTING {
                 return SNIaLikelihood::pantheonplus();
             if (n == "desy5")
                 return SNIaLikelihood::desy5();
+            if (n == "desdovekie")
+                return SNIaLikelihood::desdovekie();
+            if (n.rfind("desi_dr1_fs", 0) == 0) {
+                const std::string solve = opt("desi_fs_solve", "marg");
+                if (solve != "marg" && solve != "best")
+                    throw std::invalid_argument("desi_fs_solve must be marg or best");
+                std::vector<std::string> s{"BGS_z0", "LRG_z0", "LRG_z1", "LRG_z2", "ELG_z1", "QSO_z0"};
+                if (n != "desi_dr1_fs")
+                    s = {n.substr(12)};
+                return std::make_unique<DESIDR1FullShapeLikelihood>(
+                    Utils::fml_file("CosmologyFitting/external/desi_dr1_fs"), s, n, solve == "marg");
+            }
+            if (n == "planck_lowl_TT")
+                return std::make_unique<PlanckLowlTTLikelihood>(
+                    Utils::fml_file("CosmologyFitting/external/planck2018_lowT"));
+            if (n == "planck_lowl_EE")
+                return std::make_unique<PlanckLowlEELikelihood>(
+                    Utils::fml_file("CosmologyFitting/external/planck2018_lowE"));
+            if (n.rfind("act_dr6_lensing", 0) == 0) {
+                const std::string dir = Utils::fml_file("CosmologyFitting/external/act_dr6_lensing");
+                if (n == "act_dr6_lensing")
+                    return std::make_unique<ACTDR6LensingLikelihood>(dir, "act_baseline", n);
+                if (n == "act_dr6_lensing_extended")
+                    return std::make_unique<ACTDR6LensingLikelihood>(dir, "act_extended", n);
+                if (n == "act_dr6_lensing_actplanck")
+                    return std::make_unique<ACTDR6LensingLikelihood>(dir, "actplanck_baseline", n);
+                if (n == "act_dr6_lensing_actplanck_extended")
+                    return std::make_unique<ACTDR6LensingLikelihood>(dir, "actplanck_extended", n);
+            }
+            if (n.rfind("planck_camspec_npipe_", 0) == 0) {
+                const std::string v = n.substr(21);
+                const std::vector<std::string> tt{"143x143", "217x217", "143x217"};
+                std::vector<std::string> use;
+                if (v == "TT" || v == "TTTE" || v == "TTTEEE")
+                    use = tt;
+                if (v == "TE" || v == "TTTE" || v == "TTTEEE")
+                    use.push_back("TE");
+                if (v == "EE" || v == "TTTEEE")
+                    use.push_back("EE");
+                if (!use.empty())
+                    return std::make_unique<CamSpecNPIPELikelihood>(
+                        Utils::fml_file("CosmologyFitting/external/planck_npipe_camspec"), use, n);
+            }
             if (n == "union3")
                 return SNIaLikelihood::union3();
             if (n == "sn_free_amplitude")

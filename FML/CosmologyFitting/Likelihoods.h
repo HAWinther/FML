@@ -27,6 +27,10 @@
 //                 s = h r_d / (h r_d)_fid; the no-wiggle P(k) from cosmoprimo's "peakaverage" filter (ported:
 //                 envelopes of the extrema of P/P_EH,nowiggle at the fiducial positions rescaled by s)
 //                 (do not combine with desi_dr1: the BAO are the same data)
+//   desi_dr1_fs   DESI DR1 full shape (P_0, P_2 of BGS, LRG x 3, ELG, QSO, rotated, with the window and systematics),
+//                 one-loop REPT as DESI's own likelihood, bias parameters desi_<SAMPLE>_b1p, _b2p, _bsp, counterterms and
+//                 stochastic terms marginalized analytically (option desi_fs_solve = marg | best): see DESIFullShape.h.
+//                 desi_dr1_fs_<SAMPLE> for one sample. Data: python/convert_desi_dr1_fullshape.py
 //   kids1000_cosebis  KiDS-1000 cosmic shear, COSEBIs (Asgari et al. 2021, arXiv:2007.15633): E_n, n = 1..5, of the
 //                 15 pairs of 5 tomographic bins, theta = 0.5' - 300', with the release's covariance (which includes the
 //                 shear-calibration uncertainty), SOM n(z) and the correlated Gaussian prior on the photo-z shifts
@@ -46,8 +50,9 @@
 // b = sum C^-1 D, e = sum C^-1, D = data - model at M = 0; as Cobaya/CosmoMC):
 //   pantheonplus  Pantheon+ (Brout et al. 2022), 1590 light curves with z_HD > 0.01, STAT+SYS covariance
 //   desy5         DES-SN5YR (DES Collaboration 2024), 1829 SNe, covariance covsys + diag(MUERR_FINAL^2)
+//   desdovekie    DES-Dovekie (DES-SN5YR recalibrated, Popovic et al. 2025), 1820 SNe, inverse total covariance
 //   union3        Union3 (Rubin et al. 2023, UNITY1.5), 22 binned distance moduli with covariance
-// Data in external/sn/ (Union3 included; python/fetch_sn_data.py downloads Pantheon+ and DES-SN5YR).
+// Data in external/sn/ (Union3 included; python/fetch_sn_data.py downloads Pantheon+, DES-SN5YR and DES-Dovekie).
 //
 // CMB likelihoods (need the full Boltzmann solution; use precision = fast):
 //   planck_lite_TTTEEE   Planck 2018 high-ell plik_lite (Planck 2018 V, arXiv:1907.12875): binned, foreground-
@@ -69,6 +74,12 @@
 //                        it when combining). Data: external/planck2018_lensing/.
 //   planck_lensing_marged  The same, marginalized over the CMB spectra (Cobaya planck_2018_lensing.CMBMarged):
 //                        PP-only correction and a larger covariance; for use without CMB power-spectrum data.
+//   planck_lowl_TT, planck_lowl_EE, planck_camspec_npipe_TTTEEE (_TT, _TE, _EE, _TTTE)   Planck 2018 low-ell TT
+//                        (Commander) and EE (SimAll) and the high-ell CamSpec PR4 (NPIPE) likelihood, ported from
+//                        Cobaya: see PlanckLikelihoods.h. Data: python/fetch_planck_data.py.
+//   act_dr6_lensing_actplanck, act_dr6_lensing (+ _extended)   ACT DR6 (+ Planck PR4) lensing with the CMB-dependent
+//                        corrections, as act_dr6_lenslike: see PlanckLikelihoods.h. Data:
+//                        python/convert_act_dr6_lensing.py. Needs the CMB spectra to ell = 2999.
 //   cmb_mock             Simulated full-sky-like data: the exact Gaussian likelihood of TT, EE, TE (ell =
 //                        2..cmb_mock_lmax) for a fiducial lensed spectrum (cmb_mock_file, a cells_lensed.txt of
 //                        ./cmb) with white noise (cmb_mock_noise [muK arcmin], polarization sqrt(2) higher),
@@ -110,6 +121,10 @@ namespace FML::COSMOLOGY::FITTING {
         virtual std::vector<double> pk_redshifts() const { return {}; }
         // The redshifts at which the likelihood needs Theory::pk_nl and growth_D (TheoryOptions::pk_nl_z)
         virtual std::vector<double> pk_nl_redshifts() const { return {}; }
+        // Does the likelihood need Theory::pk_theta (at pk_redshifts)?
+        virtual bool needs_pk_theta() const { return false; }
+        // > 0: the perturbations must be solved at least up to this k [h/Mpc] (TheoryOptions::pk_k_max)
+        virtual double pk_k_max() const { return 0.0; }
     };
 
     // Gaussian likelihood -chi^2/2 with a fixed covariance (inverted once)
@@ -150,10 +165,20 @@ namespace FML::COSMOLOGY::FITTING {
                        std::vector<double> z_hel,
                        std::vector<double> mag,
                        const std::vector<double> & cov);
+        // the same with the inverse covariance C^-1 given (n x n, row-major)
+        struct InverseCovariance {};
+        SNIaLikelihood(std::string name,
+                       std::vector<double> z_cmb,
+                       std::vector<double> z_hel,
+                       std::vector<double> mag,
+                       std::vector<double> inverse_cov,
+                       InverseCovariance);
         static std::unique_ptr<SNIaLikelihood>
         pantheonplus(const std::string & dir = Utils::fml_file("CosmologyFitting/external/sn/PantheonPlus"));
         static std::unique_ptr<SNIaLikelihood>
         desy5(const std::string & dir = Utils::fml_file("CosmologyFitting/external/sn/DESY5"));
+        static std::unique_ptr<SNIaLikelihood>
+        desdovekie(const std::string & dir = Utils::fml_file("CosmologyFitting/external/sn/DES-Dovekie"));
         static std::unique_ptr<SNIaLikelihood>
         union3(const std::string & dir = Utils::fml_file("CosmologyFitting/external/sn/Union3"));
         std::string name() const override { return label; }
@@ -170,6 +195,7 @@ namespace FML::COSMOLOGY::FITTING {
         std::vector<double> zc, zh, m;
         std::vector<double> icov, rowsum; // C^-1 (row-major) and its row sums
         double e = 0.0;                   // sum of C^-1
+        void set_row_sums();
     };
 
     class BAOLikelihood : public Likelihood {
@@ -197,6 +223,24 @@ namespace FML::COSMOLOGY::FITTING {
         GaussianData data;
     };
 
+    // cosmoprimo's PeakAveragePowerSpectrumBAOFilter (as in DESI's DR1 ShapeFit and full-shape likelihoods): the
+    // no-wiggle P(k) is P_EH times the mean of the two envelopes of P/P_EH through the BAO maxima and minima, found
+    // once in the fiducial P(k) at z = 0 and moved by 1/s, s = h r_d / (h r_d)_fid (see Likelihoods.cpp)
+    class PeakAverageBAOFilter {
+      public:
+        PeakAverageBAOFilter() = default;
+        // fiducial: a Theory with 0 in pk_z
+        explicit PeakAverageBAOFilter(const Theory & fiducial);
+        // The no-wiggle spectrum on Theory::pk_k_grid() of P (on that grid) of a model with these settings (for its
+        // Eisenstein-Hu shape) and rescaling s
+        std::vector<double> nowiggle(const std::vector<double> & P, const RunSettings & settings, double s) const;
+
+      private:
+        // indices into Theory::pk_k_grid() of the low-k padding, the extrema (maxima, minima) and the high-k padding
+        std::vector<int> nodes[2];
+        int npad_low[2] = {0, 0}, npeaks[2] = {0, 0}, npad_high[2] = {0, 0};
+    };
+
     class DESIShapeFitLikelihood : public Likelihood {
       public:
         enum class Quantity { qiso, qap, qpar, qper, df, dm };
@@ -219,14 +263,11 @@ namespace FML::COSMOLOGY::FITTING {
         std::vector<double> z, zs; // the data redshifts; those of the ShapeFit samples
         std::vector<Quantity> q;
         GaussianData data;
-        // The fiducial: D_M/r_d, D_H/r_d at the data redshifts, h r_d, m and f sqrt(A_p) at zs, and the nodes of the
-        // BAO filter (indices into Theory::pk_k_grid() of the low-k padding, the extrema of the wiggles (maxima,
-        // minima) and the high-k padding)
+        // The fiducial: D_M/r_d, D_H/r_d at the data redshifts, h r_d, m and f sqrt(A_p) at zs, and the BAO filter
         struct Fiducial {
             std::vector<double> dm_rd, dh_rd, m, fA;
             double hrd = 0.0;
-            std::vector<int> nodes[2];
-            int npad_low[2] = {0, 0}, npeaks[2] = {0, 0}, npad_high[2] = {0, 0};
+            PeakAverageBAOFilter filter;
         };
         mutable Fiducial fid;
         mutable std::once_flag fid_once;
@@ -374,8 +415,10 @@ namespace FML::COSMOLOGY::FITTING {
         // By name (throws for an unknown name): sn, sn_free_amplitude, desi_dr2, desi_dr1, boss_dr12, boss_dr12_bao,
         // eboss_dr16_lrg, eboss_dr16_qso, planck_dp, bbn,
         // planck_lite_TTTEEE, planck_lite_TT, planck_lite_TTTEEE_lowl, planck_lite_TT_lowl, planck_lensing,
-        // planck_lensing_marged, cmb_mock.
-        // Options (cmb_mock): cmb_mock_file (default data/cmb_mock/cells_lensed.txt), cmb_mock_lmax (2500),
+        // planck_lensing_marged, planck_lowl_TT, planck_lowl_EE, planck_camspec_npipe_TTTEEE (and _TT, _TE, _EE, _TTTE),
+        // act_dr6_lensing, act_dr6_lensing_actplanck (and _extended), desi_dr1_fs (and desi_dr1_fs_<SAMPLE>),
+        // cmb_mock (and pantheonplus, desy5, desdovekie, union3, desi_dr1_shapefit, kids1000_cosebis: see above).
+        // Options (desi_dr1_fs): desi_fs_solve = marg (default) or best. Options (cmb_mock): cmb_mock_file (default data/cmb_mock/cells_lensed.txt), cmb_mock_lmax (2500),
         // cmb_mock_fsky (0.6), cmb_mock_noise (33 muK arcmin), cmb_mock_beam (7 arcmin), cmb_mock_bb (false)
         std::unique_ptr<Likelihood> create(const std::string & name,
                                            const std::map<std::string, std::string> & options = {});

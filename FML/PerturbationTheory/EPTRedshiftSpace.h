@@ -535,6 +535,95 @@ namespace FML::PERTURBATION {
             return out;
         }
 
+        /// The columns of P(k_obs, mu_obs) with the linear spectra and the growth of another redshift (velocileptors'
+        /// ept_fullresum_varyDz_nu_fftw, used by DESI's DR1 full-shape likelihood): the one-loop terms of this object
+        /// (its linear spectrum, at some reference redshift) scaled by Dz^4, the linear terms and the counterterms
+        /// built from pcb and pcb_nw (the linear CDM + baryon spectrum and its no-wiggle part at the redshift, on k()),
+        /// the BAO damping Sigma^2 scaled by Dz^2, and a scale-dependent growth rate f(k) (on k()), e.g.
+        /// sqrt(P_theta theta / P_cb) with massive neutrinos or a fifth force on the dark matter
+        std::vector<Columns> table_at_mu_scaled(const DVector & fk,
+                                                double mu_obs,
+                                                const DVector & pcb,
+                                                const DVector & pcb_nw,
+                                                double Dz,
+                                                double apar = 1.0,
+                                                double aperp = 1.0) const {
+            const int nk = opt.nk;
+            if (int(fk.size()) != nk or int(pcb.size()) != nk or int(pcb_nw.size()) != nk)
+                throw std::invalid_argument("[EPTRedshiftSpace] f(k), pcb and pcb_nw must be given on k()");
+            const auto ap = ap_transform(mu_obs, apar, aperp);
+            const double mu = ap.mu, mu2 = mu * mu, D2 = Dz * Dz, D4 = D2 * D2;
+            DVector damp_exp(nk), damp(nk);
+            for (int j = 0; j < nk; j++) {
+                const double f = fk[j];
+                damp_exp[j] = -0.5 * D2 * kv[j] * kv[j] * sigma2_bao * (1 + f * (2 + f) * mu2);
+                damp[j] = std::exp(damp_exp[j]);
+            }
+            static const int idx[12][5] = {{0, 0, 1, 1, 1}, {0, 1, 2, 2, 0}, {1, 2, 3, 0, 0}, {0, 3, 4, 0, 0},
+                                           {2, 4, 0, 0, 0}, {4, 0, 0, 0, 0}, {0, 5, 5, 0, 0}, {3, 6, 0, 0, 0},
+                                           {5, 0, 0, 0, 0}, {6, 0, 0, 0, 0}, {0, 7, 0, 0, 0}, {7, 0, 0, 0, 0}};
+            std::vector<DVector> cols(ncolumns, DVector(nk, 0.0));
+            for (int c = 0; c < 12; c++) {
+                const int * ii = idx[c];
+                for (int j = 0; j < nk; j++) {
+                    const double kk = kv[j], km = kk * mu, f = fk[j];
+                    // the coefficient of the linear spectrum in this column: (b1 + f mu^2)^2 -> 1 (b1^2), 2 f mu^2 (b1),
+                    // f^2 mu^4 (1)
+                    const double lin = (ii[0] == 1 ? 1.0 : 0.0) + (ii[1] == 1 ? 2 * f * mu2 : 0.0) +
+                                       (ii[2] == 1 ? f * f * mu2 * mu2 : 0.0);
+                    auto term = [&](const EPTVelocityMoments & e, double plin_e) {
+                        double r = 0.0;
+                        if (ii[0])
+                            r += e.pk[ii[0] - 1][j];
+                        if (ii[1])
+                            r -= f * kk * mu2 * e.vk[ii[1] - 1][j];
+                        if (ii[2])
+                            r -= 0.5 * f * f * kk * kk * mu2 * (e.s0k[ii[2] - 1][j] + 0.5 * e.s2k[ii[2] - 1][j] * (3 * mu2 - 1));
+                        if (ii[3])
+                            r += f * f * f * km * km * km / 6. * (e.g1k[ii[3] - 1][j] * mu + e.g3k[ii[3] - 1][j] * mu * mu2);
+                        if (ii[4])
+                            r += f * f * f * f * km * km * km * km / 24. * (e.k0[j] + e.k2[j] * mu2 + e.k4[j] * mu2 * mu2);
+                        return r - lin * plin_e; // the one-loop part
+                    };
+                    const double nw = term(ept_nw, plin_nw[j]), all = term(ept, plin[j]);
+                    const double pw = pcb[j] - pcb_nw[j];
+                    cols[c][j] = D4 * (nw + damp[j] * (all - nw)) +
+                                 lin * (pcb_nw[j] + damp[j] * pw - damp_exp[j] * damp[j] * pw);
+                }
+            }
+            for (int j = 0; j < nk; j++) {
+                const double k2 = kv[j] * kv[j], pres = pcb_nw[j] + damp[j] * (pcb[j] - pcb_nw[j]);
+                cols[12][j] = k2 * pres;
+                cols[13][j] = k2 * mu2 * pres;
+                cols[14][j] = k2 * mu2 * mu2 * pres;
+                cols[15][j] = k2 * mu2 * mu2 * mu2 * pres;
+                cols[16][j] = 1.0;
+                cols[17][j] = k2 * mu2;
+                cols[18][j] = k2 * k2 * mu2 * mu2;
+            }
+            std::vector<Columns> out(nk);
+            const bool no_ap = apar == 1.0 and aperp == 1.0;
+            const detail::NotAKnotSpline spline(ap.kobs);
+            for (int c = 0; c < ncolumns; c++) {
+                const DVector v = no_ap or c == 16 ? cols[c] : spline(cols[c], kv);
+                for (int j = 0; j < nk; j++)
+                    out[j][c] = v[j] / ap.vol;
+            }
+            return out;
+        }
+
+        /// The multipoles of table_at_mu_scaled (Gauss-Legendre in mu with 2 ngauss points)
+        MultipoleTable multipole_components_scaled(const DVector & fk,
+                                                   const DVector & pcb,
+                                                   const DVector & pcb_nw,
+                                                   double Dz,
+                                                   double apar = 1.0,
+                                                   double aperp = 1.0,
+                                                   int ngauss = 4) const {
+            return multipoles_of([&](double mu) { return table_at_mu_scaled(fk, mu, pcb, pcb_nw, Dz, apar, aperp); },
+                                 ngauss);
+        }
+
         /// P(k_obs, mu_obs) for the bias parameters (bFoG: the extra -bFoG k^4 mu^4 (b1 + f mu^2)^2 P_res term)
         DVector pkmu(double f, double mu_obs, const Bias & b, double apar = 1.0, double aperp = 1.0, double bFoG = 0.0) const {
             const auto t = table_at_mu(f, mu_obs, apar, aperp);
@@ -562,12 +651,17 @@ namespace FML::PERTURBATION {
 
         /// The multipoles of the columns (Gauss-Legendre in mu with 2 ngauss points)
         MultipoleTable multipole_components(double f, double apar = 1.0, double aperp = 1.0, int ngauss = 4) const {
+            return multipoles_of([&](double mu) { return table_at_mu(f, mu, apar, aperp); }, ngauss);
+        }
+
+        template <class TableAtMu>
+        MultipoleTable multipoles_of(TableAtMu && table_at, int ngauss) const {
             DVector nus, ws;
             LPTRedshiftSpace::gauss_legendre(2 * ngauss, nus, ws);
             const int nk = opt.nk, nnu = 2 * ngauss;
             std::vector<std::vector<Columns>> table(nnu);
             for (int ii = 0; ii < ngauss; ii++)
-                table[ii] = table_at_mu(f, nus[ii], apar, aperp);
+                table[ii] = table_at(nus[ii]);
             for (int ii = 0; ii < ngauss; ii++)
                 table[nnu - 1 - ii] = table[ii];
             MultipoleTable out;

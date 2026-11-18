@@ -16,7 +16,8 @@ there):
 ```
 make                                               # ./mcmc  (make clean && make USE_MPI=true for MPI)
 make test                                          # tests/test_fitting (the samplers: make run in ../MCMC/tests)
-python3 python/fetch_sn_data.py                    # Pantheon+ and DES-SN5YR into external/sn/ (87 MB, once)
+python3 python/fetch_sn_data.py                    # Pantheon+, DES-SN5YR, DES-Dovekie into external/sn/ (once)
+python3 python/fetch_planck_data.py                # CamSpec PR4 + Planck 2018 low-ell TT, EE into external/ (once)
 ./mcmc params/mcmc_lcdm.ini                        # flat LCDM: DESI DR2 + Planck distance priors + Pantheon+
 ./mcmc params/mcmc_w0wa.ini                        # w0-wa dark energy, same data
 ./mcmc params/mcmc_desi_bbn.ini                    # LCDM from DESI DR2 BAO + BBN alone
@@ -29,7 +30,7 @@ MCMC-specific entries are:
 
 | Entry | Meaning |
 |---|---|
-| `likelihoods = desi_dr2, planck_dp, pantheonplus` | Data: supernovae `pantheonplus` (Pantheon+, 1590 light curves with z > 0.01, STAT+SYS covariance), `desy5` (DES-SN5YR, 1829), `union3` (Union3, 22 bins), each with the absolute magnitude marginalized analytically (as Cobaya; `sn`, `sn_free_amplitude`: the binned JLA data of the course), `desi_dr2`, `desi_dr1` (BAO with full covariance), `boss_dr12` (BOSS DR12 consensus BAO + full shape: D_M, H and fσ_8 at z = 0.38, 0.51, 0.61), `boss_dr12_bao` (its BAO only), `eboss_dr16_lrg`, `eboss_dr16_qso` (SDSS DR16 BAO + RSD of the LRGs, including BOSS DR12 at z = 0.38, 0.51, and of the quasars; do not combine `eboss_dr16_lrg` with `boss_dr12`), `desi_dr1_shapefit` (DESI DR1 full shape, ShapeFit compression + BAO; not with `desi_dr1`), `kids1000_cosebis` (KiDS-1000 cosmic shear, COSEBIs; needs `nonlinear`, see below), `planck_dp` (Planck 2018 R, l_A, ω_b of Chen, Huang & Wang 2019, LCDM-type early universe), `bbn` (ω_b = 0.02218 ± 0.00055); CMB: `planck_lite_TTTEEE`, `planck_lite_TT` (+ `_lowl`), `planck_lensing`, `planck_lensing_marged`, `cmb_mock` (below) |
+| `likelihoods = desi_dr2, planck_dp, pantheonplus` | Data: supernovae `pantheonplus` (Pantheon+, 1590 light curves with z > 0.01, STAT+SYS covariance), `desy5` (DES-SN5YR, 1829), `desdovekie` (DES-Dovekie, DES-SN5YR recalibrated, 1820), `union3` (Union3, 22 bins), each with the absolute magnitude marginalized analytically (as Cobaya; `sn`, `sn_free_amplitude`: the binned JLA data of the course), `desi_dr2`, `desi_dr1` (BAO with full covariance), `boss_dr12` (BOSS DR12 consensus BAO + full shape: D_M, H and fσ_8 at z = 0.38, 0.51, 0.61), `boss_dr12_bao` (its BAO only), `eboss_dr16_lrg`, `eboss_dr16_qso` (SDSS DR16 BAO + RSD of the LRGs, including BOSS DR12 at z = 0.38, 0.51, and of the quasars; do not combine `eboss_dr16_lrg` with `boss_dr12`), `desi_dr1_shapefit` (DESI DR1 full shape, ShapeFit compression + BAO; not with `desi_dr1`), `desi_dr1_fs` (DESI DR1 full-shape power spectra, see below), `kids1000_cosebis` (KiDS-1000 cosmic shear, COSEBIs; needs `nonlinear`, see below), `planck_dp` (Planck 2018 R, l_A, ω_b of Chen, Huang & Wang 2019, LCDM-type early universe), `bbn` (ω_b = 0.02218 ± 0.00055); CMB: `planck_lite_TTTEEE`, `planck_lite_TT` (+ `_lowl`), `planck_lowl_TT`, `planck_lowl_EE`, `planck_camspec_npipe_TTTEEE` (also `_TT`, `_TE`, `_EE`, `_TTTE`), `act_dr6_lensing_actplanck`, `act_dr6_lensing` (+ `_extended`), `planck_lensing`, `planck_lensing_marged`, `cmb_mock` (below) |
 | `sample_<name> = start, min, max, step [, label]` | Sampled parameter with a flat prior on [min, max]. Valid names are any `./cmb` parameter, a model parameter such as `w0`, a nuisance parameter (`A_planck`, `kids_A_IA`, `kids_dz1`..`kids_dz5`), or the aliases `H0`, `omega_b`, `omega_cdm`, `Omega_m`, `logA` = ln(10¹⁰A_s), `tau_reio` (sets z_reion), `theta_MC_100` (sets h), and for Brans–Dicke `log10_bd_omega` and `inv_bd_omega` = 1/ω (0 = GR) |
 | `gauss_<name> = mean, sigma` | Additional Gaussian prior on a sampled parameter |
 | `mcmc_chains`, `mcmc_burn_in`, `mcmc_adapt_every`, `mcmc_min_samples`, `mcmc_max_steps`, `mcmc_Rminus1`, `mcmc_check_every`, `mcmc_seed`, `mcmc_threads`, `mcmc_output` | Sampler settings (defaults 4, 2000, 100, 4000, 100000, 0.01, 1000, 1, one thread per chain (1 with CMB likelihoods), `chains/run`) |
@@ -103,6 +104,42 @@ be sampled as any model parameter. `params/mcmc_jbd_planck_boss_pantheonplus.ini
 Joudaki, Ferreira, Lima & Winther (2022, arXiv:2010.15278) with plik_lite + lensing, Pantheon+ and BOSS DR12 (BAO +
 fσ_8), the neutrino mass free and `nonlinear = jbd_boost`; its header lists the DESI ShapeFit and KiDS-1000 variants.
 ~22 s per slow point on 2 cores.
+
+### DESI DR1 full shape
+
+`desi_dr1_fs` is DESI's DR1 full-shape power-spectrum likelihood (DESI 2024 V, VII) as DESI's Cobaya likelihood
+`desi_fs_bao_all` with `observable_name = spectrum-poles-rotated` and its theory `reptvelocileptors`
+(desi-kp-cosmological-likelihoods, dr1/cobaya): for BGS, LRG (3 bins), ELG and QSO the rotated P_0, P_2 (k = 0.02–0.2
+h/Mpc, 72 values each) with the rotated window and the covariance with the rotation, HOD and photometric systematics.
+The theory is velocileptors' one-loop REPT (PerturbationTheory/EPTRedshiftSpace.h) of the linear CDM + baryon P(k)
+at the first redshift, with the loops scaled by D⁴, the linear terms from P_cb(k, z) and its no-wiggle part (the
+peak-average BAO filter of the ShapeFit likelihood) and the scale-dependent growth rate f(k) = (P_θθ/P_cb)^½ at each
+redshift, with AP relative to DESI's fiducial cosmology. Bias parameters per sample in DESI's physical basis,
+`desi_<SAMPLE>_b1p`, `_b2p`, `_bsp` (SAMPLE = BGS_z0, LRG_z0, LRG_z1, LRG_z2, ELG_z1, QSO_z0; DESI's priors: b1p in [0,
+3], b2p and bsp Gaussian 0 ± 5), the counterterms α0, α2 and the stochastic terms (Gaussian priors 12.5, 12.5, 2, 5)
+marginalized analytically (`desi_fs_solve = marg`, as DESI, or `best`, the maximum, for best fits and profiles).
+Data: `python3 python/convert_desi_dr1_fullshape.py /path/to/data/likelihood` (needs h5py) with DESI's likelihood
+files (`python download.py` in dr1/cobaya of desi-kp-cosmological-likelihoods). One sample: `desi_dr1_fs_<SAMPLE>`.
+`params/mcmc_lcdm_desi_fs_bbn.ini` is LCDM from the full shape + BBN + DESI's n_s prior.
+
+Nothing in it assumes a model: for modified gravity or a coupled dark sector the linear P_cb, P_θθ and growth carry
+the model, with EdS loop kernels. It adds ~0.2 s per point to the theory (and nothing to the Boltzmann run).
+
+For the same REPT inputs (P_cb, no-wiggle P, P_θθ, AP, σ_8) ln L equals DESI's code path (velocileptors 3.1) to 1e-7
+for all six samples (`tests/test_fitting`, `python/generate_desi_fs_reference.py`), and the scaled REPT tables equal
+velocileptors' `ept_fullresum_varyDz_nu_fftw` to 1e-8 (`PerturbationTheory/tests/test_rept`). Our linear P_cb agrees
+with CAMB's to 1e-4 for k < 0.3 h/Mpc; with CAMB's P_cb and P_θθ instead of ours (same cosmology and biases) ln L
+changes by 0.26 in total. Raising the perturbations' k_max to 3 h/Mpc changes ln L by < 0.003.
+
+### Fading Dark Sector
+
+`model = fading_dark_sector` with `fds_c` and `fds_cprime` sampled (Obied, Vafa & Wu 2026, arXiv:2611.17422:
+V = V0 e^(−cφ), m_DM = m0 e^(−c′φ); the EBS's coupled quintessence with λ = c, β = c′, the field at rest at φ = 0
+initially). Only the relative sign matters (φ → −φ), so c′ ≥ 0. `params/mcmc_fds_cmb_desi_dovekie.ini` is their
+CMB + DESI DR2 BAO + DES-Dovekie fit with Planck PR4 CamSpec, the Planck 2018 low-ℓ TT and EE and ACT DR6 + Planck
+PR4 lensing, as the paper (which adds the DESI DR1 full shape); its header has the ΛCDM variant
+(`model=lcdm sample_fds_c= sample_fds_cprime=`). An evaluation is about 15 s on 2 cores (`precision = fast`), as for
+ΛCDM.
 
 ### Cosmic shear (KiDS-1000)
 
@@ -189,6 +226,23 @@ make clean && make USE_MPI=true && mpirun -np 4 ./mcmc params/mcmc_planck_lite_l
   linear correction for the dependence of the N0/N1 biases on the CMB and lensing spectra (CMBlikes format, as
   Cobaya's `planck_2018_lensing.native`; data in `external/planck2018_lensing/`); it shares `A_planck` with
   plik_lite. `planck_lensing_marged` is the CMB-marginalized variant, for use without CMB power-spectrum data.
+  `planck_lowl_TT` (Commander, 2 ≤ ℓ ≤ 29) and `planck_lowl_EE` (SimAll) are Planck 2018's low-ℓ likelihoods and
+  `planck_camspec_npipe_TTTEEE` the high-ℓ CamSpec PR4 (NPIPE) 12.6cl likelihood (Rosenberg, Gratton & Efstathiou
+  2022: TT of 143×143, 217×217, 143×217, TE and EE, 9915 multipoles with the full covariance), all ported from
+  Cobaya's native versions (`planck_2018_lowl.TT`, `.EE`, `planck_NPIPE_highl_CamSpec.TTTEEE`; PlanckLikelihoods.h).
+  Data: `python3 python/fetch_planck_data.py` (from Cobaya's planck_native_data release; 510 MB unpacked).
+  CamSpec has the nuisance parameters A_planck, calTE, calEE (Gaussian priors 1 ± 0.0025, 0.01, 0.01: add the
+  `gauss_` lines) and the power-law foreground residuals `amp_143`, `amp_217`, `amp_143x217` (flat in [0, 50]),
+  `n_143`, `n_217`, `n_143x217` (flat in [0, 5]), all fast; see `params/mcmc_fds_cmb_desi_dovekie.ini`. It
+  factorizes its covariance once at the start (about a minute, 0.8 GB per process). With them τ needs no prior.
+  `act_dr6_lensing_actplanck` is the ACT DR6 + Planck PR4 lensing likelihood (Madhavacheril et al. 2023, Qu et al.
+  2023, Carron et al. 2022; variant `actplanck_baseline`, 19 bandpowers), `act_dr6_lensing` ACT alone
+  (`act_baseline`, 10), `_extended` their extended L ranges, as `act_dr6_lenslike` 1.2.1 with the corrections for
+  the dependence of the normalization and N1 on the CMB and lensing spectra (to be combined with CMB spectra; the
+  Hartlap factor of its Cobaya class). These corrections are linear in the spectra, so
+  `python/convert_act_dr6_lensing.py` (from ACT_dr6_likelihood_v1.2.tgz, 360 MB, from NASA LAMBDA; downloaded if not
+  given) precomputes them as matrices on the bandpowers. The spectra are then needed to ℓ = 2999 (k_max of the
+  perturbations is raised automatically), which makes a point ~20% slower.
   `cmb_mock` is the exact Gaussian likelihood of TT, TE, EE for a fiducial spectrum with
   white noise and a beam (options `cmb_mock_file`, `_lmax`, `_fsky`, `_noise`, `_beam`), for tests and forecasts;
   `cmb_mock_bb = true` adds the lensed BB (e.g. `sample_r` with mock data made with `r > 0`). With `r > 0` (fixed or
@@ -228,6 +282,12 @@ Validation:
   1σ of Planck, and χ² = 592 for 615 bins.
 - The supernova likelihoods agree with an independent Python implementation (numpy, CLASS distances) to 1e-5 in
   χ²: at the Planck 2018 cosmology χ² = 1413.5 (Pantheon+, 1590), 1655.4 (DES-SN5YR, 1829), 29.9 (Union3, 22).
+  DES-Dovekie equals numpy with Cobaya's `sn.desdovekie` for the same distances to 1e-10 (χ² = 1642.1, 1820 SNe).
+- The Planck low-ℓ TT and EE likelihoods equal Cobaya's (3.6.2) to 1e-14 in ln L, CamSpec PR4 TT to 1e-15 and
+  TTTEEE to 1e-8 relative in χ² (Cholesky factorization here, inversion in Cobaya). At the Planck 2018 cosmology
+  (`precision = fast`) χ² = 10545 (CamSpec TTTEEE, 9915), 22.4 (low-ℓ TT), 396.9 (low-ℓ EE).
+- ACT DR6 lensing (all four variants) equals `act_dr6_lenslike` 1.2.1 to 1e-14 in ln L for its fiducial and for
+  perturbed spectra; at the Planck 2018 cosmology χ² = 19.6 (ACT + Planck, 19 bandpowers) and 13.8 (ACT, 10).
 - DESI DR2 + Planck distance priors + Pantheon+ (`params/mcmc_lcdm.ini`, `mcmc_w0wa.ini`; 15 and 25 min on 2
   cores) gives, in ΛCDM, H0 = 68.35 ± 0.28 and Ω_m = 0.3016 ± 0.0036; in w0wa, w0 = −0.848 ± 0.054,
   wa = −0.55 ± 0.22 and Ω_m = 0.311 ± 0.006, with Δχ² = −7.6 relative to ΛCDM. This is close to the DESI DR2
@@ -238,18 +298,23 @@ Validation:
 | File | Contents |
 |---|---|
 | `Theory.h/.cpp` | Distances, r_d, z_*, distance-prior quantities, θ_MC, θ_*, lensed CMB spectra, τ, σ_8, σ_8(z) and fσ_8(z), linear P_cb(k, z), nonlinear P(k, z) and D(z) (each computed only when needed); nuisance parameters |
-| `Likelihoods.h/.cpp` | SN (Pantheon+, DES-SN5YR, Union3, JLA bins), BAO (DESI DR1/DR2), BAO + RSD (BOSS DR12, eBOSS DR16), DESI DR1 ShapeFit, KiDS-1000 COSEBIs, Planck distance priors, BBN, Planck 2018 plik_lite and lensing, mock CMB |
+| `Likelihoods.h/.cpp` | SN (Pantheon+, DES-SN5YR, DES-Dovekie, Union3, JLA bins), BAO (DESI DR1/DR2), BAO + RSD (BOSS DR12, eBOSS DR16), DESI DR1 ShapeFit, KiDS-1000 COSEBIs, Planck distance priors, BBN, Planck 2018 plik_lite and lensing, mock CMB |
+| `DESIFullShape.h/.cpp` | DESI DR1 full-shape power-spectrum likelihood (REPT, analytic marginalization) |
+| `PlanckLikelihoods.h/.cpp` | Planck 2018 low-ℓ TT (Commander) and EE (SimAll), CamSpec PR4 (NPIPE), ported from Cobaya; ACT DR6 (+ Planck PR4) lensing |
 | `SampledParameterMap.h/.cpp` | A sampled point → `RunSettings`, with the aliases (H0, omega_b, omega_cdm, Omega_m, logA, tau_reio, theta_MC_100) |
 | `Main.cpp` | `./mcmc`: MCMC, best fits, profiles and Hessians from a parameter file |
 | `params/` | `mcmc_*.ini` and the Planck proposal covmat |
 | `python/plot_chains.py` | Triangle plots and marginalized limits of `./mcmc` chains (GetDist) |
-| `python/fetch_sn_data.py` | Downloads Pantheon+ and DES-SN5YR into `external/sn/` |
+| `python/fetch_sn_data.py` | Downloads Pantheon+, DES-SN5YR and DES-Dovekie into `external/sn/` |
+| `python/fetch_planck_data.py` | Downloads the CamSpec PR4 and Planck 2018 low-ℓ data into `external/` |
+| `python/convert_desi_dr1_fullshape.py`, `python/generate_desi_fs_reference.py` | Converts DESI's DR1 full-shape likelihood files into `external/desi_dr1_fs/`; the test reference from DESI's code path |
+| `python/convert_act_dr6_lensing.py` | Converts the ACT DR6 lensing likelihood data into `external/act_dr6_lensing/` |
 | `python/convert_kids1000.py` | Converts the KiDS-1000 data release into `external/kids1000/` |
-| `external/` | DESI DR1/DR2 BAO, DESI DR1 ShapeFit, BOSS DR12 and eBOSS DR16 BAO + RSD (`bao/`), Planck 2018 plik_lite (`planck2018_lite/`) and lensing (`planck2018_lensing/`), KiDS-1000 COSEBIs (`kids1000/`), supernovae (`sn/`: Union3; Pantheon+ and DES-SN5YR via the script), binned JLA supernovae |
+| `external/` | DESI DR1/DR2 BAO, DESI DR1 ShapeFit, BOSS DR12 and eBOSS DR16 BAO + RSD (`bao/`), Planck 2018 plik_lite (`planck2018_lite/`) and lensing (`planck2018_lensing/`), KiDS-1000 COSEBIs (`kids1000/`), supernovae (`sn/`: Union3; Pantheon+, DES-SN5YR and DES-Dovekie via the script), CamSpec PR4 and low-ℓ (via the script), binned JLA supernovae |
 | `chains/` | Summaries and plots of the runs quoted above |
 | `tests/` | `test_fitting`: theory and likelihoods |
 
 ## Possible next steps
 
-ACT DR6 lensing and the full (clik) Planck likelihoods, fast–slow dragging in the sampler, DES-Dovekie supernovae,
-and a converged Planck LCDM run compared with Planck.
+Fast–slow dragging in the sampler, and a
+converged Planck LCDM run compared with Planck.

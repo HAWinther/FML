@@ -66,6 +66,11 @@ namespace FML::COSMOLOGY::FITTING {
         std::vector<double> growth_z;
         // The redshifts of the linear P_cb(k) tables (pk_cb) on pk_k_grid() (computed with the growth)
         std::vector<double> pk_z;
+        // Also the velocity-divergence spectra P_theta,cb(k) (pk_theta) at pk_z
+        bool pk_theta = false;
+        // > 0: solve the perturbations at least up to this k [h/Mpc] (beyond the computed range P(k) is extrapolated
+        // with the Eisenstein-Hu shape)
+        double pk_k_max = 0.0;
         // The redshifts of the nonlinear total-matter P(k) tables (pk_nl, on pk_nl_k_grid(); the nonlinear method of
         // the RunSettings, e.g. nonlinear = hmcode2016) and the linear growth factor D(z) (computed with the growth)
         std::vector<double> pk_nl_z;
@@ -121,6 +126,9 @@ namespace FML::COSMOLOGY::FITTING {
         // model). The grid is that of cosmoprimo's BAO filters: 1024 points log-spaced from 1e-7 to 100 h/Mpc
         static const std::vector<double> & pk_k_grid();
         const std::vector<double> & pk_cb(double z) const;
+        // The linear power spectrum of the velocity divergence of the CDM + baryons in units of -aH, P_cb(k) f(k)^2
+        // [(Mpc/h)^3], on pk_k_grid() at the redshifts of pk_z (computed only if TheoryOptions::pk_theta)
+        const std::vector<double> & pk_theta(double z) const;
         // The nonlinear total-matter power spectrum [(Mpc/h)^3] on pk_nl_k_grid() [h/Mpc] at the redshifts of pk_nl_z
         // (= linear without a nonlinear method). The grid: 400 points log-spaced from 1e-5 to 100 h/Mpc
         static const std::vector<double> & pk_nl_k_grid();
@@ -142,6 +150,17 @@ namespace FML::COSMOLOGY::FITTING {
         double nuisance(const std::string & name, double default_value) const {
             const auto it = nuis.find(name);
             return it == nuis.end() ? default_value : it->second;
+        }
+
+        // A product of a likelihood computed from this theory, kept with it (e.g. multipole tables, reused when only
+        // nuisance parameters change): make() is called on the first request for the key. Not thread safe (a Theory
+        // is used by one thread at a time)
+        template <class T, class F>
+        const T & cached(const std::string & key, F && make) const {
+            auto it = products.find(key);
+            if (it == products.end())
+                it = products.emplace(key, std::make_shared<T>(make())).first;
+            return *static_cast<const T *>(it->second.get());
         }
 
         ~Theory();
@@ -168,6 +187,7 @@ namespace FML::COSMOLOGY::FITTING {
         mutable bool growth_done = false;
         mutable std::vector<double> sigma8cb_z, fsigma8_z, sigma8th_z; // at opt.growth_z
         mutable std::vector<std::vector<double>> pk_tables;           // at opt.pk_z
+        mutable std::vector<std::vector<double>> pk_theta_tables;     // at opt.pk_z (if opt.pk_theta)
         mutable std::vector<std::vector<double>> pk_nl_tables;        // at opt.pk_nl_z
         mutable std::vector<double> growth_D_z;                       // at opt.pk_nl_z
         size_t pk_nl_index(double z) const;
@@ -176,6 +196,7 @@ namespace FML::COSMOLOGY::FITTING {
         size_t growth_index(double z) const;
         void ensure_growth() const;
         std::map<std::string, double> nuis;
+        mutable std::map<std::string, std::shared_ptr<void>> products;
     };
 
 } // namespace FML::COSMOLOGY::FITTING

@@ -1,6 +1,7 @@
 //==========================================================
 // Tests for EPTRedshiftSpace.h (IR-resummed one-loop EPT in redshift space, a port of velocileptors' REPT):
-//   - velocileptors (reference: python/generate_rept_reference.py): the Savitzky-Golay no-wiggle spectrum, Sigma^2,
+//   - velocileptors (reference: python/generate_rept_reference.py; the scaled tables of ept_fullresum_varyDz_nu_fftw:
+//     python/generate_rept_varydz_reference.py): the Savitzky-Golay no-wiggle spectrum, Sigma^2,
 //     the EPT velocity-moment tables, the 19 columns of P(k, mu) with and without AP, P(k, mu) with bFoG and the
 //     multipole columns
 //   - the real-space matter P(k) (b1 = 1, f = 0, no wiggles) against the direct one-loop SPT of OneLoop.h
@@ -229,6 +230,63 @@ int main() {
             std::cout << "  multipole columns max diff " << err << " (" << n << " rows)\n";
             check(n == 360, "velocileptors multipole rows found");
             check(err < 1e-7, "multipole columns (P0, P2, P4; with and without AP) = velocileptors");
+        }
+
+        // The scaled tables (velocileptors' ept_fullresum_varyDz_nu_fftw, python/generate_rept_varydz_reference.py):
+        // one-loop terms x Dz^4, linear terms from pcb, pcb_nw, f(k)
+        {
+            const auto vrows = read_rows("reference/rept_varydz_velocileptors.txt");
+            const double Dz = 0.8;
+            DVector pcb(60), pcbnw(60), fk(60);
+            for (int j = 0; j < 60; j++) {
+                const double supp = 1.0 - 0.05 * kv[j];
+                pcb[j] = Dz * Dz * rept.plinear()[j] * supp;
+                pcbnw[j] = Dz * Dz * rept.plinear_nowiggle()[j] * supp;
+                fk[j] = 0.7 + 0.05 * kv[j];
+            }
+            double errm = 0, errp = 0;
+            int nm = 0, np = 0;
+            for (const auto & r : vrows.at("M")) {
+                const auto t = rept.table_at_mu_scaled(fk, r[2], pcb, pcbnw, Dz, r[0], r[1]);
+                int j = 0;
+                while (j < 60 and std::abs(kv[j] / r[3] - 1) > 1e-10)
+                    j++;
+                double scale = 0;
+                for (int cc = 0; cc < 12; cc++)
+                    scale = std::max(scale, std::abs(r[4 + cc]));
+                for (int c = 0; c < 19; c++) {
+                    const double sc = c < 12 ? scale : std::max(std::abs(r[4 + c]), 1e-300);
+                    errm = std::max(errm, std::abs(t[j][c] - r[4 + c]) / sc);
+                }
+                nm++;
+            }
+            for (double apar : {1.0, 1.03}) {
+                const double aperp = apar == 1.0 ? 1.0 : 0.97;
+                const auto t = rept.multipole_components_scaled(fk, pcb, pcbnw, Dz, apar, aperp, 4);
+                for (int ell : {0, 2, 4}) {
+                    const auto & tab = ell == 0 ? t.p0 : (ell == 2 ? t.p2 : t.p4);
+                    for (const auto & r : vrows.at("P" + std::to_string(ell))) {
+                        if (std::abs(r[0] - apar) > 1e-12)
+                            continue;
+                        int j = 0;
+                        while (j < 60 and std::abs(kv[j] / r[2] - 1) > 1e-10)
+                            j++;
+                        double scale = 0;
+                        for (int cc = 0; cc < 12; cc++)
+                            scale = std::max(scale, std::abs(r[3 + cc]));
+                        for (int c = 0; c < 19; c++) {
+                            const double sc = c < 12 ? scale : std::abs(t.p0[j][c]);
+                            errp = std::max(errp, std::abs(tab[j][c] - r[3 + c]) / sc);
+                        }
+                        np++;
+                    }
+                }
+            }
+            std::cout << "  scaled tables (Dz, pcb, f(k)): columns at mu max diff " << errm << " (" << nm
+                      << " rows), multipoles " << errp << " (" << np << " rows)\n";
+            check(nm == 240 and np == 360, "velocileptors scaled-table rows found");
+            check(errm < 1e-7, "scaled columns of P(k, mu) (Dz, pcb, pcb_nw, f(k); with and without AP) = velocileptors");
+            check(errp < 1e-7, "scaled multipole columns = velocileptors");
         }
     }
 

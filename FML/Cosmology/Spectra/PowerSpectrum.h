@@ -273,6 +273,10 @@ namespace FML::COSMOLOGY {
         // sigma_8 of the velocity divergence of the CDM + baryons in units of -aH (int dk/k Delta_cb^2 f(k)^2 W^2):
         // sigma_8,thetatheta / sigma_8,cb is the growth rate f of the ShapeFit compression (DESI)
         double get_sigma8_theta(double x = 0.0) const;
+        // The power spectrum of the velocity divergence of the CDM + baryons in units of -aH, P_cb(k) f(k)^2 with
+        // f(k)^2 = sum (dDelta_c/dx)^2 / sum Delta_c^2 over the components (f(k) held at the ends of the computed
+        // k-range); linear theory, [m^3] for k [1/m]
+        double get_matter_power_spectrum_theta_cb_extrapolated(double x, double k) const;
         // Angular power spectrum of the projected matter/galaxy density for the given ells (C_ell, dimensionless)
         // Auto: exact for ell < ell_limber, Limber above (Limber error ~0.4% at ell = 100, ~0.1-0.2% at 200, for
         // sigma_z = 0.1)

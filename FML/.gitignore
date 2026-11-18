@@ -97,6 +97,14 @@ CosmologyFitting/chains/*
 # Large supernova data (CosmologyFitting/python/fetch_sn_data.py); Union3 is kept
 CosmologyFitting/external/sn/PantheonPlus/
 CosmologyFitting/external/sn/DESY5/
+CosmologyFitting/external/sn/DES-Dovekie/
+# Planck PR4 CamSpec and 2018 low-ell data (CosmologyFitting/python/fetch_planck_data.py); ACT DR6 lensing (by hand)
+CosmologyFitting/external/planck_npipe_camspec/
+CosmologyFitting/external/planck2018_lowT/
+CosmologyFitting/external/planck2018_lowE/
+CosmologyFitting/external/act_dr6_lensing/
+# DESI DR1 full-shape likelihood (CosmologyFitting/python/convert_desi_dr1_fullshape.py)
+CosmologyFitting/external/desi_dr1_fs/
 # LaTeX by-products of the solver's report
 Cosmology/EinsteinBoltzmannSolver/report/*.aux
 Cosmology/EinsteinBoltzmannSolver/report/*.out

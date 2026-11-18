@@ -136,7 +136,11 @@ weight $F(k)$ on the operator leg ($F=-k^2$ for $\nabla^2\delta_L$), used by the
 the wiggle part of every term damped by $\exp[-k^2\Sigma^2(1+f(2+f)\mu^2)/2]$, $\Sigma^2=X(r_{\rm bao})+Y(r_{\rm bao})/3$ of
 the no-wiggle spectrum, and Eulerian bias. The default no-wiggle method is DST and the default grid wider than
 velocileptors', whose grid is not converged (0.5\% at $k=0.5\hMpc$). Validation: velocileptors to $10^{-8}$ on its grid;
-$f=0$, $b_1=1$ without wiggles against direct one-loop SPT ($6\times10^{-5}$).
+$f=0$, $b_1=1$ without wiggles against direct one-loop SPT ($6\times10^{-5}$). \code{table_at_mu_scaled} and
+\code{multipole_components_scaled} are velocileptors' \code{ept_fullresum_varyDz_nu_fftw} (used by DESI's DR1 full-shape
+likelihood, \cref{sec:fit-cosmology}): the loops of the object scaled by $D^4$, the linear terms and counterterms from the
+linear $P_{cb}$ and its no-wiggle part at another redshift, $\Sigma^2$ scaled by $D^2$ and a scale-dependent growth rate
+$f(k)$; equal to velocileptors to $10^{-8}$.
 
 \begin{cppcode}[Redshift-space multipoles of biased tracers]
 #include <FML/PerturbationTheory/EFTofLSS.h>
