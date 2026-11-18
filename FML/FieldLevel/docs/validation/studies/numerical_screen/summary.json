@@ -1,0 +1,1326 @@
+{
+  "date": "2026-11-18",
+  "numerical_screen_passed": true,
+  "case_count": 17,
+  "scope": "One frozen moderately nonlinear synthetic tracer field, no posterior calibration/real catalog",
+  "fisher_rank": 5,
+  "fisher_scaled_eigenvalues": [
+    0.022109258343169718,
+    0.07289065810012703,
+    0.32036463197804915,
+    1.0081719659266004,
+    3.5764634856520536
+  ],
+  "local_fisher_alpha_sigma": 0.09247970985136007,
+  "plan_sha256": "6f614c391b4986dfa289287dd0391c4d600f36e884721a358f36dcac0c72c1e6",
+  "data_sha256": "53cbced0cea109c2a8fb06fc20a40f1fb40b612990287829aa5903b65dd61abf",
+  "executable_sha256": {
+    "serial": "0fada09f143600b65cb086776dc29d492b35c2aa7ca8cbdf16e0674eca1b8a59",
+    "slab": "6921b9ecf614a9592fdc2e6287e144e21fd9ae26116a7f2bde78837008982762",
+    "pencil": "1e02e265d2c6a6a5c76d1b1382036404385fd75c888a526277eebd0b2c34589d"
+  },
+  "host": {
+    "platform": "macOS-14.7.6-x86_64-i386-64bit",
+    "machine": "x86_64",
+    "logical_cpus": 12
+  },
+  "spent_seconds": {
+    "serial": 35.79675047658384,
+    "mpi": 12.877127453917637
+  },
+  "cases": [
+    {
+      "name": "serial-reference",
+      "configuration": {
+        "name": "reference",
+        "mesh": 8,
+        "product": 24,
+        "density": 48,
+        "epsilon": 1e-12
+      },
+      "passed": true,
+      "checks": {
+        "finite_differences": true,
+        "hmc_smoke": true,
+        "model_distance": true,
+        "field_score": true,
+        "fisher_score": true,
+        "amplitude_proxy": true
+      },
+      "max_model_distance": 0.0,
+      "max_field_score_relative_error": 0.0,
+      "max_fisher_score_distance": 0.0,
+      "max_local_alpha_shift_in_fisher_sigma": 0.0,
+      "max_absolute_potential_shift": 0.0,
+      "mpi_prediction_absolute_error": null,
+      "metrics": {
+        "mesh": 8,
+        "product": 24,
+        "density": 48,
+        "epsilon": 1e-12,
+        "kernel_width": 13,
+        "ranks": 1,
+        "real_modes": 124,
+        "setup_seconds": 0.024055285,
+        "cold_forward_seconds": 0.395938959,
+        "forward_seconds": [
+          0.386540424,
+          0.389820005,
+          0.387815964
+        ],
+        "gradient_seconds": [
+          0.823197405,
+          0.814141894,
+          0.840829248
+        ],
+        "hmc_two_draws_seconds": 4.098324537,
+        "hmc_divergences": 0,
+        "hmc_acceptance": 0.9999998499250622,
+        "rank_peak_rss_max_mib": 30.12890625,
+        "sum_rank_peak_rss_mib": 30.12890625,
+        "field_fd_error": 9.187736105332703e-08,
+        "alpha_fd_error": 2.8556901929287914e-07,
+        "potential": [
+          -353.0046107451514,
+          -369.08815057223757,
+          -350.2615490753231
+        ],
+        "scalar_gradients": [
+          -342.8570586367631,
+          -129.4810312762542,
+          -161.50691319956906,
+          -10.4226902222412,
+          2.926724477018999,
+          19.18807360918459,
+          7.864227449183021,
+          12.933389855732464,
+          1.9717723624408954,
+          0.1066647377271157,
+          348.4248739438825,
+          170.08901808705946,
+          266.78284038041465,
+          22.188217432947383,
+          -3.3037930481850895
+        ]
+      }
+    },
+    {
+      "name": "serial-baseline",
+      "configuration": {
+        "name": "baseline",
+        "mesh": 8,
+        "product": 12,
+        "density": 24,
+        "epsilon": 1e-08
+      },
+      "passed": true,
+      "checks": {
+        "finite_differences": true,
+        "hmc_smoke": true,
+        "model_distance": true,
+        "field_score": true,
+        "fisher_score": true,
+        "amplitude_proxy": true
+      },
+      "max_model_distance": 0.0012288722476933374,
+      "max_field_score_relative_error": 0.00017238490587508806,
+      "max_fisher_score_distance": 0.0006733025888634288,
+      "max_local_alpha_shift_in_fisher_sigma": 0.0004175412048995055,
+      "max_absolute_potential_shift": 0.0004541317587154481,
+      "mpi_prediction_absolute_error": null,
+      "metrics": {
+        "mesh": 8,
+        "product": 12,
+        "density": 24,
+        "epsilon": 1e-08,
+        "kernel_width": 9,
+        "ranks": 1,
+        "real_modes": 124,
+        "setup_seconds": 0.008688067,
+        "cold_forward_seconds": 0.029268751,
+        "forward_seconds": [
+          0.021450983,
+          0.020839031,
+          0.02082517
+        ],
+        "gradient_seconds": [
+          0.037307758,
+          0.037347416,
+          0.036864037
+        ],
+        "hmc_two_draws_seconds": 0.184822378,
+        "hmc_divergences": 0,
+        "hmc_acceptance": 0.9999998498996532,
+        "rank_peak_rss_max_mib": 9.80859375,
+        "sum_rank_peak_rss_mib": 9.80859375,
+        "field_fd_error": 9.187953844672395e-08,
+        "alpha_fd_error": 2.8546035716652285e-07,
+        "potential": [
+          -353.0049316051181,
+          -369.0886047039963,
+          -350.2615179490195
+        ],
+        "scalar_gradients": [
+          -342.8592512351064,
+          -129.48199294305496,
+          -161.5062419442186,
+          -10.422741839673126,
+          2.926748104892141,
+          19.188466130629834,
+          7.862697618868392,
+          12.936826843868227,
+          1.971828965442925,
+          0.10670485366322173,
+          348.4361440257438,
+          170.08725697174927,
+          266.79453914008417,
+          22.18880056158319,
+          -3.303742864679764
+        ]
+      }
+    },
+    {
+      "name": "serial-loose_tolerance",
+      "configuration": {
+        "name": "loose_tolerance",
+        "mesh": 8,
+        "product": 12,
+        "density": 24,
+        "epsilon": 1e-06
+      },
+      "passed": true,
+      "checks": {
+        "finite_differences": true,
+        "hmc_smoke": true,
+        "model_distance": true,
+        "field_score": true,
+        "fisher_score": true,
+        "amplitude_proxy": true
+      },
+      "max_model_distance": 0.0012293324394310615,
+      "max_field_score_relative_error": 0.00017135691775850497,
+      "max_fisher_score_distance": 0.0006252756504709374,
+      "max_local_alpha_shift_in_fisher_sigma": 0.00033446442193228347,
+      "max_absolute_potential_shift": 0.00044814904919121545,
+      "mpi_prediction_absolute_error": null,
+      "metrics": {
+        "mesh": 8,
+        "product": 12,
+        "density": 24,
+        "epsilon": 1e-06,
+        "kernel_width": 7,
+        "ranks": 1,
+        "real_modes": 124,
+        "setup_seconds": 0.006824608,
+        "cold_forward_seconds": 0.021364168,
+        "forward_seconds": [
+          0.015907979,
+          0.016026506,
+          0.015544461
+        ],
+        "gradient_seconds": [
+          0.024391168,
+          0.024348624,
+          0.023923657
+        ],
+        "hmc_two_draws_seconds": 0.120710782,
+        "hmc_divergences": 0,
+        "hmc_acceptance": 0.9999998498868918,
+        "rank_peak_rss_max_mib": 8.89453125,
+        "sum_rank_peak_rss_mib": 8.89453125,
+        "field_fd_error": 9.192713861163808e-08,
+        "alpha_fd_error": 2.857262616229854e-07,
+        "potential": [
+          -353.0049283430441,
+          -369.08859872128676,
+          -350.2615150357225
+        ],
+        "scalar_gradients": [
+          -342.8587578573379,
+          -129.48201330691546,
+          -161.50626448459542,
+          -10.422749670790846,
+          2.9267484571829785,
+          19.18836672850126,
+          7.862698764959176,
+          12.936848258116598,
+          1.9718280373867998,
+          0.10670498964455069,
+          348.43521872696596,
+          170.0872444455587,
+          266.79452500186096,
+          22.188798381766134,
+          -3.303742463093571
+        ]
+      }
+    },
+    {
+      "name": "serial-tight_tolerance",
+      "configuration": {
+        "name": "tight_tolerance",
+        "mesh": 8,
+        "product": 12,
+        "density": 24,
+        "epsilon": 1e-10
+      },
+      "passed": true,
+      "checks": {
+        "finite_differences": true,
+        "hmc_smoke": true,
+        "model_distance": true,
+        "field_score": true,
+        "fisher_score": true,
+        "amplitude_proxy": true
+      },
+      "max_model_distance": 0.0012288663048022335,
+      "max_field_score_relative_error": 0.0001723976809525811,
+      "max_fisher_score_distance": 0.0006737494814832847,
+      "max_local_alpha_shift_in_fisher_sigma": 0.0004182486870902216,
+      "max_absolute_potential_shift": 0.0004541496078331875,
+      "mpi_prediction_absolute_error": null,
+      "metrics": {
+        "mesh": 8,
+        "product": 12,
+        "density": 24,
+        "epsilon": 1e-10,
+        "kernel_width": 11,
+        "ranks": 1,
+        "real_modes": 124,
+        "setup_seconds": 0.010724401,
+        "cold_forward_seconds": 0.045431219,
+        "forward_seconds": [
+          0.033263875,
+          0.032072216,
+          0.032148042
+        ],
+        "gradient_seconds": [
+          0.061899202,
+          0.062953489,
+          0.061498444
+        ],
+        "hmc_two_draws_seconds": 0.329357312,
+        "hmc_divergences": 0,
+        "hmc_acceptance": 0.9999998498716578,
+        "rank_peak_rss_max_mib": 9.2109375,
+        "sum_rank_peak_rss_mib": 9.2109375,
+        "field_fd_error": 9.188979358884042e-08,
+        "alpha_fd_error": 2.8549463444392306e-07,
+        "potential": [
+          -353.00493154136126,
+          -369.0886047218454,
+          -350.2615179179069
+        ],
+        "scalar_gradients": [
+          -342.85925760141885,
+          -129.48199308419692,
+          -161.50624189689503,
+          -10.422741867625966,
+          2.926748106867368,
+          19.188467809589984,
+          7.862697594647538,
+          12.936827056428992,
+          1.9718289919672356,
+          0.10670485280868088,
+          348.43615211780934,
+          170.08725708144544,
+          266.79453956665276,
+          22.188800639254094,
+          -3.3037428676269553
+        ]
+      }
+    },
+    {
+      "name": "serial-finest_tolerance",
+      "configuration": {
+        "name": "finest_tolerance",
+        "mesh": 8,
+        "product": 12,
+        "density": 24,
+        "epsilon": 1e-12
+      },
+      "passed": true,
+      "checks": {
+        "finite_differences": true,
+        "hmc_smoke": true,
+        "model_distance": true,
+        "field_score": true,
+        "fisher_score": true,
+        "amplitude_proxy": true
+      },
+      "max_model_distance": 0.0012288663159931044,
+      "max_field_score_relative_error": 0.00017239781502374733,
+      "max_fisher_score_distance": 0.0006737530155126383,
+      "max_local_alpha_shift_in_fisher_sigma": 0.0004182544642445271,
+      "max_absolute_potential_shift": 0.00045414918884034705,
+      "mpi_prediction_absolute_error": null,
+      "metrics": {
+        "mesh": 8,
+        "product": 12,
+        "density": 24,
+        "epsilon": 1e-12,
+        "kernel_width": 13,
+        "ranks": 1,
+        "real_modes": 124,
+        "setup_seconds": 0.013673093,
+        "cold_forward_seconds": 0.054856366,
+        "forward_seconds": [
+          0.046498257,
+          0.04567577,
+          0.04553869
+        ],
+        "gradient_seconds": [
+          0.0932266,
+          0.09503963,
+          0.094441821
+        ],
+        "hmc_two_draws_seconds": 0.467540467,
+        "hmc_divergences": 0,
+        "hmc_acceptance": 0.9999998498775837,
+        "rank_peak_rss_max_mib": 8.03125,
+        "sum_rank_peak_rss_mib": 8.03125,
+        "field_fd_error": 9.189970526463206e-08,
+        "alpha_fd_error": 2.8546567133301407e-07,
+        "potential": [
+          -353.0049315403205,
+          -369.0886047214264,
+          -350.2615179175496
+        ],
+        "scalar_gradients": [
+          -342.85925765454306,
+          -129.48199308516877,
+          -161.5062418985959,
+          -10.42274186830524,
+          2.926748106900513,
+          19.18846782068713,
+          7.862697594911495,
+          12.9368270567041,
+          1.9718289917455485,
+          0.10670485281384112,
+          348.4361521807146,
+          170.08725708241715,
+          266.79453956597695,
+          22.188800639313204,
+          -3.3037428676369927
+        ]
+      }
+    },
+    {
+      "name": "serial-deposition_32",
+      "configuration": {
+        "name": "deposition_32",
+        "mesh": 8,
+        "product": 12,
+        "density": 32,
+        "epsilon": 1e-10
+      },
+      "passed": true,
+      "checks": {
+        "finite_differences": true,
+        "hmc_smoke": true,
+        "model_distance": true,
+        "field_score": true,
+        "fisher_score": true,
+        "amplitude_proxy": true
+      },
+      "max_model_distance": 0.0012288662395589804,
+      "max_field_score_relative_error": 0.00017239744714804656,
+      "max_fisher_score_distance": 0.0006737402635803542,
+      "max_local_alpha_shift_in_fisher_sigma": 0.000418234152827682,
+      "max_absolute_potential_shift": 0.000454148675714805,
+      "mpi_prediction_absolute_error": null,
+      "metrics": {
+        "mesh": 8,
+        "product": 12,
+        "density": 32,
+        "epsilon": 1e-10,
+        "kernel_width": 10,
+        "ranks": 1,
+        "real_modes": 124,
+        "setup_seconds": 0.009961068,
+        "cold_forward_seconds": 0.042970609,
+        "forward_seconds": [
+          0.041441369,
+          0.040611279,
+          0.040491847
+        ],
+        "gradient_seconds": [
+          0.063929001,
+          0.063135292,
+          0.062914972
+        ],
+        "hmc_two_draws_seconds": 0.318099705,
+        "hmc_divergences": 0,
+        "hmc_acceptance": 0.9999998498839786,
+        "rank_peak_rss_max_mib": 14.0703125,
+        "sum_rank_peak_rss_mib": 14.0703125,
+        "field_fd_error": 9.191019567466567e-08,
+        "alpha_fd_error": 2.767358029247806e-07,
+        "potential": [
+          -353.0049315390691,
+          -369.0886047209133,
+          -350.2615179174196
+        ],
+        "scalar_gradients": [
+          -342.85925751491186,
+          -129.48199308761158,
+          -161.50624190514196,
+          -10.422741869422454,
+          2.9267481069349115,
+          19.188467771977063,
+          7.8626975914428945,
+          12.936827046139914,
+          1.9718289909258262,
+          0.10670485288446736,
+          348.43615195139796,
+          170.08725707949142,
+          266.7945395578686,
+          22.188800639087404,
+          -3.3037428675823604
+        ]
+      }
+    },
+    {
+      "name": "serial-deposition_48",
+      "configuration": {
+        "name": "deposition_48",
+        "mesh": 8,
+        "product": 12,
+        "density": 48,
+        "epsilon": 1e-10
+      },
+      "passed": true,
+      "checks": {
+        "finite_differences": true,
+        "hmc_smoke": true,
+        "model_distance": true,
+        "field_score": true,
+        "fisher_score": true,
+        "amplitude_proxy": true
+      },
+      "max_model_distance": 0.0012288663280146485,
+      "max_field_score_relative_error": 0.00017239773778902415,
+      "max_fisher_score_distance": 0.0006737512052820719,
+      "max_local_alpha_shift_in_fisher_sigma": 0.0004182515046452025,
+      "max_absolute_potential_shift": 0.0004541490278029414,
+      "mpi_prediction_absolute_error": null,
+      "metrics": {
+        "mesh": 8,
+        "product": 12,
+        "density": 48,
+        "epsilon": 1e-10,
+        "kernel_width": 10,
+        "ranks": 1,
+        "real_modes": 124,
+        "setup_seconds": 0.01025818,
+        "cold_forward_seconds": 0.117004302,
+        "forward_seconds": [
+          0.1049933,
+          0.105206394,
+          0.106328984
+        ],
+        "gradient_seconds": [
+          0.131214885,
+          0.135553317,
+          0.130903483
+        ],
+        "hmc_two_draws_seconds": 0.656656154,
+        "hmc_divergences": 0,
+        "hmc_acceptance": 0.9999998498682898,
+        "rank_peak_rss_max_mib": 27.43359375,
+        "sum_rank_peak_rss_mib": 27.43359375,
+        "field_fd_error": 9.189502289747388e-08,
+        "alpha_fd_error": 2.8545680806464214e-07,
+        "potential": [
+          -353.00493154039566,
+          -369.08860472126537,
+          -350.26151791747407
+        ],
+        "scalar_gradients": [
+          -342.8592576560576,
+          -129.48199308501097,
+          -161.50624189856003,
+          -10.422741868294427,
+          2.9267481068962535,
+          19.18846781028524,
+          7.862697595726121,
+          12.936827057774394,
+          1.9718289918294127,
+          0.10670485279971685,
+          348.4361521507128,
+          170.08725708306858,
+          266.7945395676825,
+          22.18880063951499,
+          -3.303742867648589
+        ]
+      }
+    },
+    {
+      "name": "serial-product_16",
+      "configuration": {
+        "name": "product_16",
+        "mesh": 8,
+        "product": 16,
+        "density": 32,
+        "epsilon": 1e-10
+      },
+      "passed": true,
+      "checks": {
+        "finite_differences": true,
+        "hmc_smoke": true,
+        "model_distance": true,
+        "field_score": true,
+        "fisher_score": true,
+        "amplitude_proxy": true
+      },
+      "max_model_distance": 8.289975823365243e-06,
+      "max_field_score_relative_error": 8.445193359336873e-07,
+      "max_fisher_score_distance": 4.371944020003686e-06,
+      "max_local_alpha_shift_in_fisher_sigma": 6.705247491868949e-07,
+      "max_absolute_potential_shift": 4.484181090447237e-06,
+      "mpi_prediction_absolute_error": null,
+      "metrics": {
+        "mesh": 8,
+        "product": 16,
+        "density": 32,
+        "epsilon": 1e-10,
+        "kernel_width": 11,
+        "ranks": 1,
+        "real_modes": 124,
+        "setup_seconds": 0.010645783,
+        "cold_forward_seconds": 0.085675334,
+        "forward_seconds": [
+          0.081851813,
+          0.079750936,
+          0.080173145
+        ],
+        "gradient_seconds": [
+          0.154597779,
+          0.15420786,
+          0.156598923
+        ],
+        "hmc_two_draws_seconds": 0.796952723,
+        "hmc_divergences": 0,
+        "hmc_acceptance": 0.9999998499155409,
+        "rank_peak_rss_max_mib": 17.65234375,
+        "sum_rank_peak_rss_mib": 17.65234375,
+        "field_fd_error": 9.137807696245718e-08,
+        "alpha_fd_error": 2.8563208833897555e-07,
+        "potential": [
+          -353.0046112292854,
+          -369.0881503907502,
+          -350.261544591142
+        ],
+        "scalar_gradients": [
+          -342.857057676778,
+          -129.48102725074557,
+          -161.50690968400193,
+          -10.422690420123088,
+          2.926724455897419,
+          19.188090070264046,
+          7.864238266547508,
+          12.933407263616553,
+          1.9717708090719686,
+          0.10666476121119807,
+          348.424958806719,
+          170.08904636838847,
+          266.7829106116686,
+          22.188211830983374,
+          -3.303792869766113
+        ]
+      }
+    },
+    {
+      "name": "serial-product_24",
+      "configuration": {
+        "name": "product_24",
+        "mesh": 8,
+        "product": 24,
+        "density": 48,
+        "epsilon": 1e-10
+      },
+      "passed": true,
+      "checks": {
+        "finite_differences": true,
+        "hmc_smoke": true,
+        "model_distance": true,
+        "field_score": true,
+        "fisher_score": true,
+        "amplitude_proxy": true
+      },
+      "max_model_distance": 1.5488951406876098e-10,
+      "max_field_score_relative_error": 4.0216067964030916e-10,
+      "max_fisher_score_distance": 1.3430840057602982e-08,
+      "max_local_alpha_shift_in_fisher_sigma": 1.3430792253381702e-08,
+      "max_absolute_potential_shift": 2.345927896385547e-10,
+      "mpi_prediction_absolute_error": null,
+      "metrics": {
+        "mesh": 8,
+        "product": 24,
+        "density": 48,
+        "epsilon": 1e-10,
+        "kernel_width": 11,
+        "ranks": 1,
+        "real_modes": 124,
+        "setup_seconds": 0.021938775,
+        "cold_forward_seconds": 0.283577912,
+        "forward_seconds": [
+          0.2738951,
+          0.272006675,
+          0.305512619
+        ],
+        "gradient_seconds": [
+          0.544161879,
+          0.543811103,
+          0.550658911
+        ],
+        "hmc_two_draws_seconds": 2.772263392,
+        "hmc_divergences": 0,
+        "hmc_acceptance": 0.9999998499238258,
+        "rank_peak_rss_max_mib": 28.8359375,
+        "sum_rank_peak_rss_mib": 28.8359375,
+        "field_fd_error": 9.152200522794784e-08,
+        "alpha_fd_error": 2.819901681955858e-07,
+        "potential": [
+          -353.0046107452439,
+          -369.08815057247216,
+          -350.2615490752581
+        ],
+        "scalar_gradients": [
+          -342.8570585185316,
+          -129.48103127625694,
+          -161.5069131994889,
+          -10.422690222359153,
+          2.9267244770151994,
+          19.18807360702013,
+          7.864227449411366,
+          12.93338985635629,
+          1.9717723624517258,
+          0.10666473772089967,
+          348.42487379831937,
+          170.08901808675034,
+          266.78284038065743,
+          22.18821743322307,
+          -3.303793048175975
+        ]
+      }
+    },
+    {
+      "name": "serial-latent_12",
+      "configuration": {
+        "name": "latent_12",
+        "mesh": 12,
+        "product": 16,
+        "density": 32,
+        "epsilon": 1e-10
+      },
+      "passed": true,
+      "checks": {
+        "finite_differences": true,
+        "hmc_smoke": true,
+        "model_distance": true,
+        "field_score": true,
+        "fisher_score": true,
+        "amplitude_proxy": true
+      },
+      "max_model_distance": 8.289975825271592e-06,
+      "max_field_score_relative_error": 8.445193355550635e-07,
+      "max_fisher_score_distance": 4.371944013328457e-06,
+      "max_local_alpha_shift_in_fisher_sigma": 6.705247527489969e-07,
+      "max_absolute_potential_shift": 4.484180976760399e-06,
+      "mpi_prediction_absolute_error": null,
+      "metrics": {
+        "mesh": 12,
+        "product": 16,
+        "density": 32,
+        "epsilon": 1e-10,
+        "kernel_width": 11,
+        "ranks": 1,
+        "real_modes": 124,
+        "setup_seconds": 0.010393395,
+        "cold_forward_seconds": 0.092084998,
+        "forward_seconds": [
+          0.080575147,
+          0.082928473,
+          0.080919252
+        ],
+        "gradient_seconds": [
+          0.162595943,
+          0.155058518,
+          0.166344077
+        ],
+        "hmc_two_draws_seconds": 0.790576736,
+        "hmc_divergences": 0,
+        "hmc_acceptance": 0.9999998499723275,
+        "rank_peak_rss_max_mib": 19.125,
+        "sum_rank_peak_rss_mib": 19.125,
+        "field_fd_error": 9.138353036752485e-08,
+        "alpha_fd_error": 2.856024323544357e-07,
+        "potential": [
+          -353.0046112292854,
+          -369.0881503907502,
+          -350.2615445911421
+        ],
+        "scalar_gradients": [
+          -342.8570576767788,
+          -129.48102725074577,
+          -161.50690968400232,
+          -10.42269042012311,
+          2.9267244558974235,
+          19.18809007026344,
+          7.864238266547292,
+          12.933407263616134,
+          1.9717708090719255,
+          0.10666476121120269,
+          348.424958806718,
+          170.089046368388,
+          266.7829106116677,
+          22.188211830983207,
+          -3.3037928697661054
+        ]
+      }
+    },
+    {
+      "name": "serial-shared_16",
+      "configuration": {
+        "name": "shared_16",
+        "mesh": 16,
+        "product": 0,
+        "density": 32,
+        "epsilon": 1e-10
+      },
+      "passed": true,
+      "checks": {
+        "finite_differences": true,
+        "hmc_smoke": true,
+        "model_distance": true,
+        "field_score": true,
+        "fisher_score": true,
+        "amplitude_proxy": true
+      },
+      "max_model_distance": 8.289975823255725e-06,
+      "max_field_score_relative_error": 8.445193352228253e-07,
+      "max_fisher_score_distance": 4.371944014555084e-06,
+      "max_local_alpha_shift_in_fisher_sigma": 6.705247477991419e-07,
+      "max_absolute_potential_shift": 4.484180976760399e-06,
+      "mpi_prediction_absolute_error": null,
+      "metrics": {
+        "mesh": 16,
+        "product": 16,
+        "density": 32,
+        "epsilon": 1e-10,
+        "kernel_width": 11,
+        "ranks": 1,
+        "real_modes": 124,
+        "setup_seconds": 0.009219754,
+        "cold_forward_seconds": 0.080283961,
+        "forward_seconds": [
+          0.08118734,
+          0.079487616,
+          0.079618814
+        ],
+        "gradient_seconds": [
+          0.158254826,
+          0.153837032,
+          0.15252674
+        ],
+        "hmc_two_draws_seconds": 0.816452068,
+        "hmc_divergences": 0,
+        "hmc_acceptance": 0.999999849974317,
+        "rank_peak_rss_max_mib": 16.08203125,
+        "sum_rank_peak_rss_mib": 16.08203125,
+        "field_fd_error": 9.137262451216498e-08,
+        "alpha_fd_error": 2.855727928484211e-07,
+        "potential": [
+          -353.0046112292854,
+          -369.0881503907501,
+          -350.2615445911421
+        ],
+        "scalar_gradients": [
+          -342.85705767677877,
+          -129.48102725074577,
+          -161.50690968400224,
+          -10.422690420123098,
+          2.926724455897424,
+          19.188090070263147,
+          7.864238266547188,
+          12.933407263615834,
+          1.9717708090718995,
+          0.10666476121120458,
+          348.4249588067182,
+          170.08904636838807,
+          266.7829106116676,
+          22.188211830983263,
+          -3.303792869766105
+        ]
+      }
+    },
+    {
+      "name": "slab-1",
+      "configuration": {
+        "name": "product_16",
+        "mesh": 8,
+        "product": 16,
+        "density": 32,
+        "epsilon": 1e-10
+      },
+      "passed": true,
+      "checks": {
+        "finite_differences": true,
+        "hmc_smoke": true,
+        "model_distance": true,
+        "field_score": true,
+        "fisher_score": true,
+        "amplitude_proxy": true,
+        "mpi_parity": true
+      },
+      "max_model_distance": 8.289975820536756e-06,
+      "max_field_score_relative_error": 8.445193350316622e-07,
+      "max_fisher_score_distance": 4.371944018163952e-06,
+      "max_local_alpha_shift_in_fisher_sigma": 6.705247488073938e-07,
+      "max_absolute_potential_shift": 4.484180976760399e-06,
+      "mpi_prediction_absolute_error": 1.5515838457795457e-16,
+      "metrics": {
+        "mesh": 8,
+        "product": 16,
+        "density": 32,
+        "epsilon": 1e-10,
+        "kernel_width": 11,
+        "ranks": 1,
+        "real_modes": 124,
+        "setup_seconds": 0.007972493,
+        "cold_forward_seconds": 0.082323469,
+        "forward_seconds": [
+          0.084725872,
+          0.082169491,
+          0.081458825
+        ],
+        "gradient_seconds": [
+          0.158475849,
+          0.15893652,
+          0.154068204
+        ],
+        "hmc_two_draws_seconds": 0.784370357,
+        "hmc_divergences": 0,
+        "hmc_acceptance": 0.9999998498962994,
+        "rank_peak_rss_max_mib": 22.58984375,
+        "sum_rank_peak_rss_mib": 22.58984375,
+        "field_fd_error": 9.137262164783864e-08,
+        "alpha_fd_error": 2.8560245068448066e-07,
+        "potential": [
+          -353.0046112292854,
+          -369.0881503907502,
+          -350.2615445911421
+        ],
+        "scalar_gradients": [
+          -342.8570576767786,
+          -129.48102725074574,
+          -161.50690968400212,
+          -10.422690420123134,
+          2.9267244558974195,
+          19.18809007026379,
+          7.8642382665474155,
+          12.933407263616338,
+          1.9717708090719526,
+          0.10666476121119914,
+          348.42495880671834,
+          170.08904636838818,
+          266.78291061166806,
+          22.188211830983263,
+          -3.3037928697661076
+        ]
+      }
+    },
+    {
+      "name": "slab-2",
+      "configuration": {
+        "name": "product_16",
+        "mesh": 8,
+        "product": 16,
+        "density": 32,
+        "epsilon": 1e-10
+      },
+      "passed": true,
+      "checks": {
+        "finite_differences": true,
+        "hmc_smoke": true,
+        "model_distance": true,
+        "field_score": true,
+        "fisher_score": true,
+        "amplitude_proxy": true,
+        "mpi_parity": true
+      },
+      "max_model_distance": 8.289975819767851e-06,
+      "max_field_score_relative_error": 8.445193350427177e-07,
+      "max_fisher_score_distance": 4.371944064915123e-06,
+      "max_local_alpha_shift_in_fisher_sigma": 6.705247470335463e-07,
+      "max_absolute_potential_shift": 4.484181033603818e-06,
+      "mpi_prediction_absolute_error": 1.4946834900704541e-16,
+      "metrics": {
+        "mesh": 8,
+        "product": 16,
+        "density": 32,
+        "epsilon": 1e-10,
+        "kernel_width": 11,
+        "ranks": 2,
+        "real_modes": 124,
+        "setup_seconds": 0.03540981,
+        "cold_forward_seconds": 0.06279075,
+        "forward_seconds": [
+          0.058313789,
+          0.05868667,
+          0.058259399
+        ],
+        "gradient_seconds": [
+          0.100160672,
+          0.09881126,
+          0.101631392
+        ],
+        "hmc_two_draws_seconds": 0.520757538,
+        "hmc_divergences": 0,
+        "hmc_acceptance": 0.9999998498964842,
+        "rank_peak_rss_max_mib": 19.79296875,
+        "sum_rank_peak_rss_mib": 38.6640625,
+        "field_fd_error": 9.137807805362913e-08,
+        "alpha_fd_error": 2.85587632968145e-07,
+        "potential": [
+          -353.0046112292854,
+          -369.08815039075023,
+          -350.26154459114207
+        ],
+        "scalar_gradients": [
+          -342.85705767677854,
+          -129.48102725074557,
+          -161.5069096840024,
+          -10.422690420123072,
+          2.926724455897425,
+          19.188090070263684,
+          7.8642382665474075,
+          12.9334072636162,
+          1.9717708090719275,
+          0.10666476121120055,
+          348.4249588067183,
+          170.0890463683883,
+          266.7829106116686,
+          22.188211830983313,
+          -3.3037928697660974
+        ]
+      }
+    },
+    {
+      "name": "slab-4",
+      "configuration": {
+        "name": "product_16",
+        "mesh": 8,
+        "product": 16,
+        "density": 32,
+        "epsilon": 1e-10
+      },
+      "passed": true,
+      "checks": {
+        "finite_differences": true,
+        "hmc_smoke": true,
+        "model_distance": true,
+        "field_score": true,
+        "fisher_score": true,
+        "amplitude_proxy": true,
+        "mpi_parity": true
+      },
+      "max_model_distance": 8.289975821047235e-06,
+      "max_field_score_relative_error": 8.445193351466707e-07,
+      "max_fisher_score_distance": 4.371944081422924e-06,
+      "max_local_alpha_shift_in_fisher_sigma": 6.705247509341903e-07,
+      "max_absolute_potential_shift": 4.484181147290656e-06,
+      "mpi_prediction_absolute_error": 1.4033044459902308e-16,
+      "metrics": {
+        "mesh": 8,
+        "product": 16,
+        "density": 32,
+        "epsilon": 1e-10,
+        "kernel_width": 11,
+        "ranks": 4,
+        "real_modes": 124,
+        "setup_seconds": 0.081447162,
+        "cold_forward_seconds": 0.058826244,
+        "forward_seconds": [
+          0.054679466,
+          0.052067108,
+          0.051905155
+        ],
+        "gradient_seconds": [
+          0.091516305,
+          0.091671298,
+          0.093375221
+        ],
+        "hmc_two_draws_seconds": 0.497686595,
+        "hmc_divergences": 0,
+        "hmc_acceptance": 0.9999998498965126,
+        "rank_peak_rss_max_mib": 16.0703125,
+        "sum_rank_peak_rss_mib": 63.36328125,
+        "field_fd_error": 9.136716524204814e-08,
+        "alpha_fd_error": 2.8557282154697634e-07,
+        "potential": [
+          -353.00461122928533,
+          -369.0881503907501,
+          -350.26154459114196
+        ],
+        "scalar_gradients": [
+          -342.8570576767785,
+          -129.4810272507458,
+          -161.50690968400238,
+          -10.422690420123054,
+          2.926724455897428,
+          19.188090070263698,
+          7.864238266547428,
+          12.93340726361623,
+          1.9717708090719217,
+          0.10666476121119972,
+          348.4249588067183,
+          170.08904636838855,
+          266.78291061166794,
+          22.188211830983263,
+          -3.303792869766096
+        ]
+      }
+    },
+    {
+      "name": "pencil-1",
+      "configuration": {
+        "name": "product_16",
+        "mesh": 8,
+        "product": 16,
+        "density": 32,
+        "epsilon": 1e-10
+      },
+      "passed": true,
+      "checks": {
+        "finite_differences": true,
+        "hmc_smoke": true,
+        "model_distance": true,
+        "field_score": true,
+        "fisher_score": true,
+        "amplitude_proxy": true,
+        "mpi_parity": true
+      },
+      "max_model_distance": 8.289975820536756e-06,
+      "max_field_score_relative_error": 8.445193350316622e-07,
+      "max_fisher_score_distance": 4.371944018163952e-06,
+      "max_local_alpha_shift_in_fisher_sigma": 6.705247491359478e-07,
+      "max_absolute_potential_shift": 4.484181090447237e-06,
+      "mpi_prediction_absolute_error": 1.5515838457795457e-16,
+      "metrics": {
+        "mesh": 8,
+        "product": 16,
+        "density": 32,
+        "epsilon": 1e-10,
+        "kernel_width": 11,
+        "ranks": 1,
+        "real_modes": 124,
+        "setup_seconds": 0.0098181,
+        "cold_forward_seconds": 0.084942671,
+        "forward_seconds": [
+          0.085168128,
+          0.083416147,
+          0.082094962
+        ],
+        "gradient_seconds": [
+          0.160767216,
+          0.160187405,
+          0.161645359
+        ],
+        "hmc_two_draws_seconds": 0.816946878,
+        "hmc_divergences": 0,
+        "hmc_acceptance": 0.9999998498961857,
+        "rank_peak_rss_max_mib": 20.36328125,
+        "sum_rank_peak_rss_mib": 20.36328125,
+        "field_fd_error": 9.137262164783864e-08,
+        "alpha_fd_error": 2.855135775286693e-07,
+        "potential": [
+          -353.0046112292853,
+          -369.08815039075034,
+          -350.261544591142
+        ],
+        "scalar_gradients": [
+          -342.8570576767786,
+          -129.48102725074574,
+          -161.50690968400212,
+          -10.422690420123134,
+          2.9267244558974195,
+          19.188090070263787,
+          7.8642382665474155,
+          12.933407263616338,
+          1.9717708090719526,
+          0.10666476121119914,
+          348.42495880671834,
+          170.08904636838818,
+          266.78291061166806,
+          22.188211830983263,
+          -3.3037928697661076
+        ]
+      }
+    },
+    {
+      "name": "pencil-2",
+      "configuration": {
+        "name": "product_16",
+        "mesh": 8,
+        "product": 16,
+        "density": 32,
+        "epsilon": 1e-10
+      },
+      "passed": true,
+      "checks": {
+        "finite_differences": true,
+        "hmc_smoke": true,
+        "model_distance": true,
+        "field_score": true,
+        "fisher_score": true,
+        "amplitude_proxy": true,
+        "mpi_parity": true
+      },
+      "max_model_distance": 8.289975819767851e-06,
+      "max_field_score_relative_error": 8.445193350427177e-07,
+      "max_fisher_score_distance": 4.371944065384688e-06,
+      "max_local_alpha_shift_in_fisher_sigma": 6.705247473621001e-07,
+      "max_absolute_potential_shift": 4.484181147290656e-06,
+      "mpi_prediction_absolute_error": 1.4946834900704541e-16,
+      "metrics": {
+        "mesh": 8,
+        "product": 16,
+        "density": 32,
+        "epsilon": 1e-10,
+        "kernel_width": 11,
+        "ranks": 2,
+        "real_modes": 124,
+        "setup_seconds": 0.021147627,
+        "cold_forward_seconds": 0.06260361,
+        "forward_seconds": [
+          0.060386937,
+          0.059805382,
+          0.059604567
+        ],
+        "gradient_seconds": [
+          0.106029261,
+          0.10728015,
+          0.106172458
+        ],
+        "hmc_two_draws_seconds": 0.552239254,
+        "hmc_divergences": 0,
+        "hmc_acceptance": 0.9999998498965694,
+        "rank_peak_rss_max_mib": 17.69140625,
+        "sum_rank_peak_rss_mib": 34.49609375,
+        "field_fd_error": 9.136716633322008e-08,
+        "alpha_fd_error": 2.8551357197411023e-07,
+        "potential": [
+          -353.0046112292854,
+          -369.0881503907501,
+          -350.26154459114196
+        ],
+        "scalar_gradients": [
+          -342.8570576767786,
+          -129.48102725074557,
+          -161.5069096840024,
+          -10.422690420123072,
+          2.926724455897425,
+          19.18809007026368,
+          7.8642382665474075,
+          12.9334072636162,
+          1.9717708090719275,
+          0.10666476121120055,
+          348.42495880671834,
+          170.0890463683883,
+          266.7829106116686,
+          22.188211830983313,
+          -3.3037928697660974
+        ]
+      }
+    },
+    {
+      "name": "pencil-4",
+      "configuration": {
+        "name": "product_16",
+        "mesh": 8,
+        "product": 16,
+        "density": 32,
+        "epsilon": 1e-10
+      },
+      "passed": true,
+      "checks": {
+        "finite_differences": true,
+        "hmc_smoke": true,
+        "model_distance": true,
+        "field_score": true,
+        "fisher_score": true,
+        "amplitude_proxy": true,
+        "mpi_parity": true
+      },
+      "max_model_distance": 8.289975821300591e-06,
+      "max_field_score_relative_error": 8.445193352043256e-07,
+      "max_fisher_score_distance": 4.371944074305755e-06,
+      "max_local_alpha_shift_in_fisher_sigma": 6.705247509464035e-07,
+      "max_absolute_potential_shift": 4.484181147290656e-06,
+      "mpi_prediction_absolute_error": 1.4946834900704541e-16,
+      "metrics": {
+        "mesh": 8,
+        "product": 16,
+        "density": 32,
+        "epsilon": 1e-10,
+        "kernel_width": 11,
+        "ranks": 4,
+        "real_modes": 124,
+        "setup_seconds": 0.029869134,
+        "cold_forward_seconds": 0.056885038,
+        "forward_seconds": [
+          0.053926244,
+          0.056615178,
+          0.056665331
+        ],
+        "gradient_seconds": [
+          0.097949962,
+          0.097918977,
+          0.099207944
+        ],
+        "hmc_two_draws_seconds": 0.535693631,
+        "hmc_divergences": 0,
+        "hmc_acceptance": 0.9999998498965268,
+        "rank_peak_rss_max_mib": 17.515625,
+        "sum_rank_peak_rss_mib": 66.94921875,
+        "field_fd_error": 9.13671678335815e-08,
+        "alpha_fd_error": 2.855283780258718e-07,
+        "potential": [
+          -353.0046112292854,
+          -369.0881503907501,
+          -350.26154459114196
+        ],
+        "scalar_gradients": [
+          -342.85705767677837,
+          -129.48102725074574,
+          -161.50690968400212,
+          -10.422690420123073,
+          2.9267244558974257,
+          19.188090070263563,
+          7.864238266547375,
+          12.93340726361614,
+          1.971770809071931,
+          0.10666476121120055,
+          348.42495880671834,
+          170.08904636838844,
+          266.78291061166794,
+          22.18821183098327,
+          -3.303792869766096
+        ]
+      }
+    }
+  ],
+  "sampling_readiness": "Noise/response-aware field metric follow-up FL-7 recommended before longer pilot",
+  "linear_surrogate_metric_ratio": {
+    "min": 393.60571741276544,
+    "max": 461.977683055221,
+    "interpretation": "Analytic linear surrogate only, not nonlinear Hessian or measured mixing slowdown"
+  },
+  "runner_checks": {
+    "ast": true,
+    "real_child_interrupt_cleanup": true,
+    "resume_no_native_reruns": true,
+    "resume_summary_byte_identical": true
+  }
+}

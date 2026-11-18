@@ -1,0 +1,196 @@
+{
+  "date": "2026-11-18",
+  "fl7_resolved": true,
+  "metric_tests": {
+    "serial": [
+      78
+    ],
+    "mpi_pencil": [
+      156,
+      160,
+      160
+    ]
+  },
+  "max_analytic_mode_error": 1.13687e-12,
+  "max_zero_field_hessian_error": 3.22258e-10,
+  "target_data_value_gradients_byte_identical": true,
+  "final_source_replay_identical": true,
+  "new_eulerian_restart_exact": true,
+  "pre_fl7_eulerian_checkpoint_rejected": true,
+  "legacy_checkpoint_compatibility": true,
+  "probe": {
+    "legacy": {
+      "diagnostics": [
+        {
+          "projection": 0,
+          "rhat": 4.378954073922697,
+          "bulk_ess": 4.504008290183321,
+          "tail_ess": 11.63441263203575,
+          "status": "ok"
+        },
+        {
+          "projection": 1,
+          "rhat": 2.915531018419843,
+          "bulk_ess": 4.85994247251184,
+          "tail_ess": 11.533064799968727,
+          "status": "ok"
+        },
+        {
+          "projection": 2,
+          "rhat": 4.099199850426511,
+          "bulk_ess": 4.548536657912452,
+          "tail_ess": 11.604540893619546,
+          "status": "ok"
+        },
+        {
+          "projection": 3,
+          "rhat": 3.333640684057536,
+          "bulk_ess": 4.702059413128443,
+          "tail_ess": 11.624570486459863,
+          "status": "ok"
+        },
+        {
+          "projection": 4,
+          "rhat": 4.172629195900149,
+          "bulk_ess": 4.532531041548659,
+          "tail_ess": 11.71762041460969,
+          "status": "ok"
+        },
+        {
+          "projection": 5,
+          "rhat": 4.143264937101951,
+          "bulk_ess": 4.532856329849147,
+          "tail_ess": 11.524952127867456,
+          "status": "ok"
+        }
+      ],
+      "chains": [
+        {
+          "seconds": 12.242058016,
+          "acceptance": 0.9880306623553411,
+          "divergences": 0,
+          "samples": 128
+        },
+        {
+          "seconds": 12.327023995,
+          "acceptance": 0.9857499474276338,
+          "divergences": 0,
+          "samples": 128
+        },
+        {
+          "seconds": 12.083225869,
+          "acceptance": 0.9857567642010195,
+          "divergences": 0,
+          "samples": 128
+        },
+        {
+          "seconds": 12.066443605,
+          "acceptance": 0.9880594984561494,
+          "divergences": 0,
+          "samples": 128
+        }
+      ],
+      "exe_sha256": "521309611e3866b92b41f68f1b1450778f2bd02e167bd4d00d5757ead9fe9a68",
+      "rhat_max": 4.378954073922697,
+      "bulk_ess_range": [
+        4.504008290183321,
+        4.85994247251184
+      ],
+      "seconds": 48.718751485,
+      "sampling_divergences": 0
+    },
+    "corrected": {
+      "diagnostics": [
+        {
+          "projection": 0,
+          "rhat": 1.0049108192310139,
+          "bulk_ess": 261.0483061967806,
+          "tail_ess": 400.05085195636065,
+          "status": "ok"
+        },
+        {
+          "projection": 1,
+          "rhat": 1.0065827258037467,
+          "bulk_ess": 207.41798925973762,
+          "tail_ess": 357.56677714135776,
+          "status": "ok"
+        },
+        {
+          "projection": 2,
+          "rhat": 1.023498406241613,
+          "bulk_ess": 170.99417134643704,
+          "tail_ess": 323.10975763171683,
+          "status": "ok"
+        },
+        {
+          "projection": 3,
+          "rhat": 1.0079094971271347,
+          "bulk_ess": 179.51957533746582,
+          "tail_ess": 385.21554081985096,
+          "status": "ok"
+        },
+        {
+          "projection": 4,
+          "rhat": 1.0160216320358253,
+          "bulk_ess": 198.34793612602328,
+          "tail_ess": 333.8418006420349,
+          "status": "ok"
+        },
+        {
+          "projection": 5,
+          "rhat": 1.004659427987714,
+          "bulk_ess": 231.77732759461796,
+          "tail_ess": 223.88395931244872,
+          "status": "ok"
+        }
+      ],
+      "chains": [
+        {
+          "seconds": 10.670464262,
+          "acceptance": 0.9841427531082028,
+          "divergences": 0,
+          "samples": 128
+        },
+        {
+          "seconds": 10.12949851,
+          "acceptance": 0.9822580464282309,
+          "divergences": 0,
+          "samples": 128
+        },
+        {
+          "seconds": 10.194486738,
+          "acceptance": 0.9821759488905536,
+          "divergences": 0,
+          "samples": 128
+        },
+        {
+          "seconds": 10.319268344,
+          "acceptance": 0.9832991797954417,
+          "divergences": 0,
+          "samples": 128
+        }
+      ],
+      "exe_sha256": "305df5b147980920c64379d8b63112fcd7a06d4b8e83b187e51dd3e2f11f23ed",
+      "rhat_max": 1.023498406241613,
+      "bulk_ess_range": [
+        170.99417134643704,
+        261.0483061967806
+      ],
+      "seconds": 41.313717854000004,
+      "sampling_divergences": 0
+    }
+  },
+  "full_mixing_validation_complete": false,
+  "limits": [
+    "Field-only fixed-scalar probe, six selected projections",
+    "Four chains times 128 retained draws; no extension or retuning",
+    "Corrected max Rhat 1.023 exceeds 1.01 and bulk ESS stays below 400",
+    "No marginalized sigma8, all-coordinate or coverage claim"
+  ],
+  "plan_sha256": "c72bfa105a16cd7779f0bc5d68450d6e13e10a5799a8e037da7f6985e07a6ac8",
+  "before_header_sha256": {
+    "EulerianCheckpoint.h": "45cf4e8a910dd122c59cd1d774d34ca6605d3a633638e9f249782d2c9cc554ae",
+    "Framework.h": "1038e96f817dda99317203613034ff562064c433fbbdabe7e008c8ff8ad4800e",
+    "DistributedEulerianLPT.h": "a567d37afef60ac42a3bb6699b1e66a88a8b49095c84d6076c33c0664762176d"
+  }
+}

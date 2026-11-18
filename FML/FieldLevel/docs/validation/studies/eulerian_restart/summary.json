@@ -1,0 +1,50 @@
+{
+  "date": "2026-11-18",
+  "passed": true,
+  "scope": "Bounded restart and output replay, no scientific posterior validation",
+  "native_checks": {
+    "serial": [
+      15,
+      43
+    ],
+    "mpi_pencil": [
+      30,
+      86,
+      30,
+      86,
+      30,
+      86
+    ]
+  },
+  "example_byte_equality": [
+    {
+      "case": "serial-1",
+      "identical_draw_files": 16
+    },
+    {
+      "case": "mpi_slab-2",
+      "identical_draw_files": 32
+    },
+    {
+      "case": "mpi_pencil-4",
+      "identical_draw_files": 64
+    }
+  ],
+  "portability_rejections": [
+    "rank count",
+    "process grid",
+    "thread count"
+  ],
+  "pre_refactor_compatibility": {
+    "ranks": 2,
+    "old_executable_sha256": "9a71a910d39125e5b1834ba63d40300eb8469b502eec55376e1325a2ebc71a58",
+    "prepare_checks": 21,
+    "resume_checks": 36
+  },
+  "limits": [
+    "Same rank/layout/build/thread configuration required",
+    "Spectrum/callback physics versioned explicitly through problem_id",
+    "Specialized fixed-IC Metropolis samplers unchanged",
+    "No new posterior campaign, larger-rank or power-loss durability validation"
+  ]
+}

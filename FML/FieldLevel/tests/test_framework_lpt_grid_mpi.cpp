@@ -59,8 +59,10 @@ static std::vector<double> edges(int parts, int n) {
         e[j] = double(j * n / parts) / n;
     return e;
 }
+static bool use_pswf = false;
 static FF::Configuration config(int n = 8, int nd = 16) {
     FF::Configuration c;
+    c.matter_assignment = use_pswf ? FF::MatterAssignment::PSWF : FF::MatterAssignment::Smooth;
     c.mesh = n;
     c.density_mesh = nd;
     c.boxsize = 100;
@@ -154,6 +156,7 @@ template <class Model>
 Snapshot exercise(const FF::Configuration & c, const FML::Domain & domain, const std::string & label) {
     auto lc = c;
     lc.evolution = FF::Evolution::Linear;
+    lc.matter_assignment = FF::MatterAssignment::Smooth;
     typename Model::LinearModel metadata(lc, spectrum(), {}, {}, domain);
     FF::FourierResponse response;
     for (const auto & mode : metadata.modes())
@@ -370,6 +373,7 @@ void manufactured(const FML::Domain & domain, const std::string & label) {
 }
 int main(int argc, char ** argv) {
     FML::FMLSetup::init(&argc, &argv);
+    use_pswf = argc > 1 && std::string(argv[1]) == "--pswf";
     auto c = config();
     Snapshot slab[2];
     bool have_slab = c.mesh % FML::NTasks == 0;

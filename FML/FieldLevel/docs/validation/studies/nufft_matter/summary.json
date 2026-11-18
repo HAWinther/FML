@@ -1,0 +1,110 @@
+{
+  "date": "2026-11-18",
+  "passed": true,
+  "scope": "Small double-precision numerical/adjoint fixtures, serial and 1/2/4 MPI ranks; no new posterior campaign",
+  "eulerian_checks": {
+    "serial": 63,
+    "mpi": [
+      107,
+      111,
+      111
+    ]
+  },
+  "matter_mode_error": {
+    "slab": 2.48416e-06,
+    "slab-PSWF": 1.72081e-09
+  },
+  "single_particle": {
+    "epsilon": 1e-10,
+    "mode_error": 1.29737e-10,
+    "position_gradient_vs_exact": 1.43182e-07,
+    "position_gradient_vs_finite_difference": 1.21498e-08
+  },
+  "distributed_lpt": [
+    {
+      "checks": 87,
+      "max_relative_gradient_errors": [
+        3.0323235682878024e-09,
+        3.044054483296391e-08,
+        1.6014935688354881e-12,
+        6.021533609999724e-08
+      ],
+      "max_slab_pencil_difference": 6.140321494906828e-15,
+      "assignment": "smooth",
+      "ranks": 1
+    },
+    {
+      "checks": 129,
+      "max_relative_gradient_errors": [
+        1.841790446130572e-09,
+        3.011477518849763e-08,
+        1.5936447040482138e-12,
+        5.2172873620735134e-08
+      ],
+      "max_slab_pencil_difference": 8.826712148928642e-15,
+      "assignment": "smooth",
+      "ranks": 2
+    },
+    {
+      "checks": 157,
+      "max_relative_gradient_errors": [
+        2.0350149159193973e-09,
+        2.995188386122085e-08,
+        1.5821860965478662e-12,
+        9.213350691711336e-08
+      ],
+      "max_slab_pencil_difference": 9.546812835840599e-15,
+      "assignment": "smooth",
+      "ranks": 4
+    },
+    {
+      "checks": 87,
+      "max_relative_gradient_errors": [
+        1.8476857727544687e-09,
+        3.019078408946182e-08,
+        9.88239221358378e-13,
+        5.176978668755574e-08
+      ],
+      "max_slab_pencil_difference": 3.070329028626251e-15,
+      "assignment": "PSWF",
+      "ranks": 1
+    },
+    {
+      "checks": 129,
+      "max_relative_gradient_errors": [
+        1.735937331103425e-09,
+        3.0028027961673054e-08,
+        1.1779917319376665e-12,
+        5.519900680719881e-08
+      ],
+      "max_slab_pencil_difference": 7.292031442987434e-15,
+      "assignment": "PSWF",
+      "ranks": 2
+    },
+    {
+      "checks": 157,
+      "max_relative_gradient_errors": [
+        2.064136061476723e-09,
+        3.006871427075809e-08,
+        1.1832028412595008e-12,
+        1.0070342491794524e-07
+      ],
+      "max_slab_pencil_difference": 1.0362360471613753e-14,
+      "assignment": "PSWF",
+      "ranks": 4
+    }
+  ],
+  "checkpoint_prepare_resume_checks": [
+    19,
+    34,
+    21,
+    36,
+    21,
+    36
+  ],
+  "catalog_regression_checks": [
+    36,
+    57,
+    76
+  ]
+}

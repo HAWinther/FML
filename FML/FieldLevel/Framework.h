@@ -38,10 +38,13 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         }
     };
     enum class Evolution { Linear, Zeldovich, LPT2 };
+    enum class MatterAssignment { Smooth, PSWF };
     struct Configuration {
         int mesh{16}, density_mesh{32}, kernel_width{6};
         double boxsize{400}, initial_cutoff{.04}, bias_cutoff{.035}, likelihood_cutoff{.03}, growth_rate{0};
         Evolution evolution{Evolution::LPT2};
+        MatterAssignment matter_assignment{MatterAssignment::Smooth};
+        double nufft_epsilon{1e-8};
     };
     // Fixed periodic Fourier observation response. A separate component, not a noise/selection probability.
     struct FourierResponse {
@@ -170,6 +173,10 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
               FourierResponse response = {},
               std::vector<Parameter> priors = {})
             : config_(config), spectrum_(std::move(spectrum)) {
+            int unsupported_assignment = config.matter_assignment != MatterAssignment::Smooth;
+            FML::MaxOverTasks(&unsupported_assignment);
+            if (unsupported_assignment)
+                throw std::invalid_argument("[FieldFramework] PSWF assignment requires DistributedLPTModelT");
             if ((config.evolution != Evolution::Linear && config.evolution != Evolution::Zeldovich &&
                  config.evolution != Evolution::LPT2) ||
                 config.mesh < 4 || config.mesh % 2 != 0 || config.density_mesh % 2 != 0 ||
@@ -608,21 +615,75 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
     template<class Likelihood,class=void> struct HasLikelihoodDifference : std::false_type {};
     template<class Likelihood> struct HasLikelihoodDifference<Likelihood,std::void_t<decltype(
         std::declval<const Likelihood &>().difference(std::declval<const Modes &>(),double{},std::declval<const Modes &>(),double{}))>> : std::true_type {};
+    // Explicit noise layout. Defaults preserve the historical last-scalar log-power convention.
+    struct GaussianNoise {
+        enum class Mode { LastParameter, Parameter, Fixed };
+        Mode mode{Mode::LastParameter};
+        size_t parameter_index{};
+        double fixed_log_power{};
+        static GaussianNoise parameter(size_t index) { return {Mode::Parameter, index, 0}; }
+        static GaussianNoise fixed_power(double power) { return {Mode::Fixed, 0, std::log(power)}; }
+        size_t index(size_t size) const { return mode == Mode::LastParameter ? size - 1 : parameter_index; }
+        double log_power(const std::vector<double> & p) const {
+            return mode == Mode::Fixed ? fixed_log_power : p[index(p.size())];
+        }
+        void add_gradient(std::vector<double> & gp, double gradient) const {
+            if (mode != Mode::Fixed) gp[index(gp.size())] += gradient;
+        }
+    };
+    // ConditionOnField gives a scalar target conditional on the supplied whitened realization.
+    // It is not a prior for sampling the field itself.
+    enum class InitialFieldPrior { WhitenedGaussian, ConditionOnField };
     // A forward model satisfying this interface can replace Model without changing the posterior or sampler.
+    // Posterior-aware metric dispatch. Existing forwards retain their exact numerical path.
+    // Likelihood-specific adapters can consume the actual noise policy without dummy scalars.
+    template <class Forward, class Likelihood>
+    struct PosteriorFieldMetric {
+        template <class Work>
+        static Field apply(const Forward & model, const Likelihood &, const GaussianNoise &,
+                           const Field & input, const std::vector<double> & parameters,
+                           Work & work, double exponent) {
+            return model.apply_field_metric(input, parameters, work, exponent);
+        }
+    };
     template <class Forward, class Likelihood = GaussianFieldLikelihood>
     class BasicPosterior {
         const Forward & model_;
         Likelihood likelihood_;
+        GaussianNoise noise_;
+        InitialFieldPrior field_prior_;
+        void validate_policy() const {
+            bool valid = (noise_.mode == GaussianNoise::Mode::Fixed && std::isfinite(noise_.fixed_log_power) &&
+                          std::isfinite(std::exp(noise_.fixed_log_power)) && std::exp(noise_.fixed_log_power) > 0) ||
+                         ((noise_.mode == GaussianNoise::Mode::Parameter || noise_.mode == GaussianNoise::Mode::LastParameter) &&
+                          !model_.parameters().empty() && noise_.index(model_.parameters().size()) < model_.parameters().size());
+            valid &= field_prior_ == InitialFieldPrior::WhitenedGaussian || field_prior_ == InitialFieldPrior::ConditionOnField;
+            if (Execution<Forward>::maximum(model_, valid ? 0 : 1) != 0)
+                throw std::invalid_argument("[FieldFramework] Invalid noise layout or field-prior policy");
+            for (double x : {double(noise_.mode), double(noise_.parameter_index), noise_.fixed_log_power, double(field_prior_)})
+                if (Execution<Forward>::maximum(model_, x) != -Execution<Forward>::maximum(model_, -x))
+                    throw std::invalid_argument("[FieldFramework] Posterior policy differs across ranks");
+        }
 
       public:
-        BasicPosterior(const Forward & model, Modes data)
-            : model_(model), likelihood_(Execution<Forward>::template likelihood<Likelihood>(model, std::move(data))) {}
-        BasicPosterior(const Forward & model, Likelihood likelihood)
-            : model_(model), likelihood_(std::move(likelihood)) {}
-        BasicPosterior(Forward &&, Modes) = delete;
-        BasicPosterior(Forward &&, Likelihood) = delete;
+        BasicPosterior(const Forward & model, Modes data, GaussianNoise noise = {},
+                       InitialFieldPrior field_prior = InitialFieldPrior::WhitenedGaussian)
+            : BasicPosterior(model, Execution<Forward>::template likelihood<Likelihood>(model, std::move(data)), noise, field_prior) {}
+        BasicPosterior(const Forward & model, Likelihood likelihood, GaussianNoise noise = {},
+                       InitialFieldPrior field_prior = InitialFieldPrior::WhitenedGaussian)
+            : model_(model), likelihood_(std::move(likelihood)), noise_(noise), field_prior_(field_prior) { validate_policy(); }
+        BasicPosterior(Forward &&, Modes, GaussianNoise = {}, InitialFieldPrior = InitialFieldPrior::WhitenedGaussian) = delete;
+        BasicPosterior(Forward &&, Likelihood, GaussianNoise = {}, InitialFieldPrior = InitialFieldPrior::WhitenedGaussian) = delete;
         const Forward & model() const { return model_; }
         const Likelihood & likelihood() const { return likelihood_; }
+        const GaussianNoise & noise_policy() const { return noise_; }
+        InitialFieldPrior field_prior() const { return field_prior_; }
+        template <class Work>
+        Field apply_field_metric(const Field & input, const std::vector<double> & parameters,
+                                 Work & work, double exponent) const {
+            return PosteriorFieldMetric<Forward, Likelihood>::apply(model_, likelihood_, noise_, input,
+                                                                    parameters, work, exponent);
+        }
         // Same normalized target as evaluate(), without the forward-model pullback.
         // Custom likelihoods retain their existing evaluate interface/cotangent work.
         template <class Work>
@@ -632,9 +693,10 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             double U = 0, unused_noise = 0;
             try {
                 const auto & prediction = model_.predict(white, p, w);
-                U = likelihood_.evaluate(prediction, p.back(), w.cotangent_buffer(), unused_noise);
+                U = likelihood_.evaluate(prediction, noise_.log_power(p), w.cotangent_buffer(), unused_noise);
             } catch (const UnrepresentableState &) { return HUGE_VAL; }
-            for (double x : white) U += .5 * x * x;
+            if (field_prior_ == InitialFieldPrior::WhitenedGaussian)
+                for (double x : white) U += .5 * x * x;
             U = Execution<Forward>::sum(model_, U);
             for (size_t j = 0; j < p.size(); ++j) U += model_.parameters()[j].penalty(p[j]);
             return U;
@@ -681,10 +743,10 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 double U=0,unused=0;long double delta=0;
                 try {
                     const auto & prediction=model_.predict(white,p,work);
-                    U=likelihood_.evaluate(prediction,p.back(),work.cotangent_buffer(),unused);
-                    delta=likelihood_.difference(prediction,p.back(),reference.prediction,reference.parameters.back());
+                    U=likelihood_.evaluate(prediction,noise_.log_power(p),work.cotangent_buffer(),unused);
+                    delta=likelihood_.difference(prediction,noise_.log_power(p),reference.prediction,noise_.log_power(reference.parameters));
                 }catch(const UnrepresentableState &){return {HUGE_VAL,HUGE_VAL};}
-                for(size_t i=0;i<white.size();++i) {
+                if (field_prior_ == InitialFieldPrior::WhitenedGaussian) for(size_t i=0;i<white.size();++i) {
                     U+=.5*white[i]*white[i];
                     const long double dx=(long double)white[i]-base_white[i];
                     delta+=(long double)base_white[i]*dx+.5L*dx*dx;
@@ -718,7 +780,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             try {
                 const auto & prediction = model_.predict(white, p, w);
                 auto & g = w.cotangent_buffer();
-                U = likelihood_.evaluate(prediction, p.back(), g, noise_gradient);
+                U = likelihood_.evaluate(prediction, noise_.log_power(p), g, noise_gradient);
                 model_.pullback(p, g, w, gs, gp);
             } catch (const UnrepresentableState &) {
                 // A collectively detected numerical domain failure rejects the proposal.
@@ -727,8 +789,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 gp.assign(p.size(), 0);
                 return HUGE_VAL;
             }
-            gp.back() += noise_gradient;
-            for (size_t i = 0; i < white.size(); ++i) {
+            noise_.add_gradient(gp, noise_gradient);
+            if (field_prior_ == InitialFieldPrior::WhitenedGaussian) for (size_t i = 0; i < white.size(); ++i) {
                 U += .5 * white[i] * white[i];
                 gs[i] += white[i];
             }
@@ -760,6 +822,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                          int max_iterations = 200,
                          double tolerance = 1e-6) {
         Execution<Forward>::map_controls(posterior.model(), vary_parameters, max_iterations, tolerance);
+        if (posterior.field_prior() != InitialFieldPrior::WhitenedGaussian)
+            throw std::invalid_argument("[FieldFramework] Joint MAP requires a field prior; use a scalar optimizer for fixed ICs");
         if (max_iterations < 0 || tolerance <= 0 || !std::isfinite(tolerance))
             throw std::invalid_argument("[FieldFramework] Invalid MAP controls");
         const auto & model = posterior.model();
@@ -771,7 +835,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         if (!std::isfinite(U))
             throw std::invalid_argument("[FieldFramework] MAP initial state outside support");
         for (int iteration = 0;; ++iteration) {
-            auto direction = model.apply_field_metric(grad, p, w, -1);
+            auto direction = posterior.apply_field_metric(grad, p, w, -1);
             std::vector<double> dp(p.size(), 0);
             double slope = 0, norm = 0;
             for (size_t q = 0; q < white.size(); ++q) {
@@ -836,14 +900,16 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             const auto & model = posterior.model();
             Execution<Forward>::validate(model, white, p);
             Execution<Forward>::hmc_controls(model, vary_parameters, options);
+            if (posterior.field_prior() != InitialFieldPrior::WhitenedGaussian)
+                throw std::invalid_argument("[FieldFramework] Field HMC requires a field prior; use a scalar sampler for fixed ICs");
             auto w = model.workspace();
             const size_t n = model.cells(), np = p.size();
             if (white.size() != n || !model.in_support(p))
                 throw std::invalid_argument("[FieldFramework] Invalid HMC initial state");
             FML::MCMC::HMCMass mass;
             mass.n_custom = n;
-            mass.apply_sqrt = [&](auto & x) { x = model.apply_field_metric(x, frozen, w, .5); };
-            mass.apply_inverse = [&](auto & x) { x = model.apply_field_metric(x, frozen, w, -1); };
+            mass.apply_sqrt = [&](auto & x) { x = posterior.apply_field_metric(x, frozen, w, .5); };
+            mass.apply_inverse = [&](auto & x) { x = posterior.apply_field_metric(x, frozen, w, -1); };
             options.lower.clear();
             options.upper.clear();
             if (vary_parameters)

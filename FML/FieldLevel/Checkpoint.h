@@ -97,30 +97,45 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 e.vector(model.response());
             }
         };
+        // Local-only numerical configuration codec. Specializations can describe a
+        // different model contract without adding legacy fields to its public configuration.
+        // The default emits exactly the historical byte sequence, in the same three positions.
+        template <class Forward>
+        struct ConfigurationIdentity {
+            static void assignment(Codec::Encoder & e, const Forward & model) {
+                const auto & c = model.configuration();
+                if (c.matter_assignment != MatterAssignment::Smooth) {
+                    e.text("PSWF matter assignment 1");
+                    e.integer(int(c.matter_assignment));
+                    e.real(c.nufft_epsilon);
+                }
+            }
+            static void meshes(Codec::Encoder & e, const Forward & model) {
+                const auto & c = model.configuration();
+                for (int x : {c.mesh, c.density_mesh, c.kernel_width, int(c.evolution)}) e.integer(x);
+            }
+            static void physics(Codec::Encoder & e, const Forward & model) {
+                const auto & c = model.configuration();
+                for (double x : {c.boxsize, c.initial_cutoff, c.bias_cutoff, c.likelihood_cutoff, c.growth_rate})
+                    e.real(x);
+            }
+        };
         template <class Forward, class Likelihood>
         std::string identity(const BasicPosterior<Forward, Likelihood> & posterior, const std::string & problem_id) {
             Codec::Encoder e;
             const auto & m = posterior.model();
-            const auto & c = m.configuration();
             const auto l = m.layout();
             e.text("FML field target 3");
+            ConfigurationIdentity<Forward>::assignment(e, m);
             e.text(typeid(Likelihood).name());
             e.text(Codec::build_tag());
             e.text(problem_id);
             e.text(typeid(Forward).name());
-            for (int x : {FML::NTasks,
-                          FML::ThisTask,
-                          FML::NThreads,
-                          int(sizeof(FML::GRID::FloatType)),
-                          c.mesh,
-                          c.density_mesh,
-                          c.kernel_width,
-                          int(c.evolution),
-                          l.local_start,
-                          l.local_width})
+            for (int x : {FML::NTasks, FML::ThisTask, FML::NThreads, int(sizeof(FML::GRID::FloatType))})
                 e.integer(x);
-            for (double x : {c.boxsize, c.initial_cutoff, c.bias_cutoff, c.likelihood_cutoff, c.growth_rate})
-                e.real(x);
+            ConfigurationIdentity<Forward>::meshes(e, m);
+            for (int x : {l.local_start, l.local_width}) e.integer(x);
+            ConfigurationIdentity<Forward>::physics(e, m);
             e.integer(l.global_cells);
             e.integer(l.owned_cells);
             for (int d = 0; d < 3; ++d) {
@@ -145,6 +160,16 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             }
             ForwardIdentity<Forward>::append(e, m);
             LikelihoodIdentity<Likelihood>::append(e, posterior.likelihood());
+            // Keep historical identities byte-identical for the historical default policy.
+            const auto & noise = posterior.noise_policy();
+            if (noise.mode != GaussianNoise::Mode::LastParameter ||
+                posterior.field_prior() != InitialFieldPrior::WhitenedGaussian) {
+                e.text("explicit posterior policy 1");
+                e.integer(int(noise.mode));
+                e.integer(noise.parameter_index);
+                e.real(noise.fixed_log_power);
+                e.integer(int(posterior.field_prior()));
+            }
             return std::to_string(Codec::checksum(e.bytes));
         }
         inline void replicas(const State & state) {

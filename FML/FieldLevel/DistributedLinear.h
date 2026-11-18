@@ -163,10 +163,11 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                         config.bias_cutoff,
                         config.likelihood_cutoff,
                         config.growth_rate,
-                        double(config.evolution)});
+                        double(config.evolution), double(config.matter_assignment)});
             require(tasks == FML::NTasks && config.mesh >= 4 && config.mesh % 2 == 0 &&
                         (!FML::GRID::is_fftwgrid_v<Grid> || config.mesh % tasks == 0) &&
-                        config.evolution == Evolution::Linear && config.boxsize > 0 && std::isfinite(config.boxsize) &&
+                        config.evolution == Evolution::Linear && config.matter_assignment == MatterAssignment::Smooth &&
+                        config.boxsize > 0 && std::isfinite(config.boxsize) &&
                         config.initial_cutoff > 0 && config.likelihood_cutoff > 0 && config.bias_cutoff > 0 &&
                         config.bias_cutoff <= config.initial_cutoff && std::isfinite(config.growth_rate) &&
                         config.initial_cutoff < M_PI * config.mesh / config.boxsize &&

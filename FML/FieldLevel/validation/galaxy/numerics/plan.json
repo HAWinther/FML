@@ -1,0 +1,136 @@
+{
+  "version": 1,
+  "scope": "Bounded synthetic-field numerical/resource screen, not posterior calibration or a real-catalog result",
+  "boxsize": 100,
+  "initial_cutoff_in_fundamentals": 2.7,
+  "matter_cutoff_in_fundamentals": 2.8,
+  "likelihood_cutoff_in_fundamentals": 2.5,
+  "matter_geometry": "cube",
+  "likelihood_geometry": "cube",
+  "spectrum": "20000 exp(-5 k), amplitude ratio squared",
+  "noise_power": 1000,
+  "initial_seed": 1901,
+  "direction_seed": 1902,
+  "noise_seed": 1903,
+  "amplitudes": [
+    0.9,
+    1.0,
+    1.1
+  ],
+  "bias": [
+    1.6,
+    0.3,
+    -0.2,
+    7.0
+  ],
+  "finite_difference_step": 0.0001,
+  "timing_repeats": 3,
+  "hmc": {
+    "warmup": 0,
+    "samples": 2,
+    "leapfrog_steps": 2,
+    "step_size": 0.0001,
+    "seed": 5150
+  },
+  "gates": {
+    "finite_difference_scaled_error": 1e-05,
+    "noise_weighted_model_distance": 0.1,
+    "active_field_score_relative_error": 0.001,
+    "local_fisher_score_distance": 0.1,
+    "local_amplitude_shift_in_fisher_sigma": 0.1,
+    "fisher_scaled_rcond": 1e-10,
+    "mpi_mode_absolute_error": 1e-10,
+    "note": "Fisher metrics are local proxies, not posterior SD or a measured posterior-mean shift. Rank-deficient Fisher metrics cannot pass the amplitude proxy. No extension-until-pass."
+  },
+  "budget": {
+    "case_timeout_seconds": 180,
+    "serial_total_seconds": 600,
+    "mpi_total_seconds": 600
+  },
+  "reference": {
+    "name": "reference",
+    "mesh": 8,
+    "product": 24,
+    "density": 48,
+    "epsilon": 1e-12
+  },
+  "cases": [
+    {
+      "name": "baseline",
+      "mesh": 8,
+      "product": 12,
+      "density": 24,
+      "epsilon": 1e-08
+    },
+    {
+      "name": "loose_tolerance",
+      "mesh": 8,
+      "product": 12,
+      "density": 24,
+      "epsilon": 1e-06
+    },
+    {
+      "name": "tight_tolerance",
+      "mesh": 8,
+      "product": 12,
+      "density": 24,
+      "epsilon": 1e-10
+    },
+    {
+      "name": "finest_tolerance",
+      "mesh": 8,
+      "product": 12,
+      "density": 24,
+      "epsilon": 1e-12
+    },
+    {
+      "name": "deposition_32",
+      "mesh": 8,
+      "product": 12,
+      "density": 32,
+      "epsilon": 1e-10
+    },
+    {
+      "name": "deposition_48",
+      "mesh": 8,
+      "product": 12,
+      "density": 48,
+      "epsilon": 1e-10
+    },
+    {
+      "name": "product_16",
+      "mesh": 8,
+      "product": 16,
+      "density": 32,
+      "epsilon": 1e-10
+    },
+    {
+      "name": "product_24",
+      "mesh": 8,
+      "product": 24,
+      "density": 48,
+      "epsilon": 1e-10
+    },
+    {
+      "name": "latent_12",
+      "mesh": 12,
+      "product": 16,
+      "density": 32,
+      "epsilon": 1e-10
+    },
+    {
+      "name": "shared_16",
+      "mesh": 16,
+      "product": 0,
+      "density": 32,
+      "epsilon": 1e-10
+    }
+  ],
+  "limitations": [
+    "Product mesh and particle lattice refine together",
+    "Small fixed cutoffs/box and one frozen mock",
+    "No real catalog, large-scale extrapolation or posterior mean-shift claim",
+    "Per-process peak RSS includes setup and the bounded HMC block; sum of rank peaks is not simultaneous job RSS"
+  ],
+  "mpi_validation_case": "product_16"
+}

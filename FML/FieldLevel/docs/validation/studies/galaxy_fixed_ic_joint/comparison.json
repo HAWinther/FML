@@ -1,0 +1,48 @@
+{
+  "same_target": true,
+  "same_data": true,
+  "old_draws": 1024,
+  "new_draws": 1024,
+  "cases": [
+    {
+      "label": "N12 / deposit 24 / w6",
+      "old_mixing_passed": false,
+      "new_mixing_passed": true,
+      "old_alpha_bulk_ess": 287.30194959805084,
+      "new_alpha_bulk_ess": 578.8572324423977,
+      "ess_per_forward_ratio": 2.0148044009177335,
+      "forward_evaluations": [
+        5124,
+        5124
+      ],
+      "alpha_mean_shift_in_new_sd": 0.06449201987809498
+    },
+    {
+      "label": "N12 / deposit 36 / w6",
+      "old_mixing_passed": false,
+      "new_mixing_passed": true,
+      "old_alpha_bulk_ess": 331.17984091501705,
+      "new_alpha_bulk_ess": 578.0918272410075,
+      "ess_per_forward_ratio": 1.7455525844924533,
+      "forward_evaluations": [
+        5124,
+        5124
+      ],
+      "alpha_mean_shift_in_new_sd": 0.042862052714069884
+    },
+    {
+      "label": "N16 / deposit 48 / w8",
+      "old_mixing_passed": false,
+      "new_mixing_passed": true,
+      "old_alpha_bulk_ess": 270.2227231879712,
+      "new_alpha_bulk_ess": 648.6157106428303,
+      "ess_per_forward_ratio": 2.4003004003169743,
+      "forward_evaluations": [
+        5124,
+        5124
+      ],
+      "alpha_mean_shift_in_new_sd": 0.11763630464204812
+    }
+  ],
+  "note": "Campaigns remain separate. Original mixing failures and their draws are preserved; no chains pooled or extended."
+}

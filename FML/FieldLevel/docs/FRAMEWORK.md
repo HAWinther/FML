@@ -852,3 +852,41 @@ checkpoints require their original code/build and are rejected by this version;
 there is no silent legacy-prior assumption or automatic trajectory migration.
 The existing shard/manifest framing, full HMC state and MPI publication protocol
 are unchanged. New schema-2 periodic and survey restarts are tested separately.
+
+## Explicit noise layout and conditional initial fields
+
+`BasicPosterior` retains its default sampled-last-scalar log-noise-power convention.
+It also accepts `GaussianNoise::parameter(index)` or
+`GaussianNoise::fixed_power(P)` as a third constructor argument. Fixed power adds
+no noise coordinate or covariance derivative to the model's scalar vector. Its
+physical Fourier covariance is P/V. The default initial-field prior is
+`InitialFieldPrior::WhitenedGaussian`; a fourth argument
+`InitialFieldPrior::ConditionOnField` omits that penalty when forming a scalar
+target conditional on the supplied realization. Joint field MAP/HMC reject the
+conditional-field policy; use a scalar optimizer/sampler while holding the field
+fixed. Value, gradient and stable-difference paths use the same policies.
+
+Policies are checked for MPI agreement and included in checkpoint identities
+when they differ from the historical default; default target identities remain
+unchanged. See the [Eulerian LPT model](EULERIAN_LPT.md) for an amplitude-only
+example with four bias parameters and fixed Poisson noise. The new model still
+needs its own checkpoint descriptor/driver before production sampling.
+
+## PSWF matter assignment (18 November 2026)
+
+Distributed LPT and the composed Eulerian LPT model now offer
+[PSWF NUFFT deposition with a matched position adjoint](NUFFT_MATTER.md).
+Set `matter_assignment=FF::MatterAssignment::PSWF` and choose `nufft_epsilon`;
+the density/initial mesh ratio controls upsampling. Smooth assignment remains
+the default. The compatibility backend and PM force solver do not gain this
+option. Checkpoint identities for distributed LPT include the selected PSWF
+tolerance, and the guide documents finite-stencil boundaries and validation.
+
+## Posterior-aware field metric dispatch (18 November 2026)
+
+`BasicPosterior::apply_field_metric` supplies likelihood and noise-policy context
+to `PosteriorFieldMetric<Forward,Likelihood>`. MAP and HMC use this dispatch;
+existing forwards retain their numerical default. The
+[Eulerian Gaussian adapter](EULERIAN_METRIC.md) uses its actual noise, tracer
+response and likelihood mask/volume. HMC keeps its saved initial metric snapshot;
+MAP uses current parameters. Metric changes do not alter the target potential.

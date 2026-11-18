@@ -1,6 +1,7 @@
 #ifndef FML_FIELD_LEVEL_DISTRIBUTED_LPT_H
 #define FML_FIELD_LEVEL_DISTRIBUTED_LPT_H
 #include <FML/FieldLevel/DistributedLinear.h>
+#include <FML/NUFFT/NUFFT.h>
 #include <FML/FieldLevel/DistributedAssignment.h>
 #include <FML/FFTWGrid/FourierResampling.h>
 #include <FML/FFTWGrid/CopyFourierModes.h>
@@ -28,7 +29,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
     } // namespace DETAIL
 
     // Distributed 1LPT/2LPT evolution with the periodic framework's smoothed
-    // Lagrangian bias, plane-parallel RSD and smooth/deconvolved mesh assignment.
+    // Lagrangian bias, plane-parallel RSD and smooth or PSWF NUFFT assignment.
+    // The PSWF reverse differentiates the actual fitted spreading weights.
     template <class GridType = FML::GRID::FFTWGrid<3>>
     class DistributedLPTModelT {
       public:
@@ -40,9 +42,12 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         LinearModel linear_;
         std::vector<Parameter> parameters_;
         std::vector<double> kernel_ft_;
+        std::unique_ptr<FML::NUFFT::PSWFKernel<3>> pswf_;
+        int stencil_width() const { return pswf_ ? pswf_->width : config_.kernel_width + 1; }
         static constexpr int pair_[6][2] = {{0, 0}, {1, 1}, {2, 2}, {0, 1}, {0, 2}, {1, 2}};
         static Configuration linear_config(Configuration c) {
             c.evolution = Evolution::Linear;
+            c.matter_assignment = MatterAssignment::Smooth;
             return c;
         }
         static std::vector<Parameter> linear_priors(const std::vector<Parameter> & priors) {
@@ -84,12 +89,25 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             return double(m.n[pair_[a][0]]) * m.n[pair_[a][1]] / n2;
         }
         struct Taps {
-            int node[9];
-            double w[9], dw[9];
+            int node[16];
+            double w[16], dw[16];
         };
-        void taps(double u, Taps & t) const {
+        void taps(double u, Taps & t, bool derivatives) const {
             const int n = config_.density_mesh;
             u -= n * std::floor(u / n);
+            if (pswf_) {
+                const double h = .5 * pswf_->width;
+                const int start = int(std::ceil(u - h));
+                if (derivatives)
+                    pswf_->weights_and_derivatives(start - u + h, t.w, t.dw);
+                else
+                    pswf_->weights(start - u + h, t.w);
+                for (int j = 0; j < pswf_->width; ++j) {
+                    t.node[j] = ((start + j) % n + n) % n;
+                    t.dw[j] = derivatives ? -t.dw[j] : 0.; // delta = start - u + h
+                }
+                return;
+            }
             const double h = .5 * config_.kernel_width;
             const int start = int(std::floor(u - h)) + 1;
             for (int j = 0; j <= config_.kernel_width; ++j) {
@@ -97,7 +115,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 const double z = (node - u) / h;
                 t.node[j] = ((node % n) + n) % n;
                 t.w[j] = kernel(z);
-                t.dw[j] = -kernel_derivative(z) / h;
+                t.dw[j] = derivatives ? -kernel_derivative(z) / h : 0.;
             }
         }
 
@@ -137,23 +155,23 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                     "[Distributed LPT] Foreign/moved workspace");
             linear_.check(w.base);
         }
-        void particle_taps(size_t q, const Workspace & w, Taps (&t)[3]) const {
+        void particle_taps(size_t q, const Workspace & w, Taps (&t)[3], bool derivatives) const {
             const int n = config_.mesh;
             const auto pos = layout().global_coordinate(q);
             for (int c = 0; c < 3; ++c) {
                 // Wrap displacement before scaling: even very large finite shifts cannot overflow grid coordinates.
                 const double shift = w.psi[c][q] - std::floor(w.psi[c][q]);
-                taps((double(pos[c]) / n + shift) * config_.density_mesh, t[c]);
+                taps((double(pos[c]) / n + shift) * config_.density_mesh, t[c], derivatives);
             }
         }
         template <class Visit>
-        void stencil(size_t q, const Workspace & w, Visit visit) const {
+        void stencil(size_t q, const Workspace & w, Visit visit, bool derivatives = false) const {
             Taps t[3];
-            particle_taps(q, w, t);
+            particle_taps(q, w, t, derivatives);
             const size_t n = config_.density_mesh;
-            for (int a = 0; a <= config_.kernel_width; ++a)
-                for (int b = 0; b <= config_.kernel_width; ++b)
-                    for (int c = 0; c <= config_.kernel_width; ++c) {
+            for (int a = 0; a < stencil_width(); ++a)
+                for (int b = 0; b < stencil_width(); ++b)
+                    for (int c = 0; c < stencil_width(); ++c) {
                         const std::uint64_t node = (std::uint64_t(t[0].node[a]) * n + t[1].node[b]) * n + t[2].node[c];
                         visit(node,
                               t[0].w[a] * t[1].w[b] * t[2].w[c],
@@ -234,12 +252,28 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                              const FML::Domain & domain = FML::domain)
             : config_(c),
               linear_(linear_config(c), std::move(spectrum), std::move(response), linear_priors(priors), domain) {
-            linear_.controls({double(c.evolution), double(c.density_mesh), double(c.kernel_width)});
+            linear_.controls({double(c.evolution), double(c.density_mesh), double(c.kernel_width),
+                              double(c.matter_assignment), c.nufft_epsilon});
+            require(c.matter_assignment == MatterAssignment::Smooth || c.matter_assignment == MatterAssignment::PSWF,
+                    "[Distributed LPT] Invalid matter assignment");
+            if (c.matter_assignment == MatterAssignment::PSWF) {
+                const double sigma = double(c.density_mesh) / c.mesh;
+                require(std::isfinite(c.nufft_epsilon) &&
+                            c.nufft_epsilon >= 32 * std::numeric_limits<FML::GRID::FloatType>::epsilon() &&
+                            c.nufft_epsilon < 1 && sigma >= 1.25 && sigma <= 8,
+                        "[Distributed LPT] PSWF requires valid tolerance and density/initial mesh ratio in [1.25,8]");
+                const double width = std::ceil(std::log(.18 * 1.4 * 1.4 / c.nufft_epsilon) /
+                                              (M_PI * std::sqrt(1 - 1 / sigma)) + 1);
+                require(width <= 16, "[Distributed LPT] PSWF tolerance exceeds supported kernel width");
+                FML::COMMUNICATION::collective_try([&] {
+                    pswf_ = std::make_unique<FML::NUFFT::PSWFKernel<3>>(c.nufft_epsilon, sigma);
+                }, "[Distributed LPT] PSWF setup");
+            }
             const size_t nd = c.density_mesh > 0 ? size_t(c.density_mesh) : 0;
             require(
                 (c.evolution == Evolution::Zeldovich || c.evolution == Evolution::LPT2) && c.density_mesh >= c.mesh &&
                     c.density_mesh % 2 == 0 && (!FML::GRID::is_fftwgrid_v<Grid> || c.density_mesh % FML::NTasks == 0) &&
-                    (c.kernel_width == 4 || c.kernel_width == 6 || c.kernel_width == 8) &&
+                    (pswf_ || c.kernel_width == 4 || c.kernel_width == 6 || c.kernel_width == 8) &&
                     c.initial_cutoff < .5 * M_PI * c.mesh / c.boxsize && nd > 0 && nd <= Field().max_size() / nd / nd,
                 "[Distributed LPT] Requires Zeldovich/2LPT, supported even density mesh, width 4/6/8, and initial "
                 "cutoff below half Nyquist");
@@ -297,6 +331,12 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             kernel_ft_.resize(c.mesh / 2 + 1);
             const double h = .5 * c.kernel_width;
             for (size_t mode = 0; mode < kernel_ft_.size(); ++mode) {
+                if (pswf_) {
+                    kernel_ft_[mode] = pswf_->fourier(2 * M_PI * mode / c.density_mesh);
+                    require(std::isfinite(kernel_ft_[mode]) && kernel_ft_[mode] != 0,
+                            "[Distributed LPT] Singular PSWF response");
+                    continue;
+                }
                 double integral = 0;
                 const int nq = 4000;
                 for (int j = 0; j <= nq; ++j) {
@@ -312,6 +352,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             }
         }
         const Configuration & configuration() const { return config_; }
+        int assignment_width() const { return pswf_ ? pswf_->width : config_.kernel_width; }
         const FML::Domain & domain() const { return linear_.domain(); }
         const auto & parameters() const { return parameters_; }
         const std::vector<FieldLevelBAO::Mode> & modes() const { return linear_.modes(); }
@@ -439,7 +480,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                     xbar[0][q] += factor * dx;
                     xbar[1][q] += factor * dy;
                     xbar[2][q] += factor * dz;
-                });
+                }, true);
             Modes Q(modes().size(), 0);
             for (int c = 0; c < 3; ++c)
                 add_adjoint(xbar[c], w, Q, [&](const auto & m) {

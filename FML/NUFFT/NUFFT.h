@@ -428,6 +428,38 @@ namespace FML {
                 }
             }
 
+            /// Same fitted weights as weights(), plus their derivative with respect to delta.
+            /// Derivatives are local to a fixed stencil; compact support changes at its boundary.
+            void weights_and_derivatives(double delta, double * out, double * derivative) const {
+                if (cheb_degree < 0) {
+                    weights(delta, out);
+                    for (int j = 0; j < width; ++j) {
+                        const double z = 2 * (delta + j - .5 * width) / width;
+                        double p0 = 1, p1 = z, d0 = 0, d1 = 1, sum = 0;
+                        const int degree = 2 * int(legendre_coeffs.size() - 1);
+                        for (int ell = 1; ell < degree; ++ell) {
+                            const double p2 = ((2 * ell + 1) * z * p1 - ell * p0) / (ell + 1);
+                            const double d2 = ((2 * ell + 1) * (p1 + z * d1) - ell * d0) / (ell + 1);
+                            if ((ell + 1) % 2 == 0) sum += legendre_coeffs[(ell + 1) / 2] * d2;
+                            p0 = p1; p1 = p2; d0 = d1; d1 = d2;
+                        }
+                        derivative[j] = std::abs(z) > 1 ? 0 : sum * 2 / width;
+                    }
+                    return;
+                }
+                const double u = 2 * delta - 1;
+                for (int j = 0; j < width; ++j) {
+                    double b1 = 0, b2 = 0, d1 = 0, d2 = 0;
+                    for (int k = cheb_degree; k >= 1; --k) {
+                        const double b0 = 2 * u * b1 - b2 + cheb_coeffs[size_t(k) * width + j];
+                        const double d0 = 2 * b1 + 2 * u * d1 - d2;
+                        b2 = b1; b1 = b0; d2 = d1; d1 = d0;
+                    }
+                    out[j] = u * b1 - b2 + .5 * cheb_coeffs[j];
+                    derivative[j] = 2 * (b1 + u * d1 - d2);
+                }
+            }
+
             int polynomial_degree() const { return cheb_degree; }
 
           private:

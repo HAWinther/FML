@@ -7,6 +7,7 @@ ifeq ($(USE_MPI),true)
 TARGETS += test_framework_linear_grid_mpi test_framework_lpt_grid_mpi test_survey_grid_mpi test_checkpoint_grid_mpi
 endif
 EXTRA_CLEAN += test_framework_linear_grid_mpi test_framework_lpt_grid_mpi test_survey_grid_mpi test_checkpoint_grid_mpi
+TARGETS += test_eulerian_metric test_eulerian_checkpoint test_compact_eulerian_lpt test_eulerian_bias test_eulerian_lpt test_fixed_ic test_periodic_catalog
 include ../../Makefile.config
 FML_MODULES := Global
 ifeq ($(USE_MPI),true)
@@ -203,3 +204,63 @@ run: particle-mesh-observer
 pm-assignment: test_pm_assignment
 	@set -e; for np in $(NP_LIST); do $(SAFETY_RUN) ./test_pm_assignment; done
 run: pm-assignment
+
+run: eulerian-bias
+.PHONY: eulerian-bias
+test_eulerian_bias: test_eulerian_bias.o Global.o $(PM_GRID_OBJECT)
+	$(LINK_EXE)
+eulerian-bias: test_eulerian_bias
+	@set -e; for np in $(NP_LIST); do $(SAFETY_RUN) ./test_eulerian_bias; done
+
+run: eulerian-lpt
+.PHONY: eulerian-lpt
+test_eulerian_lpt: test_eulerian_lpt.o Global.o $(PM_GRID_OBJECT)
+	$(LINK_EXE)
+eulerian-lpt: test_eulerian_lpt
+	@set -e; for np in $(NP_LIST); do $(SAFETY_RUN) ./test_eulerian_lpt; done
+
+run: fixed-ic
+.PHONY: fixed-ic
+test_fixed_ic: test_fixed_ic.o Global.o
+	$(LINK_EXE)
+fixed-ic: test_fixed_ic
+	@set -e; for np in $(NP_LIST); do $(SAFETY_RUN) ./test_fixed_ic; done
+
+run: periodic-catalog
+.PHONY: periodic-catalog
+test_periodic_catalog: test_periodic_catalog.o Global.o $(PM_GRID_OBJECT)
+	$(LINK_EXE)
+periodic-catalog: test_periodic_catalog
+	@set -e; for np in $(NP_LIST); do $(SAFETY_RUN) ./test_periodic_catalog; done
+
+.PHONY: framework-nufft-grid-mpi
+framework-nufft-grid-mpi: test_framework_lpt_grid_mpi
+	@set -e; for np in $(NP_LIST); do $(SAFETY_RUN) ./test_framework_lpt_grid_mpi --pswf; done
+ifeq ($(USE_MPI),true)
+run: framework-nufft-grid-mpi
+endif
+
+.PHONY: compact-eulerian-lpt
+test_compact_eulerian_lpt: test_compact_eulerian_lpt.o Global.o $(PM_GRID_OBJECT)
+	$(LINK_EXE)
+compact-eulerian-lpt: test_compact_eulerian_lpt
+	@set -e; for np in $(NP_LIST); do $(SAFETY_RUN) ./test_compact_eulerian_lpt; done
+run: compact-eulerian-lpt
+
+.PHONY: eulerian-checkpoint
+test_eulerian_checkpoint: test_eulerian_checkpoint.o Global.o $(PM_GRID_OBJECT)
+	$(LINK_EXE)
+eulerian-checkpoint: test_eulerian_checkpoint
+	@set -e; checkpoint_tmp=$$(mktemp -d "$${TMPDIR:-/tmp}/fml-eulerian-checkpoint.XXXXXX"); trap 'rm -rf "$$checkpoint_tmp"' EXIT; \
+	for np in $(NP_LIST); do \
+	  $(SAFETY_RUN) ./test_eulerian_checkpoint "$$checkpoint_tmp/np$$np" prepare; \
+	  $(SAFETY_RUN) ./test_eulerian_checkpoint "$$checkpoint_tmp/np$$np" resume; \
+	done
+run: eulerian-checkpoint
+
+.PHONY: eulerian-metric
+test_eulerian_metric: test_eulerian_metric.o Global.o $(PM_GRID_OBJECT)
+	$(LINK_EXE)
+eulerian-metric: test_eulerian_metric
+	@set -e; for np in $(NP_LIST); do $(SAFETY_RUN) ./test_eulerian_metric; done
+run: eulerian-metric

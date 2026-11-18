@@ -1,0 +1,135 @@
+{
+  "date": "2026-11-18",
+  "passed": true,
+  "scope": "59-point controlled weighted periodic catalog, N16 output mesh, double precision; no challenge-catalog inference",
+  "native_checks": {
+    "serial": 18,
+    "mpi_1": 36,
+    "mpi_2": 57,
+    "mpi_4": 76
+  },
+  "io_checks": [
+    {
+      "check": "serial",
+      "epsilon": 1e-08,
+      "absolute_error": 5.546759710523359e-09,
+      "rows": 59,
+      "fine_mesh": 32,
+      "passed": true
+    },
+    {
+      "check": "batch-one",
+      "epsilon": 1e-08,
+      "absolute_error": 5.546759709882548e-09,
+      "rows": 59,
+      "fine_mesh": 32,
+      "passed": true
+    },
+    {
+      "check": "slab-1",
+      "epsilon": 1e-08,
+      "absolute_error": 5.546759717748891e-09,
+      "rows": 59,
+      "fine_mesh": 32,
+      "passed": true
+    },
+    {
+      "check": "slab-2",
+      "epsilon": 1e-08,
+      "absolute_error": 5.546759717748891e-09,
+      "rows": 59,
+      "fine_mesh": 32,
+      "passed": true
+    },
+    {
+      "check": "slab-4",
+      "epsilon": 1e-08,
+      "absolute_error": 5.546759717748891e-09,
+      "rows": 59,
+      "fine_mesh": 32,
+      "passed": true
+    },
+    {
+      "check": "pencil-1",
+      "epsilon": 1e-08,
+      "absolute_error": 5.546759717748891e-09,
+      "rows": 59,
+      "fine_mesh": 32,
+      "passed": true
+    },
+    {
+      "check": "pencil-2",
+      "epsilon": 1e-08,
+      "absolute_error": 5.546759717748891e-09,
+      "rows": 59,
+      "fine_mesh": 32,
+      "passed": true
+    },
+    {
+      "check": "pencil-4",
+      "epsilon": 1e-08,
+      "absolute_error": 5.546759717748891e-09,
+      "rows": 59,
+      "fine_mesh": 32,
+      "passed": true
+    },
+    {
+      "check": "tolerance-0.0001",
+      "epsilon": 0.0001,
+      "absolute_error": 5.768654549088023e-05,
+      "rows": 59,
+      "fine_mesh": 32,
+      "passed": true
+    },
+    {
+      "check": "tolerance-1e-06",
+      "epsilon": 1e-06,
+      "absolute_error": 5.501236703203746e-07,
+      "rows": 59,
+      "fine_mesh": 32,
+      "passed": true
+    },
+    {
+      "check": "tolerance-1e-10",
+      "epsilon": 1e-10,
+      "absolute_error": 8.36264650344494e-11,
+      "rows": 59,
+      "fine_mesh": 32,
+      "passed": true
+    },
+    {
+      "check": "missing-field",
+      "passed": true
+    },
+    {
+      "check": "extra-field",
+      "passed": true
+    },
+    {
+      "check": "negative-weight",
+      "passed": true
+    },
+    {
+      "check": "hdf5-compound",
+      "max_difference": 3.376611507232129e-16,
+      "passed": true
+    },
+    {
+      "check": "hdf5-columns",
+      "max_difference": 3.376611507232129e-16,
+      "passed": true
+    },
+    {
+      "check": "hdf5-pencils-4",
+      "max_difference": 3.376611507232129e-16,
+      "passed": true
+    }
+  ],
+  "default_epsilon": 1e-08,
+  "default_max_absolute_mode_error": 5.546759717748891e-09,
+  "limitations": [
+    "No observed-position adjoint or replacement of LPT matter deposition",
+    "No public challenge catalog or new sigma8 posterior",
+    "Only serial and 1/2/4-rank runtime validation"
+  ]
+}

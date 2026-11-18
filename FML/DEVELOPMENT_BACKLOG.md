@@ -621,3 +621,152 @@ replay checks are recorded. N32 mixing, physical convergence, larger calibration
 ensembles and scalable full-grid metrics remain open. This validation pilot
 buffers chain output until completion and has no mid-chain restart checkpoint;
 finished mocks are persistent, but interrupted unfinished chains must restart.
+
+
+### Item 52: periodic galaxy amplitude model (17 November 2026)
+
+The [LEFTfield-style project plan](FieldLevel/docs/LEFTFIELD_PLAN.md) now has
+a [composed Eulerian LPT model](FieldLevel/docs/EULERIAN_LPT.md): unbiased
+real-space LPT matter followed by density, centered density squared, centered
+tidal squared and physical-Laplacian operators, with an amplitude-only spectrum
+alpha=sigma8/sigma8_fid. Cubic likelihood corner modes are explicitly enumerated.
+The generic posterior now accepts fixed noise or an explicit sampled noise index,
+and distinguishes a fixed-IC conditional target from the whitened-field prior.
+Small Gaussian tracer-field tests cover the full field/all-scalar gradients,
+normalization, direct particle Fourier sums and slab/pencil MPI. These are
+forward/adjoint checks, not galaxy-catalog inference or posterior calibration.
+Next: fixed-IC scalar sampling and mesh/assignment refinement. Exact catalog
+IC/spectrum/cosmology inputs, challenge filter details, NUFFT integration, compact
+latent/product meshes and this model's checkpoint driver remain open.
+
+
+### Item 52: bounded fixed-IC amplitude pilot (17 November 2026)
+
+Added the reusable fixed-noise linear-bias likelihood cache and a fixed-IC
+amplitude/bias sampler with the coordinate Jacobian, independent quadrature
+and MPI tests. The [three-mesh Gaussian tracer-field pilot](FieldLevel/docs/validation/studies/galaxy_fixed_ic/RESULTS.md)
+completed all 12 declared chains, but alpha bulk ESS 270–331 falls below the
+frozen 400 gate. Rhat is about 1.009. Observed mean shifts 0.048/0.067 SD are
+small, but paired Monte Carlo uncertainty does not certify the 0.1 SD budget.
+The pilot is preserved without extension or thinning. Next: improve the exact
+joint amplitude/bias proposal and declare a new campaign. This remains a small
+fixed-IC field validation, not catalog inference or completion of item 52.
+
+
+### Item 52: joint amplitude/bias fixed-IC pilot (18 November 2026)
+
+The [separate joint-proposal campaign](FieldLevel/docs/validation/studies/galaxy_fixed_ic_joint/RESULTS.md)
+passes all frozen scalar mixing gates in three small configurations, on the
+original data/priors and draw budget. Alpha bulk ESS 578–649 gives 1.75–2.40
+times the ESS per forward call. All-parameter max Rhat is 1.00613. Paired
+refinement mean shifts plus two batch MC errors stay below 0.025 SD, within
+the 0.1 SD budget. The normalized Gaussian proposal densities and finite
+prior support are handled in the exact joint MH kernel; proposal regularization
+does not change the posterior. The original failed pilot is preserved.
+This remains one fixed-IC Gaussian tracer field, not catalog or free-IC inference.
+Next: catalog/NUFFT integration, compact meshes and production restart; real-data
+inputs and catalog-specific model/numerical validation remain open.
+
+
+### Item 52: periodic catalog observation ingestion (18 November 2026)
+
+Added the [streaming catalog adapter](FieldLevel/docs/PERIODIC_CATALOG.md) for
+weighted/unweighted periodic data, internal MPI ownership routing, explicit
+density/Poisson normalization, and same-layout model mode export. CSV and optional
+HDF5 converters stream bounded batches and perform one final NUFFT transform.
+[Small-fixture validation](FieldLevel/docs/validation/studies/periodic_catalog/RESULTS.md)
+passes serial and slab/pencil 1/2/4-rank checks and all 17 file-interface checks;
+maximum mode error is 5.55e-9 at epsilon=1e-8. No challenge catalog was downloaded
+and no new posterior was sampled. Next: NUFFT matter deposition/position adjoint,
+compact latent/product meshes and production restart. Catalog-specific modeling,
+real-data inputs and free-IC scientific validation remain open; item 52 is ongoing.
+
+
+### Item 52: PSWF NUFFT matter deposition and position adjoint (18 November 2026)
+
+Added an explicit [PSWF matter option](FieldLevel/docs/NUFFT_MATTER.md) to distributed
+LPT and the composed Eulerian model. The reverse differentiates the actual fitted
+spreading weights and reuses sparse node scatter/transpose, preserving original
+particle ownership across rank boundaries. Smooth assignment remains the default.
+[Bounded numerical validation](FieldLevel/docs/validation/studies/nufft_matter/RESULTS.md)
+passes serial and slab/pencil 1/2/4-rank field/scalar/particle checks, both evolution
+orders, bias/RSD and short MAP/HMC, plus smooth/checkpoint/catalog regressions.
+The N12/N24 fixture's mode error is 1.72e-9 at epsilon=1e-8. Compact stencil jumps,
+derivative accuracy and wider-support cost remain explicit numerical considerations;
+no production benchmark or new posterior was run. Next: compact latent/product
+meshes, then production restart and catalog-specific real-data/free-IC validation.
+Item 52 remains ongoing.
+
+
+### Item 52: compact latent and padded product meshes (18 November 2026)
+
+Added explicit [compact/product mesh separation](FieldLevel/docs/COMPACT_MESHES.md)
+to the Eulerian LPT model. `mesh` controls sampled white-field/likelihood storage,
+`product_mesh` controls padded LPT/particle/operator work, and `density_mesh`
+controls deposition. The isometric white-field lift and its Euclidean transpose
+preserve the physical initial spectrum and compact unit-Gaussian prior; padding
+guards remain on the product grid. Zero/default product_mesh keeps the old path.
+[Validation](FieldLevel/docs/validation/studies/compact_meshes/RESULTS.md) passes
+serial and slab/pencil 1/2/4-rank smooth/PSWF checks against independently evaluated
+padded fields, plus prior/gradient/mock/metric and short HMC checks. The 8/12/24
+fixture uses 512 instead of 1728 sampler field coordinates at fixed particle and
+product resolution. This is a per-vector storage saving, not a total RSS or
+production-speed result. Shared-mesh, fixed-IC and catalog regressions pass.
+Next: production restart for the Eulerian target, followed by catalog-specific
+convergence and real-data/free-IC validation. Packed Fourier storage and separate
+particle/evolution/operator resolutions remain extensions. Item 52 is ongoing.
+
+
+### Item 52: Eulerian HMC checkpoint/restart (18 November 2026)
+
+Added the [Eulerian checkpoint adapter](FieldLevel/docs/EULERIAN_RESTART.md),
+including shared/compact grids, both matter assignments and an explicit target
+fingerprint for grids/filters/operator versions, priors/noise and observed modes.
+The generic numerical-configuration codec is extensible while preserving old
+default bytes. [Validation](FieldLevel/docs/validation/studies/eulerian_restart/RESULTS.md)
+passes serial and slab/pencil 1/2/4-rank fresh-process joint and field-only replay,
+write-failure/corruption/target rejection, and indexed output-record replay.
+Existing field/survey/PM checkpoint suites pass, and the new reader resumes real
+files written by a retained pre-refactor executable. Restart requires the same
+layout/build/thread configuration and a versioned callback problem ID. The
+specialized fixed-IC Metropolis sampler remains unchanged; no new posterior
+campaign or power-loss durability test was run. Next: catalog-specific convergence
+and resource checks, then a declared inference pilot. Initial cubic filtering and
+real-data/free-IC scientific validation remain open. Item 52 is ongoing.
+
+
+### Item 52: bounded numerical/resource screen (18 November 2026)
+
+Added the [maintained frozen screen](FieldLevel/validation/galaxy/numerics/README.md)
+with resumable per-case hashes, physical Fourier-keyed initial conditions, numerical
+and local Fisher proxies, finite differences, warm timing, process RSS and a bounded
+HMC smoke. [All 17 serial/MPI cases pass](FieldLevel/docs/validation/studies/numerical_screen/RESULTS.md).
+The N8/N12/N24, epsilon=1e-8 baseline has maximum noise-weighted distance 0.00123
+and median forward+gradient cost 0.037 s on this host. Increasing product/particle
+resolution matters more than tightening tolerance here. Particle/product refinement
+is coupled. Compact per-vector storage savings do not establish total-RSS savings;
+measured process peaks include padded/sparse workspaces and transfer overhead.
+No posterior mean-shift, coverage, real-catalog or production-scaling claim is made.
+A separate [FL-7 metric issue](FieldLevel/docs/KNOWN_ISSUES.md) uses unit legacy noise
+and unbiased response in the Eulerian field metric. This preserves the target but
+can slow field exploration. Next: noise/response-aware frozen metric with restart
+identity and a short exploration check, then a declared multi-chain pilot.
+Item 52 remains ongoing.
+
+
+### Item 52: FL-7 field metric correction (18 November 2026)
+
+Resolved [FL-7](FieldLevel/docs/EULERIAN_METRIC.md): posterior-aware Gaussian
+metric dispatch uses actual noise policy, covariance volume and mask with
+Eulerian linear/Laplacian response; HMC keeps its saved initial snapshot. Cached
+log precisions operate on sampled/compact grids and invalidate collectively
+when only some ranks own changed modes. MAP routes through the same interface.
+[Validation](FieldLevel/docs/validation/studies/eulerian_metric/RESULTS.md) passes
+analytic/Hessian/compact/cache/MAP and serial/slab/pencil 1/2/4-rank restart checks.
+The Eulerian metric identity rejects pre-fix snapshots; old backend formats and
+kinetics retain replay compatibility. In a fixed four-chain field-only probe,
+selected-projection bulk ESS improves from 4.5--4.9 to 171--261 with identical
+data/objective/gradient bytes. Corrected max Rhat=1.023 and bulk ESS<400 mean
+full mixing gates remain unmet; no extension or retuning was done. Next: a
+declared longer joint field/scalar pilot, then scientific posterior/refinement
+validation. Item 52 remains ongoing.

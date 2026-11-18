@@ -8,6 +8,9 @@ validation is bounded; consult the current limitations before interpreting resul
 ## Guides
 
 - [Framework API and conventions](docs/FRAMEWORK.md)
+- [Periodic galaxy / sigma8 project](docs/LEFTFIELD_PLAN.md), [Eulerian bias operators](docs/EULERIAN_BIAS.md),
+  [composed LPT model](docs/EULERIAN_LPT.md), and [fixed-IC sampling](docs/FIXED_IC.md)
+- [Periodic catalog / NUFFT observations](docs/PERIODIC_CATALOG.md)
 - [MAP optimization](docs/MAP.md)
 - [Particle-mesh evolution](docs/PARTICLE_MESH.md), [adjoint](docs/PM_ADJOINT.md),
   [posterior](docs/PM_POSTERIOR.md), [checkpoint/restart](docs/PM_CHECKPOINT.md)
@@ -31,3 +34,15 @@ make -C FML/FieldLevel/example
 
 See the framework guide for compiler/backend options and MPI launcher settings.
 Write new scientific run output outside the library source tree.
+
+[PSWF NUFFT matter deposition and position adjoint](docs/NUFFT_MATTER.md)
+provides an explicit alternative to smooth LPT particle assignment.
+
+[Compact latent/product meshes](docs/COMPACT_MESHES.md) separate sampled field
+coordinates from LPT and nonlinear operator padding.
+
+[Eulerian checkpoint/restart](docs/EULERIAN_RESTART.md) supports shared/compact
+meshes, with a bounded HMC example and indexed draw output.
+
+[Bounded numerical/resource screen](docs/NUMERICAL_SCREEN.md) records mesh/tolerance
+errors and measured small-fixture costs, including the FL-7 diagnosis and its [validated correction](docs/EULERIAN_METRIC.md).

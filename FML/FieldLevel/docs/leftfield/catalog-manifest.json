@@ -1,0 +1,83 @@
+{
+  "audited": "2026-11-17",
+  "repository": "https://github.com/ANSalcedo/Beyond2ptMock",
+  "git_tree_sha": "5898e9513427a66af8589182efe847e4069e9519",
+  "verification": "Git tree metadata and pinned README/reader inspected; catalogs not downloaded. Git blob IDs are not raw-file SHA256 checksums.",
+  "catalogs": [
+    {
+      "path": "LCDM_real_space/mock_lcdm_real-space_01.h5",
+      "bytes": 43104356,
+      "git_blob_sha1": "64d45073e3989de955adcd2bf8a96c5f4f6c99b2"
+    },
+    {
+      "path": "LCDM_real_space/mock_lcdm_real-space_02.h5",
+      "bytes": 43113284,
+      "git_blob_sha1": "ee546c7fb23531a4de2bd4d1209fa43947bf15a2"
+    },
+    {
+      "path": "LCDM_real_space/mock_lcdm_real-space_03.h5",
+      "bytes": 43097264,
+      "git_blob_sha1": "d3fa5e432249527fae7bc80f34dd6be3ae595db0"
+    },
+    {
+      "path": "LCDM_real_space/mock_lcdm_real-space_04.h5",
+      "bytes": 43114496,
+      "git_blob_sha1": "dbf1aa0b8fd5fed4ac7549bdd94c6a3f81583522"
+    },
+    {
+      "path": "LCDM_real_space/mock_lcdm_real-space_05.h5",
+      "bytes": 43102208,
+      "git_blob_sha1": "bc0b64888b1f325933795502bd0ea778021d1f05"
+    },
+    {
+      "path": "LCDM_real_space/mock_lcdm_real-space_06.h5",
+      "bytes": 43105112,
+      "git_blob_sha1": "22b51d05f248dc6bf26d3e6ed00817e2da6476ab"
+    },
+    {
+      "path": "LCDM_real_space/mock_lcdm_real-space_07.h5",
+      "bytes": 43122008,
+      "git_blob_sha1": "b7bf24a98ae2d2c6d44e771b39c255de4aa3516e"
+    },
+    {
+      "path": "LCDM_real_space/mock_lcdm_real-space_08.h5",
+      "bytes": 43125716,
+      "git_blob_sha1": "e3f9e1a8911fc8bf1d4378846d7f9734f003b272"
+    },
+    {
+      "path": "LCDM_real_space/mock_lcdm_real-space_09.h5",
+      "bytes": 43078592,
+      "git_blob_sha1": "2f09cba38c9da5a41654479c9a13b73bf1c5be13"
+    },
+    {
+      "path": "LCDM_real_space/mock_lcdm_real-space_10.h5",
+      "bytes": 43103144,
+      "git_blob_sha1": "924205c60e7b9c3a01837c2a591af30a0724b216"
+    }
+  ],
+  "coordinates": {
+    "units": "Mpc/h",
+    "boxsize": 2000.0,
+    "box_center": [
+      1000.0,
+      1000.0,
+      1000.0
+    ],
+    "redshift": 1.0,
+    "periodic": true,
+    "fields_from_example_reader": [
+      "galaxies/x",
+      "galaxies/y",
+      "galaxies/z"
+    ],
+    "schema_verified_on_file": false
+  },
+  "unresolved": [
+    "Exact box-1 normalized initial field",
+    "Mapping to fixed non-amplitude cosmology",
+    "Reference linear matter spectrum, species and growth conventions",
+    "Exact intermediate matter/operator filter prescription",
+    "Published derivative-bias prior units/normalization"
+  ],
+  "notes": "The repository includes summit_cosmologies.txt, but no verified assignment of a row to these catalogs. No inference from that table has been made."
+}

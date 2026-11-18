@@ -412,3 +412,31 @@ replay checks are recorded. N32 mixing, physical convergence, larger calibration
 ensembles and scalable full-grid metrics remain open. This validation pilot
 buffers chain output until completion and has no mid-chain restart checkpoint;
 finished mocks are persistent, but interrupted unfinished chains must restart.
+
+
+## FL-7 (P2), resolved: Eulerian metric noise and tracer response
+
+Resolved 18 November 2026. The posterior-aware metric now uses the actual
+Gaussian noise policy, covariance volume and likelihood mask with linear response
+`b_delta-b_laplacian*k^2`; inactive modes retain identity precision. HMC freezes the
+operator at its initial scalar snapshot; MAP uses its current point. Precision
+caching is collective across MPI mask changes and uses the sampled grid directly.
+The Eulerian restart identity versions the new metric, rejecting pre-fix Eulerian
+checkpoints. Existing backend identities/kinetics retain compatibility.
+See [the implementation guide](EULERIAN_METRIC.md) and
+[recorded validation](validation/studies/eulerian_metric/RESULTS.md).
+
+The original path reused `matter_parameters`: unbiased b1=1, other legacy
+coordinates (including log noise) zero. It supplied unit noise to the inherited
+metric instead of the posterior's fixed noise and tracer response. Its precision
+exceeded a noise-aware linear surrogate by 394--462 times in the earlier screen.
+That was an efficiency defect, not evidence of an incorrect corrected target.
+
+Analytic precisions, an independent zero-field likelihood Hessian, metric powers,
+symmetry/positivity, cache/tape/MAP behavior and serial/slab/pencil/restart checks
+pass. In a frozen four-chain field-only probe, projection bulk ESS changes from
+4.5--4.9 to 171--261, with unchanged data/objective/gradient bytes and zero sampling
+divergences. Corrected maximum Rhat is 1.023: this short probe does not pass every
+production mixing gate or establish marginal-sigma8/full-field calibration.
+No extra draws or retuning were used. Next: a declared longer joint field/scalar
+pilot and numerical/scientific posterior validation.
