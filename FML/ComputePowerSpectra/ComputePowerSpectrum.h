@@ -1491,9 +1491,11 @@ namespace FML {
                     double k2;
                     input.get_fourier_wavevector_and_norm2_by_index(index, wave, k2);
                     const double fraction = shell_weight(input, wave, k2, bin);
+                    // The weight in the grid's own precision (std::complex<float> * double does not compile)
                     field.set_fourier_from_index(index,
-                                                 fraction != 0.0 ? fraction * input.get_fourier_from_index(index) :
-                                                                   0.0);
+                                                 fraction != 0.0 ?
+                                                     FML::GRID::FloatType(fraction) * input.get_fourier_from_index(index) :
+                                                     FML::GRID::ComplexType(0.0));
                 }
                 if (mesh != Nmesh) {
                     auto & memory = bins.statistics.memory;
