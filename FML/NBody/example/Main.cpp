@@ -62,6 +62,10 @@ const int nbin_bispectrum = 16;                 // Number of bins for computing 
 const double apofk = 1.0;                       // Redshift for which P(k) is at
 const std::string filename = "pofk.txt";        // File with k (h/Mpc), P(k)  (Mpc/h)^3
 const std::string interpolation_method = "CIC"; // The grid-assignment method
+// Gradient kernel for the force. With a force grid finer than the particle grid (Nmesh = 2 Npart_1D here) the
+// particles start on grid nodes, and the continuous gradient (the library default) then gives spurious forces
+// while the displacements are small. The two-point gradient avoids this (see NBody/ForceOptions.md)
+const std::string force_gradient_kernel = "discrete_2pt"; // continuous, discrete_2pt, discrete_4pt
 const double OmegaM = 1.0;                      // The matter density parameter at z = 0
 const double h = 0.7;                           // Hubble parameter h = H0/(100km/s/Mpc) at z = 0
 const double A_s = 2e-9;                        // Primordial amplitude
@@ -301,10 +305,13 @@ int main() {
 
         // Density field -> force
         std::array<FFTWGrid<NDIM>, NDIM> force_real;
+        FML::NBODY::ForceOptions force_options;
+        force_options.gradient_kernel = FML::NBODY::gradient_kernel_from_name(force_gradient_kernel);
         FML::NBODY::compute_force_from_density_fourier<NDIM>(density_grid_fourier,
                                                              force_real,
                                                              interpolation_method,
-                                                             norm_poisson_equation);
+                                                             norm_poisson_equation,
+                                                             force_options);
 
         // Update velocity of particles (frees force)
         FML::NBODY::KickParticles<NDIM>(force_real, part, delta_time_vel, interpolation_method);

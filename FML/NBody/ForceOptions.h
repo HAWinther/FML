@@ -29,6 +29,13 @@ namespace FML::NBODY {
 
 
     /// Per-call force discretization. No process-wide mutable defaults.
+    ///
+    /// Warning: with a force grid an integer factor finer than the particle grid (e.g. Nmesh = 2 Npart_1D) the
+    /// particles of the initial lattice sit exactly on grid nodes. With CIC and the default continuous gradient
+    /// this gives spurious forces as long as the displacements are small compared to a force cell, and the
+    /// growth of the large-scale modes can be wrong by tens of per cent (a factor of several in a test at very
+    /// small amplitude). Use gradient_kernel = DISCRETE_TWO_POINT_GRADIENT (or TSC, or offset the lattice by half
+    /// a force cell and use DISCRETE_FOUR_POINT_GRADIENT as SimulationCode does). See ForceOptions.md.
     struct ForceOptions {
         GreensFunctionLaplaceOperatorKernels laplace_kernel{CONTINUOUS_GREENS_FUNCTION};
         GradientKernels gradient_kernel{CONTINUOUS_GRADIENT};

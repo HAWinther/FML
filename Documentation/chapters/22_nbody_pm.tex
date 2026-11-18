@@ -84,6 +84,17 @@ $3\times$ the particle grid and the two-point gradient for finer grids (\param{f
 \code{= fiducial}). With these, $P(k)$ at $z=0$ agrees with a $6\times$ TSC reference to $\lesssim1\%$ for $k\le0.4\hMpc$
 on 2--4$\times$ grids, against $+10$--$14\%$ for the continuous kernel on a $2\times$ grid with particles on the nodes.
 
+The plain library functions have no such defaults: \code{NBodyInitialConditions} puts the particles on the nodes and
+an omitted \cls{ForceOptions} means the continuous gradient. In a linear test ($64^3$ particles, $N_{\rm mesh}=128$,
+CIC, displacements much smaller than a cell) the growth of the first six modes is off by factors $0.5$--$3.8$; the
+two-point gradient alone brings it to within $1\%$, the four-point gradient to within $9\%$ and TSC to within $4\%$,
+while shifting the lattice with the continuous gradient still leaves $+5$--$24\%$. With realistic amplitudes the
+particles leave the nodes early and the effect is smaller (in the \file{NBody/example} run the continuous gradient
+gives $3$--$6\%$ more power at $k<0.03\hMpc$ than a TSC run, the two-point gradient agrees with it to $1$--$2\%$),
+but with a finer force grid set
+\code{options.gradient_kernel = FML::NBODY::DISCRETE_TWO_POINT_GRADIENT}, as \file{NBody/example} does
+(details in \file{NBody/ForceOptions.md}).
+
 \subsection{Accurate forces on a grid equal to the particle grid}
 
 With $N_{\rm mesh}^3$ equal to the number of particles, CIC smooths the force twice and aliases it, so $P(k)$ is low on

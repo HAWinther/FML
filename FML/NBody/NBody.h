@@ -287,7 +287,8 @@ namespace FML {
         /// Different choices for what kernel to use for \f$ \nabla / \nabla^2\f$ are available through ForceOptions.
         /// Fiducial choice is the continuous greens function \f$ D^2 =-k^2\f$, and gradient \f$ D = i\vec{k}\f$. We can
         /// also choose to deconvole the density assignment and force interpolation (ala Gadget). Set
-        /// ForceOptions::deconvolve to enable this.
+        /// ForceOptions::deconvolve to enable this. With a force grid finer than the particle grid (particles of a
+        /// lattice on grid nodes) use a discrete gradient kernel; see the warning in ForceOptions.h.
         ///
         /// @tparam N The dimension of the grid
         ///
@@ -322,7 +323,8 @@ namespace FML {
         /// Different choices for what kernel to use for \f$ \nabla / \nabla^2\f$ are available through ForceOptions.
         /// Fiducial choice is the continuous greens function \f$ D^2 =-k^2\f$, and gradient \f$ D = i\vec{k}\f$. We can
         /// also choose to deconvole the density assignment and force interpolation (ala Gadget). Set
-        /// ForceOptions::deconvolve to enable this.
+        /// ForceOptions::deconvolve to enable this. With a force grid finer than the particle grid (particles of a
+        /// lattice on grid nodes) use a discrete gradient kernel; see the warning in ForceOptions.h.
         ///
         /// @tparam N The dimension of the grid
         ///

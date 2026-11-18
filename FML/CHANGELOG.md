@@ -5,6 +5,13 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### NBody: force grid finer than the particle grid
+- Warning in `ForceOptions.h`/`ForceOptions.md` and the book (sec. on the force grid and the lattice): with
+  Nmesh = m Npart_1D the lattice of `NBodyInitialConditions` sits on grid nodes, and CIC with the default continuous
+  gradient gives spurious forces while the displacements are small (linear growth off by factors 0.5-3.8 in a
+  low-amplitude test); `DISCRETE_TWO_POINT_GRADIENT` fixes it (within 1%). `NBody/example` (Nmesh = 2 Npart_1D) now
+  uses the two-point gradient (`force_gradient_kernel`), which brings its large scales in line with a TSC run.
+
 ### QuickStart
 - `QuickStart/example`: three short programs that do a real calculation and check it, run in CI with 1 and 4 MPI tasks:
   the power spectrum of a random catalogue against the shot noise, a particle-mesh simulation of a scale-free spectrum

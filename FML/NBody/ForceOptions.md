@@ -33,6 +33,45 @@ using the density-assignment/interpolation kernel supplied there.
 resolve to continuous kernels. Invalid names and invalid enum values are rejected
 before parallel force work.
 
+## Force grid finer than the particle grid
+
+The defaults (continuous kernels, no deconvolution) are a poor choice when the
+force grid is an integer factor finer than the particle grid, e.g. `Nmesh = 2 Npart_1D`,
+with CIC. `NBodyInitialConditions` puts the particles on a regular lattice, and that
+lattice then sits exactly on grid nodes, where the CIC kernel has a kink. As long as
+the displacements are small compared to a force cell the assigned density responds to
+the size of the displacement, which gives a signal at the grid Nyquist frequency, and
+the continuous gradient (large near Nyquist) turns it into spurious forces.
+
+A linear test (64^3 particles, Nmesh = 128, CIC, amplitude so small that the particles
+hardly move, 30 steps; P/P_lin at k = 1..6 times the fundamental mode at the end):
+
+| Setup                                            | P/P_lin                        |
+|--------------------------------------------------|--------------------------------|
+| continuous gradient (default)                    | 0.54 1.65 2.76 3.42 2.99 3.81  |
+| continuous, lattice shifted by half a force cell | 1.05 1.09 1.13 1.18 1.20 1.24  |
+| TSC, continuous                                  | 1.02 1.03 1.04 1.04 1.04 1.04  |
+| `discrete_2pt` gradient                          | 0.99 0.99 0.99 1.00 1.00 1.01  |
+| `discrete_4pt` gradient                          | 0.99 1.00 1.02 1.01 1.05 1.09  |
+| shifted, `discrete_4pt` gradient, `discrete_2pt` Laplacian | 0.99 0.99 0.99 0.99 0.99 0.99 |
+| Nmesh = 64 (= particle grid), continuous         | 0.98 0.96 0.94 0.97 0.88 0.84  |
+
+With realistic amplitudes the particles leave the nodes early and the effect is smaller:
+in the NBody example (COLA, 128^3 particles in 1000 Mpc/h from z = 20 on a 256^3 grid)
+the continuous gradient gives 3-6% more power at k < 0.03 h/Mpc than the same run with
+TSC, while the two-point gradient agrees with TSC to 1-2%. The effect dominates clean
+linear tests, very early starts and low-amplitude boxes. With a finer force grid
+than the particle grid, set
+
+```cpp
+FML::NBODY::ForceOptions options;
+options.gradient_kernel = FML::NBODY::DISCRETE_TWO_POINT_GRADIENT;
+```
+
+or use TSC, or (as SimulationCode does by default, see `SimulationCode/EVOLUTION.md`)
+offset the lattice by half a force cell and use the four-point gradient.
+`NBody/example` uses the two-point gradient.
+
 ## Migration
 
 The old `FIDUCIAL_LAPLACE_KERNEL`, `FIDUCIAL_GRADIENT_KERNEL`,
