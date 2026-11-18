@@ -33,6 +33,8 @@ field in a massive-neutrino model is not automatically total matter. No modified
 Weyl response, curvature, post-Born/lens–lens coupling, reduced-shear correction,
 intrinsic alignments, source clustering, magnification bias, shape noise or
 shot-noise subtraction or RSD/relativistic number-count terms are included.
+(`CosmicShear.h`, below, adds NLA intrinsic alignments, a Sigma(z) on the lensing
+kernel, photo-z shifts and shear calibration.)
 
 ## Source bins and kernels
 
@@ -193,10 +195,89 @@ conversion assumes one lens plane and unclustered source weights; converting a
 broad foreground population requires its own lens/source integration, not one
 mean lens redshift. Surface density here is per (Mpc/h)^2, not per pc^2.
 
+## Tomographic cosmic shear (`CosmicShear.h`)
+
+`CosmicShear.h` (header-only, standalone like `WeakLensing.h`, same units) adds what a cosmic-shear
+likelihood (KiDS, DES, ...) needs on top of the kernels above: intrinsic alignments, photometric-redshift
+and shear-calibration nuisances, the correlation functions and COSEBIs. The matter power spectrum is the
+caller's: nonlinear, **total** matter, including any baryonic feedback.
+
+```cpp
+#include <FML/WeakLensing/CosmicShear.h>
+using namespace FML::WEAKLENSING;
+ShearModel model;
+model.geometry = {Omega_m, 2997.92458, z_of_chi};   // flat; Omega_m in the lensing prefactor
+model.chi_of_z = chi_of_z;                          // Mpc/h
+model.power = {P_nl_of_k_z, k_min, k_max, 0, z_max};// h/Mpc, (Mpc/h)^3; 0 outside [k_min, k_max]
+model.growth = D_of_z;                              // D(z)/D(0), for NLA
+// model.lensing_strength = Sigma_of_z;             // modified gravity: Sigma(z) on the lensing kernel
+ShearSystematics sys{delta_z, m, NLA{A_IA, eta_IA}}; // per-bin shifts and m (empty: 0)
+auto cl  = shear_spectra(nz_bins, model, sys, ells); // cl.total[cl.pair(i, j)][ell], also GG, GI, II
+auto xi  = shear_correlation_binned(cl, theta_edges);  // xi_+-, bin-averaged with weight theta
+LogCOSEBIs cosebis(0.5 * arcmin, 300 * arcmin, 5);   // tabulates W_n(ell) once (~3 s for ell <= 1e5)
+auto En  = cosebis.E(cl);                            // En[pair][n-1]
+```
+
+Limber spectra of shear and NLA intrinsic alignments:
+
+```
+C_ell^ij = S(ell) int dchi/chi^2 [q_i q_j + (q_i p_j + p_i q_j) F + p_i p_j F^2] P((ell+1/2)/chi, z)
+F(z)     = -A_IA C1 rho_crit Omega_m / D(z) [(1+z)/(1+z_pivot)]^eta_IA
+C_ell^ij -> (1 + m_i)(1 + m_j) C_ell^ij,       n_i(z) -> n_i(z - delta_z_i)
+```
+
+with q_i the convergence kernel above (times `lensing_strength` if set), p_i = n_i(z) dz/dchi normalised,
+C1 rho_crit = 5e-14 rho_crit = 0.013877 (CosmoSIS as used by KiDS-1000 and DES, and CCL; the KiDS-1000 chain's
+chi^2 values need it: with 0.0134 they differ by 1.5 at A_IA = 2), z_pivot = 0.62 by default, and
+S(ell) = (ell-1)ell(ell+1)(ell+2)/(ell+1/2)^4 only with `ShearSettings::spin_factor` (CCL includes it,
+CosmoSIS does not; it matters only at ell < 10). A positive delta_z moves the sources to higher redshift (as
+CosmoSIS' `photoz_bias`); n(z) is linear between its nodes, cut at z = 0 and refined to `dz_max` = 0.002.
+The radial integral uses Gauss-Legendre panels of width min(20 Mpc/h, 0.1 chi).
+
+The correlation functions are the flat-sky transforms
+xi_+-(theta) = int dell ell/(2 pi) C_ell J_{0,4}(ell theta) over the ell range of the spectra (C_ell a
+cubic spline in ln ell of ln C_ell, zero outside; take ell up to ~1e5 for arcminute scales), integrated
+between the zeros of the Bessel function. `hankel` does the same for any callable C(ell) and J_0, J_2, J_4.
+
+`LogCOSEBIs` are the logarithmic COSEBIs of Schneider, Eifler & Krause (2010, arXiv:1002.2136) used by
+KiDS-1000 (Asgari et al. 2021):
+
+```
+E_n = int dell ell/(2 pi) C^E_ell W_n(ell),  W_n(ell) = int dtheta theta T_+n(theta) J_0(ell theta)
+    = 1/2 int dtheta theta [T_+n xi_+ + T_-n xi_-]      (B_n: the difference; EB() from xi_+-)
+```
+
+T_+n is a polynomial of degree n+1 in ln(theta/theta_min) with int theta T_+ = int theta^3 T_+ = 0 and
+(1/Delta theta) int T_+m T_+n = delta_mn. SEK10 solve for its monomial coefficients with ~40 digits; here it is
+expanded in the polynomials orthonormal for dtheta on [theta_min, theta_max] (from the Stieltjes recurrence),
+where the conditions are a well-conditioned Gram-Schmidt step in double precision (orthonormal to 1e-14
+for n = 20). `normalization(n)` and `roots(n)` are SEK10's N_n and r_ni, for comparison with tabulated
+files. W_n is tabulated at construction: direct Gauss-Legendre below ell theta = 30, above it the Hankel
+asymptotic form of J_0 with Filon's method, so the cost does not grow with ell (~3 s on two cores for
+n <= 5, ell <= 1e5); E() then costs ~1 ms per pair.
+
+Validation (`tests/test_cosmic_shear.cpp`, references by `tests/generate_cosmic_shear_reference.py`):
+
+| Check | Agreement |
+|---|---|
+| C_ell, 3 bins with photo-z shifts, ell = 2 - 2e4, vs QUADPACK with the exact n(z) | 1e-5 (6e-6 from the tabulated n(z)) |
+| same, GG and GG + NLA vs CCL 3.3.6 (same P(k, z), chi(z), D(z)) | 3e-4 (CCL is 3e-4 low at ell = 2e4 for the low-z bin) |
+| NLA part (GI + II) vs CCL | 3e-5 of the signal |
+| xi_+- vs QUADPACK of the same C_ell, 0.5' - 300' | 6e-8 |
+| Hankel J_0, J_4 vs analytic transforms | 1e-10 |
+| COSEBIs N_n, r_ni, T_+-(theta), n <= 5, 0.5' - 300', vs SEK10 in 60-digit arithmetic | 1e-14 |
+| W_n(ell) (asymptotic + Filon) vs brute force, ell = 3 - 7e4 | 3e-7 |
+| E_n in ell space vs real space (T_+-, xi_+-); B_n of a pure E mode | 7e-6; 5e-6 of E_n |
+
+Not included: the data files and likelihoods (KiDS-1000 COSEBIs, DES Y3 xi_+-), the theory pipeline
+(nonlinear total-matter P(k, z) on a grid from `CosmologyFitting::Theory`), bandpowers, galaxy-galaxy lensing
+and clustering (3x2pt), beyond-Limber or full-sky corrections, reduced shear, source clustering, and TATT
+intrinsic alignments.
+
 ## Build, example and validation
 
 ```sh
-make -C FML/WeakLensing/tests run
+make -C FML/WeakLensing/tests run            # test_weak_lensing (np = 1, 2, 4) and test_cosmic_shear (np = 1)
 make -C FML/WeakLensing/example
 OMP_NUM_THREADS=2 mpirun -np 2 FML/WeakLensing/example/weak_lensing_example
 # Scalar-only path, from a clean/separate build:
