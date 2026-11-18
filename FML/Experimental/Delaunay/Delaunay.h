@@ -76,6 +76,8 @@ namespace FML {
                 vertices.clear();
                 keys.clear();
                 simplices.clear();
+                births.clear();
+                next_birth = 0;
                 free_list.clear();
                 vertex_simplex.clear();
                 mark.clear();
@@ -106,6 +108,7 @@ namespace FML {
                 }
                 simplices.push_back(s);
                 mark.push_back(0);
+                births.push_back(next_birth++);
                 if (orient_of(s.v) < 0)
                     std::swap(simplices[0].v[0], simplices[0].v[1]);
                 for (int k = 0; k < NV; k++)
@@ -188,6 +191,9 @@ namespace FML {
             /// A live simplex having v as a vertex
             int incident_simplex(int v) const { return vertex_simplex[v]; }
             const Statistics & statistics() const { return stats; }
+            /// A number unique to each simplex ever created (slots of deleted simplices are reused, so this tells
+            /// whether the simplex in a slot is still the one seen earlier)
+            uint64_t birth(int s) const { return births[size_t(s)]; }
 
             /// The simplices having v as a vertex (by walking across the facets that contain v)
             void incident_simplices(int v, std::vector<int> & out) const {
@@ -308,6 +314,8 @@ namespace FML {
             std::vector<Point> vertices{};
             std::vector<uint64_t> keys{};
             std::vector<Simplex> simplices{};
+            std::vector<uint64_t> births{};
+            uint64_t next_birth{0};
             std::vector<int> free_list{};
             std::vector<int> vertex_simplex{};
             std::vector<int> mark{}; // per simplex: stamp of the last cavity test (+ in cavity, - not in cavity)
@@ -432,10 +440,12 @@ namespace FML {
                 if (!free_list.empty()) {
                     const int s = free_list.back();
                     free_list.pop_back();
+                    births[size_t(s)] = next_birth++;
                     return s;
                 }
                 simplices.emplace_back();
                 mark.push_back(0);
+                births.push_back(next_birth++);
                 return int(simplices.size()) - 1;
             }
 

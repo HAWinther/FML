@@ -251,7 +251,7 @@ namespace {
                 seen[f]++;
                 const auto & F = v.faces()[f];
                 const double sign = c >= 0 ? 1.0 : -1.0;
-                s.ok_lists = s.ok_lists && (c >= 0 ? F.i == i : F.j == i);
+                s.ok_lists = s.ok_lists && (c >= 0 ? F.local_i == i : F.local_j == i);
                 // Face centroid as seen from this cell
                 std::array<double, D> fc = F.centroid;
                 if (c < 0)
@@ -286,8 +286,9 @@ namespace {
         check(ok,
               std::to_string(D) + "D periodic Voronoi, " + name + " (N = " + std::to_string(p.size()) +
                   "): sum V / L^D - 1 = " + num(s.sum_volume / LD - 1.0, 2) + ", closure " + num(s.max_closure, 2) +
-                  ", divergence volume " + num(s.max_divergence, 2) + ", buffer " + num(v.statistics().buffer, 3) +
-                  " boxes" + (s.ok_lists ? "" : ", BAD face lists"));
+                  ", divergence volume " + num(s.max_divergence, 2) + ", " + std::to_string(v.statistics().nrounds) +
+                  " rounds, " + std::to_string(v.statistics().nghosts) + " ghosts" +
+                  (s.ok_lists ? "" : ", BAD face lists"));
     }
 
     template <int D>
