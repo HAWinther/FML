@@ -7,8 +7,8 @@
   <?php include('head.php'); ?>
 
   <!-- Set title and description -->
-  <title>FML: A C++ template library for working with particles, grids and solving PDEs in a parallel setting.</title>
-  <meta name="description" content="A C++ template library for working with particles, grids and solving PDEs in a parallel setting. Cosmology. Large scale structure.">
+  <title>FML: a C++ library for large-scale-structure cosmology, from parallel grids and particles to simulations, analysis and inference.</title>
+  <meta name="description" content="A C++ library for large-scale-structure cosmology: parallel grids and particles on slab, pencil and Peano-Hilbert domains, solvers, simulations, analysis and inference, for any cosmological model.">
   <meta name="keywords" content="Cosmology, Numerical cosmology, N-body, C++, multigrid solver, power-spectrum, bispectrum, trispectrum, polyspectrum, pair counting, two point correlation function, FFTLog, FFTW, fourier transforms, density assignment, NGP, CIC, TSC, PCS, tessellation, DTFE, friends of friends, halo finder, void finder, ZOBOV, ORIGAMI, cosmic web, watershed, non-gaussianity, initial conditions, MPI, OpenMP, COLA simulations, LPT, Lagrangian perturbation theory, smoothing, gaussian filter, tophat filter, sharp-k filter">
 
   </head>

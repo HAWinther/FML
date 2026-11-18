@@ -4,12 +4,51 @@
 
 **This is FML 2.0.** The library is constantly under construction. The changes since 1.0 are in the [changelog](FML/CHANGELOG.md); for the old version see [Version 1.0](#version-10). Development happens in the FMLDevelop branch.
 
-**FML is a C++17 library for working with particles and grids in parallel, made for large-scale-structure
-cosmology.** It gives you the parallel building blocks (grids that do FFTs, particle containers that move particles
-between tasks, mass assignment, PDE solvers) and, built on them, the methods you need to set up, run and analyse
-cosmological simulations and to compare them with theory. Most of it is header-only and templated on the particle
-type and the number of dimensions, so your own particle struct works directly, and it runs in serial or in parallel
-with MPI and OpenMP: you write the algorithm, FML handles most of the communication.
+**FML is a C++17 library for large-scale-structure cosmology.** It started as a set of general building blocks for
+working in parallel: grids that do FFTs, particle containers, mass assignment and PDE solvers, where the library takes
+care of the MPI and OpenMP parallelisation so that you can write an algorithm without thinking about how the data is
+split over tasks. On top of these it has grown to cover almost everything one needs in large-scale structure: the
+expansion history and the linear Einstein–Boltzmann equations, initial conditions and simulations, halo and void
+finding, clustering statistics, survey estimators and parameter inference. And not only for ΛCDM, but for any
+cosmological model you add.
+
+## The ideas behind FML
+
+<p align="center"><img src="Documentation/website/images/fml-architecture.svg" alt="FML is built up from a domain decomposition, grids and particles on it, the algorithms that work on them, and the programs built from those" width="820"></p>
+
+- **Parallel without having to think about it.** The data structures know how they are distributed. A grid knows which
+  part of the box it owns, exchanges its ghost cells and does distributed FFTs; a particle container sends particles
+  to the task that owns them. Algorithms are written on top of these and run the same way in serial, with MPI, with
+  OpenMP or with both. The one thing to keep in mind is that collective functions are called by all tasks.
+- **Built up in layers: domain → grids and particles → algorithms → programs.** A *domain* says which MPI task owns
+  which part of the box: slabs (the default), pencils (x and y split, for up to N_mesh² tasks) or load-balanced ranges
+  of a Peano–Hilbert curve. Grids (`FFTWGrid` on slabs, `PencilGrid` on pencils, the general `MPIGrid` and the
+  adaptively refined `AdaptiveMPIGrid`) and particles (`MPIParticles`) live on a domain. The particles can be on the
+  same domain as a grid or on another one, and the operations between them (mass assignment, interpolation) work
+  across domains. The algorithms are written against a common grid interface, so most of the library, SimulationCode
+  and SnapshotAnalyzer run on slabs or on pencils.
+- **General through templates.** Classes and algorithms are templated on the particle type and on the number of
+  dimensions. Your own particle struct works as it is: it needs `get_pos()`, and the library detects at compile time
+  which other members (velocity, mass, ID, ...) it has and uses them if it needs them. Most of the library is
+  header-only.
+- **Easy to extend.** A module is a folder with its headers, a README, an example and tests. A new analysis method
+  uses the grids and particles and gets the parallelisation from them.
+- **Lightweight.** You need a C++17 compiler and make. FFTW (Fourier transforms) and GSL (splines, ODEs) are used by
+  most of the library; MPI, OpenMP, Lua, HDF5, CGAL and Python are optional and only needed by the modules that use
+  them. There are no large dependencies such as Boost: the multigrid solvers, halo finders, KD-tree, FFTLog, samplers,
+  the Boltzmann solver and so on are all part of the library.
+- **Any cosmological model.** The physics is implemented once and shared: the same background and the same
+  quasi-static gravity (μ and Σ) drive the Einstein–Boltzmann solver, the growth factors, LPT, the halo model and the
+  simulations. A new model (dark energy, modified gravity, interacting dark sectors, ...) is a header and an entry in
+  a registry for the Einstein–Boltzmann solver and everything built on its background, and the gravity models of
+  SimulationCode use the same quasi-static definitions. Some twenty models are included.
+- **Programs as examples.** SimulationCode (formerly COLASolver), SnapshotAnalyzer, the Einstein–Boltzmann solver,
+  CosmologyFitting and AMRCode were written to show what can be done with the library. They have grown into codes that
+  are useful in their own right, and they are also the most demanding tests of the building blocks.
+- **Tested and validated.** About 200 test programs compare with analytic results, manufactured solutions,
+  conservation laws and external codes (CLASS, CAMB, CCL, FAST-PT, MG-PICOLA, ...). They run in CI on every push with
+  1 and 4 MPI tasks, and with longer accuracy checks every night. The module READMEs say what has been validated and
+  over which range.
 
 ## What's inside
 

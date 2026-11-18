@@ -1,12 +1,24 @@
 \chapter*{Preface}
 \addcontentsline{toc}{chapter}{Preface}
 
-\fml{} is a C++17 library for cosmology and the large-scale structure of the Universe. It started as a collection of
-the tools needed for fast approximate simulations (particle--mesh gravity, Lagrangian perturbation theory, the COLA
-method and modified-gravity solvers) and has grown into a library that covers the whole chain from the expansion
-history and the linear Einstein--Boltzmann equations, through initial conditions and $N$-body, hydrodynamical and
-wave dark matter simulations, to halo and void finding, clustering statistics, survey estimators, analytic nonlinear
-models and statistical inference.
+\fml{} is a C++17 library for cosmology and the large-scale structure of the Universe. It began with a simple goal:
+to provide the basic, general tools that one needs to work in parallel when doing large-scale structure (grids,
+particle containers, mass assignment, Fourier transforms and PDE solvers), with the parallelisation over MPI tasks and
+OpenMP threads taken care of by the library, so that a user can write an algorithm without having to think about how
+the data is distributed. The classes and algorithms are templated on the particle type and on the number of
+dimensions, so that they work with any particle and can be reused for problems we did not have in mind, and new
+analysis modules can be added on top of them with little effort. The library is meant to be lightweight: it brings
+its own implementations and depends only on a few basic libraries such as FFTW, not on large frameworks.
+
+The programs that came with the library, first of all the COLA code that is now \file{SimulationCode}, were meant as
+examples of what can be done with it. They have grown so much that they are interesting in their own right. Over the
+years the scope of the library has grown with them: it now aims to provide almost everything one needs in large-scale
+structure, from the expansion history and the linear Einstein--Boltzmann equations, through initial conditions and
+$N$-body, hydrodynamical and wave dark matter simulations, to halo and void finding, clustering statistics, survey
+estimators, analytic nonlinear models and statistical inference. And it should do so not only for $\Lambda$CDM but for
+any cosmological model, or make it easy to add a new one. As the library has grown, testing and validation have become
+as important as the features themselves: every module comes with tests that check it against analytic results and
+other codes, and they run every time the code changes.
 
 This book documents all of it. For every feature it gives
 \begin{itemize}

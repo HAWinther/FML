@@ -26,6 +26,6 @@
 <div class="my-header-block">
   <div>
     <h1>FML</h1>
-    <h3>A C++ template library for working with particles, grids and solving PDEs in parallel</h3>
+    <h3>A C++ library for large-scale-structure cosmology: parallel grids, particles and solvers, and everything built on them</h3>
   </div>
 </div>

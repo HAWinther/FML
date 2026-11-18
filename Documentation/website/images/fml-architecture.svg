@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 640" role="img" aria-labelledby="title desc">
+<title id="title">How FML is built up</title><desc id="desc">A domain decomposition (slabs, pencils or a Peano-Hilbert curve) at the bottom. Grids and particle containers live on a domain and take care of the MPI and OpenMP communication. The algorithms work on grids and particles, and the programs are built from the algorithms.</desc>
+<defs><marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#64748b"/></marker></defs>
+<rect width="1120" height="640" rx="18" fill="#f8fafc"/>
+<g font-family="Inter,Arial,sans-serif" text-anchor="middle" fill="#0f172a">
+ <text x="560" y="40" font-size="22" font-weight="700">How FML is built up</text>
+
+ <!-- Programs -->
+ <rect x="40" y="62" width="1040" height="96" rx="14" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+ <text x="560" y="88" font-size="16" font-weight="700">Programs: examples of what the library can do</text>
+ <g font-size="13.5">
+  <rect x="60" y="102" width="150" height="40" rx="8" fill="#fff" stroke="#d97706"/><text x="135" y="127">SimulationCode</text>
+  <rect x="222" y="102" width="150" height="40" rx="8" fill="#fff" stroke="#d97706"/><text x="297" y="127">SnapshotAnalyzer</text>
+  <rect x="384" y="102" width="170" height="40" rx="8" fill="#fff" stroke="#d97706"/><text x="469" y="127">Boltzmann solver ./cmb</text>
+  <rect x="566" y="102" width="150" height="40" rx="8" fill="#fff" stroke="#d97706"/><text x="641" y="127">Fits ./mcmc</text>
+  <rect x="728" y="102" width="150" height="40" rx="8" fill="#fff" stroke="#d97706"/><text x="803" y="127">AMRCode, ...</text>
+  <rect x="890" y="102" width="170" height="40" rx="8" fill="#fff" stroke="#d97706" stroke-dasharray="5 4"/><text x="975" y="127" font-style="italic">your own code</text>
+ </g>
+
+ <!-- Algorithms -->
+ <rect x="40" y="186" width="1040" height="112" rx="14" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+ <text x="560" y="212" font-size="16" font-weight="700">Algorithms and analysis modules (templated on particle type and dimension)</text>
+ <g font-size="13">
+  <text x="200" y="240">mass assignment, interpolation, FFTs</text>
+  <text x="560" y="240">multigrid PDE solvers, LPT, N-body forces</text>
+  <text x="920" y="240">power spectra, polyspectra, correlations</text>
+  <text x="200" y="266">halo, void and cosmic-web finders</text>
+  <text x="560" y="266">cosmology: background, perturbations, PT, halo model</text>
+  <text x="920" y="266">surveys, lensing, inference</text>
+ </g>
+
+ <!-- Grids and particles -->
+ <rect x="40" y="326" width="500" height="118" rx="14" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+ <text x="290" y="354" font-size="16" font-weight="700">Grids</text>
+ <g font-size="13.5">
+  <text x="290" y="380">FFTWGrid (slabs) · PencilGrid (pencils): in-place FFTs</text>
+  <text x="290" y="402">MPIGrid (any cell type) · AdaptiveMPIGrid (AMR, Hilbert)</text>
+  <text x="290" y="426" fill="#334155">ghost cells, boundaries and transposes handled internally</text>
+ </g>
+ <rect x="580" y="326" width="500" height="118" rx="14" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/>
+ <text x="830" y="354" font-size="16" font-weight="700">Particles</text>
+ <g font-size="13.5">
+  <text x="830" y="380">MPIParticles&lt;T&gt;: any particle type, any dimension</text>
+  <text x="830" y="402">a particle only needs get_pos(); the rest is optional</text>
+  <text x="830" y="426" fill="#334155">particles are moved to the task that owns them</text>
+ </g>
+ <path d="M540 385 H580" stroke="#64748b" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+ <path d="M580 395 H540" stroke="#64748b" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+
+ <!-- Domain -->
+ <rect x="40" y="472" width="1040" height="148" rx="14" fill="#e2e8f0" stroke="#475569" stroke-width="2"/>
+ <text x="560" y="498" font-size="16" font-weight="700">Domain: which MPI task owns which part of the box</text>
+ <g font-size="14" font-weight="600">
+  <text x="250" y="608">Slab</text><text x="560" y="608">Pencil</text><text x="870" y="608">Peano–Hilbert</text>
+ </g>
+ <!-- slab -->
+ <g stroke="#475569" stroke-width="1.5">
+  <rect x="200" y="512" width="25" height="80" fill="#bfdbfe"/><rect x="225" y="512" width="25" height="80" fill="#93c5fd"/>
+  <rect x="250" y="512" width="25" height="80" fill="#bfdbfe"/><rect x="275" y="512" width="25" height="80" fill="#93c5fd"/>
+ </g>
+ <!-- pencil -->
+ <g stroke="#475569" stroke-width="1.5">
+  <rect x="520" y="512" width="20" height="20" fill="#bfdbfe"/><rect x="540" y="512" width="20" height="20" fill="#93c5fd"/><rect x="560" y="512" width="20" height="20" fill="#bfdbfe"/><rect x="580" y="512" width="20" height="20" fill="#93c5fd"/>
+  <rect x="520" y="532" width="20" height="20" fill="#93c5fd"/><rect x="540" y="532" width="20" height="20" fill="#bfdbfe"/><rect x="560" y="532" width="20" height="20" fill="#93c5fd"/><rect x="580" y="532" width="20" height="20" fill="#bfdbfe"/>
+  <rect x="520" y="552" width="20" height="20" fill="#bfdbfe"/><rect x="540" y="552" width="20" height="20" fill="#93c5fd"/><rect x="560" y="552" width="20" height="20" fill="#bfdbfe"/><rect x="580" y="552" width="20" height="20" fill="#93c5fd"/>
+  <rect x="520" y="572" width="20" height="20" fill="#93c5fd"/><rect x="540" y="572" width="20" height="20" fill="#bfdbfe"/><rect x="560" y="572" width="20" height="20" fill="#93c5fd"/><rect x="580" y="572" width="20" height="20" fill="#bfdbfe"/>
+ </g>
+ <!-- hilbert -->
+ <rect x="830" y="512" width="80" height="80" fill="#fff" stroke="#475569" stroke-width="1.5"/>
+ <polyline fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round" points="840,582 860,582 860,562 840,562 840,542 840,522 860,522 860,542 880,542 880,522 900,522 900,542 900,562 880,562 880,582 900,582"/>
+ <g font-size="12.5" fill="#334155" text-anchor="start">
+  <text x="60" y="530">default;</text><text x="60" y="548">x split</text><text x="60" y="566">over tasks</text>
+  <text x="360" y="530">x and y split:</text><text x="360" y="548">up to N_mesh² tasks</text>
+  <text x="940" y="530">load-balanced</text><text x="940" y="548">ranges of the</text><text x="940" y="566">space-filling curve</text>
+ </g>
+ <text x="560" y="463" font-size="12.5" fill="#334155">grid ↔ particle operations work across domains</text>
+ <path d="M290 472 V446" stroke="#64748b" stroke-width="2" marker-end="url(#arr)"/>
+ <path d="M830 472 V446" stroke="#64748b" stroke-width="2" marker-end="url(#arr)"/>
+ <path d="M560 298 V326" stroke="#64748b" stroke-width="2"/>
+ <path d="M560 158 V186" stroke="#64748b" stroke-width="2"/>
+</g>
+</svg>
