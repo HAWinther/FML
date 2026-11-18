@@ -5,6 +5,13 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### QuickStart
+- `QuickStart/example`: three short programs that do a real calculation and check it, run in CI with 1 and 4 MPI tasks:
+  the power spectrum of a random catalogue against the shot noise, a particle-mesh simulation of a scale-free spectrum
+  in Einstein-de Sitter (largest scales against linear theory) in about 60 lines, and the same power spectrum with the
+  particles on slabs, pencils and a Peano-Hilbert curve (equal to rounding). Shown on the website in place of the old
+  untested example; the README example uses the current `MPIParticles::create` API.
+
 ### AMRCode: N-GenIC random generator
 - `random_generator = GSL` (new default: gsl_rng_ranlxd1, as N-GenIC/2LPTic/L-PICOLA and SimulationCode's
   `ic_random_generator = GSL`) or `MT19937` (std::mt19937, the previous behaviour). The same seed now gives different

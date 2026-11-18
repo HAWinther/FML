@@ -51,6 +51,8 @@ jobs:
           cache-key: examples
       - name: Build the examples
         run: make -C FML examples -j4
+      - name: Quick-start examples run and check their results (1 and 4 MPI tasks)
+        run: make -C FML/QuickStart/example run MPIRUN="${MPIRUN:-mpirun --oversubscribe}" NP_LIST="1 4"
 
   library-tests:
     runs-on: ubuntu-24.04

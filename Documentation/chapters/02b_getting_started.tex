@@ -1,5 +1,5 @@
 \chapter{Getting started}\label{ch:getting-started}
-\chapterstatus{written}{2026-11-14}
+\chapterstatus{written}{2026-11-18}
 
 How to configure and build \fml{}, write and compile a first program, run the tests, and use the four programs that come with the
 library. \file{FML/BUILDING.md} is the reference for all build options and \file{FML/CAPABILITIES.md} lists the modules with their
@@ -78,6 +78,13 @@ mpicxx -std=c++17 -O3 -fopenmp -I. -DUSE_MPI -DUSE_OMP -DUSE_FFTW -DUSE_FFTW_THR
        particles.cpp FML/Global/Global.cpp -lfftw3_mpi -lfftw3_threads -lfftw3 -o particles
 OMP_NUM_THREADS=4 mpirun -np 2 ./particles
 \end{paramfile}
+
+\paragraph*{Quick start.} \file{QuickStart/example} has three short programs that each do a real calculation and check
+the result (they run in CI with 1 and 4 MPI tasks): \file{pofk.cpp}, the power spectrum of a random catalogue against
+the shot noise; \file{pm_simulation.cpp}, a particle-mesh simulation of a scale-free spectrum in an Einstein--de Sitter
+universe in about 60 lines, whose largest scales follow linear theory; and \file{domains.cpp}, the same power spectrum
+with the particles on slabs, on pencils and on a Peano--Hilbert curve (\cref{sec:par-domains}). Build and run them with
+\code{make run} in that folder.
 
 Every module has an \file{example/} folder with a Makefile that uses the shared configuration (\code{make -C FML examples}). The examples need
 no data files: those that read particles, a survey or a snapshot make a small synthetic data set with

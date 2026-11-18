@@ -216,7 +216,7 @@ The full guide to the build options is in <tt>FML/BUILDING.md</tt> and the list 
 <hr/>
 
 <p>
-Almost every folder in the code contains an [example] folder showing how one can use the methods and classes. Here are a few of those:
+Almost every folder in the code contains an [example] folder showing how one can use the methods and classes. Here are a few of those (the three short <a href="https://github.com/HAWinther/FML/tree/master/FML/QuickStart" style="display: inline">quick-start programs</a> are shown in full below the list):
 <ul>
 <li>
 <a href="https://github.com/HAWinther/FML/tree/master/FML/ComputePowerSpectra/example/Main.cpp" style="display: inline">Compute power spectra (and multipoles)</a>
@@ -392,234 +392,238 @@ Almost every folder in the code contains an [example] folder showing how one can
 </p>
 
 <p>
-Some random examples just for showing some of the methods in the library:
+Three short programs from <a href="https://github.com/HAWinther/FML/tree/master/FML/QuickStart" style="display: inline">FML/QuickStart</a> show what working with the library looks like. Each does a real calculation and checks its result, and they are built and run in continuous integration, so they stay up to date with the library. None of them contains any MPI code, yet they run unchanged on any number of tasks (<tt>make run</tt> in <tt>FML/QuickStart/example</tt>, or e.g. <tt>mpirun -np 4 ./pm_simulation</tt>).
+</p>
+<p><b>The power spectrum of a catalogue</b> (<a href="https://github.com/HAWinther/FML/blob/master/FML/QuickStart/example/pofk.cpp" style="display: inline">pofk.cpp</a>). Your own particle type, distributed over the MPI tasks, and its power spectrum. The catalogue is uniformly random, so P(k) must be the shot noise.</p>
 <div style="text-align: center">
-  <div style="width:600px;display: inline-block;text-align: left">
-    <pre class="prettyprint">
-//==================================================================
-// Headers we need to include
-//==================================================================
-#include &lt;FML/FFTWGrid/FFTWGrid.h&gt;
-#include &lt;FML/MPIParticles/MPIParticles.h&gt;
-#include &lt;FML/Interpolation/ParticleGridInterpolation.h&gt;
-#include &lt;FML/Smoothing/SmoothingFourier.h&gt;
-#include &lt;FML/FriendsOfFriends/FoF.h&gt;
+  <div style="width:100%;display: inline-block;text-align: left">
+    <pre class="prettyprint" style="overflow-x:auto;white-space:pre;font-size:12px">
+// Quick start 1: the power spectrum of a particle catalogue.
+//
+// Your own particle type, distributed over the MPI tasks, and P(k) with cloud-in-cell assignment and interlacing. The
+// catalogue is uniformly random, so P(k) is the shot noise 1/n: we check that.
 #include &lt;FML/ComputePowerSpectra/ComputePowerSpectrum.h&gt;
-#include &lt;FML/RandomFields/NonLocalGaussianRandomField.h&gt;
-#include &lt;FML/LPT/DisplacementFields.h&gt;
-#include &lt;FML/NBody/NBody.h&gt;
+#include &lt;FML/MPIParticles/MPIParticles.h&gt;
+#include &lt;FML/RandomGenerator/RandomGenerator.h&gt;
 
-//==================================================================
-// The particles class
-//==================================================================
-template &lt;int NDIM&gt;
-class MyParticle {
-  double pos[NDIM];
-  double vel[NDIM];
-public:
-  double * get_pos() { return pos; }
-  double * get_vel() { return vel; }
-  constexpr int get_ndim() const { return NDIM; }
+#include &lt;cmath&gt;
+#include &lt;iostream&gt;
+
+// Any type with get_pos() (positions in the box [0,1)) works as a particle: no base class needed
+struct Particle {
+    double x[3];
+    double * get_pos() { return x; }
+    constexpr int get_ndim() const { return 3; }
 };
 
-//==================================================================
-// Initialization of the library, FFTW and MPI is automatically taken care of
-//==================================================================
-int main(){
+int main() {
+    // The same random catalogue on every task (box units)
+    const size_t Npart = 200000;
+    std::vector&lt;Particle&gt; catalogue(Npart);
+    FML::RANDOM::RandomGenerator rng(1234);
+    for (auto &amp; p : catalogue)
+        for (auto &amp; x : p.x)
+            x = rng.generate_uniform();
 
-  //==================================================================
-  // The dimension we are working in and an alias for the particle class
-  //==================================================================
-  const int NDIM = 3;
-  using Particle = MyParticle&lt;NDIM&gt;;
-  FML::PARTICLE::info&lt;Particle&gt;();
+    // Distribute it: every task keeps the particles in its part of the box
+    FML::PARTICLE::MPIParticles&lt;Particle&gt; part;
+    part.create(catalogue, 2 * Npart / FML::NTasks + 1000, FML::PARTICLE::Input::Replicated);
 
-  //==================================================================
-  // Create a regular set of 32^3 particles spread across tasks
-  // The local task is responsible for the x-domain [FML::xmin_domain, FML::xmax_domain) in [0,1)
-  //==================================================================
-  FML::PARTICLE::MPIParticles&lt;Particle&gt; part;
-  const int Npart_1D = 32;
-  const double buffer_factor = 2.0; // Allocate 2 times as many particles on each task
-  part.create_particle_grid(
-            Npart_1D,
-            buffer_factor,
-            FML::xmin_domain,
-            FML::xmax_domain);
-  part.info(); // Show info about the particle container
+    // P(k) on a 64^3 grid, CIC with interlacing, without subtracting the shot noise
+    const int Nmesh = 64;
+    FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning&lt;3&gt; pofk(Nmesh / 2);
+    pofk.subtract_shotnoise = false;
+    FML::CORRELATIONFUNCTIONS::compute_power_spectrum&lt;3&gt;(
+        Nmesh, part.get_particles_ptr(), part.get_npart(), part.get_npart_total(), pofk, &quot;CIC&quot;, true);
 
-  //==================================================================
-  // Randomly change the coordinates of all the particles
-  // which will make some leave the local domain
-  //==================================================================
-  for (auto &amp; p : part) {
-      auto pos = FML::PARTICLE::GetPos(p);
-      auto vel = FML::PARTICLE::GetVel(p);
-      for(int idim = 0; idim &lt; NDIM; idim++) {
-        pos[idim] = (rand() % 1000) / 1000.0;
-        vel[idim] = 0.0;
-      }
-  }
-
-  //==================================================================
-  // Communicate so that all particles end up on the right task
-  //==================================================================
-  part.communicate_particles();
-
-  //==================================================================
-  // Compute the power-spectrum of the particles using interlacing for alias reduction
-  //==================================================================
-  const int Nmesh = 32;
-  const bool interlacing = true;
-  const std::string density_assignment_method = "CIC"; // NGP, CIC, TSC, PCS, PQS, ...
-  FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning&lt;NDIM&gt; pofk(Nmesh / 2);
-  FML::CORRELATIONFUNCTIONS::compute_power_spectrum&lt;NDIM&gt;(
-            Nmesh,
-            part.get_particles_ptr(),
-            part.get_npart(),
-            part.get_npart_total(),
-            pofk,
-            density_assignment_method,
-            interlacing);
-
-  const double box = 100.0; // The physical size of the box
-  pofk.scale(box);          // To physical units
-
-  //==================================================================
-  // Compute a density field of the particles
-  //==================================================================
-  auto nleftright = FML::INTERPOLATION::get_extra_slices_needed_for_density_assignment(density_assignment_method);
-  FML::GRID::FFTWGrid&lt;NDIM&gt; density_field(Nmesh, nleftright.first, nleftright.second);
-  FML::INTERPOLATION::particles_to_grid&lt;NDIM, Particle&gt;(
-            part.get_particles_ptr(),
-            part.get_npart(),
-            part.get_npart_total(),
-            density_field,
-            density_assignment_method);
-
-  //==================================================================
-  // Transform density field to fourier space (FFTW real-to-complex)
-  //==================================================================
-  density_field.fftw_r2c();
-
-  //==================================================================
-  // Show info about the grid
-  //==================================================================
-  density_field.info();
-
-  //==================================================================
-  // Smooth the density field by multiplying by a fourier-space filter
-  //==================================================================
-  const double smoothing_scale = 0.01; // In units of the boxsize
-  const std::string smoothing_method = "gaussian";
-  FML::GRID::smoothing_filter_fourier_space(
-              density_field,
-              smoothing_scale,
-              smoothing_method);
-
-  //==================================================================
-  // Compute the 1LPT displacement field
-  //==================================================================
-  FML::GRID::FFTWGrid&lt;NDIM&gt; phi_1LPT_fourier;
-  std::array&lt;FML::GRID::FFTWGrid&lt;NDIM&gt;, NDIM&gt; psi_1LPT_real;
-  FML::COSMOLOGY::LPT::compute_1LPT_potential_fourier(
-              density_field,
-              phi_1LPT_fourier);
-  FML::COSMOLOGY::LPT::from_LPT_potential_to_displacement_vector&lt;NDIM&gt;(
-              phi_1LPT_fourier,
-              psi_1LPT_real);
-
-  // To free up the memory just call free
-  phi_1LPT_fourier.free();
-  for(auto &amp;g : psi_1LPT_real)
-    g.free();
-
-  //==================================================================
-  // Take a single (leapfrog) N-body time-step: compute the force,
-  // kick the velocities and drift the positions
-  //==================================================================
-  const double timestep = 1e-3; // dt_code = H0 dt / a^2
-  const double OmegaM = 0.3;
-  const double a = 1.0;
-  const double norm_poisson_equation = 1.5 * OmegaM * a;
-  FML::GRID::FFTWGrid&lt;NDIM&gt; density_nbody(Nmesh, nleftright.first, nleftright.second);
-  FML::INTERPOLATION::particles_to_grid&lt;NDIM, Particle&gt;(
-              part.get_particles_ptr(),
-              part.get_npart(),
-              part.get_npart_total(),
-              density_nbody,
-              density_assignment_method);
-  density_nbody.fftw_r2c();
-  std::array&lt;FML::GRID::FFTWGrid&lt;NDIM&gt;, NDIM&gt; force_real;
-  FML::NBODY::compute_force_from_density_fourier&lt;NDIM&gt;(
-              density_nbody,
-              force_real,
-              density_assignment_method,
-              norm_poisson_equation);
-  FML::NBODY::KickParticles&lt;NDIM&gt;(force_real, part, timestep, density_assignment_method);
-  FML::NBODY::DriftParticles&lt;NDIM&gt;(part, timestep);
-
-  //==================================================================
-  // Do Friend of Friend finding
-  //==================================================================
-  const double linking_length = 0.2;   // In units of the mean particle separation
-  const int n_min_FoF_group = 20;
-  const bool periodic_box = true;
-  const double buffer_size = 3.0 / box; // Buffer (in units of the box) we use to link across tasks
-
-  using FoFHalo = FML::FOF::FoFHalo&lt;Particle, NDIM&gt;;
-  std::vector&lt;FoFHalo&gt; FoFGroups;
-  FML::FOF::FriendsOfFriends&lt;Particle, NDIM&gt;(
-              part.get_particles_ptr(),
-              part.get_npart(),
-              linking_length,
-              n_min_FoF_group,
-              periodic_box,
-              buffer_size,
-              FoFGroups);
-
-  //==================================================================
-  // Generate a non-gaussian random field
-  //==================================================================
-  FML::GRID::FFTWGrid&lt;NDIM&gt; random_fourier_field(Nmesh);
-  FML::RANDOM::RandomGenerator rng;
-  const double fNL = 100.0;
-  const std::string type_of_fnl = "local";
-  const bool fix_amplitude = false; // Fix the norm and only do random phases?
-  std::function&lt;double(double)&gt; Pofk_of_kBox_over_volume = [&amp;](double kBox) {
-        if (kBox == 0.0) return 0.0;
-        double k = kBox / box;                        // k in physical units
-        double volume = std::pow(box, NDIM);          // Volume of the box in physical units
-        double pofk = 1e-6 * std::pow(1.0 / k, NDIM); // pofk in physical units
-        return pofk / volume;                         // Dimensionless P(k)/V
-  };
-  FML::RANDOM::NONGAUSSIAN::generate_nonlocal_gaussian_random_field_fourier(
-              random_fourier_field,
-              &amp;rng,
-              Pofk_of_kBox_over_volume,
-              fix_amplitude,
-              fNL,
-              type_of_fnl);
-
-  //==================================================================
-  // Compute the bispectrum
-  //==================================================================
-  const double kmin = 0.0;
-  const double kmax = 2.0 * M_PI * Nmesh/2;
-  const int nbin = 16;
-  FML::CORRELATIONFUNCTIONS::BispectrumBinning&lt;NDIM&gt; bofk(kmin, kmax, nbin);
-  FML::CORRELATIONFUNCTIONS::compute_bispectrum(
-              random_fourier_field,
-              bofk);
-  bofk.scale(box); // To physical units
-
-  //==================================================================
-  // Fourier transform the random field to real-space
-  //==================================================================
-  random_fourier_field.fftw_c2r();
-
+    // In a box of 1000 Mpc/h: k in h/Mpc, P in (Mpc/h)^3. The shot noise is V/N
+    const double box = 1000.0, shotnoise = box * box * box / double(Npart);
+    pofk.scale(box);
+    double mean = 0.0;
+    for (int i = 0; i &lt; pofk.n; i++)
+        mean += pofk.pofk[i] / shotnoise / pofk.n;
+    if (FML::ThisTask == 0) {
+        std::cout &lt;&lt; &quot;# k [h/Mpc]   P(k) [(Mpc/h)^3]   P / shot noise\n&quot;;
+        for (int i = 0; i &lt; pofk.n; i++)
+            std::cout &lt;&lt; pofk.kbin[i] &lt;&lt; &quot; &quot; &lt;&lt; pofk.pofk[i] &lt;&lt; &quot; &quot; &lt;&lt; pofk.pofk[i] / shotnoise &lt;&lt; &quot;\n&quot;;
+        std::cout &lt;&lt; &quot;Mean P / shot noise = &quot; &lt;&lt; mean &lt;&lt; &quot; (expected 1)\n&quot;;
+    }
+    return std::abs(mean - 1.0) &lt; 0.05 ? 0 : 1;
 }
 </pre>
+  </div>
 </div>
+<p><b>A particle-mesh simulation</b> (<a href="https://github.com/HAWinther/FML/blob/master/FML/QuickStart/example/pm_simulation.cpp" style="display: inline">pm_simulation.cpp</a>). 2LPT initial conditions, a leapfrog and the power spectrum today, for a scale-free spectrum in an Einstein&ndash;de Sitter universe where the largest scales must follow linear theory.</p>
+<div style="text-align: center">
+  <div style="width:100%;display: inline-block;text-align: left">
+    <pre class="prettyprint" style="overflow-x:auto;white-space:pre;font-size:12px">
+// Quick start 2: a particle-mesh N-body simulation in about 60 lines.
+//
+// A scale-free simulation in an Einstein-de Sitter universe (Omega_m = 1, P(k) ~ k^-2), where linear theory is
+// simple: the density grows as the scale factor a and H/H0 = a^-3/2. 2LPT initial conditions at a = 0.02, a leapfrog
+// with time steps in ln a, and the power spectrum today against linear theory, P(k, a) = P(k, a_ini) (a / a_ini)^2:
+// equal on the largest scales, above it on smaller scales where the growth is nonlinear. All lengths are in units of
+// the box, the time variable is dtau = H0 dt / a^2 and the velocities are v = dx/dtau.
+#include &lt;FML/ComputePowerSpectra/ComputePowerSpectrum.h&gt;
+#include &lt;FML/MPIParticles/MPIParticles.h&gt;
+#include &lt;FML/NBody/NBody.h&gt;
+
+#include &lt;algorithm&gt;
+#include &lt;cmath&gt;
+#include &lt;iostream&gt;
+
+// The particle type: what the algorithms need (position and velocity), nothing more
+struct Particle {
+    double pos[3]{}, vel[3]{};
+    double * get_pos() { return pos; }
+    double * get_vel() { return vel; }
+    constexpr int get_ndim() const { return 3; }
+};
+
+int main() {
+    const int Npart_1D = 128, Nmesh = 128, nsteps = 30;
+    const double aini = 0.02, aend = 1.0;
+
+    // Initial conditions: P(k)/V at aini as a function of k in units of 1/box, 2LPT, fixed amplitudes
+    const double A = 1e-6;
+    auto Pofk_over_volume = [&amp;](double kBox) { return kBox &gt; 0 ? A * std::pow(kBox / (2 * M_PI), -2) : 0.0; };
+    auto one = [](double) { return 1.0; };
+    const double vnorm = aini * aini * std::pow(aini, -1.5); // v = a^2 (H/H0) f_n Psi_n with f_1 = 1, f_2 = 2
+    FML::RANDOM::RandomGenerator rng(1234);
+    FML::PARTICLE::MPIParticles&lt;Particle&gt; part;
+    FML::NBODY::NBodyInitialConditions&lt;3, Particle&gt;(part, Npart_1D, 1.5, Nmesh, true, &amp;rng, one, Pofk_over_volume, 2,
+                                                    &quot;gaussian&quot;, 0.0, 1.0, 1.0 / aini - 1.0, {vnorm, 2 * vnorm});
+
+    // The power spectrum of the initial conditions (CIC with interlacing; no shot noise on the initial lattice)
+    auto power_spectrum = [&amp;]() {
+        FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning&lt;3&gt; pofk(Nmesh / 2);
+        pofk.subtract_shotnoise = false;
+        FML::CORRELATIONFUNCTIONS::compute_power_spectrum&lt;3&gt;(
+            Nmesh, part.get_particles_ptr(), part.get_npart(), part.get_npart_total(), pofk, &quot;CIC&quot;, true);
+        return pofk;
+    };
+    const auto pofk_ini = power_spectrum();
+
+    // Leapfrog with steps uniform in ln a: positions at a_i, velocities half a step ahead. The force is computed at
+    // a_i, with the Poisson equation nabla^2 Phi = 1.5 Omega_m a delta; the time steps are the integrals of
+    // dtau = a^-3/2 da (drift) and of (a / a_i) a^-3/2 da (kick)
+    auto a_of = [&amp;](double i) { return aini * std::pow(aend / aini, std::clamp(i, 0.0, double(nsteps)) / nsteps); };
+    for (int i = 0; i &lt;= nsteps; i++) {
+        const double a = a_of(i), avel_old = a_of(i - 0.5), avel_new = a_of(i + 0.5), anew = a_of(i + 1);
+        auto nleftright = FML::INTERPOLATION::get_extra_slices(&quot;CIC&quot;);
+        FML::GRID::FFTWGrid&lt;3&gt; density(Nmesh, nleftright.first, nleftright.second);
+        FML::INTERPOLATION::particles_to_grid(
+            part.get_particles_ptr(), part.get_npart(), part.get_npart_total(), density, &quot;CIC&quot;);
+        density.fftw_r2c();
+        std::array&lt;FML::GRID::FFTWGrid&lt;3&gt;, 3&gt; force;
+        FML::NBODY::compute_force_from_density_fourier&lt;3&gt;(density, force, &quot;CIC&quot;, 1.5 * a);
+        FML::NBODY::KickParticles&lt;3&gt;(force, part, 2.0 / a * (std::sqrt(avel_new) - std::sqrt(avel_old)), &quot;CIC&quot;);
+        FML::NBODY::DriftParticles&lt;3, Particle&gt;(part, 2.0 * (1.0 / std::sqrt(a) - 1.0 / std::sqrt(anew)));
+    }
+
+    // The power spectrum today against linear theory
+    const auto pofk = power_spectrum();
+    double max_dev = 0.0;
+    if (FML::ThisTask == 0)
+        std::cout &lt;&lt; &quot;# k [2pi/box]   P(k) / P_linear(k)\n&quot;;
+    for (int i = 0; i &lt; pofk.n; i++) {
+        const double ratio = pofk.pofk[i] / (pofk_ini.pofk[i] * std::pow(aend / aini, 2));
+        if (FML::ThisTask == 0)
+            std::cout &lt;&lt; pofk.kbin[i] / (2 * M_PI) &lt;&lt; &quot; &quot; &lt;&lt; ratio &lt;&lt; &quot;\n&quot;;
+        if (pofk.kbin[i] &lt; 2 * M_PI * 2.5)
+            max_dev = std::max(max_dev, std::abs(ratio - 1.0));
+    }
+    if (FML::ThisTask == 0)
+        std::cout &lt;&lt; &quot;Largest scales (k &lt;= 2 x 2pi/box): |P/P_linear - 1| &lt;= &quot; &lt;&lt; max_dev &lt;&lt; &quot;\n&quot;;
+    return max_dev &lt; 0.05 ? 0 : 1;
+}
+</pre>
+  </div>
 </div>
-</p>
+<p><b>Slabs, pencils or a Peano&ndash;Hilbert curve</b> (<a href="https://github.com/HAWinther/FML/blob/master/FML/QuickStart/example/domains.cpp" style="display: inline">domains.cpp</a>). The same power spectrum with the particles on three different domains. The grid is made for the domain of the particles; particles on the Peano&ndash;Hilbert curve are assigned to a slab grid without being moved. The three results agree to rounding.</p>
+<div style="text-align: center">
+  <div style="width:100%;display: inline-block;text-align: left">
+    <pre class="prettyprint" style="overflow-x:auto;white-space:pre;font-size:12px">
+// Quick start 3: the same calculation on slabs, on pencils and with the particles on a Peano-Hilbert curve.
+//
+// A Domain says which MPI task owns which part of the box. The particles are distributed according to it, and the
+// grid is made for the domain of the particles: FFTWGrid on slabs, PencilGrid on pencils. Particles on a
+// Peano-Hilbert domain (load-balanced ranges of a space-filling curve) are assigned to a slab grid without moving
+// them. The power spectrum is the same in all three cases.
+#include &lt;FML/ComputePowerSpectra/ComputePowerSpectrum.h&gt;
+#include &lt;FML/Interpolation/DistributedDeposit.h&gt;
+#include &lt;FML/MPIParticles/MPIParticles.h&gt;
+#include &lt;FML/PencilDomain/PencilGrid.h&gt;
+#include &lt;FML/RandomGenerator/RandomGenerator.h&gt;
+
+#include &lt;cmath&gt;
+#include &lt;iostream&gt;
+
+struct Particle {
+    double x[3];
+    double * get_pos() { return x; }
+    constexpr int get_ndim() const { return 3; }
+};
+using Binning = FML::CORRELATIONFUNCTIONS::PowerSpectrumBinning&lt;3&gt;;
+const int Nmesh = 64;
+
+// P(k) of the particles with CIC on a grid of type Grid, made for the domain of the particles
+template &lt;template &lt;int&gt; class Grid&gt;
+Binning spectrum(FML::PARTICLE::MPIParticles&lt;Particle&gt; &amp; part) {
+    Binning pofk(Nmesh / 2);
+    FML::CORRELATIONFUNCTIONS::compute_power_spectrum&lt;3, Particle, Grid&gt;(
+        Nmesh, part.get_particles_ptr(), part.get_npart(), part.get_npart_total(), pofk, &quot;CIC&quot;, false, part.get_domain());
+    return pofk;
+}
+
+int main() {
+    // A clustered catalogue (random points displaced by two plane waves, in x and in y), the same on every task
+    std::vector&lt;Particle&gt; catalogue(200000);
+    FML::RANDOM::RandomGenerator rng(1234);
+    for (auto &amp; p : catalogue) {
+        for (auto &amp; x : p.x)
+            x = rng.generate_uniform();
+        p.x[0] = std::fmod(p.x[0] + 0.03 * std::sin(2 * M_PI * p.x[0]) + 1.0, 1.0);
+        p.x[1] = std::fmod(p.x[1] + 0.02 * std::sin(4 * M_PI * p.x[1]) + 1.0, 1.0);
+    }
+    const size_t nalloc = 2 * catalogue.size() / FML::NTasks + 1000;
+
+    // 1. Slabs (the default domain)
+    FML::PARTICLE::MPIParticles&lt;Particle&gt; slabs;
+    slabs.create(catalogue, nalloc, FML::PARTICLE::Input::Replicated);
+    auto p_slab = spectrum&lt;FML::GRID::FFTWGrid&gt;(slabs);
+
+    // 2. Pencils: x and y split over a 2D grid of tasks
+    FML::PARTICLE::MPIParticles&lt;Particle&gt; pencils(FML::pencil_domain());
+    pencils.create(catalogue, nalloc, FML::PARTICLE::Input::Replicated);
+    auto p_pencil = spectrum&lt;FML::GRID::PencilGrid&gt;(pencils);
+
+    // 3. Peano-Hilbert: the particles stay on their tasks; the density is assigned to a slab grid across domains
+    FML::PARTICLE::MPIParticles&lt;Particle&gt; hilbert(FML::Domain::uniform_peano_hilbert(FML::NTasks));
+    hilbert.create(catalogue, nalloc, FML::PARTICLE::Input::Replicated);
+    FML::GRID::FFTWGrid&lt;3&gt; density(Nmesh);
+    FML::INTERPOLATION::particles_to_grid_any_domain&lt;3, 2&gt;(
+        hilbert.get_particles_ptr(), hilbert.get_npart(), hilbert.get_npart_total(), density);
+    density.fftw_r2c();
+    FML::INTERPOLATION::deconvolve_window_function_fourier&lt;3&gt;(density, &quot;CIC&quot;);
+    Binning p_hilbert(Nmesh / 2);
+    FML::CORRELATIONFUNCTIONS::bin_up_power_spectrum&lt;3&gt;(density, p_hilbert);
+    for (int i = 0; i &lt; p_hilbert.n; i++) // subtract the shot noise as compute_power_spectrum does
+        p_hilbert.pofk[i] -= 1.0 / double(catalogue.size());
+    if (FML::ThisTask == 0)
+        for (int i = 0; i &lt; 4; i++)
+            std::cout &lt;&lt; &quot;k = &quot; &lt;&lt; i + 1 &lt;&lt; &quot; x 2pi/box: P(k) on slabs &quot; &lt;&lt; p_slab.pofk[i] &lt;&lt; &quot;, pencils &quot; &lt;&lt; p_pencil.pofk[i]
+                      &lt;&lt; &quot;, Peano-Hilbert &quot; &lt;&lt; p_hilbert.pofk[i] &lt;&lt; &quot;\n&quot;;
+
+    double max_diff = 0.0;
+    for (int i = 0; i &lt; p_slab.n; i++)
+        max_diff = std::max({max_diff, std::abs(p_pencil.pofk[i] - p_slab.pofk[i]) / std::abs(p_slab.pofk[i]),
+                             std::abs(p_hilbert.pofk[i] - p_slab.pofk[i]) / std::abs(p_slab.pofk[i])});
+    if (FML::ThisTask == 0)
+        std::cout &lt;&lt; &quot;Largest relative difference between the three: &quot; &lt;&lt; max_diff &lt;&lt; &quot;\n&quot;;
+    return max_diff &lt; 1e-8 ? 0 : 1;
+}
+</pre>
+  </div>
+</div>
+
