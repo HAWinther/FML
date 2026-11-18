@@ -586,10 +586,10 @@ int main(int argc, char ** argv) {
         density_ref.fftw_r2c();
         double maxdiff = 0.0, maxref = 0.0;
         for (auto && fourier_index : density.get_fourier_range()) {
-            maxdiff = std::max(maxdiff,
+            maxdiff = std::max<double>(maxdiff,
                                std::abs(density.get_fourier_from_index(fourier_index) -
                                         density_ref.get_fourier_from_index(fourier_index)));
-            maxref = std::max(maxref, std::abs(density_ref.get_fourier_from_index(fourier_index)));
+            maxref = std::max<double>(maxref, std::abs(density_ref.get_fourier_from_index(fourier_index)));
         }
         FML::MaxOverTasks(&maxdiff);
         FML::MaxOverTasks(&maxref);
@@ -613,10 +613,10 @@ int main(int argc, char ** argv) {
                                                        1e-8);
         maxdiff = maxref = 0.0;
         for (auto && fourier_index : density_nufft.get_fourier_range()) {
-            maxdiff = std::max(maxdiff,
+            maxdiff = std::max<double>(maxdiff,
                                std::abs(density_nufft.get_fourier_from_index(fourier_index) -
                                         density_nufft_ref.get_fourier_from_index(fourier_index)));
-            maxref = std::max(maxref, std::abs(density_nufft_ref.get_fourier_from_index(fourier_index)));
+            maxref = std::max<double>(maxref, std::abs(density_nufft_ref.get_fourier_from_index(fourier_index)));
         }
         FML::MaxOverTasks(&maxdiff);
         FML::MaxOverTasks(&maxref);

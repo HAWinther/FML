@@ -198,7 +198,7 @@ namespace {
         grid.fftw_c2r();
         double maxerr = 0.0;
         for (auto && index : grid.get_real_range())
-            maxerr = std::max(maxerr, std::fabs(grid.get_real_from_index(index) - original.get_real_from_index(index)));
+            maxerr = std::max<double>(maxerr, std::fabs(grid.get_real_from_index(index) - original.get_real_from_index(index)));
         check(grid.get_grid_status_real() and maxerr < 1e-12, label(grid, "r2c then c2r gives back the grid"));
 
         // The free functions
@@ -207,7 +207,7 @@ namespace {
         fftw_c2r(fourier, real);
         maxerr = 0.0;
         for (auto && index : real.get_real_range())
-            maxerr = std::max(maxerr, std::fabs(real.get_real_from_index(index) - original.get_real_from_index(index)));
+            maxerr = std::max<double>(maxerr, std::fabs(real.get_real_from_index(index) - original.get_real_from_index(index)));
         check(maxerr < 1e-12 and original.get_grid_status_real(), label(grid, "fftw_r2c / fftw_c2r(in, out)"));
 
         // fill_fourier_grid

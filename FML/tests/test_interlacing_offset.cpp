@@ -173,7 +173,7 @@ void run_case(const std::string & label, bool empty_rank = false) {
             FML::SumOverTasks(&mean_weight);
             mean_weight /= total;
         }
-        double dc = FML::ThisTask == 0 ? double(std::abs(actual.get_fourier_from_index(0) - mean_weight)) : 0;
+        double dc = FML::ThisTask == 0 ? double(std::abs(actual.get_fourier_from_index(0) - FML::GRID::FloatType(mean_weight))) : 0;
         FML::MaxOverTasks(&dc);
         conserved = conserved && dc < 1e-11;
     }

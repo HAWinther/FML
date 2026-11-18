@@ -306,7 +306,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             auto grid = FML::GRID::make_grid<Grid>(config_.mesh, 0, 0, domain());
             grid.fill_fourier_grid(FML::GRID::ComplexType(0));
             for (size_t j = 0; j < data.size(); ++j)
-                grid.set_fourier_from_index(modes_[j].fourier_index, data[j]);
+                grid.set_fourier_from_index(modes_[j].fourier_index, FML::GRID::ComplexType(data[j]));
             grid.set_grid_status_real(false);
             grid.fftw_c2r();
             grid.fftw_r2c();
@@ -324,7 +324,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             const auto & mk = matter_.predict(lift_white(s, w), matter_parameters(p), w.matter);
             w.grid.fill_fourier_grid(FML::GRID::ComplexType(0));
             for (size_t j = 0; j < mk.size(); ++j)
-                w.grid.set_fourier_from_index(matter_.modes()[j].fourier_index, mk[j]);
+                w.grid.set_fourier_from_index(matter_.modes()[j].fourier_index, FML::GRID::ComplexType(mk[j]));
             w.grid.set_grid_status_real(false);
             w.grid.fftw_c2r();
             const auto & columns = bias_.evaluate(real_field(w.grid), w.bias);
@@ -384,7 +384,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             auto & observation = compact_ ? w.compact_grid : w.grid;
             observation.fill_fourier_grid(FML::GRID::ComplexType(0));
             for (size_t j = 0; j < g.size(); ++j)
-                observation.set_fourier_from_index(modes_[j].fourier_index, g[j] / n3);
+                observation.set_fourier_from_index(modes_[j].fourier_index, FML::GRID::ComplexType(g[j] / n3));
             observation.set_grid_status_real(false);
             if (compact_) w.lift_plan->apply(observation, w.grid);
             w.grid.fftw_c2r();

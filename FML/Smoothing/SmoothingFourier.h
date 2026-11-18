@@ -153,7 +153,7 @@ namespace FML {
                     auto value = fourier_grid.get_fourier_from_index(fourier_index);
                     double norm = std::sqrt(std::norm(value));
                     norm = norm == 0.0 ? 0.0 : 1.0 / norm;
-                    fourier_grid.set_fourier_from_index(fourier_index, value * norm);
+                    fourier_grid.set_fourier_from_index(fourier_index, value * FML::GRID::FloatType(norm));
                 }
             }
         }
@@ -423,8 +423,8 @@ namespace FML {
             for (FML::IndexIntType irow = 0; irow < real_grid.get_local_nrows(); irow++) {
                 for (auto && real_index : real_grid.get_real_range_of_rows(irow, irow + 1)) {
                     auto value = real_grid.get_real_from_index(real_index);
-                    grid_min = std::min(grid_min, value);
-                    grid_max = std::max(grid_max, value);
+                    grid_min = std::min(grid_min, double(value));
+                    grid_max = std::max(grid_max, double(value));
                 }
             }
             FML::MinOverTasks(&grid_min);

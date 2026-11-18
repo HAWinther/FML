@@ -200,7 +200,7 @@ int main(int argc, char ** argv) {
             FML::GRID::set_fftw_planner_flag(FFTW_ESTIMATE);
             double maxdiff = 0.0;
             for (auto && fourier_index : d.get_fourier_range())
-                maxdiff = std::max(
+                maxdiff = std::max<double>(
                     maxdiff,
                     std::abs(d.get_fourier_from_index(fourier_index) - e.get_fourier_from_index(fourier_index)));
             FML::MaxOverTasks(&maxdiff);

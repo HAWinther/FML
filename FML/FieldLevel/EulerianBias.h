@@ -130,7 +130,7 @@ namespace FML::FIELDLEVEL::EULERIAN {
             for (auto i : w.scratch.get_fourier_range()) {
                 auto n = w.scratch.get_fourier_integer_wavevector_from_index(i);
                 const double mult = band_.contains(n, boxsize_, mesh_) ? kernel(n) : 0.;
-                w.scratch.set_fourier_from_index(i, w.scratch.get_fourier_from_index(i) * mult);
+                w.scratch.set_fourier_from_index(i, w.scratch.get_fourier_from_index(i) * FML::GRID::FloatType(mult));
             }
             w.scratch.fftw_c2r();
             Field out = allocate();

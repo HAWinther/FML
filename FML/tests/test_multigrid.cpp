@@ -459,7 +459,7 @@ int main() {
             double pmax = 0.0;
             for (int islice = 0; islice < phi.get_local_nx(); islice++)
                 for (auto && ri : phi.get_real_range(islice, islice + 1))
-                    pmax = std::max(pmax, std::abs(phi.get_real_from_index(ri)));
+                    pmax = std::max<double>(pmax, std::abs(phi.get_real_from_index(ri)));
             FML::MaxOverTasks(&pmax);
             check_local(pmax == 0.0, "Symmetron a = 0.4 < assb: zero field (max " + num(pmax, 3) + ")");
         }

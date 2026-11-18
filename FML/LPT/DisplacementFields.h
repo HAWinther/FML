@@ -1290,7 +1290,7 @@ namespace FML {
                         // phi_1LPT = delta / k^2 (D^2 phi_1LPT = -delta)
                         auto p1LPT = delta_fourier.get_fourier_from_index(fourier_index) / FML::GRID::FloatType(kmag2);
                         auto p2LPT = phi_ALPT_fourier.get_fourier_from_index(fourier_index);
-                        auto long_range = p1LPT * DoverDini_1LPT + p2LPT * DoverDini_2LPT;
+                        auto long_range = p1LPT * FML::GRID::FloatType(DoverDini_1LPT) + p2LPT * FML::GRID::FloatType(DoverDini_2LPT);
                         phi_ALPT_fourier.set_fourier_from_index(fourier_index, long_range - short_range);
                     }
                 }

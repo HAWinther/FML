@@ -105,7 +105,7 @@ Error behavior is API specific: newer numerical summaries often throw standard e
 
 ## FFT precision and grid layout
 
-FFTWGrid defaults to double precision. `SINGLE_PRECISION_FFTW` or `LONG_DOUBLE_PRECISION_FFTW` selects the matching scalar/complex type; provide the corresponding FFTW libraries as well. For example, pass `FFTW_LINK=-lfftw3f` and `FFTW_MPI_LINK=-lfftw3f_mpi` for float, plus the matching thread library when enabled. These are C++ defines supplied consistently to every dependent object; the shared Makefile does not infer precision libraries from arbitrary defines.
+FFTWGrid defaults to double precision. `SINGLE_PRECISION_FFTW` or `LONG_DOUBLE_PRECISION_FFTW` selects the matching scalar/complex type; provide the corresponding FFTW libraries as well. For example, pass `FFTW_LINK="-lfftw3f -lfftw3"` and `FFTW_MPI_LINK=-lfftw3f_mpi` for float, plus the matching thread library (`FFTW_OMP_LINK=-lfftw3f_threads`) when enabled. Keep `-lfftw3` (double) in the link: the 1D transforms in FFTLog, SphericalBesselTransform, NoWiggle, FastOneLoop and LPT/ArbitraryOrder always use the double-precision FFTW API. These are C++ defines supplied consistently to every dependent object; the shared Makefile does not infer precision libraries from arbitrary defines.
 
 FFTWGrid uses a non-transposed r2c slab layout with a final axis of `nmesh/2+1` complex coefficients and real-array padding. The MPI constructor currently requires dimension >1 and a mesh divisible by task count. Forward transforms are normalized; raw Fourier resampling needs no extra volume factor. Physical spectra, assignment-window corrections, shot noise and survey windows have separate conventions in their module guides. Clean/rebuild when precision or layout-related options change.
 
