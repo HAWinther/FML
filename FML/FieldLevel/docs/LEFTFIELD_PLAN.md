@@ -177,7 +177,49 @@ The first operator component is now implemented (status below). No galaxy-catalo
 - Done: [Eulerian HMC checkpoint/restart adapter](EULERIAN_RESTART.md), fresh-process exact joint/field-only continuation and indexed draw output replay on small slab/pencil fixtures. Existing checkpoint formats retain compatibility.
 - Done: [bounded synthetic numerical/resource screen](NUMERICAL_SCREEN.md) at frozen physical cutoffs, with all 17 serial/MPI cases passing their declared screen gates. This does not establish posterior-mean convergence or real-catalog fidelity.
 - Done: [FL-7 posterior-aware field metric](EULERIAN_METRIC.md), independent linear-limit/compact/MPI/restart checks and a fixed-budget old/new field-only probe with improved projection diagnostics. Its maximum corrected Rhat=1.023 still needs longer mixing validation.
-- Next: declare the larger joint field/scalar pilot and its fixed budgets/gates. Exact catalog IC/spectrum inputs and initial cubic filtering remain open; the real-data and free-IC scientific milestones are not complete.
+- Done: [bounded joint field/scalar pilot](validation/studies/joint_pilot/RESULTS.md), four chains with 256 warmup and 1024 retained draws and exact 64-draw restart replay. Its frozen mixing gate is **FAIL**; sampler/coupling diagnosis is required before scaling or claiming marginalized sigma8 convergence. Exact catalog IC/spectrum inputs and initial cubic filtering remain open; real-data and scientifically validated free-IC milestones are not complete.
 - Open: exact challenge IC/spectrum/cosmology inputs and intermediate-filter/prior-unit details. Fixed-IC synthetic validation can proceed independently.
 
 The milestones above remain gates. The small forward/adjoint and fixed-noise target checks are implemented. The improved synthetic fixed-IC pilot passes its bounded scalar-mixing/refinement checks. The catalog-to-mode data path is now implemented on small fixtures; application to the actual catalog, catalog-specific numerical/model validation and the real-data/free-IC deliverables remain open.
+
+### Blocked sampler comparison (18 November 2026)
+
+The [blocked field/cached-scalar pilot](validation/studies/blocked_pilot/RESULTS.md)
+uses the same synthetic target, four dispersed starts and retained budget; its
+frozen eleven-coordinate mixing gate is **FAIL**. Cached/full-target and
+finite-difference checks, independent scalar quadrature and exact fresh-process
+continuation pass. Further joint exploration work is required before scaling or claiming marginalized sigma8 convergence.
+The original failed joint pilot is retained; production MPI blocked-driver support
+and real-data/free-IC scientific validation are not established by this experiment.
+
+### Amplitude/field interweaving comparison (18 November 2026)
+
+The [separate interweaving pilot](validation/studies/interweave_pilot/RESULTS.md) adds full-field amplitude rescaling with the correct 64-real-coordinate Jacobian to the unchanged blocked kernels. The frozen eleven-coordinate gate is **FAIL**. Analytic-marginal/unused-direction and shared/compact 1LPT/2LPT tests pass, together with exact restart. Joint mixing remains open; diagnose remaining chain-dependent configurations before scaling.
+
+### Geometry audit (18 November 2026)
+
+[The deterministic geometry audit](validation/studies/geometry_audit/RESULTS.md) finds 124–141 point-potential barriers on nine selected routes after exact bounded-bias profiling. Thirty-two actual-endpoint field/scalar finite differences pass. Likelihood tempering reduces these sampled barriers; next is a separately validated replica-exchange connectivity pilot, not a claim of converged marginalized sigma8.
+
+### Replica-exchange connectivity (18 November 2026)
+
+[The separate likelihood-tempering connectivity pilot](validation/studies/tempering_connectivity/RESULTS.md) uses two six-replica ensembles and 64/256 discarded/measured sweeps. Frozen connectivity gate: **FAIL**; not a posterior-convergence claim. Analytic-Gaussian/prior/target tests and full-ensemble exact restart pass. Next: diagnose ladder overlap and freeze a separate refinement test before a posterior campaign.
+
+### Configurable prior-bridge refinement (18 November 2026)
+
+[The separate configurable prior-bridge test](validation/studies/tempering_bridge/RESULTS.md) runs eleven replicas with four exchange passes and actual-prior-refresh-qualified transport. Frozen connectivity gate: **PASS**. Legacy six-level native continuation and analysis remain byte/statistic-identical; changed layouts reject checkpoints. Next: a separately frozen four-cold-chain posterior campaign.
+
+### Four-cold-chain posterior validation (18 November 2026)
+
+[The separate frozen posterior campaign](validation/studies/tempering_posterior/RESULTS.md) completes four 256/1024 chains with eleven replicas. Posterior gate: **FAIL** (2/11 coordinate gates fail); connectivity: **PASS**. Complete replay, legacy continuation, pause/SIGTERM/stale-summary and exclusive-writer checks pass. Numerical posterior stability, independent-mock calibration and real-catalog scientific validation remain separate.
+
+### Longer four-cold-chain posterior validation (18 November 2026)
+
+[The separate frozen posterior campaign](validation/studies/tempering_long/RESULTS.md) completes four 256/2048 chains with eleven replicas. Posterior gate: **PASS** (0/11 coordinate gates fail); connectivity: **PASS**. Complete replay, legacy continuation, pause/SIGTERM/stale-summary and exclusive-writer checks pass. Numerical posterior stability, independent-mock calibration and real-catalog scientific validation remain separate.
+
+### Posterior numerical-refinement check (18 November 2026)
+
+[The frozen six-case posterior sensitivity check](validation/studies/posterior_refinement/RESULTS.md) is **PASS** on all 8192 existing cold states. Same latent coordinates, data, priors, noise and physical bands. Max paired mean-shift bound: 1.62e-07 posterior SD; max sampled model distance: 1.58e-05. Importance overlap remains adequate; this is not new refined-target MCMC or independent-mock calibration. Source checkpoints are unchanged. Next: independently frozen mock recovery/calibration.
+
+### Independent fixed-truth mock recovery (18 November 2026)
+
+[Both predeclared independent-mock budgets](validation/studies/independent_mocks/RESULTS.md) complete four fresh 256/2048 chains. Computational gate: **PASS**; all outcomes and interval misses preserved. Exact namespace, legacy, data-seed, whole-study pause and eight-chain final checkpoint checks pass. Recovery/interval ranks are descriptive; two fixed-truth mocks are not prior-predictive SBC or coverage calibration.

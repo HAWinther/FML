@@ -155,3 +155,52 @@ probe. Six field-projection bulk ESS values improve from 4.5--4.9 to 171--261
 at the same fixed budget; max corrected Rhat=1.023 still needs longer mixing
 validation. Pre-fix Eulerian checkpoints are rejected by the new metric identity;
 legacy backend checkpoint compatibility is retained.
+
+## Joint Eulerian initial-field/amplitude/bias pilot
+
+[Recorded result](validation/studies/joint_pilot/RESULTS.md): four chains each
+complete 256 warmup and 1024 retained draws using the FL-7 metric. The frozen
+eleven-coordinate mixing gate is **FAIL**; no extension or retuning. A separate
+64-draw fresh-process continuation replays byte-for-byte and is excluded from
+diagnostics. This is a synthetic same-model test, not coverage or real data.
+
+## Blocked field/cached-scalar comparison
+
+[Recorded result](validation/studies/blocked_pilot/RESULTS.md): four chains,
+256 warmup and 1024 retained draws; eleven-coordinate mixing gate **FAIL**.
+The target/initial states/gates match the preceding joint pilot. Cache/full-target,
+bias derivatives, independent scalar quadrature and exact restart checks pass.
+No extension, retuning or baseline/replay pooling. This is a serial validation
+prototype, not a production MPI blocked-sampler API or scientific calibration.
+
+### Amplitude/field interweaving (18 November 2026)
+
+[Recorded comparison](validation/studies/interweave_pilot/RESULTS.md): 26 dedicated kernel tests, 18 full-target/cache checks, 72 bias derivatives and exact native replay pass. Four chains each complete 256/1024 discarded/retained sweeps. Frozen mixing gate: **FAIL**. No extension, retuning, excluded chains or pooling; serial validation prototype, not production MPI support or scientific calibration.
+
+### Geometry audit (18 November 2026)
+
+[Geometry audit](validation/studies/geometry_audit/RESULTS.md): 1010 deterministic points, exact convex bias profiling, three independent optimizer references, 32 endpoint derivative comparisons and a rescaling control. Profiled barriers remain on nine selected paths. A reuse-only temperature scan motivates a separate replica-exchange test; no new Monte Carlo draws, evidence or coverage claim.
+
+### Replica-exchange connectivity (18 November 2026)
+
+[Replica-exchange connectivity](validation/studies/tempering_connectivity/RESULTS.md): eleven kernel checks, positive-beta target/cache consistency, actual beta=0 prior refresh and byte-exact ensemble replay pass. Short fixed-budget connectivity gate **FAIL**. Only beta=1 records are cold states; no posterior Rhat/ESS, coverage, production MPI support or real-catalog claim.
+
+### Configurable prior-bridge refinement (18 November 2026)
+
+[Configurable prior-bridge connectivity](validation/studies/tempering_bridge/RESULTS.md): 25 kernel checks, ten beta contexts, thirty cache comparisons, exact legacy retained continuation and whole-ensemble replay pass. Fixed 64/256 two-ensemble gate **PASS**. Prior bounces without refresh do not count. No posterior Rhat/ESS, coverage, production MPI or real-catalog claim.
+
+### Four-cold-chain posterior validation (18 November 2026)
+
+[The separate frozen posterior campaign](validation/studies/tempering_posterior/RESULTS.md) completes four 256/1024 chains with eleven replicas. Posterior gate: **FAIL** (2/11 coordinate gates fail); connectivity: **PASS**. Complete replay, legacy continuation, pause/SIGTERM/stale-summary and exclusive-writer checks pass. Numerical posterior stability, independent-mock calibration and real-catalog scientific validation remain separate.
+
+### Longer four-cold-chain posterior validation (18 November 2026)
+
+[The separate frozen posterior campaign](validation/studies/tempering_long/RESULTS.md) completes four 256/2048 chains with eleven replicas. Posterior gate: **PASS** (0/11 coordinate gates fail); connectivity: **PASS**. Complete replay, legacy continuation, pause/SIGTERM/stale-summary and exclusive-writer checks pass. Numerical posterior stability, independent-mock calibration and real-catalog scientific validation remain separate.
+
+### Posterior numerical-refinement check (18 November 2026)
+
+[The frozen six-case posterior sensitivity check](validation/studies/posterior_refinement/RESULTS.md) is **PASS** on all 8192 existing cold states. Same latent coordinates, data, priors, noise and physical bands. Max paired mean-shift bound: 1.62e-07 posterior SD; max sampled model distance: 1.58e-05. Importance overlap remains adequate; this is not new refined-target MCMC or independent-mock calibration. Source checkpoints are unchanged. Next: independently frozen mock recovery/calibration.
+
+### Independent fixed-truth mock recovery (18 November 2026)
+
+[Both predeclared independent-mock budgets](validation/studies/independent_mocks/RESULTS.md) complete four fresh 256/2048 chains. Computational gate: **PASS**; all outcomes and interval misses preserved. Exact namespace, legacy, data-seed, whole-study pause and eight-chain final checkpoint checks pass. Recovery/interval ranks are descriptive; two fixed-truth mocks are not prior-predictive SBC or coverage calibration.

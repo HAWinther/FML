@@ -1,0 +1,13 @@
+{
+  "frozen_utc": "2026-11-18T11:59:00.160802+00:00",
+  "plan_sha256": "807b6dae5a020a283f42e1af695b8bae933d44babfc404748343a86569a12f95",
+  "binary_sha256": "03bc42f9711d79cf8d55842bc9d96f4a593a57cb19a76a4684f9225a973703e4",
+  "scientific_budget": {
+    "ensembles": 4,
+    "warmup": 256,
+    "retained_per_chain": 1024,
+    "replicas": 11,
+    "exchange_passes": 4
+  },
+  "status": "Frozen before posterior sampling; no budget extension or retuning"
+}

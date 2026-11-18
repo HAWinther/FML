@@ -1,0 +1,795 @@
+{
+  "scope": "Separate eleven-replica prior-bridge connectivity refinement; no posterior convergence claim",
+  "connectivity_passed": true,
+  "posterior_convergence_claim": false,
+  "ensemble_gates": [
+    {
+      "ensemble": 0,
+      "each_edge_exchanged": true,
+      "roundtrips": 1,
+      "roundtrip_gate": true,
+      "divergence_gate": true
+    },
+    {
+      "ensemble": 1,
+      "each_edge_exchanged": true,
+      "roundtrips": 1,
+      "roundtrip_gate": true,
+      "divergence_gate": true
+    }
+  ],
+  "betas": [
+    1,
+    0.5,
+    0.25,
+    0.125,
+    0.0625,
+    0.03125,
+    0.015625,
+    0.0078125,
+    0.00390625,
+    0.001953125,
+    0
+  ],
+  "exchange_passes": 4,
+  "prior_refresh_qualified_roundtrips": true,
+  "pooled_swap_attempts": [
+    1024,
+    1024,
+    1024,
+    1024,
+    1024,
+    1024,
+    1024,
+    1024,
+    1024,
+    1024
+  ],
+  "pooled_swap_accepted": [
+    101,
+    151,
+    127,
+    144,
+    269,
+    630,
+    697,
+    758,
+    804,
+    547
+  ],
+  "pooled_swap_rates": [
+    0.0986328125,
+    0.1474609375,
+    0.1240234375,
+    0.140625,
+    0.2626953125,
+    0.615234375,
+    0.6806640625,
+    0.740234375,
+    0.78515625,
+    0.5341796875
+  ],
+  "pooled_rate_gate": true,
+  "roundtrips_by_ensemble": [
+    [
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  ],
+  "summaries": [
+    {
+      "connectivity_only": true,
+      "completed_iterations": 320,
+      "completed_samples": 256,
+      "warmup": 64,
+      "samples": 256,
+      "betas": [
+        1,
+        0.5,
+        0.25,
+        0.125,
+        0.0625,
+        0.03125,
+        0.015625,
+        0.0078125,
+        0.00390625,
+        0.001953125,
+        0
+      ],
+      "replicas": [
+        {
+          "beta": 1,
+          "field_acceptance": 0.9742213020580412,
+          "divergences": 0,
+          "scalar_accepted": 620,
+          "scalar_attempts": 1024,
+          "support_rejections": 129,
+          "rescale_accepted": 645,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.5,
+          "field_acceptance": 0.9742574840907167,
+          "divergences": 0,
+          "scalar_accepted": 617,
+          "scalar_attempts": 1024,
+          "support_rejections": 112,
+          "rescale_accepted": 652,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.25,
+          "field_acceptance": 0.9754394560342663,
+          "divergences": 0,
+          "scalar_accepted": 573,
+          "scalar_attempts": 1024,
+          "support_rejections": 156,
+          "rescale_accepted": 629,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.125,
+          "field_acceptance": 0.9748681865101445,
+          "divergences": 0,
+          "scalar_accepted": 521,
+          "scalar_attempts": 1024,
+          "support_rejections": 181,
+          "rescale_accepted": 637,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.0625,
+          "field_acceptance": 0.9831090144328954,
+          "divergences": 0,
+          "scalar_accepted": 478,
+          "scalar_attempts": 1024,
+          "support_rejections": 207,
+          "rescale_accepted": 652,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.03125,
+          "field_acceptance": 0.9856220255985889,
+          "divergences": 0,
+          "scalar_accepted": 452,
+          "scalar_attempts": 1024,
+          "support_rejections": 248,
+          "rescale_accepted": 624,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.015625,
+          "field_acceptance": 0.9811415087672146,
+          "divergences": 0,
+          "scalar_accepted": 406,
+          "scalar_attempts": 1024,
+          "support_rejections": 309,
+          "rescale_accepted": 642,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.0078125,
+          "field_acceptance": 0.9845896678511147,
+          "divergences": 0,
+          "scalar_accepted": 442,
+          "scalar_attempts": 1024,
+          "support_rejections": 275,
+          "rescale_accepted": 619,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.00390625,
+          "field_acceptance": 0.9798438792528111,
+          "divergences": 0,
+          "scalar_accepted": 426,
+          "scalar_attempts": 1024,
+          "support_rejections": 260,
+          "rescale_accepted": 646,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.001953125,
+          "field_acceptance": 0.9844504759517737,
+          "divergences": 0,
+          "scalar_accepted": 442,
+          "scalar_attempts": 1024,
+          "support_rejections": 250,
+          "rescale_accepted": 673,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0,
+          "field_acceptance": 0,
+          "divergences": 0,
+          "scalar_accepted": 0,
+          "scalar_attempts": 0,
+          "support_rejections": 0,
+          "rescale_accepted": 0,
+          "rescale_attempts": 0,
+          "cache_builds": 0,
+          "prior_refreshes": 320
+        }
+      ],
+      "swap_attempts": [
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512
+      ],
+      "swap_accepted": [
+        57,
+        86,
+        48,
+        87,
+        137,
+        309,
+        341,
+        390,
+        406,
+        264
+      ],
+      "roundtrips": [
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "transport_phase": [
+        2,
+        0,
+        0,
+        1,
+        2,
+        0,
+        2,
+        1,
+        0,
+        1,
+        0
+      ],
+      "exchange_passes": 4
+    },
+    {
+      "connectivity_only": true,
+      "completed_iterations": 320,
+      "completed_samples": 256,
+      "warmup": 64,
+      "samples": 256,
+      "betas": [
+        1,
+        0.5,
+        0.25,
+        0.125,
+        0.0625,
+        0.03125,
+        0.015625,
+        0.0078125,
+        0.00390625,
+        0.001953125,
+        0
+      ],
+      "replicas": [
+        {
+          "beta": 1,
+          "field_acceptance": 0.9835638706834637,
+          "divergences": 0,
+          "scalar_accepted": 560,
+          "scalar_attempts": 1024,
+          "support_rejections": 167,
+          "rescale_accepted": 634,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.5,
+          "field_acceptance": 0.9820776307573316,
+          "divergences": 0,
+          "scalar_accepted": 490,
+          "scalar_attempts": 1024,
+          "support_rejections": 248,
+          "rescale_accepted": 628,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.25,
+          "field_acceptance": 0.9818197995820888,
+          "divergences": 0,
+          "scalar_accepted": 555,
+          "scalar_attempts": 1024,
+          "support_rejections": 148,
+          "rescale_accepted": 623,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.125,
+          "field_acceptance": 0.984588430920035,
+          "divergences": 0,
+          "scalar_accepted": 577,
+          "scalar_attempts": 1024,
+          "support_rejections": 174,
+          "rescale_accepted": 632,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.0625,
+          "field_acceptance": 0.9856112030733628,
+          "divergences": 0,
+          "scalar_accepted": 487,
+          "scalar_attempts": 1024,
+          "support_rejections": 200,
+          "rescale_accepted": 645,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.03125,
+          "field_acceptance": 0.9868078345353976,
+          "divergences": 0,
+          "scalar_accepted": 443,
+          "scalar_attempts": 1024,
+          "support_rejections": 252,
+          "rescale_accepted": 661,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.015625,
+          "field_acceptance": 0.9839962143600992,
+          "divergences": 0,
+          "scalar_accepted": 444,
+          "scalar_attempts": 1024,
+          "support_rejections": 292,
+          "rescale_accepted": 612,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.0078125,
+          "field_acceptance": 0.9850362065783502,
+          "divergences": 0,
+          "scalar_accepted": 426,
+          "scalar_attempts": 1024,
+          "support_rejections": 270,
+          "rescale_accepted": 653,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.00390625,
+          "field_acceptance": 0.9836865748010424,
+          "divergences": 0,
+          "scalar_accepted": 456,
+          "scalar_attempts": 1024,
+          "support_rejections": 246,
+          "rescale_accepted": 662,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.001953125,
+          "field_acceptance": 0.985101944281928,
+          "divergences": 0,
+          "scalar_accepted": 446,
+          "scalar_attempts": 1024,
+          "support_rejections": 264,
+          "rescale_accepted": 631,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0,
+          "field_acceptance": 0,
+          "divergences": 0,
+          "scalar_accepted": 0,
+          "scalar_attempts": 0,
+          "support_rejections": 0,
+          "rescale_accepted": 0,
+          "rescale_attempts": 0,
+          "cache_builds": 0,
+          "prior_refreshes": 320
+        }
+      ],
+      "swap_attempts": [
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512,
+        512
+      ],
+      "swap_accepted": [
+        44,
+        65,
+        79,
+        57,
+        132,
+        321,
+        356,
+        368,
+        398,
+        283
+      ],
+      "roundtrips": [
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "transport_phase": [
+        0,
+        2,
+        0,
+        0,
+        1,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0
+      ],
+      "exchange_passes": 4
+    }
+  ],
+  "max_cold_quadratic_reconstruction_error": 4.889584580583871e-16,
+  "serialized_targets_match_baseline": true,
+  "exact_full_ensemble_replay": true,
+  "summed_main_process_seconds": 1435.9176021867897,
+  "limits": [
+    "Only beta=1 records are cold posterior draws",
+    "This two-ensemble short connectivity test has no posterior Rhat/ESS or coverage success claim",
+    "Labels measure walker transport, not unchanged physical configurations",
+    "Path-barrier reduction does not certify energy overlap",
+    "Serial validation format, not production MPI ensemble checkpointing",
+    "Connectivity is not sufficient posterior mixing evidence",
+    "No excluded ensembles, retuned gates, extra sweeps or pooled hot/replay draws"
+  ],
+  "exploratory_prior_overlap": {
+    "scope": "Exploratory prior overlap only, no posterior weights or modified gate",
+    "prior_draws": 512,
+    "prior_quadratic_quantiles": [
+      166.86834880763502,
+      259.24601154732545,
+      724.7917295682894,
+      4110.350871189035,
+      10679.619512681664
+    ],
+    "candidates": [
+      {
+        "beta": 0.0625,
+        "prior_weight_ess": 2.90587068907782,
+        "fraction": 0.005675528689605117
+      },
+      {
+        "beta": 0.03125,
+        "prior_weight_ess": 16.400240084831008,
+        "fraction": 0.03203171891568556
+      },
+      {
+        "beta": 0.015625,
+        "prior_weight_ess": 67.08529825015997,
+        "fraction": 0.13102597314484368
+      },
+      {
+        "beta": 0.0078125,
+        "prior_weight_ess": 139.0536042245562,
+        "fraction": 0.27158907075108635
+      },
+      {
+        "beta": 0.00390625,
+        "prior_weight_ess": 225.392172209564,
+        "fraction": 0.4402190863468047
+      },
+      {
+        "beta": 0.001953125,
+        "prior_weight_ess": 313.73908853810053,
+        "fraction": 0.6127716573009776
+      },
+      {
+        "beta": 0.0009765625,
+        "prior_weight_ess": 392.7987255074919,
+        "fraction": 0.7671850107568201
+      },
+      {
+        "beta": 0,
+        "prior_weight_ess": 512.0,
+        "fraction": 1.0
+      }
+    ]
+  },
+  "previous_comparison": {
+    "previous_betas": [
+      1,
+      0.5,
+      0.25,
+      0.125,
+      0.0625,
+      0
+    ],
+    "previous_exchange_passes": 1,
+    "previous_connectivity_passed": false,
+    "previous_pooled_prior_edge_rate": 0.01171875,
+    "previous_summed_process_seconds": 686.835314000491,
+    "process_seconds_ratio": 2.0906286746137854,
+    "limits": "Ladder and exchange frequency both change; not an isolated or matched-compute comparison"
+  },
+  "date": "2026-11-18",
+  "preflight": {
+    "targets": {
+      "passed": true,
+      "positive_betas": 10,
+      "cache_points": 30,
+      "prior_draws": 8192,
+      "max_scaled_error": 1.1932555253038116e-14,
+      "prior_white_mean": 0.0032838725781303996,
+      "prior_white_second": 1.0078617640577017
+    },
+    "bridge_split_exact": true,
+    "legacy_retained_continuation_byte_exact": true,
+    "legacy_draws_compared": 5,
+    "changed_ladder_refused": true,
+    "changed_schedule_refused": true,
+    "wrong_ensemble_refused": true,
+    "corruption_refused": true,
+    "invalid_layout_no_output": true,
+    "commands": [
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/build/FML/FieldLevel/validation/galaxy/tempering/tempering_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/preflight/targets",
+          "start",
+          "0",
+          "0",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/preflight/bridge.txt",
+          "4"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/build/FML/FieldLevel/validation/galaxy/tempering/tempering_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/preflight/full",
+          "start",
+          "0",
+          "5",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/preflight/bridge.txt",
+          "4"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/build/FML/FieldLevel/validation/galaxy/tempering/tempering_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/preflight/split",
+          "start",
+          "0",
+          "2",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/preflight/bridge.txt",
+          "4"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/build/FML/FieldLevel/validation/galaxy/tempering/tempering_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/preflight/split",
+          "resume",
+          "0",
+          "3",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/preflight/bridge.txt",
+          "4"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-pilot/build/FML/FieldLevel/validation/galaxy/tempering/tempering_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/preflight/old-continue",
+          "resume",
+          "0",
+          "5"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/build/FML/FieldLevel/validation/galaxy/tempering/tempering_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/preflight/new-continue",
+          "resume",
+          "0",
+          "5",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/preflight/legacy.txt",
+          "1"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/build/FML/FieldLevel/validation/galaxy/tempering/tempering_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/preflight/changed-config",
+          "resume",
+          "0",
+          "0",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/preflight/bridge.txt",
+          "4"
+        ],
+        "exit_code": 1
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/build/FML/FieldLevel/validation/galaxy/tempering/tempering_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/preflight/changed-config",
+          "resume",
+          "0",
+          "0",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/preflight/legacy.txt",
+          "4"
+        ],
+        "exit_code": 1
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/build/FML/FieldLevel/validation/galaxy/tempering/tempering_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/preflight/split",
+          "resume",
+          "1",
+          "0",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/preflight/bridge.txt",
+          "4"
+        ],
+        "exit_code": 1
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/build/FML/FieldLevel/validation/galaxy/tempering/tempering_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/preflight/corrupt",
+          "resume",
+          "0",
+          "0",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/preflight/bridge.txt",
+          "4"
+        ],
+        "exit_code": 1
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/build/FML/FieldLevel/validation/galaxy/tempering/tempering_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/preflight/invalid-layout",
+          "start",
+          "0",
+          "0",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/preflight/bad.txt",
+          "4"
+        ],
+        "exit_code": 1
+      }
+    ]
+  },
+  "kernel_checks": 25,
+  "legacy_gaussian_moment_error": 0.009941666048391862,
+  "bridge_gaussian_moment_error": 0.007807218989065667,
+  "legacy_analysis_statistics_identical": true,
+  "runner_guards": {
+    "stale_summary_repaired": true,
+    "zero_transition_refresh": true,
+    "completed_payloads_unchanged": true,
+    "changed_runtime_ladder_refused": true,
+    "changed_selected_plan_refused": true,
+    "changed_binary_refused": true,
+    "canonical_cold_counts": [
+      256,
+      256
+    ]
+  },
+  "same_count_configuration_rejections": {
+    "changed_rung_same_count": true,
+    "changed_schedule_same_count": true,
+    "commands": [
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/build/FML/FieldLevel/validation/galaxy/tempering/tempering_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/extra-config-rejections",
+          "resume",
+          "0",
+          "0",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/changed-rung.txt",
+          "4"
+        ],
+        "exit_code": 1,
+        "error": "Replica target/plan/ensemble changed\n"
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/build/FML/FieldLevel/validation/galaxy/tempering/tempering_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/extra-config-rejections",
+          "resume",
+          "0",
+          "0",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-bridge/preflight/bridge.txt",
+          "3"
+        ],
+        "exit_code": 1,
+        "error": "Replica target/plan/ensemble changed\n"
+      }
+    ]
+  }
+}

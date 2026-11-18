@@ -1,0 +1,59 @@
+{
+  "scope": "Exploratory prior-endpoint overlap diagnostic; not a posterior reweighting or new convergence gate",
+  "source": "Undo recorded disjoint swaps to recover independently refreshed pre-swap beta=0 quadratics",
+  "prior_draws": 512,
+  "prior_quadratic_quantiles": [
+    173.84560282606515,
+    248.9410434894639,
+    734.9326996745242,
+    3344.0975549508216,
+    16084.014408216275
+  ],
+  "candidates": [
+    {
+      "beta": 0.0625,
+      "prior_weight_ess": 4.443518515878365,
+      "fraction": 0.008678747101324932
+    },
+    {
+      "beta": 0.03125,
+      "prior_weight_ess": 27.5051419354285,
+      "fraction": 0.05372098034263379
+    },
+    {
+      "beta": 0.015625,
+      "prior_weight_ess": 79.91032449697741,
+      "fraction": 0.156074852533159
+    },
+    {
+      "beta": 0.0078125,
+      "prior_weight_ess": 148.62781698823332,
+      "fraction": 0.2902887050551432
+    },
+    {
+      "beta": 0.00390625,
+      "prior_weight_ess": 228.53929625090694,
+      "fraction": 0.4463658129900526
+    },
+    {
+      "beta": 0.001953125,
+      "prior_weight_ess": 317.1744127955925,
+      "fraction": 0.6194812749913916
+    },
+    {
+      "beta": 0.0009765625,
+      "prior_weight_ess": 399.5567420193733,
+      "fraction": 0.7803842617565885
+    },
+    {
+      "beta": 0,
+      "prior_weight_ess": 512.0,
+      "fraction": 1.0
+    }
+  ],
+  "limits": [
+    "512 prior draws give a noisy overlap diagnostic",
+    "Exponential-weight ESS does not predict an exact exchange rate",
+    "No ladder, samples, original gates or posterior estimates are altered"
+  ]
+}

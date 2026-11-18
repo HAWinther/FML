@@ -69,3 +69,21 @@ example/catalog_to_modes
 /validation/galaxy/metric/metric_probe
 
 /validation/galaxy/metric/metric_diagnostics
+
+/validation/galaxy/joint/joint_pilot
+/validation/galaxy/joint/joint_diagnostics
+
+/validation/galaxy/blocked/blocked_pilot
+/validation/galaxy/blocked/blocked_diagnostics
+
+/validation/galaxy/interweave/interweave_pilot
+/validation/galaxy/interweave/interweave_diagnostics
+/validation/galaxy/interweave/interweave_test
+
+/validation/galaxy/geometry/geometry_probe
+
+/validation/galaxy/tempering/tempering_pilot
+/validation/galaxy/tempering/tempering_test
+/validation/galaxy/tempering/tempering_diagnostics
+/validation/galaxy/refinement/refinement_predict
+/validation/galaxy/tempering/tempering_mock_test

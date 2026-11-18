@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "scope": "Short likelihood-tempered replica-exchange connectivity test; not posterior convergence or calibration",
+  "mesh": 4,
+  "product_mesh": 8,
+  "density_mesh": 16,
+  "boxsize": 100,
+  "spectrum": "20000 exp(-5k)",
+  "noise_power": 1000,
+  "nufft_epsilon": 1e-08,
+  "initial_band": "sphere <1.7 kf",
+  "matter_band": "cube <1.8 kf",
+  "likelihood_band": "cube <1.6 kf",
+  "truth_parameters": [
+    1,
+    1.6,
+    0.3,
+    -0.2,
+    7
+  ],
+  "truth_seed": 4101,
+  "noise_seed": 4102,
+  "initial_seed_base": 4103,
+  "initial_parameters": [
+    [
+      0.8,
+      1.2,
+      -0.3,
+      0.2,
+      -20
+    ],
+    [
+      1.2,
+      2,
+      0.8,
+      -0.6,
+      30
+    ]
+  ],
+  "ensembles": 2,
+  "betas": [
+    1,
+    0.5,
+    0.25,
+    0.125,
+    0.0625,
+    0
+  ],
+  "warmup": 64,
+  "samples": 256,
+  "chunk_sweeps": 16,
+  "checkpoint_every": 16,
+  "field": {
+    "n_leapfrog": 8,
+    "step_size": 0.15,
+    "jitter": false,
+    "adapt": false,
+    "metric": "Frozen initial physical scalars per ensemble; posterior noise scaled by 1/beta"
+  },
+  "scalars": {
+    "transitions": 4,
+    "bias_sweeps": 8,
+    "amplitude_step": 0.07,
+    "noise": "1000/beta"
+  },
+  "rescaling": {
+    "attempts": 4,
+    "amplitude_step": 0.1,
+    "dimension": 64,
+    "target": "Full positive-beta posterior plus real-coordinate Jacobian"
+  },
+  "prior_replica": "Fresh independent standard-Gaussian white and bounded-uniform physical scalars each sweep; base likelihood evaluated for swaps",
+  "local_seeds": "2300000 + ensemble*1000000 + replica*10000 + outer_index*10; field +0, scalar +1, rescaling +2; prior white/scalars +0/+1",
+  "swap_seed": "7300000 + ensemble*1000000 + outer_index",
+  "swaps": "After local updates, attempt disjoint adjacent edges with parity=outer_index%2; exchange complete physical states and labels, retain temperature-slot metrics/counters",
+  "gates": {
+    "min_accepted_per_edge_per_ensemble": 1,
+    "min_pooled_edge_acceptance": 0.05,
+    "min_cold_prior_cold_roundtrips_per_ensemble": 1,
+    "positive_beta_sampling_divergences": 0
+  },
+  "roundtrip": "Labeled walker first visits cold after warmup, then beta=0, then cold; count only measured-window visits; local prior refresh preserves walker label",
+  "replay": "Ensemble 0: copy at sweep 96; independently resume 16 sweeps; compare full checkpoint, summary and cold retained draws 32..47; do not pool replay",
+  "stopping": "Stop at fixed budget even if exchange/roundtrip gates fail. No ladder edits, retuning, excluded ensembles or extra sweeps. Any tuning is a separately recorded experiment.",
+  "limits": [
+    "Only beta=1 records are cold posterior draws",
+    "This two-ensemble short connectivity test has no posterior Rhat/ESS or coverage success claim",
+    "Labels measure walker transport, not unchanged physical configurations",
+    "Path-barrier reduction does not certify energy overlap",
+    "Serial validation format, not production MPI ensemble checkpointing"
+  ]
+}

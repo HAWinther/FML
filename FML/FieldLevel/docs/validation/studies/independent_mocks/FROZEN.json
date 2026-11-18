@@ -1,0 +1,15 @@
+{
+  "declared_utc": "2026-11-18T15:50:07.821456+00:00",
+  "frozen_utc": "2026-11-18T16:02:47.598064+00:00",
+  "plans": {
+    "plan_mocks.json": "f802cad5719f7d46243a91d1d3fd49dbc5f3c33921fa918738639c27dfd89f16",
+    "plan_mock1.json": "cf0e1f74605fc1536cb758d5a02830fbc6ac32971c9a46f9cd3f0c0fea0bb432",
+    "plan_mock2.json": "1c0bc4336e62072aa1ea6de16b2de52fcfce3bbec156a2c416f9206e6d29d4cd"
+  },
+  "binary_sha256": "1b45912d601b837300fbbbd043c6b06f1908cc95de7f5e6acc07feac2e1e3ca9",
+  "sampler_sweep_body_byte_identical": true,
+  "scope": "Two independent fixed-truth mocks, each four chains 256/2048; no convergence-until-pass or coverage calibration claim",
+  "recovery_analysis_sha256": "06fc606bb88b2db8c7c30c9fd9c928a01dde81ac2cb23448c8cec67990db5b7b",
+  "result_sha256": "2c8e20205aea19be15650cf86842b4d04e7fc56001fbb5dfbe756b8de97f47d0",
+  "plot_only_update": "Post-outcome caption; numerical summary byte-identical; original variants preserved externally"
+}

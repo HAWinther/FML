@@ -1,0 +1,74 @@
+[
+  {
+    "chain": 0,
+    "scalar_medians": [
+      0.657396523799265,
+      2.2551310569786422,
+      0.6985850890186188,
+      -1.4725484859202196,
+      10.226510099454988
+    ],
+    "white_prior_median": 30.36095719412414,
+    "data_quadratic_median": 10.944929817809705,
+    "relative_potential_q05_q50_q95": [
+      32.210960175347374,
+      41.695859654299085,
+      52.530806869397075
+    ],
+    "limits": "Uniform scalar priors; omits shared constants. Energy values do not give branch probability masses."
+  },
+  {
+    "chain": 1,
+    "scalar_medians": [
+      1.4604781644023768,
+      0.35604617038769426,
+      1.69680333781551,
+      3.748259985873081,
+      88.98968537940405
+    ],
+    "white_prior_median": 44.84015855863577,
+    "data_quadratic_median": 18.626850163897473,
+    "relative_potential_q05_q50_q95": [
+      54.43893802114895,
+      63.902906616402376,
+      74.2731314941993
+    ],
+    "limits": "Uniform scalar priors; omits shared constants. Energy values do not give branch probability masses."
+  },
+  {
+    "chain": 2,
+    "scalar_medians": [
+      0.7113749381606891,
+      2.1225023755171852,
+      0.4700802705139744,
+      -1.669341219126641,
+      8.751267873275687
+    ],
+    "white_prior_median": 30.579339852950895,
+    "data_quadratic_median": 10.819864696898007,
+    "relative_potential_q05_q50_q95": [
+      32.36835549853497,
+      41.92581176707249,
+      53.61144947850143
+    ],
+    "limits": "Uniform scalar priors; omits shared constants. Energy values do not give branch probability masses."
+  },
+  {
+    "chain": 3,
+    "scalar_medians": [
+      0.7310761238597574,
+      2.075466832949356,
+      0.4512546966088584,
+      -1.6604380121307765,
+      8.33667741031462
+    ],
+    "white_prior_median": 30.71089259761533,
+    "data_quadratic_median": 10.688012263672634,
+    "relative_potential_q05_q50_q95": [
+      32.26302321752585,
+      41.551328997957064,
+      52.63265657242456
+    ],
+    "limits": "Uniform scalar priors; omits shared constants. Energy values do not give branch probability masses."
+  }
+]

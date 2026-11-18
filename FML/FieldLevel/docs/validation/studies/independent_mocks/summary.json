@@ -1,0 +1,1139 @@
+{
+  "scope": "Two predeclared independent fixed-truth mocks; bounded recovery stress test, not a coverage estimate or SBC",
+  "all_mocks_completed": true,
+  "computational_passed": true,
+  "recovery_calibration_claim": false,
+  "no_pooling_across_mocks": true,
+  "mocks": [
+    {
+      "mock_id": 1,
+      "computational_passed": true,
+      "recovery_provisional": false,
+      "source_plan": {
+        "version": 5,
+        "scope": "Independent fixed-truth recovery stress test, mock 1; not prior-predictive SBC or coverage calibration",
+        "mesh": 4,
+        "product_mesh": 8,
+        "density_mesh": 16,
+        "boxsize": 100,
+        "spectrum": "20000 exp(-5k)",
+        "noise_power": 1000,
+        "nufft_epsilon": 1e-08,
+        "initial_band": "sphere <1.7 kf",
+        "matter_band": "cube <1.8 kf",
+        "likelihood_band": "cube <1.6 kf",
+        "truth_parameters": [
+          1,
+          1.6,
+          0.3,
+          -0.2,
+          7
+        ],
+        "truth_seed": 5101,
+        "noise_seed": 5102,
+        "initial_seed_base": 5103,
+        "initial_parameters": [
+          [
+            0.8,
+            1.2,
+            -0.3,
+            0.2,
+            -20
+          ],
+          [
+            1.2,
+            2,
+            0.8,
+            -0.6,
+            30
+          ],
+          [
+            0.9,
+            2.4,
+            -0.8,
+            0.6,
+            50
+          ],
+          [
+            1.1,
+            0.8,
+            1,
+            -1,
+            -40
+          ]
+        ],
+        "ensembles": 4,
+        "betas": [
+          1,
+          0.5,
+          0.25,
+          0.125,
+          0.0625,
+          0.03125,
+          0.015625,
+          0.0078125,
+          0.00390625,
+          0.001953125,
+          0
+        ],
+        "warmup": 256,
+        "samples": 2048,
+        "chunk_sweeps": 16,
+        "checkpoint_every": 16,
+        "field": {
+          "n_leapfrog": 8,
+          "step_size": 0.15,
+          "jitter": false,
+          "adapt": false,
+          "metric": "Frozen initial physical scalars per ensemble; posterior noise scaled by 1/beta"
+        },
+        "scalars": {
+          "transitions": 4,
+          "bias_sweeps": 8,
+          "amplitude_step": 0.07,
+          "noise": "1000/beta"
+        },
+        "rescaling": {
+          "attempts": 4,
+          "amplitude_step": 0.1,
+          "dimension": 64,
+          "target": "Full positive-beta posterior plus real-coordinate Jacobian"
+        },
+        "prior_replica": "Fresh independent standard-Gaussian white and bounded-uniform physical scalars each sweep; base likelihood evaluated for swaps",
+        "local_seeds": "Layout 3: 0x5300000000000000 | mock_id<<32 | ensemble<<30 | replica<<24 | outer_index<<4 | purpose",
+        "swap_seed": "Layout 3, replica=63 purpose=3",
+        "swaps": "Four alternating disjoint neighbor passes per outer sweep, parity=(outer_index+pass_index)%2; same complete-state exchange rule",
+        "gates": {
+          "min_accepted_per_edge_per_ensemble": 1,
+          "min_pooled_edge_acceptance": 0.05,
+          "min_cold_prior_cold_roundtrips_per_ensemble": 1,
+          "positive_beta_sampling_divergences": 0
+        },
+        "roundtrip": "Measured walker visits cold, actually refreshes at beta=0, then returns cold; observe after every pass, count no unrefreshed prior bounce",
+        "replay": "Ensemble 0: copy after warmup+32; resume 16 sweeps; compare complete checkpoint, summary and retained draws 32..47; exclude replay",
+        "stopping": "Stop each fresh chain at 256 warmup and 2048 retained draws even on failure. Do not extend, retune, exclude or replace mocks/chains.",
+        "limits": [
+          "Only beta=1 records are cold posterior draws",
+          "Labels measure walker transport, not unchanged physical configurations",
+          "Path-barrier reduction does not certify energy overlap",
+          "Serial validation format, not production MPI ensemble checkpointing",
+          "Five scalar and six field projection diagnostics; not all field coordinates",
+          "Synthetic same-model target; no coverage or real-catalog claim",
+          "Fixed four-chain budget: report failure without extending or retuning"
+        ],
+        "exchange_passes": 4,
+        "comparison": "Fresh mock truth/noise, initial fields and sampler domains; no reused posterior prefixes or hot/replay pooling; same physical target and kernels.",
+        "seed_layout": 3,
+        "posterior_gates": {
+          "max_rhat": 1.01,
+          "min_bulk_ess": 400,
+          "min_tail_ess": 400
+        },
+        "mock_id": 1
+      },
+      "diagnostics": [
+        {
+          "parameter": "sigma8_ratio",
+          "rhat": 1.0078029760715688,
+          "bulk_ess": 582.1121927873445,
+          "tail_ess": 1211.2355744950446,
+          "status": "ok",
+          "passed": true
+        },
+        {
+          "parameter": "b_delta",
+          "rhat": 1.0073276045928508,
+          "bulk_ess": 538.9415101552212,
+          "tail_ess": 1038.2320199056542,
+          "status": "ok",
+          "passed": true
+        },
+        {
+          "parameter": "b_delta2",
+          "rhat": 1.0028470976052346,
+          "bulk_ess": 881.2863214550362,
+          "tail_ess": 925.5294182651709,
+          "status": "ok",
+          "passed": true
+        },
+        {
+          "parameter": "b_K2",
+          "rhat": 1.003535588261622,
+          "bulk_ess": 910.1871240616633,
+          "tail_ess": 2674.63925223848,
+          "status": "ok",
+          "passed": true
+        },
+        {
+          "parameter": "b_laplacian",
+          "rhat": 1.0027256424977564,
+          "bulk_ess": 1840.443453145382,
+          "tail_ess": 3835.593995393528,
+          "status": "ok",
+          "passed": true
+        },
+        {
+          "parameter": "cos100",
+          "rhat": 1.0046557708790447,
+          "bulk_ess": 717.816646193575,
+          "tail_ess": 1212.826852861761,
+          "status": "ok",
+          "passed": true
+        },
+        {
+          "parameter": "sin100",
+          "rhat": 1.0024210244902982,
+          "bulk_ess": 1313.03414393487,
+          "tail_ess": 2524.2376779833735,
+          "status": "ok",
+          "passed": true
+        },
+        {
+          "parameter": "cos110",
+          "rhat": 1.0028130032462155,
+          "bulk_ess": 975.2870820761285,
+          "tail_ess": 1151.9874845273748,
+          "status": "ok",
+          "passed": true
+        },
+        {
+          "parameter": "sin110",
+          "rhat": 1.0015589571263834,
+          "bulk_ess": 1411.4652947949387,
+          "tail_ess": 1562.697514919891,
+          "status": "ok",
+          "passed": true
+        },
+        {
+          "parameter": "cos001",
+          "rhat": 1.0021552230949884,
+          "bulk_ess": 1332.3253042781673,
+          "tail_ess": 1597.280538076578,
+          "status": "ok",
+          "passed": true
+        },
+        {
+          "parameter": "sin001",
+          "rhat": 1.0014268243901006,
+          "bulk_ess": 726.8554622605285,
+          "tail_ess": 1057.3228982458206,
+          "status": "ok",
+          "passed": true
+        }
+      ],
+      "transport_passed": true,
+      "roundtrips": [
+        22,
+        21,
+        17,
+        18
+      ],
+      "measured_divergences": 0,
+      "recovery": [
+        {
+          "parameter": "sigma8_ratio",
+          "truth": 1.0,
+          "mean": 0.8290367390269887,
+          "median": 0.7608362897221208,
+          "sd": 0.2573103637440116,
+          "mean_offset_sd": -0.664424310336354,
+          "truth_cdf_fraction": 0.7554931640625,
+          "intervals": {
+            "0.5": {
+              "lower": 0.6171224520992297,
+              "upper": 0.9938481594783888,
+              "contains_truth": false
+            },
+            "0.9": {
+              "lower": 0.5242075463120447,
+              "upper": 1.3519605977161815,
+              "contains_truth": true
+            },
+            "0.95": {
+              "lower": 0.5128909714918217,
+              "upper": 1.4218660974292254,
+              "contains_truth": true
+            }
+          }
+        },
+        {
+          "parameter": "b_delta",
+          "truth": 1.6,
+          "mean": 2.5459687793707295,
+          "median": 2.5819510932326404,
+          "sd": 0.7715667884763965,
+          "mean_offset_sd": 1.2260361559090982,
+          "truth_cdf_fraction": 0.1239013671875,
+          "intervals": {
+            "0.5": {
+              "lower": 1.986787937270674,
+              "upper": 3.156048207995233,
+              "contains_truth": false
+            },
+            "0.9": {
+              "lower": 1.2276234260402625,
+              "upper": 3.7411368630467714,
+              "contains_truth": true
+            },
+            "0.95": {
+              "lower": 0.9865261774858447,
+              "upper": 3.864960331878184,
+              "contains_truth": true
+            }
+          }
+        },
+        {
+          "parameter": "b_delta2",
+          "truth": 0.3,
+          "mean": 1.509027209726977,
+          "median": 1.4246082229826584,
+          "sd": 0.9812970154843127,
+          "mean_offset_sd": 1.2320706072159706,
+          "truth_cdf_fraction": 0.094482421875,
+          "intervals": {
+            "0.5": {
+              "lower": 0.8095653551401092,
+              "upper": 2.131828146435307,
+              "contains_truth": false
+            },
+            "0.9": {
+              "lower": 0.01405082763750276,
+              "upper": 3.3242501861164038,
+              "contains_truth": true
+            },
+            "0.95": {
+              "lower": -0.25373840651522495,
+              "upper": 3.600174051480051,
+              "contains_truth": true
+            }
+          }
+        },
+        {
+          "parameter": "b_K2",
+          "truth": -0.2,
+          "mean": 1.2697793924771061,
+          "median": 1.6379241202598145,
+          "sd": 1.9755735461799964,
+          "mean_offset_sd": 0.7439760444854596,
+          "truth_cdf_fraction": 0.222412109375,
+          "intervals": {
+            "0.5": {
+              "lower": 0.03651143510471114,
+              "upper": 2.8669556304112582,
+              "contains_truth": false
+            },
+            "0.9": {
+              "lower": -2.7192199865172264,
+              "upper": 3.7754567583720564,
+              "contains_truth": true
+            },
+            "0.95": {
+              "lower": -3.347242170682632,
+              "upper": 3.8870813153068977,
+              "contains_truth": true
+            }
+          }
+        },
+        {
+          "parameter": "b_laplacian",
+          "truth": 7.0,
+          "mean": 22.83376789322179,
+          "median": 30.498906128277724,
+          "sd": 53.08067661159778,
+          "mean_offset_sd": 0.29829627095902944,
+          "truth_cdf_fraction": 0.3599853515625,
+          "intervals": {
+            "0.5": {
+              "lower": -16.36663034410277,
+              "upper": 68.45034833894216,
+              "contains_truth": true
+            },
+            "0.9": {
+              "lower": -75.3655045456202,
+              "upper": 93.4406391083431,
+              "contains_truth": true
+            },
+            "0.95": {
+              "lower": -86.21837362854363,
+              "upper": 96.62861699632306,
+              "contains_truth": true
+            }
+          }
+        },
+        {
+          "parameter": "cos100",
+          "truth": -1.2380235556575918,
+          "mean": -0.7153755985342114,
+          "median": -0.7207468965219114,
+          "sd": 0.2771719387637654,
+          "mean_offset_sd": 1.8856452765546194,
+          "truth_cdf_fraction": 0.0279541015625,
+          "intervals": {
+            "0.5": {
+              "lower": -0.8972506689259963,
+              "upper": -0.5412736886880107,
+              "contains_truth": false
+            },
+            "0.9": {
+              "lower": -1.1577080342259591,
+              "upper": -0.254948340485272,
+              "contains_truth": false
+            },
+            "0.95": {
+              "lower": -1.2528862482159266,
+              "upper": -0.14413911719894024,
+              "contains_truth": true
+            }
+          }
+        },
+        {
+          "parameter": "sin100",
+          "truth": 0.7738441731574232,
+          "mean": 0.746826854284432,
+          "median": 0.731455167083515,
+          "sd": 0.21918426250097275,
+          "mean_offset_sd": -0.12326304162859908,
+          "truth_cdf_fraction": 0.582763671875,
+          "intervals": {
+            "0.5": {
+              "lower": 0.5925638387150595,
+              "upper": 0.8792737513508744,
+              "contains_truth": true
+            },
+            "0.9": {
+              "lower": 0.4212581545431436,
+              "upper": 1.1291491289005464,
+              "contains_truth": true
+            },
+            "0.95": {
+              "lower": 0.3630410181094995,
+              "upper": 1.2265163373547658,
+              "contains_truth": true
+            }
+          }
+        },
+        {
+          "parameter": "cos110",
+          "truth": 1.105759538431033,
+          "mean": 0.9029182104589315,
+          "median": 0.8866537169321245,
+          "sd": 0.3206371338955449,
+          "mean_offset_sd": -0.6326195768646743,
+          "truth_cdf_fraction": 0.7708740234375,
+          "intervals": {
+            "0.5": {
+              "lower": 0.7169629996045881,
+              "upper": 1.0839766258793682,
+              "contains_truth": false
+            },
+            "0.9": {
+              "lower": 0.49458241535572556,
+              "upper": 1.4197435702748327,
+              "contains_truth": true
+            },
+            "0.95": {
+              "lower": 0.4024302394321778,
+              "upper": 1.5479521831410308,
+              "contains_truth": true
+            }
+          }
+        },
+        {
+          "parameter": "sin110",
+          "truth": 1.1203757898266584,
+          "mean": 0.50110653052235,
+          "median": 0.4910206248726071,
+          "sd": 0.246115579892127,
+          "mean_offset_sd": -2.516172521771013,
+          "truth_cdf_fraction": 0.98779296875,
+          "intervals": {
+            "0.5": {
+              "lower": 0.3418231976847054,
+              "upper": 0.6503795213448742,
+              "contains_truth": false
+            },
+            "0.9": {
+              "lower": 0.13344674880968405,
+              "upper": 0.9144601436425801,
+              "contains_truth": false
+            },
+            "0.95": {
+              "lower": 0.05825637323081543,
+              "upper": 1.0151629713837045,
+              "contains_truth": false
+            }
+          }
+        },
+        {
+          "parameter": "cos001",
+          "truth": 0.22764628896281372,
+          "mean": 0.20646164837900585,
+          "median": 0.2095361834037226,
+          "sd": 0.19189420206862146,
+          "mean_offset_sd": -0.1103975021414781,
+          "truth_cdf_fraction": 0.54345703125,
+          "intervals": {
+            "0.5": {
+              "lower": 0.09135245410134604,
+              "upper": 0.3243881124745051,
+              "contains_truth": true
+            },
+            "0.9": {
+              "lower": -0.09975182257860082,
+              "upper": 0.509221942206429,
+              "contains_truth": true
+            },
+            "0.95": {
+              "lower": -0.17722720236706763,
+              "upper": 0.5746157755371142,
+              "contains_truth": true
+            }
+          }
+        },
+        {
+          "parameter": "sin001",
+          "truth": 0.7802328896231255,
+          "mean": 0.34698739602303297,
+          "median": 0.3504189612373487,
+          "sd": 0.24596402487439356,
+          "mean_offset_sd": -1.7614181334906112,
+          "truth_cdf_fraction": 0.9659423828125,
+          "intervals": {
+            "0.5": {
+              "lower": 0.19727101167047567,
+              "upper": 0.5027931163907643,
+              "contains_truth": false
+            },
+            "0.9": {
+              "lower": -0.059822286883749506,
+              "upper": 0.7364796475869961,
+              "contains_truth": false
+            },
+            "0.95": {
+              "lower": -0.1656424975652559,
+              "upper": 0.8203983582784691,
+              "contains_truth": true
+            }
+          }
+        }
+      ],
+      "fitted_data_residuals": [
+        {
+          "k": 0.06283185307179587,
+          "real_modes": 6.0,
+          "posterior_residual_power_q05_q50_q95": [
+            0.27132117953771556,
+            0.8789164556501095,
+            2.091594931686883
+          ],
+          "posterior_mean_residual_power": 0.05845694812439665
+        },
+        {
+          "k": 0.08885765876316733,
+          "real_modes": 12.0,
+          "posterior_residual_power_q05_q50_q95": [
+            0.41889096385966545,
+            0.9066258961611268,
+            1.7000346862895517
+          ],
+          "posterior_mean_residual_power": 0.05438295157437262
+        },
+        {
+          "k": 0.10882796185405307,
+          "real_modes": 8.0,
+          "posterior_residual_power_q05_q50_q95": [
+            0.20988970822120662,
+            0.4465164492631791,
+            0.9135124575440614
+          ],
+          "posterior_mean_residual_power": 0.24028453281500284
+        }
+      ],
+      "limits": [
+        "Synthetic same-model data; no coverage or real-catalog claim",
+        "Six field projections, not all field coordinates",
+        "Descriptive pooled quantiles are provisional when any mixing gates fail",
+        "Residuals use fitted data; not an independent predictive validation",
+        "Replay draws excluded; fixed budget not extended"
+      ],
+      "target_sha256": "4572a4a3b99a77eb195b19e9467af7ab69484af6badeeeeaeb074d238c7d8b6b"
+    },
+    {
+      "mock_id": 2,
+      "computational_passed": true,
+      "recovery_provisional": false,
+      "source_plan": {
+        "version": 5,
+        "scope": "Independent fixed-truth recovery stress test, mock 2; not prior-predictive SBC or coverage calibration",
+        "mesh": 4,
+        "product_mesh": 8,
+        "density_mesh": 16,
+        "boxsize": 100,
+        "spectrum": "20000 exp(-5k)",
+        "noise_power": 1000,
+        "nufft_epsilon": 1e-08,
+        "initial_band": "sphere <1.7 kf",
+        "matter_band": "cube <1.8 kf",
+        "likelihood_band": "cube <1.6 kf",
+        "truth_parameters": [
+          1,
+          1.6,
+          0.3,
+          -0.2,
+          7
+        ],
+        "truth_seed": 6101,
+        "noise_seed": 6102,
+        "initial_seed_base": 6103,
+        "initial_parameters": [
+          [
+            0.8,
+            1.2,
+            -0.3,
+            0.2,
+            -20
+          ],
+          [
+            1.2,
+            2,
+            0.8,
+            -0.6,
+            30
+          ],
+          [
+            0.9,
+            2.4,
+            -0.8,
+            0.6,
+            50
+          ],
+          [
+            1.1,
+            0.8,
+            1,
+            -1,
+            -40
+          ]
+        ],
+        "ensembles": 4,
+        "betas": [
+          1,
+          0.5,
+          0.25,
+          0.125,
+          0.0625,
+          0.03125,
+          0.015625,
+          0.0078125,
+          0.00390625,
+          0.001953125,
+          0
+        ],
+        "warmup": 256,
+        "samples": 2048,
+        "chunk_sweeps": 16,
+        "checkpoint_every": 16,
+        "field": {
+          "n_leapfrog": 8,
+          "step_size": 0.15,
+          "jitter": false,
+          "adapt": false,
+          "metric": "Frozen initial physical scalars per ensemble; posterior noise scaled by 1/beta"
+        },
+        "scalars": {
+          "transitions": 4,
+          "bias_sweeps": 8,
+          "amplitude_step": 0.07,
+          "noise": "1000/beta"
+        },
+        "rescaling": {
+          "attempts": 4,
+          "amplitude_step": 0.1,
+          "dimension": 64,
+          "target": "Full positive-beta posterior plus real-coordinate Jacobian"
+        },
+        "prior_replica": "Fresh independent standard-Gaussian white and bounded-uniform physical scalars each sweep; base likelihood evaluated for swaps",
+        "local_seeds": "Layout 3: 0x5300000000000000 | mock_id<<32 | ensemble<<30 | replica<<24 | outer_index<<4 | purpose",
+        "swap_seed": "Layout 3, replica=63 purpose=3",
+        "swaps": "Four alternating disjoint neighbor passes per outer sweep, parity=(outer_index+pass_index)%2; same complete-state exchange rule",
+        "gates": {
+          "min_accepted_per_edge_per_ensemble": 1,
+          "min_pooled_edge_acceptance": 0.05,
+          "min_cold_prior_cold_roundtrips_per_ensemble": 1,
+          "positive_beta_sampling_divergences": 0
+        },
+        "roundtrip": "Measured walker visits cold, actually refreshes at beta=0, then returns cold; observe after every pass, count no unrefreshed prior bounce",
+        "replay": "Ensemble 0: copy after warmup+32; resume 16 sweeps; compare complete checkpoint, summary and retained draws 32..47; exclude replay",
+        "stopping": "Stop each fresh chain at 256 warmup and 2048 retained draws even on failure. Do not extend, retune, exclude or replace mocks/chains.",
+        "limits": [
+          "Only beta=1 records are cold posterior draws",
+          "Labels measure walker transport, not unchanged physical configurations",
+          "Path-barrier reduction does not certify energy overlap",
+          "Serial validation format, not production MPI ensemble checkpointing",
+          "Five scalar and six field projection diagnostics; not all field coordinates",
+          "Synthetic same-model target; no coverage or real-catalog claim",
+          "Fixed four-chain budget: report failure without extending or retuning"
+        ],
+        "exchange_passes": 4,
+        "comparison": "Fresh mock truth/noise, initial fields and sampler domains; no reused posterior prefixes or hot/replay pooling; same physical target and kernels.",
+        "seed_layout": 3,
+        "posterior_gates": {
+          "max_rhat": 1.01,
+          "min_bulk_ess": 400,
+          "min_tail_ess": 400
+        },
+        "mock_id": 2
+      },
+      "diagnostics": [
+        {
+          "parameter": "sigma8_ratio",
+          "rhat": 1.0027684255334197,
+          "bulk_ess": 861.2128545313373,
+          "tail_ess": 1493.4470062800608,
+          "status": "ok",
+          "passed": true
+        },
+        {
+          "parameter": "b_delta",
+          "rhat": 1.0032463067752753,
+          "bulk_ess": 965.2342594874498,
+          "tail_ess": 1142.429500969622,
+          "status": "ok",
+          "passed": true
+        },
+        {
+          "parameter": "b_delta2",
+          "rhat": 1.0069384733237836,
+          "bulk_ess": 922.4750591101782,
+          "tail_ess": 892.8998205914481,
+          "status": "ok",
+          "passed": true
+        },
+        {
+          "parameter": "b_K2",
+          "rhat": 1.004255438676818,
+          "bulk_ess": 1185.963361433496,
+          "tail_ess": 1875.9892708404873,
+          "status": "ok",
+          "passed": true
+        },
+        {
+          "parameter": "b_laplacian",
+          "rhat": 1.000688782181937,
+          "bulk_ess": 2364.087331911623,
+          "tail_ess": 4843.715158133929,
+          "status": "ok",
+          "passed": true
+        },
+        {
+          "parameter": "cos100",
+          "rhat": 1.0020181595805,
+          "bulk_ess": 1053.7863310395348,
+          "tail_ess": 1571.986293576101,
+          "status": "ok",
+          "passed": true
+        },
+        {
+          "parameter": "sin100",
+          "rhat": 1.0011980539503111,
+          "bulk_ess": 1925.4921318603895,
+          "tail_ess": 2897.092584623897,
+          "status": "ok",
+          "passed": true
+        },
+        {
+          "parameter": "cos110",
+          "rhat": 1.0014540725929113,
+          "bulk_ess": 1358.5268490332787,
+          "tail_ess": 2130.55178847718,
+          "status": "ok",
+          "passed": true
+        },
+        {
+          "parameter": "sin110",
+          "rhat": 1.006209401697246,
+          "bulk_ess": 1084.603662299737,
+          "tail_ess": 1704.4799100130426,
+          "status": "ok",
+          "passed": true
+        },
+        {
+          "parameter": "cos001",
+          "rhat": 1.0034429609820608,
+          "bulk_ess": 1050.5744640006508,
+          "tail_ess": 1560.8126377127992,
+          "status": "ok",
+          "passed": true
+        },
+        {
+          "parameter": "sin001",
+          "rhat": 1.0035283034605114,
+          "bulk_ess": 1024.0181250949965,
+          "tail_ess": 1679.7871901355632,
+          "status": "ok",
+          "passed": true
+        }
+      ],
+      "transport_passed": true,
+      "roundtrips": [
+        22,
+        15,
+        17,
+        12
+      ],
+      "measured_divergences": 0,
+      "recovery": [
+        {
+          "parameter": "sigma8_ratio",
+          "truth": 1.0,
+          "mean": 0.8471922199934564,
+          "median": 0.80077611971152,
+          "sd": 0.23137778679472085,
+          "mean_offset_sd": -0.6604254545062063,
+          "truth_cdf_fraction": 0.7626953125,
+          "intervals": {
+            "0.5": {
+              "lower": 0.667640014687408,
+              "upper": 0.9862904676509604,
+              "contains_truth": false
+            },
+            "0.9": {
+              "lower": 0.5500293143153092,
+              "upper": 1.3177144494664017,
+              "contains_truth": true
+            },
+            "0.95": {
+              "lower": 0.5281889721635966,
+              "upper": 1.404348691179733,
+              "contains_truth": true
+            }
+          }
+        },
+        {
+          "parameter": "b_delta",
+          "truth": 1.6,
+          "mean": 2.4655156870348733,
+          "median": 2.4828460106772767,
+          "sd": 0.6192889343180967,
+          "mean_offset_sd": 1.3975959185963793,
+          "truth_cdf_fraction": 0.082275390625,
+          "intervals": {
+            "0.5": {
+              "lower": 2.0396328148011813,
+              "upper": 2.910115379638519,
+              "contains_truth": false
+            },
+            "0.9": {
+              "lower": 1.4317051267017855,
+              "upper": 3.4569134108398867,
+              "contains_truth": true
+            },
+            "0.95": {
+              "lower": 1.2526794674746669,
+              "upper": 3.6118590290086723,
+              "contains_truth": true
+            }
+          }
+        },
+        {
+          "parameter": "b_delta2",
+          "truth": 0.3,
+          "mean": 2.2896247371624456,
+          "median": 2.3022398871943874,
+          "sd": 0.9973525192598857,
+          "mean_offset_sd": 1.9949062129395374,
+          "truth_cdf_fraction": 0.013427734375,
+          "intervals": {
+            "0.5": {
+              "lower": 1.5060534750041543,
+              "upper": 3.1418390480828737,
+              "contains_truth": false
+            },
+            "0.9": {
+              "lower": 0.6512078730606264,
+              "upper": 3.823549528108651,
+              "contains_truth": false
+            },
+            "0.95": {
+              "lower": 0.46124493430302405,
+              "upper": 3.916674201374832,
+              "contains_truth": false
+            }
+          }
+        },
+        {
+          "parameter": "b_K2",
+          "truth": -0.2,
+          "mean": -0.8620684973408602,
+          "median": -0.7722041428297255,
+          "sd": 1.4076016925238093,
+          "mean_offset_sd": -0.47035216059862855,
+          "truth_cdf_fraction": 0.6802978515625,
+          "intervals": {
+            "0.5": {
+              "lower": -1.8105072561153124,
+              "upper": 0.046609443331997194,
+              "contains_truth": true
+            },
+            "0.9": {
+              "lower": -3.3166834921084947,
+              "upper": 1.3734326190187562,
+              "contains_truth": true
+            },
+            "0.95": {
+              "lower": -3.6271903248790642,
+              "upper": 1.9549425948013865,
+              "contains_truth": true
+            }
+          }
+        },
+        {
+          "parameter": "b_laplacian",
+          "truth": 7.0,
+          "mean": 12.927292023229754,
+          "median": 19.39116265350205,
+          "sd": 54.726581802296494,
+          "mean_offset_sd": 0.10830736779144183,
+          "truth_cdf_fraction": 0.42919921875,
+          "intervals": {
+            "0.5": {
+              "lower": -30.227333604027642,
+              "upper": 58.68037054911793,
+              "contains_truth": true
+            },
+            "0.9": {
+              "lower": -84.0603963931523,
+              "upper": 91.8436597253368,
+              "contains_truth": true
+            },
+            "0.95": {
+              "lower": -92.20280659681157,
+              "upper": 95.80584121009198,
+              "contains_truth": true
+            }
+          }
+        },
+        {
+          "parameter": "cos100",
+          "truth": 2.6498568491823766,
+          "mean": 1.858355058788439,
+          "median": 1.8463532561069163,
+          "sd": 0.3566976725017678,
+          "mean_offset_sd": -2.2189709981637598,
+          "truth_cdf_fraction": 0.9805908203125,
+          "intervals": {
+            "0.5": {
+              "lower": 1.6161037238778633,
+              "upper": 2.088359814417754,
+              "contains_truth": false
+            },
+            "0.9": {
+              "lower": 1.3004892066302358,
+              "upper": 2.456777188838308,
+              "contains_truth": false
+            },
+            "0.95": {
+              "lower": 1.2146066219718208,
+              "upper": 2.6016527279806767,
+              "contains_truth": false
+            }
+          }
+        },
+        {
+          "parameter": "sin100",
+          "truth": -0.03492181416683458,
+          "mean": -0.020905269219118394,
+          "median": -0.023059955798226905,
+          "sd": 0.15805201730854868,
+          "mean_offset_sd": 0.088683113233241,
+          "truth_cdf_fraction": 0.4703369140625,
+          "intervals": {
+            "0.5": {
+              "lower": -0.12393541855471925,
+              "upper": 0.0780120315918942,
+              "contains_truth": true
+            },
+            "0.9": {
+              "lower": -0.2738094877357891,
+              "upper": 0.2455112344317978,
+              "contains_truth": true
+            },
+            "0.95": {
+              "lower": -0.31850595090732786,
+              "upper": 0.2990053436897818,
+              "contains_truth": true
+            }
+          }
+        },
+        {
+          "parameter": "cos110",
+          "truth": -1.0927695181707973,
+          "mean": -0.9499687880487678,
+          "median": -0.9304606828828477,
+          "sd": 0.25687875824477013,
+          "mean_offset_sd": 0.5559071178083163,
+          "truth_cdf_fraction": 0.2630615234375,
+          "intervals": {
+            "0.5": {
+              "lower": -1.105250916689945,
+              "upper": -0.7672163319635509,
+              "contains_truth": true
+            },
+            "0.9": {
+              "lower": -1.4100566872167246,
+              "upper": -0.5687841232341925,
+              "contains_truth": true
+            },
+            "0.95": {
+              "lower": -1.5120022476356716,
+              "upper": -0.5044259280604184,
+              "contains_truth": true
+            }
+          }
+        },
+        {
+          "parameter": "sin110",
+          "truth": 0.9774383424540728,
+          "mean": 1.0482891405282895,
+          "median": 1.0219822020837435,
+          "sd": 0.2856258984409592,
+          "mean_offset_sd": 0.24805453028224617,
+          "truth_cdf_fraction": 0.4283447265625,
+          "intervals": {
+            "0.5": {
+              "lower": 0.8566286391344445,
+              "upper": 1.218464124467188,
+              "contains_truth": true
+            },
+            "0.9": {
+              "lower": 0.6307840413674631,
+              "upper": 1.5443943122605392,
+              "contains_truth": true
+            },
+            "0.95": {
+              "lower": 0.5663000182251364,
+              "upper": 1.6811232517078953,
+              "contains_truth": true
+            }
+          }
+        },
+        {
+          "parameter": "cos001",
+          "truth": 1.7012731169610236,
+          "mean": 1.3075238496885517,
+          "median": 1.2993363753268896,
+          "sd": 0.2951354592928055,
+          "mean_offset_sd": -1.3341306673754543,
+          "truth_cdf_fraction": 0.9117431640625,
+          "intervals": {
+            "0.5": {
+              "lower": 1.1149535979783374,
+              "upper": 1.4898085942677723,
+              "contains_truth": false
+            },
+            "0.9": {
+              "lower": 0.8695899546561373,
+              "upper": 1.7972681205629764,
+              "contains_truth": true
+            },
+            "0.95": {
+              "lower": 0.7918695822323517,
+              "upper": 1.90906051618428,
+              "contains_truth": true
+            }
+          }
+        },
+        {
+          "parameter": "sin001",
+          "truth": 1.3747670354971633,
+          "mean": 1.0790968170227326,
+          "median": 1.0756577677738397,
+          "sd": 0.2911214010645043,
+          "mean_offset_sd": -1.0156251563550234,
+          "truth_cdf_fraction": 0.8839111328125,
+          "intervals": {
+            "0.5": {
+              "lower": 0.9174995927189981,
+              "upper": 1.2403102495450273,
+              "contains_truth": false
+            },
+            "0.9": {
+              "lower": 0.715407869147941,
+              "upper": 1.5081147293566985,
+              "contains_truth": true
+            },
+            "0.95": {
+              "lower": 0.6392815532118924,
+              "upper": 1.6084642477629076,
+              "contains_truth": true
+            }
+          }
+        }
+      ],
+      "fitted_data_residuals": [
+        {
+          "k": 0.06283185307179587,
+          "real_modes": 6.0,
+          "posterior_residual_power_q05_q50_q95": [
+            0.26906087494677083,
+            0.8853370273708683,
+            2.0778188296694036
+          ],
+          "posterior_mean_residual_power": 0.09801020093244343
+        },
+        {
+          "k": 0.08885765876316733,
+          "real_modes": 12.0,
+          "posterior_residual_power_q05_q50_q95": [
+            0.4202718404299113,
+            0.9171171856610447,
+            1.6415769868923755
+          ],
+          "posterior_mean_residual_power": 0.09611287331415308
+        },
+        {
+          "k": 0.10882796185405307,
+          "real_modes": 8.0,
+          "posterior_residual_power_q05_q50_q95": [
+            0.5508917669559277,
+            1.0529731539204414,
+            1.7495497497162997
+          ],
+          "posterior_mean_residual_power": 0.6648521931222956
+        }
+      ],
+      "limits": [
+        "Synthetic same-model data; no coverage or real-catalog claim",
+        "Six field projections, not all field coordinates",
+        "Descriptive pooled quantiles are provisional when any mixing gates fail",
+        "Residuals use fitted data; not an independent predictive validation",
+        "Replay draws excluded; fixed budget not extended"
+      ],
+      "target_sha256": "c534a33ed1ad8f42c53113944810f41c6d8c718c69bc8ac822e4a0939915ab2f"
+    }
+  ],
+  "amplitude_interval_inclusion_counts": {
+    "0.5": {
+      "included": 0,
+      "mocks": 2,
+      "all_computational_gates_pass": true
+    },
+    "0.9": {
+      "included": 2,
+      "mocks": 2,
+      "all_computational_gates_pass": true
+    },
+    "0.95": {
+      "included": 2,
+      "mocks": 2,
+      "all_computational_gates_pass": true
+    }
+  },
+  "note": "Fixed scalar truth, two independent mock realizations. Counts/ranks are descriptive; interval misses are not automatic failures and no coverage/SBC claim is made.",
+  "limits": [
+    "Only two new realizations, no meaningful coverage frequency calibration",
+    "Fixed scalar truth is not prior-predictive SBC",
+    "Source numerical stability covers one original mock; optional mock sensitivity requires a separately declared check",
+    "Serial replica-exchange validation; production MPI replica layouts remain open"
+  ]
+}

@@ -1,0 +1,453 @@
+{
+  "scope": "Exploratory deterministic audit; no new Monte Carlo draws",
+  "point_count": 1010,
+  "path_count": 10,
+  "profile_reference_cases": 3,
+  "paths": [
+    {
+      "path": "white-to0",
+      "direct_endpoints": [
+        65.12450087643197,
+        31.318051583487083
+      ],
+      "profile_endpoints": [
+        64.16218731468445,
+        31.096884450197017
+      ],
+      "direct_max_above_endpoint_max": 237.96773065766888,
+      "profile_max_above_endpoint_max": 133.42244239106344,
+      "profile_max_above_endpoint_chord": 148.79266816900906,
+      "max_bias_profile_gain": 113.03268101071976,
+      "max_kkt": 5.1476757659663625e-15,
+      "max_full_error": 2.19824158875781e-14
+    },
+    {
+      "path": "physical-to0",
+      "direct_endpoints": [
+        65.12450087643197,
+        31.318051583487083
+      ],
+      "profile_endpoints": [
+        64.16218731468445,
+        31.096884450197017
+      ],
+      "direct_max_above_endpoint_max": 338.08429306445987,
+      "profile_max_above_endpoint_max": 140.70983073533782,
+      "profile_max_above_endpoint_chord": 162.5891442063824,
+      "max_bias_profile_gain": 225.9164633506977,
+      "max_kkt": 3.5864536810294515e-15,
+      "max_full_error": 5.218048215738236e-14
+    },
+    {
+      "path": "arc-to0",
+      "direct_endpoints": [
+        65.12450087643197,
+        31.318051583487083
+      ],
+      "profile_endpoints": [
+        64.16218731468445,
+        31.096884450197017
+      ],
+      "direct_max_above_endpoint_max": 376.43586881035776,
+      "profile_max_above_endpoint_max": 134.67293683236147,
+      "profile_max_above_endpoint_chord": 148.06963413096227,
+      "max_bias_profile_gain": 243.14647828222206,
+      "max_kkt": 1.908186695630123e-15,
+      "max_full_error": 2.3259320261440608e-14
+    },
+    {
+      "path": "white-to2",
+      "direct_endpoints": [
+        65.12450087643197,
+        43.660798298461096
+      ],
+      "profile_endpoints": [
+        64.16218731468445,
+        42.92638689929083
+      ],
+      "direct_max_above_endpoint_max": 157.3566996166179,
+      "profile_max_above_endpoint_max": 124.40556662835536,
+      "profile_max_above_endpoint_chord": 132.85575828239982,
+      "max_bias_profile_gain": 39.635671605082536,
+      "max_kkt": 2.818438029537583e-16,
+      "max_full_error": 5.306866057708248e-14
+    },
+    {
+      "path": "physical-to2",
+      "direct_endpoints": [
+        65.12450087643197,
+        43.660798298461096
+      ],
+      "profile_endpoints": [
+        64.16218731468445,
+        42.92638689929083
+      ],
+      "direct_max_above_endpoint_max": 157.0606946203265,
+      "profile_max_above_endpoint_max": 124.4318925223636,
+      "profile_max_above_endpoint_chord": 132.98419565906795,
+      "max_bias_profile_gain": 39.02215462613182,
+      "max_kkt": 3.8356140539240886e-16,
+      "max_full_error": 5.5566386592043717e-14
+    },
+    {
+      "path": "arc-to2",
+      "direct_endpoints": [
+        65.12450087643197,
+        43.660798298461096
+      ],
+      "profile_endpoints": [
+        64.16218731468445,
+        42.92638689929083
+      ],
+      "direct_max_above_endpoint_max": 299.0936660203357,
+      "profile_max_above_endpoint_max": 132.1680888123274,
+      "profile_max_above_endpoint_chord": 139.35678797311834,
+      "max_bias_profile_gain": 169.84609789347013,
+      "max_kkt": 2.8620983859878804e-16,
+      "max_full_error": 3.651272025213371e-14
+    },
+    {
+      "path": "white-to3",
+      "direct_endpoints": [
+        65.12450087643197,
+        45.665079986408365
+      ],
+      "profile_endpoints": [
+        64.16218731468445,
+        42.82584198913977
+      ],
+      "direct_max_above_endpoint_max": 145.10528688305257,
+      "profile_max_above_endpoint_max": 127.7865586455346,
+      "profile_max_above_endpoint_chord": 138.45473130830692,
+      "max_bias_profile_gain": 27.415834787971164,
+      "max_kkt": 1.4514717955931236e-15,
+      "max_full_error": 2.4646951146678475e-14
+    },
+    {
+      "path": "physical-to3",
+      "direct_endpoints": [
+        65.12450087643197,
+        45.665079986408365
+      ],
+      "profile_endpoints": [
+        64.16218731468445,
+        42.82584198913977
+      ],
+      "direct_max_above_endpoint_max": 151.43251505727073,
+      "profile_max_above_endpoint_max": 128.23855585679814,
+      "profile_max_above_endpoint_chord": 139.9735457858477,
+      "max_bias_profile_gain": 37.416824278341295,
+      "max_kkt": 1.0892644318384014e-15,
+      "max_full_error": 6.744604874597826e-14
+    },
+    {
+      "path": "arc-to3",
+      "direct_endpoints": [
+        65.12450087643197,
+        45.665079986408365
+      ],
+      "profile_endpoints": [
+        64.16218731468445,
+        42.82584198913977
+      ],
+      "direct_max_above_endpoint_max": 326.1794480790778,
+      "profile_max_above_endpoint_max": 133.80616273576547,
+      "profile_max_above_endpoint_chord": 144.41283670162414,
+      "max_bias_profile_gain": 195.88648214870017,
+      "max_kkt": 1.0342972800208888e-15,
+      "max_full_error": 2.7847282561165422e-14
+    },
+    {
+      "path": "rescale-control",
+      "direct_endpoints": [
+        269.48847260582784,
+        67.90709459923144
+      ],
+      "profile_endpoints": [
+        268.5261590440804,
+        66.944781037484
+      ],
+      "direct_max_above_endpoint_max": 0.0,
+      "profile_max_above_endpoint_max": 0.0,
+      "profile_max_above_endpoint_chord": 0.0,
+      "max_bias_profile_gain": 0.9623135617475214,
+      "max_kkt": 3.234205789323967e-16,
+      "max_full_error": 5.541240477306209e-14
+    }
+  ],
+  "tempered_barriers": [
+    {
+      "beta": 1.0,
+      "minimum_barrier": 124.40556662835525,
+      "maximum_barrier": 140.70983073533782,
+      "paths": [
+        {
+          "path": "white-to0",
+          "barrier": 133.42244239106333
+        },
+        {
+          "path": "physical-to0",
+          "barrier": 140.70983073533782
+        },
+        {
+          "path": "arc-to0",
+          "barrier": 134.67293683236147
+        },
+        {
+          "path": "white-to2",
+          "barrier": 124.40556662835525
+        },
+        {
+          "path": "physical-to2",
+          "barrier": 124.43189252236346
+        },
+        {
+          "path": "arc-to2",
+          "barrier": 132.16808881232726
+        },
+        {
+          "path": "white-to3",
+          "barrier": 127.78655864553454
+        },
+        {
+          "path": "physical-to3",
+          "barrier": 128.23855585679814
+        },
+        {
+          "path": "arc-to3",
+          "barrier": 133.80616273576547
+        }
+      ]
+    },
+    {
+      "beta": 0.5,
+      "minimum_barrier": 50.80457692731283,
+      "maximum_barrier": 65.01482755025279,
+      "paths": [
+        {
+          "path": "white-to0",
+          "barrier": 55.75239282096377
+        },
+        {
+          "path": "physical-to0",
+          "barrier": 59.607065323023896
+        },
+        {
+          "path": "arc-to0",
+          "barrier": 63.530686997964914
+        },
+        {
+          "path": "white-to2",
+          "barrier": 51.62089879886381
+        },
+        {
+          "path": "physical-to2",
+          "barrier": 51.63838018508786
+        },
+        {
+          "path": "arc-to2",
+          "barrier": 64.55170281598825
+        },
+        {
+          "path": "white-to3",
+          "barrier": 50.80457692731283
+        },
+        {
+          "path": "physical-to3",
+          "barrier": 51.02138356728012
+        },
+        {
+          "path": "arc-to3",
+          "barrier": 65.01482755025279
+        }
+      ]
+    },
+    {
+      "beta": 0.25,
+      "minimum_barrier": 12.326422293120842,
+      "maximum_barrier": 30.760737604865994,
+      "paths": [
+        {
+          "path": "white-to0",
+          "barrier": 17.080887065141553
+        },
+        {
+          "path": "physical-to0",
+          "barrier": 19.25486747619908
+        },
+        {
+          "path": "arc-to0",
+          "barrier": 28.074176745851958
+        },
+        {
+          "path": "white-to2",
+          "barrier": 15.410423644427013
+        },
+        {
+          "path": "physical-to2",
+          "barrier": 15.40847725799658
+        },
+        {
+          "path": "arc-to2",
+          "barrier": 30.760737604865994
+        },
+        {
+          "path": "white-to3",
+          "barrier": 12.326422293120842
+        },
+        {
+          "path": "physical-to3",
+          "barrier": 12.442444031736045
+        },
+        {
+          "path": "arc-to3",
+          "barrier": 30.658340593040435
+        }
+      ]
+    },
+    {
+      "beta": 0.125,
+      "minimum_barrier": 0.0,
+      "maximum_barrier": 13.915550621115763,
+      "paths": [
+        {
+          "path": "white-to0",
+          "barrier": 0.0
+        },
+        {
+          "path": "physical-to0",
+          "barrier": 0.0
+        },
+        {
+          "path": "arc-to0",
+          "barrier": 10.57546920670346
+        },
+        {
+          "path": "white-to2",
+          "barrier": 0.0
+        },
+        {
+          "path": "physical-to2",
+          "barrier": 0.0
+        },
+        {
+          "path": "arc-to2",
+          "barrier": 13.915550621115763
+        },
+        {
+          "path": "white-to3",
+          "barrier": 0.0
+        },
+        {
+          "path": "physical-to3",
+          "barrier": 0.0
+        },
+        {
+          "path": "arc-to3",
+          "barrier": 13.540157311792072
+        }
+      ]
+    },
+    {
+      "beta": 0.0625,
+      "minimum_barrier": 0.0,
+      "maximum_barrier": 5.575636292193195,
+      "paths": [
+        {
+          "path": "white-to0",
+          "barrier": 0.0
+        },
+        {
+          "path": "physical-to0",
+          "barrier": 0.0
+        },
+        {
+          "path": "arc-to0",
+          "barrier": 2.2599025187564408
+        },
+        {
+          "path": "white-to2",
+          "barrier": 0.0
+        },
+        {
+          "path": "physical-to2",
+          "barrier": 0.0
+        },
+        {
+          "path": "arc-to2",
+          "barrier": 5.575636292193195
+        },
+        {
+          "path": "white-to3",
+          "barrier": 0.0
+        },
+        {
+          "path": "physical-to3",
+          "barrier": 0.0
+        },
+        {
+          "path": "arc-to3",
+          "barrier": 5.0982716373261425
+        }
+      ]
+    },
+    {
+      "beta": 0.0,
+      "minimum_barrier": 0.0,
+      "maximum_barrier": 0.0,
+      "paths": [
+        {
+          "path": "white-to0",
+          "barrier": 0.0
+        },
+        {
+          "path": "physical-to0",
+          "barrier": 0.0
+        },
+        {
+          "path": "arc-to0",
+          "barrier": 0.0
+        },
+        {
+          "path": "white-to2",
+          "barrier": 0.0
+        },
+        {
+          "path": "physical-to2",
+          "barrier": 0.0
+        },
+        {
+          "path": "arc-to2",
+          "barrier": 0.0
+        },
+        {
+          "path": "white-to3",
+          "barrier": 0.0
+        },
+        {
+          "path": "physical-to3",
+          "barrier": 0.0
+        },
+        {
+          "path": "arc-to3",
+          "barrier": 0.0
+        }
+      ]
+    }
+  ],
+  "control_likelihood_span": 1.7053025658242404e-13,
+  "control_profiled_likelihood_span": 1.7053025658242404e-13,
+  "max_kkt": 5.1476757659663625e-15,
+  "max_full_error": 6.744604874597826e-14,
+  "limits": [
+    "Selected after observing separated chains; exploratory, not blind validation",
+    "Profiled potentials are not marginalized densities, evidence or configuration masses",
+    "A barrier on these paths need not occur on every possible path",
+    "Absence of a point-potential barrier does not establish easy typical-set mixing",
+    "No chains discarded, reweighted, restarted or extended"
+  ],
+  "endpoint_gradient_checks": 32,
+  "max_endpoint_gradient_error": 5.773175676490672e-09,
+  "profile_values_identical_after_gradient_replay": true,
+  "date": "2026-11-18"
+}

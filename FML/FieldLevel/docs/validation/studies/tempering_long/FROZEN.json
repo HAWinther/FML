@@ -1,0 +1,7 @@
+{
+  "frozen_utc": "2026-11-18T13:24:35.646545+00:00",
+  "plan_sha256": "a6fee75b677ab3efb27052a9a9689772a231d01272c007bbace1e0545ffbf98b",
+  "binary_sha256": "5e75801319154a19be9f33105a3194ac91ea56b8975d747bf0a5fbaca19b61cf",
+  "scope": "Four chains extended from 1024 to 2048 retained; no independent-replication claim; no gate/kernel/target changes",
+  "kernel_helpers_and_sweep_body_byte_identical": true
+}

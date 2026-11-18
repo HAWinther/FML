@@ -770,3 +770,65 @@ data/objective/gradient bytes. Corrected max Rhat=1.023 and bulk ESS<400 mean
 full mixing gates remain unmet; no extension or retuning was done. Next: a
 declared longer joint field/scalar pilot, then scientific posterior/refinement
 validation. Item 52 remains ongoing.
+
+
+### Item 52: bounded joint field/amplitude/bias pilot (18 November 2026)
+
+Added a maintained [checkpointed joint pilot](FieldLevel/validation/galaxy/joint/README.md),
+frozen before execution: four dispersed chains, 256 warmup and 1024 retained
+draws, corrected frozen field metric and warmup-only scalar/step adaptation.
+[The result](FieldLevel/docs/validation/studies/joint_pilot/RESULTS.md) has frozen
+mixing-gate status **FAIL**. All data targets match; a separate 64-draw
+fresh-process continuation replays exactly and is not pooled. No budget
+extension, retuning, chain dropping or gate changes. Next: diagnose scalar/field coupling and compare a separately declared sampler improvement before scaling.
+This does not establish coverage, all-coordinate convergence or a real-catalog
+amplitude result. Item 52 remains ongoing.
+
+
+### Item 52: blocked field/cached-scalar pilot (18 November 2026)
+
+Added a maintained [serial blocked prototype](FieldLevel/validation/galaxy/blocked/README.md)
+composing existing field-only HMC and cached scalar kernels with the unchanged
+physical target. Frozen four-chain 256/1024 comparison: mixing gate **FAIL**;
+[results](FieldLevel/docs/validation/studies/blocked_pilot/RESULTS.md). Cache/full
+posterior and derivative checks, 20 scalar regression checks, corruption/identity
+rejection and exact independent continuation pass. No extension, retuning, chain
+dropping or baseline/replay pooling. Next: diagnose remaining joint exploration before scaling.
+Production MPI blocked-driver support and scientifically validated marginalized
+sigma8/real-catalog results remain open. Item 52 is ongoing.
+
+
+### Item 52: amplitude/field interweaving comparison (18 November 2026)
+
+Added the [separate serial interweaving prototype](FieldLevel/validation/galaxy/interweave/README.md) with full-posterior MH and the all-real-coordinate Jacobian, preserving blocked field/scalar settings, initial states and gates. Four-chain 256/1024 pilot: **FAIL**; [report](FieldLevel/docs/validation/studies/interweave_pilot/RESULTS.md). Dedicated kernel tests (26), full-target/cache and bias derivatives, analytic Gaussian marginals with unused directions, shared/compact 1LPT/2LPT prediction preservation and exact fresh-process replay pass. No retuning, extension or pooling. Remaining chain-dependent configurations require diagnosis before scaling. Production MPI interweaving and scientific marginalized-sigma8/real-catalog validation remain open. Item 52 is ongoing.
+
+
+### Item 52: deterministic posterior geometry audit (18 November 2026)
+
+[The maintained audit](FieldLevel/validation/galaxy/geometry/README.md) evaluates 1010 points on selected paths between the separated primary chain configurations, with globally certified bounded-bias profiles. [Results](FieldLevel/docs/validation/studies/geometry_audit/RESULTS.md) retain 124–141 sampled point-potential barriers after profiling. Three optimizer references, full-target comparisons, rescaling control and 32 actual-endpoint field/scalar finite differences pass. A reuse-only likelihood-temperature scan reduces barriers, motivating a separately tested replica-exchange connectivity pilot. No new Monte Carlo draws, retuning, chain dropping, reweighting or posterior/evidence claim. Production tempering and scientific marginalized-sigma8/real-catalog validation remain open. Item 52 is ongoing.
+
+
+### Item 52: likelihood-tempered connectivity test (18 November 2026)
+
+Added a maintained [serial six-replica exchange prototype](FieldLevel/validation/galaxy/tempering/README.md) with unchanged priors/cold target, context-consistent positive-beta kernels, exact beta=0 prior refresh and whole-ensemble checkpoints. Two ensembles, 64/256 discarded/measured sweeps: connectivity gate **FAIL**; [report](FieldLevel/docs/validation/studies/tempering_connectivity/RESULTS.md). Analytic correlated-Gaussian, target/cache/prior and byte-exact fresh-process/replay checks pass. No ladder edits, budget extension, excluded ensembles or hot/replay pooling. Next: diagnose overlap bottlenecks and freeze a separate ladder refinement. Production MPI ensemble support, posterior convergence, coverage and real-catalog inference remain open. Item 52 is ongoing.
+
+
+### Item 52: configurable ladder and prior-bridge refinement (18 November 2026)
+
+The maintained [replica prototype](FieldLevel/validation/galaxy/tempering/README.md) now accepts fingerprinted ladders/pass counts, with dynamic replica/edge arrays, codec bounds and seed limits. Real legacy retained continuation and analysis reproduce the six-level result exactly; changed ladders/schedules reject checkpoints. A separate 11-level, four-pass, fixed two-ensemble 64/256 experiment has connectivity gate **PASS**; [report](FieldLevel/docs/validation/studies/tempering_bridge/RESULTS.md). Round trips require an actual prior refresh, excluding exchange-only bounces. Twenty-five kernel tests, ten tempered contexts, thirty cache comparisons and exact whole-ensemble replay pass. No retuning, extension, excluded ensembles or pooling. Next: separately frozen four-cold-chain posterior validation. Production MPI and scientific marginalized-sigma8/real-catalog milestones remain open. Item 52 is ongoing.
+
+- #52: Four-cold-chain eleven-replica posterior campaign frozen and started (256 warmup + 1024 retained per cold chain). Runtime schedule/ensemble identity and tuple seed domains implemented. Exact legacy/new checkpoint, pause/SIGTERM and stale-summary recovery checks pass. Posterior gates pending; see `FieldLevel/docs/validation/studies/tempering_posterior/RESULTS.md`.
+
+- #52: Frozen four-cold-chain eleven-replica posterior campaign complete: posterior gate **FAIL**, 2/11 coordinate gates fail; connectivity PASS, exact full restart and pause/locking checks pass. See `FieldLevel/docs/validation/studies/tempering_posterior/RESULTS.md`. No budget extension or tuning; scientific free-IC milestone remains bounded by this result.
+
+- #52: Separate 2048-draw four-chain continuation frozen and started. The original failed 1024-draw result is preserved; verified prefixes copied once into a new campaign. Same target/kernels/gates, exact fresh/import and legacy checks pass. This is a continuation, not independent replication; result pending in `FieldLevel/docs/validation/studies/tempering_long/RESULTS.md`.
+
+- #52: Frozen four-cold-chain eleven-replica posterior campaign complete: posterior gate **PASS**, 0/11 coordinate gates fail; connectivity PASS, exact full restart and pause/locking checks pass. See `FieldLevel/docs/validation/studies/tempering_long/RESULTS.md`. No budget extension or tuning; scientific free-IC milestone remains bounded by this result.
+
+- #52: Frozen posterior numerical-refinement check started: six product/particle/deposition/tolerance cases on all 8192 passing cold states, fixed physical target and priors. Exact baseline reproduction and pause/SIGTERM/input guards pass. Importance sensitivity with overlap and correlation-aware paired shift errors; no new refined-target MCMC/coverage claim. See `FieldLevel/docs/validation/studies/posterior_refinement/RESULTS.md`.
+
+- #52: Frozen posterior numerical-refinement gate **PASS** across six settings on 8192 cold states. Max shift+2MCSE 1.62e-07 posterior SD; max sampled noise-weighted prediction distance 1.58e-05. Exact baseline/source hashes and pause/resume checks pass. Independent mocks, larger-target/real-catalog validation and production MPI replica layouts remain open. See `FieldLevel/docs/validation/studies/posterior_refinement/RESULTS.md`.
+
+- #52: Two independent fixed-truth mock studies frozen and started, each four fresh 256/2048 chains. New fingerprinted data/initial/sampler namespaces; source kernels unchanged. Legacy, eight-chain fresh/restart, signal pause, data-independence and actual tempered-target checks pass. Recovery ranks/interval inclusion are descriptive; two mocks are not coverage calibration. Result pending in `FieldLevel/docs/validation/studies/independent_mocks/RESULTS.md`.
+
+- #52: Both independent fixed-truth mocks complete their fresh four-chain 256/2048 budgets. Computational gate **PASS**; all recovery ranks/interval misses preserved, no adaptive budget or dataset replacement. Exact replays and all eight final checkpoint reloads pass. Two mocks are not SBC/coverage calibration. See `FieldLevel/docs/validation/studies/independent_mocks/RESULTS.md`.

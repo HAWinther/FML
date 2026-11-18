@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "scope": "Frozen posterior numerical-refinement check by same-dimension likelihood importance reweighting, not refined-target MCMC or independent mock calibration",
+  "source": {
+    "plan_sha256": "a6fee75b677ab3efb27052a9a9689772a231d01272c007bbace1e0545ffbf98b",
+    "posterior_summary_sha256": "38d8a32aec65db8250bb9b95a2b9a11012a2fe724b6ddfbffd756daf53be1b1b",
+    "ensembles": 4,
+    "samples": 2048
+  },
+  "mesh": 4,
+  "boxsize": 100,
+  "initial_band": "sphere <1.7 kf",
+  "matter_band": "cube <1.8 kf",
+  "likelihood_band": "cube <1.6 kf",
+  "spectrum": "20000 exp(-5k), amplitude ratio squared",
+  "noise_power": 1000,
+  "chunk": 256,
+  "cases": [
+    {
+      "name": "baseline",
+      "product": 8,
+      "density": 16,
+      "epsilon": 1e-08
+    },
+    {
+      "name": "tolerance",
+      "product": 8,
+      "density": 16,
+      "epsilon": 1e-12
+    },
+    {
+      "name": "deposition",
+      "product": 8,
+      "density": 32,
+      "epsilon": 1e-12
+    },
+    {
+      "name": "product12",
+      "product": 12,
+      "density": 32,
+      "epsilon": 1e-12
+    },
+    {
+      "name": "reference16",
+      "product": 16,
+      "density": 48,
+      "epsilon": 1e-12
+    },
+    {
+      "name": "reference24",
+      "product": 24,
+      "density": 64,
+      "epsilon": 1e-12
+    }
+  ],
+  "comparisons": [
+    [
+      "baseline",
+      "tolerance"
+    ],
+    [
+      "baseline",
+      "deposition"
+    ],
+    [
+      "baseline",
+      "product12"
+    ],
+    [
+      "baseline",
+      "reference16"
+    ],
+    [
+      "baseline",
+      "reference24"
+    ],
+    [
+      "reference16",
+      "reference24"
+    ]
+  ],
+  "batch_lengths": [
+    64,
+    128
+  ],
+  "gates": {
+    "baseline_prediction_scaled_error": 2e-12,
+    "baseline_quadratic_scaled_error": 2e-11,
+    "max_sample_noise_weighted_prediction_distance": 0.1,
+    "max_absolute_log_weight": 1.0,
+    "min_importance_overlap_fraction_per_chain_and_pooled": 0.9,
+    "max_weight_relative_to_uniform": 5.0,
+    "max_mean_shift_in_baseline_sd": 0.1,
+    "max_mean_shift_plus_two_mcse_in_baseline_sd": 0.1,
+    "max_quantile_shift_in_baseline_sd": 0.1,
+    "max_relative_sd_change": 0.02,
+    "max_weighted_predictive_mean_distance": 0.1
+  },
+  "stopping": "Evaluate all six cases on all 8192 cold states, no thinning/hot/replay pooling, changed priors/data/cutoffs, extra cases, retuned gates or extension until pass. If overlap or stability fails, report failure; do not certify a refined posterior.",
+  "uncertainty": "Paired ratio-estimator influence batch means at lengths 64 and 128 within each independent chain; use larger MCSE. Importance overlap index is not autocorrelation-corrected MCMC ESS.",
+  "limits": [
+    "One synthetic target; baseline monitored mixing gates must pass",
+    "Only five scalar and six fixed field projections tested for marginal stability",
+    "Product mesh and particle lattice refine together",
+    "Same 64-dimensional white prior and physical scalar priors; likelihood-only ratios",
+    "Quantile shifts are point estimates with no quantile MCSE gate",
+    "Not a fresh refined-target MCMC or proof of global continuum convergence"
+  ]
+}

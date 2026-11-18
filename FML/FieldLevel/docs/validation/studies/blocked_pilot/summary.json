@@ -1,0 +1,478 @@
+{
+  "scope": "Bounded blocked field-HMC/cached-scalar comparison; same synthetic target and primary draw budget as joint pilot",
+  "passed": false,
+  "diagnostics": [
+    {
+      "parameter": "sigma8_ratio",
+      "rhat": 1.4774392264505887,
+      "bulk_ess": 7.672281821899343,
+      "tail_ess": 32.32141877989736,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "b_delta",
+      "rhat": 1.5496046433009545,
+      "bulk_ess": 7.295566115971525,
+      "tail_ess": 30.552122311176536,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "b_delta2",
+      "rhat": 1.2286217175698517,
+      "bulk_ess": 14.761899975910673,
+      "tail_ess": 488.6749277868459,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "b_K2",
+      "rhat": 1.3452179914016014,
+      "bulk_ess": 9.477185560422297,
+      "tail_ess": 50.35365394472805,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "b_laplacian",
+      "rhat": 1.273185902577402,
+      "bulk_ess": 11.445580600296891,
+      "tail_ess": 126.51611320572796,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "cos100",
+      "rhat": 1.5672757863483762,
+      "bulk_ess": 7.049789871242395,
+      "tail_ess": 31.235091823854454,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "sin100",
+      "rhat": 1.43308018520673,
+      "bulk_ess": 8.249658455590414,
+      "tail_ess": 43.40160406080977,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "cos110",
+      "rhat": 1.5918503122835563,
+      "bulk_ess": 6.890262917387469,
+      "tail_ess": 24.126771920446856,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "sin110",
+      "rhat": 1.362186572951728,
+      "bulk_ess": 9.307810923950653,
+      "tail_ess": 26.405767707409268,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "cos001",
+      "rhat": 1.576081553690428,
+      "bulk_ess": 7.220839129223609,
+      "tail_ess": 40.05788781391218,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "sin001",
+      "rhat": 1.556425006717847,
+      "bulk_ess": 7.187436668607022,
+      "tail_ess": 46.61460549323057,
+      "status": "ok",
+      "passed": false
+    }
+  ],
+  "chains": [
+    {
+      "synthetic_blocked_pilot": true,
+      "mesh": 4,
+      "product_mesh": 8,
+      "density_mesh": 16,
+      "ranks": 1,
+      "completed_iterations": 1280,
+      "completed_samples": 1024,
+      "warmup": 256,
+      "samples": 1024,
+      "acceptance": 0.9780366757388775,
+      "step_size": 0.15,
+      "divergences": 0,
+      "scalar_accepted": 2451,
+      "scalar_attempts": 4096,
+      "support_rejections": 532,
+      "cache_builds": 6400
+    },
+    {
+      "synthetic_blocked_pilot": true,
+      "mesh": 4,
+      "product_mesh": 8,
+      "density_mesh": 16,
+      "ranks": 1,
+      "completed_iterations": 1280,
+      "completed_samples": 1024,
+      "warmup": 256,
+      "samples": 1024,
+      "acceptance": 0.9743156929794999,
+      "step_size": 0.15,
+      "divergences": 0,
+      "scalar_accepted": 1073,
+      "scalar_attempts": 4096,
+      "support_rejections": 2727,
+      "cache_builds": 6400
+    },
+    {
+      "synthetic_blocked_pilot": true,
+      "mesh": 4,
+      "product_mesh": 8,
+      "density_mesh": 16,
+      "ranks": 1,
+      "completed_iterations": 1280,
+      "completed_samples": 1024,
+      "warmup": 256,
+      "samples": 1024,
+      "acceptance": 0.9837729494238144,
+      "step_size": 0.15,
+      "divergences": 0,
+      "scalar_accepted": 2446,
+      "scalar_attempts": 4096,
+      "support_rejections": 568,
+      "cache_builds": 6400
+    },
+    {
+      "synthetic_blocked_pilot": true,
+      "mesh": 4,
+      "product_mesh": 8,
+      "density_mesh": 16,
+      "ranks": 1,
+      "completed_iterations": 1280,
+      "completed_samples": 1024,
+      "warmup": 256,
+      "samples": 1024,
+      "acceptance": 0.9759914480748698,
+      "step_size": 0.15,
+      "divergences": 0,
+      "scalar_accepted": 2330,
+      "scalar_attempts": 4096,
+      "support_rejections": 628,
+      "cache_builds": 6400
+    }
+  ],
+  "pooled_descriptive_scalar_quantiles": {
+    "sigma8_ratio": [
+      0.5222587398427763,
+      0.7807017460775305,
+      1.444516622864688
+    ],
+    "b_delta": [
+      0.04908412545504502,
+      1.9947597518072393,
+      3.184524376401798
+    ],
+    "b_delta2": [
+      -0.4334234598692575,
+      1.1500492278261145,
+      3.2263360676533273
+    ],
+    "b_K2": [
+      -3.6856024195814796,
+      -0.7426583418535057,
+      3.3115939332338673
+    ],
+    "b_laplacian": [
+      -81.7762918121392,
+      39.847726446933066,
+      96.84884166402543
+    ]
+  },
+  "scalar_correlations": [
+    [
+      1.0,
+      -0.8550790478969502,
+      0.26648975259158386,
+      0.5760148192410718,
+      0.5150245906768728
+    ],
+    [
+      -0.8550790478969502,
+      1.0,
+      -0.28615662332909175,
+      -0.6587792133987876,
+      -0.32079833703645183
+    ],
+    [
+      0.26648975259158386,
+      -0.2861566233290917,
+      0.9999999999999998,
+      0.6195048878950978,
+      0.32305231638800236
+    ],
+    [
+      0.5760148192410718,
+      -0.6587792133987876,
+      0.6195048878950978,
+      0.9999999999999998,
+      0.2980690287833327
+    ],
+    [
+      0.5150245906768728,
+      -0.32079833703645183,
+      0.3230523163880023,
+      0.29806902878333263,
+      1.0
+    ]
+  ],
+  "residual_shells": [
+    {
+      "k": 0.06283185307179587,
+      "real_modes": 6.0,
+      "posterior_residual_power_q05_q50_q95": [
+        0.2688524378006426,
+        0.8645625706212978,
+        1.9589987696358264
+      ],
+      "posterior_mean_residual_power": 0.04732281272418536
+    },
+    {
+      "k": 0.08885765876316733,
+      "real_modes": 12.0,
+      "posterior_residual_power_q05_q50_q95": [
+        0.4396798745310624,
+        0.9778561367664922,
+        1.7974481112990865
+      ],
+      "posterior_mean_residual_power": 0.08809097703083595
+    },
+    {
+      "k": 0.10882796185405307,
+      "real_modes": 8.0,
+      "posterior_residual_power_q05_q50_q95": [
+        0.26782061002927654,
+        0.616455906753293,
+        1.3686585928953554
+      ],
+      "posterior_mean_residual_power": 0.18516636312714152
+    }
+  ],
+  "limits": [
+    "Synthetic same-model data; no coverage or real-catalog claim",
+    "Six field projections, not all field coordinates",
+    "Descriptive pooled quantiles are provisional when any mixing gates fail",
+    "Residuals use fitted data; not an independent predictive validation",
+    "Replay draws excluded; fixed budget not extended"
+  ],
+  "target_identical_across_chains": true,
+  "restart_replay": true,
+  "date": "2026-11-18",
+  "comparison": {
+    "same_serialized_target": true,
+    "same_initial_states": true,
+    "same_primary_draw_budget": true,
+    "same_gates": true,
+    "baseline_passed": false,
+    "blocked_passed": false,
+    "baseline_summed_process_seconds": 525.1197103401646,
+    "blocked_summed_process_seconds": 741.0491732314695,
+    "seconds_ratio": 1.4112004532289009,
+    "diagnostics": [
+      {
+        "parameter": "sigma8_ratio",
+        "baseline_rhat": 1.3171303751861048,
+        "blocked_rhat": 1.4774392264505887,
+        "baseline_bulk_ess": 10.436389898539247,
+        "blocked_bulk_ess": 7.672281821899343,
+        "baseline_bulk_ess_per_second": 0.019874306168737622,
+        "blocked_bulk_ess_per_second": 0.01035326952520987
+      },
+      {
+        "parameter": "b_delta",
+        "baseline_rhat": 2.0917930001152243,
+        "blocked_rhat": 1.5496046433009545,
+        "baseline_bulk_ess": 5.347058300872506,
+        "blocked_bulk_ess": 7.295566115971525,
+        "baseline_bulk_ess_per_second": 0.01018255113183385,
+        "blocked_bulk_ess_per_second": 0.009844914992831019
+      },
+      {
+        "parameter": "b_delta2",
+        "baseline_rhat": 2.876022011135649,
+        "blocked_rhat": 1.2286217175698517,
+        "baseline_bulk_ess": 4.610506803540918,
+        "blocked_bulk_ess": 14.761899975910673,
+        "baseline_bulk_ess_per_second": 0.008779915727319208,
+        "blocked_bulk_ess_per_second": 0.019920270488311763
+      },
+      {
+        "parameter": "b_K2",
+        "baseline_rhat": 2.0596231510365794,
+        "blocked_rhat": 1.3452179914016014,
+        "baseline_bulk_ess": 5.388108634437743,
+        "blocked_bulk_ess": 9.477185560422297,
+        "baseline_bulk_ess_per_second": 0.010260724418337693,
+        "blocked_bulk_ess_per_second": 0.012788875425223722
+      },
+      {
+        "parameter": "b_laplacian",
+        "baseline_rhat": 1.9100975741142927,
+        "blocked_rhat": 1.273185902577402,
+        "baseline_bulk_ess": 5.627981478681055,
+        "blocked_bulk_ess": 11.445580600296891,
+        "baseline_bulk_ess_per_second": 0.01071752091544104,
+        "blocked_bulk_ess_per_second": 0.01544510271887426
+      },
+      {
+        "parameter": "cos100",
+        "baseline_rhat": 2.1938728402336674,
+        "blocked_rhat": 1.5672757863483762,
+        "baseline_bulk_ess": 5.142510461434186,
+        "blocked_bulk_ess": 7.049789871242395,
+        "baseline_bulk_ess_per_second": 0.009793025019195994,
+        "blocked_bulk_ess_per_second": 0.009513255160248816
+      },
+      {
+        "parameter": "sin100",
+        "baseline_rhat": 2.268042699623417,
+        "blocked_rhat": 1.43308018520673,
+        "baseline_bulk_ess": 5.0407820215745645,
+        "blocked_bulk_ess": 8.249658455590414,
+        "baseline_bulk_ess_per_second": 0.009599300735272766,
+        "blocked_bulk_ess_per_second": 0.011132403561853245
+      },
+      {
+        "parameter": "cos110",
+        "baseline_rhat": 2.500757624729665,
+        "blocked_rhat": 1.5918503122835563,
+        "baseline_bulk_ess": 4.84361479588998,
+        "blocked_bulk_ess": 6.890262917387469,
+        "baseline_bulk_ess_per_second": 0.009223829729705556,
+        "blocked_bulk_ess_per_second": 0.009297983408228254
+      },
+      {
+        "parameter": "sin110",
+        "baseline_rhat": 1.958700080383932,
+        "blocked_rhat": 1.362186572951728,
+        "baseline_bulk_ess": 5.6111980688022,
+        "blocked_bulk_ess": 9.307810923950653,
+        "baseline_bulk_ess_per_second": 0.010685559803434823,
+        "blocked_bulk_ess_per_second": 0.012560314834928402
+      },
+      {
+        "parameter": "cos001",
+        "baseline_rhat": 1.9346791485290058,
+        "blocked_rhat": 1.576081553690428,
+        "baseline_bulk_ess": 5.575261441759308,
+        "blocked_bulk_ess": 7.220839129223609,
+        "baseline_bulk_ess_per_second": 0.010617124689811658,
+        "blocked_bulk_ess_per_second": 0.009744075548638596
+      },
+      {
+        "parameter": "sin001",
+        "baseline_rhat": 2.5870773771809965,
+        "blocked_rhat": 1.556425006717847,
+        "baseline_bulk_ess": 4.779042325719958,
+        "blocked_bulk_ess": 7.187436668607022,
+        "baseline_bulk_ess_per_second": 0.009100862587359683,
+        "blocked_bulk_ess_per_second": 0.009699000995122897
+      }
+    ],
+    "limits": [
+      "Different kernels, integration settings and warmup adaptation; not an isolated one-setting ablation",
+      "ESS/s ratios are descriptive when either chain set fails stationarity/mixing gates",
+      "Summed main-chunk process wall seconds include initialization, cache construction and draw/checkpoint I/O; exclude preflight and replay",
+      "No pooled baseline or replay draws; no post-run tuning or extension"
+    ]
+  },
+  "preflight": {
+    "cache": {
+      "passed": true,
+      "points": 18,
+      "bias_derivatives": 72,
+      "max_scaled_gap_error": 1.362118133156655e-15
+    },
+    "full_split_exact": true,
+    "wrong_chain_refused": true,
+    "corruption_refused": true,
+    "commands": [
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-blocked-pilot/build/FML/FieldLevel/validation/galaxy/blocked/blocked_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-blocked-pilot/preflight/cache",
+          "start",
+          "0",
+          "0"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-blocked-pilot/build/FML/FieldLevel/validation/galaxy/blocked/blocked_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-blocked-pilot/preflight/full",
+          "start",
+          "0",
+          "4"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-blocked-pilot/build/FML/FieldLevel/validation/galaxy/blocked/blocked_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-blocked-pilot/preflight/split",
+          "start",
+          "0",
+          "2"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-blocked-pilot/build/FML/FieldLevel/validation/galaxy/blocked/blocked_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-blocked-pilot/preflight/split",
+          "resume",
+          "0",
+          "2"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-blocked-pilot/build/FML/FieldLevel/validation/galaxy/blocked/blocked_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-blocked-pilot/preflight/split",
+          "resume",
+          "1",
+          "0"
+        ],
+        "exit_code": 1
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-blocked-pilot/build/FML/FieldLevel/validation/galaxy/blocked/blocked_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-blocked-pilot/preflight/corrupt",
+          "resume",
+          "0",
+          "0"
+        ],
+        "exit_code": 1
+      }
+    ]
+  },
+  "failed_coordinates": [
+    "sigma8_ratio",
+    "b_delta",
+    "b_delta2",
+    "b_K2",
+    "b_laplacian",
+    "cos100",
+    "sin100",
+    "cos110",
+    "sin110",
+    "cos001",
+    "sin001"
+  ]
+}

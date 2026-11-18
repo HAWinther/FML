@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "scope": "Bounded blocked sampler plus amplitude/full-field rescaling; separate primary campaign",
+  "mesh": 4,
+  "product_mesh": 8,
+  "density_mesh": 16,
+  "boxsize": 100,
+  "spectrum": "20000 exp(-5k)",
+  "noise_power": 1000,
+  "nufft_epsilon": 1e-08,
+  "initial_band": "sphere <1.7 kf",
+  "matter_band": "cube <1.8 kf",
+  "likelihood_band": "cube <1.6 kf",
+  "truth_parameters": [
+    1,
+    1.6,
+    0.3,
+    -0.2,
+    7
+  ],
+  "truth_seed": 4101,
+  "noise_seed": 4102,
+  "initial_seed_base": 4103,
+  "initial_parameters": [
+    [
+      0.8,
+      1.2,
+      -0.3,
+      0.2,
+      -20
+    ],
+    [
+      1.2,
+      2,
+      0.8,
+      -0.6,
+      30
+    ],
+    [
+      0.9,
+      2.4,
+      -0.8,
+      0.6,
+      50
+    ],
+    [
+      1.1,
+      0.8,
+      1,
+      -1,
+      -40
+    ]
+  ],
+  "chains": 4,
+  "warmup": 256,
+  "samples": 1024,
+  "checkpoint_every": 64,
+  "chunk_trajectories": 64,
+  "gates": {
+    "rhat_lt": 1.01,
+    "bulk_ess_ge": 400,
+    "tail_ess_ge": 400,
+    "sampling_divergences": 0,
+    "coordinates": "All five scalars and six fixed field projections"
+  },
+  "replay": "Chain 0: copy checkpoint at trajectory 384; independently resume 64 trajectories and compare all committed draw bytes and summary against the primary run. Do not pool replay draws.",
+  "stopping": "Stop at fixed budget, even on failed gates. No data-dependent extension, retuning, chain dropping or gate changes.",
+  "plots": [
+    "scalar and field traces",
+    "sigma8 posterior and scalar correlations",
+    "mode-binned residual spectra"
+  ],
+  "method": "Unchanged blocked field/scalar sweep, then four full-field amplitude-rescaling MH attempts",
+  "field": {
+    "n_leapfrog": 8,
+    "step_size": 0.15,
+    "jitter": false,
+    "adapt_step_size": false,
+    "adapt_mass": false,
+    "metric": "Frozen at chain initial scalar snapshot"
+  },
+  "scalars": {
+    "transitions": 4,
+    "bias_sweeps_per_transition": 8,
+    "amplitude_step": 0.07,
+    "method": "Existing physical-coordinate joint amplitude/bias MH plus convex conditional bias slices; actual priors in target"
+  },
+  "component_seed": "53000 + chain*100000 + 2*outer_iteration for field; +1 for scalar block",
+  "comparison": "Same target, initial states, gates, field/scalar settings and component seeds as blocked; only add rescaling block. Same retained count, greater compute cost; report cost and no pooling.",
+  "validation": "Independent Gaussian-marginal quadrature with Gaussian/uniform amplitude priors and unused coordinates; reciprocal/Jacobian checks; shared/compact 1LPT/2LPT prediction/target checks; exact fresh-process replay, corruption and identity rejection",
+  "interweaving": {
+    "attempts_per_sweep": 4,
+    "amplitude_step": 0.1,
+    "dimension": 64,
+    "coordinates": "All stored real white coordinates including prior-only directions",
+    "proposal": "alpha_new reflected normal walk; white_new=(alpha/alpha_new)*white; biases fixed",
+    "log_acceptance": "-U_new+U_old+N*log(alpha/alpha_new), with full existing posterior",
+    "seed": "930000 + chain*100000 + outer_iteration"
+  }
+}

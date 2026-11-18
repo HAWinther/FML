@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "scope": "Two predeclared independent fixed-truth mocks; bounded recovery stress test, not a coverage estimate or SBC",
+  "mocks": [
+    {
+      "id": 1,
+      "plan": "plan_mock1.json",
+      "truth_seed": 5101,
+      "noise_seed": 5102,
+      "initial_seed_base": 5103
+    },
+    {
+      "id": 2,
+      "plan": "plan_mock2.json",
+      "truth_seed": 6101,
+      "noise_seed": 6102,
+      "initial_seed_base": 6103
+    }
+  ],
+  "truth_parameters": [
+    1,
+    1.6,
+    0.3,
+    -0.2,
+    7
+  ],
+  "ensembles_per_mock": 4,
+  "warmup": 256,
+  "samples": 2048,
+  "workers_per_mock": 4,
+  "total_workers": 8,
+  "posterior_gates": {
+    "max_rhat": 1.01,
+    "min_bulk_ess": 400,
+    "min_tail_ess": 400
+  },
+  "recovery": {
+    "interval_probabilities": [
+      0.5,
+      0.9,
+      0.95
+    ],
+    "quantities": "All five physical scalars; initial-field projection truth and predictive residuals also reported",
+    "policy": "Describe ranks, offsets and central interval inclusion for every outcome. Interval misses are not automatic failures and must not trigger retuning. Recovery summaries provisional if mixing fails; no pooling across mocks."
+  },
+  "stopping": "All eight fresh chains complete their fixed budgets. Preserve all failed and successful mocks. No new draws until pass or seed replacement.",
+  "limits": [
+    "Only two new realizations, no meaningful coverage frequency calibration",
+    "Fixed scalar truth is not prior-predictive SBC",
+    "Source numerical stability covers one original mock; optional mock sensitivity requires a separately declared check",
+    "Serial replica-exchange validation; production MPI replica layouts remain open"
+  ]
+}

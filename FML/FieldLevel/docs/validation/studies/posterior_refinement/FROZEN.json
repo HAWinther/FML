@@ -1,0 +1,14 @@
+{
+  "plan_frozen_utc": "2026-11-18T14:06:07.412576+00:00",
+  "frozen_utc": "2026-11-18T14:07:50.638270+00:00",
+  "plan_sha256": "930b87dbe69b7fe87d978a620aa40b61c7f2e88d7f070192d4e719c5ca1ea190",
+  "binary_sha256": "90e3d7e24eabf3cca45e6abc8932240c06848f4cb6d5b8e47a833dd767d01f0c",
+  "analysis_sources_sha256": {
+    "analyze.py": "96ff0d6ce5edf52c1bc17dc9608e9bc5d7a71885b82f0df87fa605f3e151346e",
+    "weights.py": "dd751b51a22098f187549b96013e81f52ccc846c0eaf73d797f099d3ffd62da9",
+    "check_weights.py": "2722a36c1b511d37638efe05415d0dba4d988cdc941f55b46a5889e7584a569a"
+  },
+  "source_inputs_manifest_sha256": "902b32cdc72290f7736c63836bb9c4c621f08b5ffab13148ba483c3c17bef73c",
+  "result_sha256": "3d17128b85f56420435767297e1cfd35ab401aaf547b8ce53e3ed43629ab8b9a",
+  "post_seal_updates": "Zero-weight/undefined-SD failure handling before examining refined values; plot zoom after analysis with numerical summary byte-identical. Original variants and update records preserved in external output directory."
+}

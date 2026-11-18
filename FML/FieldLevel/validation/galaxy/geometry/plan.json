@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "scope": "Exploratory deterministic geometry diagnostic from existing interweaving draws; no new sampling or target change",
+  "source": "interweave campaign primary draws only",
+  "endpoint_draw": 512,
+  "source_chain": 1,
+  "destination_chains": [
+    0,
+    2,
+    3
+  ],
+  "points_per_path": 101,
+  "paths": [
+    "linear white coordinates",
+    "linear amplitude-weighted field",
+    "spherical white-direction interpolation with linearly interpolated norm"
+  ],
+  "controls": "One pure amplitude/field-rescaling path with unchanged physical initial density",
+  "scalars": "Interpolate amplitude and physical biases linearly between endpoints; separately profile all four bounded biases at fixed field/amplitude",
+  "profiling": "Enumerate 3^4 active sets of a convex box-constrained Gaussian linear-bias likelihood, solve free coordinates, select minimum, certify KKT and full-target agreement",
+  "limits": [
+    "Selected after observing separated chains; exploratory, not blind validation",
+    "Profiled potentials are not marginalized densities, evidence or configuration masses",
+    "A barrier on these paths need not occur on every possible path",
+    "Absence of a point-potential barrier does not establish easy typical-set mixing",
+    "No chains discarded, reweighted, restarted or extended"
+  ]
+}

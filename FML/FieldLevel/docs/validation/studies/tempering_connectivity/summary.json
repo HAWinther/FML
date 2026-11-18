@@ -1,0 +1,478 @@
+{
+  "scope": "Short likelihood-tempered replica-exchange connectivity test; not posterior convergence or calibration",
+  "connectivity_passed": false,
+  "posterior_convergence_claim": false,
+  "ensemble_gates": [
+    {
+      "ensemble": 0,
+      "each_edge_exchanged": true,
+      "roundtrips": 0,
+      "roundtrip_gate": false,
+      "divergence_gate": true
+    },
+    {
+      "ensemble": 1,
+      "each_edge_exchanged": true,
+      "roundtrips": 0,
+      "roundtrip_gate": false,
+      "divergence_gate": true
+    }
+  ],
+  "betas": [
+    1,
+    0.5,
+    0.25,
+    0.125,
+    0.0625,
+    0
+  ],
+  "pooled_swap_attempts": [
+    256,
+    256,
+    256,
+    256,
+    256
+  ],
+  "pooled_swap_accepted": [
+    36,
+    30,
+    31,
+    31,
+    3
+  ],
+  "pooled_swap_rates": [
+    0.140625,
+    0.1171875,
+    0.12109375,
+    0.12109375,
+    0.01171875
+  ],
+  "pooled_rate_gate": false,
+  "roundtrips_by_ensemble": [
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  ],
+  "summaries": [
+    {
+      "connectivity_only": true,
+      "completed_iterations": 320,
+      "completed_samples": 256,
+      "warmup": 64,
+      "samples": 256,
+      "betas": [
+        1,
+        0.5,
+        0.25,
+        0.125,
+        0.0625,
+        0
+      ],
+      "replicas": [
+        {
+          "beta": 1,
+          "field_acceptance": 0.9760306497903304,
+          "divergences": 0,
+          "scalar_accepted": 598,
+          "scalar_attempts": 1024,
+          "support_rejections": 123,
+          "rescale_accepted": 672,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.5,
+          "field_acceptance": 0.974854104285374,
+          "divergences": 0,
+          "scalar_accepted": 611,
+          "scalar_attempts": 1024,
+          "support_rejections": 107,
+          "rescale_accepted": 640,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.25,
+          "field_acceptance": 0.9753561259947937,
+          "divergences": 0,
+          "scalar_accepted": 597,
+          "scalar_attempts": 1024,
+          "support_rejections": 108,
+          "rescale_accepted": 641,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.125,
+          "field_acceptance": 0.9759043958830329,
+          "divergences": 0,
+          "scalar_accepted": 526,
+          "scalar_attempts": 1024,
+          "support_rejections": 168,
+          "rescale_accepted": 638,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.0625,
+          "field_acceptance": 0.9811037567982364,
+          "divergences": 0,
+          "scalar_accepted": 495,
+          "scalar_attempts": 1024,
+          "support_rejections": 243,
+          "rescale_accepted": 677,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0,
+          "field_acceptance": 0,
+          "divergences": 0,
+          "scalar_accepted": 0,
+          "scalar_attempts": 0,
+          "support_rejections": 0,
+          "rescale_accepted": 0,
+          "rescale_attempts": 0,
+          "cache_builds": 0,
+          "prior_refreshes": 320
+        }
+      ],
+      "swap_attempts": [
+        128,
+        128,
+        128,
+        128,
+        128
+      ],
+      "swap_accepted": [
+        23,
+        18,
+        17,
+        13,
+        1
+      ],
+      "roundtrips": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "transport_phase": [
+        1,
+        1,
+        2,
+        1,
+        1,
+        0
+      ]
+    },
+    {
+      "connectivity_only": true,
+      "completed_iterations": 320,
+      "completed_samples": 256,
+      "warmup": 64,
+      "samples": 256,
+      "betas": [
+        1,
+        0.5,
+        0.25,
+        0.125,
+        0.0625,
+        0
+      ],
+      "replicas": [
+        {
+          "beta": 1,
+          "field_acceptance": 0.9842615463825967,
+          "divergences": 0,
+          "scalar_accepted": 612,
+          "scalar_attempts": 1024,
+          "support_rejections": 114,
+          "rescale_accepted": 621,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.5,
+          "field_acceptance": 0.9817003661091968,
+          "divergences": 0,
+          "scalar_accepted": 525,
+          "scalar_attempts": 1024,
+          "support_rejections": 222,
+          "rescale_accepted": 684,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.25,
+          "field_acceptance": 0.983126264688354,
+          "divergences": 0,
+          "scalar_accepted": 519,
+          "scalar_attempts": 1024,
+          "support_rejections": 277,
+          "rescale_accepted": 685,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.125,
+          "field_acceptance": 0.983541593297192,
+          "divergences": 0,
+          "scalar_accepted": 529,
+          "scalar_attempts": 1024,
+          "support_rejections": 228,
+          "rescale_accepted": 667,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0.0625,
+          "field_acceptance": 0.9853111900535833,
+          "divergences": 0,
+          "scalar_accepted": 438,
+          "scalar_attempts": 1024,
+          "support_rejections": 298,
+          "rescale_accepted": 656,
+          "rescale_attempts": 1024,
+          "cache_builds": 1600,
+          "prior_refreshes": 0
+        },
+        {
+          "beta": 0,
+          "field_acceptance": 0,
+          "divergences": 0,
+          "scalar_accepted": 0,
+          "scalar_attempts": 0,
+          "support_rejections": 0,
+          "rescale_accepted": 0,
+          "rescale_attempts": 0,
+          "cache_builds": 0,
+          "prior_refreshes": 320
+        }
+      ],
+      "swap_attempts": [
+        128,
+        128,
+        128,
+        128,
+        128
+      ],
+      "swap_accepted": [
+        13,
+        12,
+        14,
+        18,
+        2
+      ],
+      "roundtrips": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "transport_phase": [
+        1,
+        0,
+        1,
+        1,
+        1,
+        1
+      ]
+    }
+  ],
+  "max_cold_quadratic_reconstruction_error": 6.138879709304046e-16,
+  "serialized_targets_match_baseline": true,
+  "exact_full_ensemble_replay": true,
+  "summed_main_process_seconds": 686.835314000491,
+  "limits": [
+    "Only beta=1 records are cold posterior draws",
+    "This two-ensemble short connectivity test has no posterior Rhat/ESS or coverage success claim",
+    "Labels measure walker transport, not unchanged physical configurations",
+    "Path-barrier reduction does not certify energy overlap",
+    "Serial validation format, not production MPI ensemble checkpointing",
+    "Connectivity gates are necessary diagnostics, not sufficient posterior mixing conditions",
+    "Swap outcomes are temporally dependent; empirical rates are not independent-binomial measurements",
+    "No excluded ensembles, ladder tuning, extra sweeps or pooled hot/replay draws"
+  ],
+  "date": "2026-11-18",
+  "preflight": {
+    "positive_beta_targets": {
+      "passed": true,
+      "positive_betas": 5,
+      "cache_points": 15,
+      "prior_draws": 8192,
+      "max_scaled_error": 1.1932555253038116e-14,
+      "prior_white_mean": 0.0032838725781303996,
+      "prior_white_second": 1.0078617640577017
+    },
+    "full_ensemble_split_exact": true,
+    "wrong_ensemble_refused": true,
+    "corruption_refused": true,
+    "old_format_refused": true,
+    "commands": [
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-pilot/build/FML/FieldLevel/validation/galaxy/tempering/tempering_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-pilot/preflight/targets",
+          "start",
+          "0",
+          "0"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-pilot/build/FML/FieldLevel/validation/galaxy/tempering/tempering_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-pilot/preflight/full",
+          "start",
+          "0",
+          "5"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-pilot/build/FML/FieldLevel/validation/galaxy/tempering/tempering_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-pilot/preflight/split",
+          "start",
+          "0",
+          "2"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-pilot/build/FML/FieldLevel/validation/galaxy/tempering/tempering_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-pilot/preflight/split",
+          "resume",
+          "0",
+          "3"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-pilot/build/FML/FieldLevel/validation/galaxy/tempering/tempering_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-pilot/preflight/split",
+          "resume",
+          "1",
+          "0"
+        ],
+        "exit_code": 1
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-pilot/build/FML/FieldLevel/validation/galaxy/tempering/tempering_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-pilot/preflight/corrupt",
+          "resume",
+          "0",
+          "0"
+        ],
+        "exit_code": 1
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-pilot/build/FML/FieldLevel/validation/galaxy/tempering/tempering_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-tempering-pilot/preflight/old-interweave",
+          "resume",
+          "0",
+          "0"
+        ],
+        "exit_code": 1
+      }
+    ]
+  },
+  "exchange_kernel_checks": 11,
+  "max_gaussian_reference_moment_error": 0.009941666048391862,
+  "exploratory_prior_overlap": {
+    "scope": "Exploratory prior-endpoint overlap diagnostic; not a posterior reweighting or new convergence gate",
+    "source": "Undo recorded disjoint swaps to recover independently refreshed pre-swap beta=0 quadratics",
+    "prior_draws": 512,
+    "prior_quadratic_quantiles": [
+      173.84560282606515,
+      248.9410434894639,
+      734.9326996745242,
+      3344.0975549508216,
+      16084.014408216275
+    ],
+    "candidates": [
+      {
+        "beta": 0.0625,
+        "prior_weight_ess": 4.443518515878365,
+        "fraction": 0.008678747101324932
+      },
+      {
+        "beta": 0.03125,
+        "prior_weight_ess": 27.5051419354285,
+        "fraction": 0.05372098034263379
+      },
+      {
+        "beta": 0.015625,
+        "prior_weight_ess": 79.91032449697741,
+        "fraction": 0.156074852533159
+      },
+      {
+        "beta": 0.0078125,
+        "prior_weight_ess": 148.62781698823332,
+        "fraction": 0.2902887050551432
+      },
+      {
+        "beta": 0.00390625,
+        "prior_weight_ess": 228.53929625090694,
+        "fraction": 0.4463658129900526
+      },
+      {
+        "beta": 0.001953125,
+        "prior_weight_ess": 317.1744127955925,
+        "fraction": 0.6194812749913916
+      },
+      {
+        "beta": 0.0009765625,
+        "prior_weight_ess": 399.5567420193733,
+        "fraction": 0.7803842617565885
+      },
+      {
+        "beta": 0,
+        "prior_weight_ess": 512.0,
+        "fraction": 1.0
+      }
+    ],
+    "limits": [
+      "512 prior draws give a noisy overlap diagnostic",
+      "Exponential-weight ESS does not predict an exact exchange rate",
+      "No ladder, samples, original gates or posterior estimates are altered"
+    ]
+  },
+  "runner_guards": {
+    "stale_summary_repaired": true,
+    "completed_checkpoint_bytes_unchanged": true,
+    "changed_binary_refused": true,
+    "no_extra_transitions": true
+  }
+}

@@ -1,0 +1,577 @@
+{
+  "scope": "Bounded blocked sampler plus amplitude/full-field rescaling; separate primary campaign",
+  "passed": false,
+  "diagnostics": [
+    {
+      "parameter": "sigma8_ratio",
+      "rhat": 1.5232583376972506,
+      "bulk_ess": 7.351498823808136,
+      "tail_ess": 34.55590491710931,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "b_delta",
+      "rhat": 1.5472817012831703,
+      "bulk_ess": 7.174330198188301,
+      "tail_ess": 29.940733408713847,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "b_delta2",
+      "rhat": 1.0924130767981197,
+      "bulk_ess": 39.480491390971004,
+      "tail_ess": 502.6187490669451,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "b_K2",
+      "rhat": 1.5191563490349003,
+      "bulk_ess": 7.35822185634106,
+      "tail_ess": 30.53243545090965,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "b_laplacian",
+      "rhat": 1.2789910911797442,
+      "bulk_ess": 10.868444654523707,
+      "tail_ess": 96.23822734965906,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "cos100",
+      "rhat": 1.0548354204681605,
+      "bulk_ess": 62.822798732740296,
+      "tail_ess": 114.25797264397804,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "sin100",
+      "rhat": 1.3599128776186227,
+      "bulk_ess": 9.42532000148038,
+      "tail_ess": 42.131557088297505,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "cos110",
+      "rhat": 1.4287438894602353,
+      "bulk_ess": 8.130411909309718,
+      "tail_ess": 16.577512098888008,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "sin110",
+      "rhat": 1.5314898824090113,
+      "bulk_ess": 7.273760344392453,
+      "tail_ess": 44.556432603107545,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "cos001",
+      "rhat": 1.0168818313694479,
+      "bulk_ess": 286.40182812829573,
+      "tail_ess": 358.2117010429549,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "sin001",
+      "rhat": 1.4643526479285034,
+      "bulk_ess": 7.9794105468844805,
+      "tail_ess": 15.554485122556276,
+      "status": "ok",
+      "passed": false
+    }
+  ],
+  "chains": [
+    {
+      "synthetic_interweaving_pilot": true,
+      "mesh": 4,
+      "product_mesh": 8,
+      "density_mesh": 16,
+      "ranks": 1,
+      "completed_iterations": 1280,
+      "completed_samples": 1024,
+      "warmup": 256,
+      "samples": 1024,
+      "acceptance": 0.9762093514762632,
+      "step_size": 0.15,
+      "divergences": 0,
+      "scalar_accepted": 2427,
+      "scalar_attempts": 4096,
+      "rescale_accepted": 2474,
+      "rescale_attempts": 4096,
+      "support_rejections": 561,
+      "cache_builds": 6400
+    },
+    {
+      "synthetic_interweaving_pilot": true,
+      "mesh": 4,
+      "product_mesh": 8,
+      "density_mesh": 16,
+      "ranks": 1,
+      "completed_iterations": 1280,
+      "completed_samples": 1024,
+      "warmup": 256,
+      "samples": 1024,
+      "acceptance": 0.9727316015784739,
+      "step_size": 0.15,
+      "divergences": 0,
+      "scalar_accepted": 484,
+      "scalar_attempts": 4096,
+      "rescale_accepted": 2262,
+      "rescale_attempts": 4096,
+      "support_rejections": 3531,
+      "cache_builds": 6400
+    },
+    {
+      "synthetic_interweaving_pilot": true,
+      "mesh": 4,
+      "product_mesh": 8,
+      "density_mesh": 16,
+      "ranks": 1,
+      "completed_iterations": 1280,
+      "completed_samples": 1024,
+      "warmup": 256,
+      "samples": 1024,
+      "acceptance": 0.9839692695994959,
+      "step_size": 0.15,
+      "divergences": 0,
+      "scalar_accepted": 2376,
+      "scalar_attempts": 4096,
+      "rescale_accepted": 2548,
+      "rescale_attempts": 4096,
+      "support_rejections": 594,
+      "cache_builds": 6400
+    },
+    {
+      "synthetic_interweaving_pilot": true,
+      "mesh": 4,
+      "product_mesh": 8,
+      "density_mesh": 16,
+      "ranks": 1,
+      "completed_iterations": 1280,
+      "completed_samples": 1024,
+      "warmup": 256,
+      "samples": 1024,
+      "acceptance": 0.9775456061234118,
+      "step_size": 0.15,
+      "divergences": 0,
+      "scalar_accepted": 2458,
+      "scalar_attempts": 4096,
+      "rescale_accepted": 2533,
+      "rescale_attempts": 4096,
+      "support_rejections": 516,
+      "cache_builds": 6400
+    }
+  ],
+  "pooled_descriptive_scalar_quantiles": {
+    "sigma8_ratio": [
+      0.5245562343834609,
+      0.7943573690222874,
+      1.4876636687889402
+    ],
+    "b_delta": [
+      0.23424177007156458,
+      1.89766129029938,
+      3.12654519679157
+    ],
+    "b_delta2": [
+      -0.46258255316343083,
+      1.0557508272621123,
+      2.670729519688241
+    ],
+    "b_K2": [
+      -3.6973332719155847,
+      -0.7257329959078281,
+      3.922807770567911
+    ],
+    "b_laplacian": [
+      -82.60629688846265,
+      38.19823252349821,
+      97.29901972317516
+    ]
+  },
+  "scalar_correlations": [
+    [
+      1.0,
+      -0.8794650754492856,
+      0.14341808048631896,
+      0.7232108181563904,
+      0.5313489806187404
+    ],
+    [
+      -0.8794650754492856,
+      0.9999999999999999,
+      -0.05768607187640424,
+      -0.7249006804232077,
+      -0.26725387759811836
+    ],
+    [
+      0.14341808048631893,
+      -0.05768607187640424,
+      1.0,
+      0.536788607829622,
+      0.2863194804890557
+    ],
+    [
+      0.7232108181563903,
+      -0.7249006804232077,
+      0.5367886078296221,
+      1.0,
+      0.4198032984746762
+    ],
+    [
+      0.5313489806187404,
+      -0.26725387759811836,
+      0.28631948048905576,
+      0.41980329847467623,
+      1.0
+    ]
+  ],
+  "residual_shells": [
+    {
+      "k": 0.06283185307179587,
+      "real_modes": 6.0,
+      "posterior_residual_power_q05_q50_q95": [
+        0.28394899387097766,
+        0.9045747087661875,
+        2.0830396829289546
+      ],
+      "posterior_mean_residual_power": 0.06540566697745949
+    },
+    {
+      "k": 0.08885765876316733,
+      "real_modes": 12.0,
+      "posterior_residual_power_q05_q50_q95": [
+        0.44381727122341513,
+        0.9689320848704189,
+        1.827066203785015
+      ],
+      "posterior_mean_residual_power": 0.0771667811495467
+    },
+    {
+      "k": 0.10882796185405307,
+      "real_modes": 8.0,
+      "posterior_residual_power_q05_q50_q95": [
+        0.26197525930462784,
+        0.668064449740639,
+        2.5437175809408084
+      ],
+      "posterior_mean_residual_power": 0.4516935880838525
+    }
+  ],
+  "limits": [
+    "Synthetic same-model data; no coverage or real-catalog claim",
+    "Six field projections, not all field coordinates",
+    "Descriptive pooled quantiles are provisional when any mixing gates fail",
+    "Residuals use fitted data; not an independent predictive validation",
+    "Replay draws excluded; fixed budget not extended"
+  ],
+  "target_identical_across_chains": true,
+  "restart_replay": true,
+  "date": "2026-11-18",
+  "comparison": {
+    "same_serialized_target": true,
+    "same_initial_states": true,
+    "same_primary_draw_budget": true,
+    "same_gates": true,
+    "same_base_kernels": true,
+    "baseline_passed": false,
+    "interweave_passed": false,
+    "baseline_summed_process_seconds": 741.0491732314695,
+    "interweave_summed_process_seconds": 827.1765875983983,
+    "seconds_ratio": 1.116223615757313,
+    "diagnostics": [
+      {
+        "parameter": "sigma8_ratio",
+        "baseline_rhat": 1.4774392264505887,
+        "interweave_rhat": 1.5232583376972506,
+        "baseline_bulk_ess": 7.672281821899343,
+        "interweave_bulk_ess": 7.351498823808136,
+        "baseline_bulk_ess_per_second": 0.01035326952520987,
+        "interweave_bulk_ess_per_second": 0.008887459986207146
+      },
+      {
+        "parameter": "b_delta",
+        "baseline_rhat": 1.5496046433009545,
+        "interweave_rhat": 1.5472817012831703,
+        "baseline_bulk_ess": 7.295566115971525,
+        "interweave_bulk_ess": 7.174330198188301,
+        "baseline_bulk_ess_per_second": 0.009844914992831019,
+        "interweave_bulk_ess_per_second": 0.008673275218074115
+      },
+      {
+        "parameter": "b_delta2",
+        "baseline_rhat": 1.2286217175698517,
+        "interweave_rhat": 1.0924130767981197,
+        "baseline_bulk_ess": 14.761899975910673,
+        "interweave_bulk_ess": 39.480491390971004,
+        "baseline_bulk_ess_per_second": 0.019920270488311763,
+        "interweave_bulk_ess_per_second": 0.047729217657861395
+      },
+      {
+        "parameter": "b_K2",
+        "baseline_rhat": 1.3452179914016014,
+        "interweave_rhat": 1.5191563490349003,
+        "baseline_bulk_ess": 9.477185560422297,
+        "interweave_bulk_ess": 7.35822185634106,
+        "baseline_bulk_ess_per_second": 0.012788875425223722,
+        "interweave_bulk_ess_per_second": 0.00889558767337059
+      },
+      {
+        "parameter": "b_laplacian",
+        "baseline_rhat": 1.273185902577402,
+        "interweave_rhat": 1.2789910911797442,
+        "baseline_bulk_ess": 11.445580600296891,
+        "interweave_bulk_ess": 10.868444654523707,
+        "baseline_bulk_ess_per_second": 0.01544510271887426,
+        "interweave_bulk_ess_per_second": 0.013139207295601594
+      },
+      {
+        "parameter": "cos100",
+        "baseline_rhat": 1.5672757863483762,
+        "interweave_rhat": 1.0548354204681605,
+        "baseline_bulk_ess": 7.049789871242395,
+        "interweave_bulk_ess": 62.822798732740296,
+        "baseline_bulk_ess_per_second": 0.009513255160248816,
+        "interweave_bulk_ess_per_second": 0.07594847300397885
+      },
+      {
+        "parameter": "sin100",
+        "baseline_rhat": 1.43308018520673,
+        "interweave_rhat": 1.3599128776186227,
+        "baseline_bulk_ess": 8.249658455590414,
+        "interweave_bulk_ess": 9.42532000148038,
+        "baseline_bulk_ess_per_second": 0.011132403561853245,
+        "interweave_bulk_ess_per_second": 0.0113945681524251
+      },
+      {
+        "parameter": "cos110",
+        "baseline_rhat": 1.5918503122835563,
+        "interweave_rhat": 1.4287438894602353,
+        "baseline_bulk_ess": 6.890262917387469,
+        "interweave_bulk_ess": 8.130411909309718,
+        "baseline_bulk_ess_per_second": 0.009297983408228254,
+        "interweave_bulk_ess_per_second": 0.00982911270846692
+      },
+      {
+        "parameter": "sin110",
+        "baseline_rhat": 1.362186572951728,
+        "interweave_rhat": 1.5314898824090113,
+        "baseline_bulk_ess": 9.307810923950653,
+        "interweave_bulk_ess": 7.273760344392453,
+        "baseline_bulk_ess_per_second": 0.012560314834928402,
+        "interweave_bulk_ess_per_second": 0.008793479473966843
+      },
+      {
+        "parameter": "cos001",
+        "baseline_rhat": 1.576081553690428,
+        "interweave_rhat": 1.0168818313694479,
+        "baseline_bulk_ess": 7.220839129223609,
+        "interweave_bulk_ess": 286.40182812829573,
+        "baseline_bulk_ess_per_second": 0.009744075548638596,
+        "interweave_bulk_ess_per_second": 0.3462402495697163
+      },
+      {
+        "parameter": "sin001",
+        "baseline_rhat": 1.556425006717847,
+        "interweave_rhat": 1.4643526479285034,
+        "baseline_bulk_ess": 7.187436668607022,
+        "interweave_bulk_ess": 7.9794105468844805,
+        "baseline_bulk_ess_per_second": 0.009699000995122897,
+        "interweave_bulk_ess_per_second": 0.009646562374367583
+      }
+    ],
+    "limits": [
+      "The only algorithm change from the blocked baseline is the added rescaling block; original kernel settings/seeds remain unchanged, but computation increases",
+      "ESS/s ratios are descriptive when either chain set fails stationarity/mixing gates",
+      "Summed main-chunk process wall seconds include initialization, cache construction and draw/checkpoint I/O; exclude preflight and replay",
+      "No pooled baseline or replay draws; no post-run tuning or extension"
+    ]
+  },
+  "preflight": {
+    "cache": {
+      "passed": true,
+      "points": 18,
+      "bias_derivatives": 72,
+      "max_scaled_gap_error": 1.362118133156655e-15
+    },
+    "full_split_exact": true,
+    "wrong_chain_refused": true,
+    "corruption_refused": true,
+    "commands": [
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-interweave-pilot/build/FML/FieldLevel/validation/galaxy/interweave/interweave_test"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-interweave-pilot/build/FML/FieldLevel/validation/galaxy/interweave/interweave_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-interweave-pilot/preflight/cache",
+          "start",
+          "0",
+          "0"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-interweave-pilot/build/FML/FieldLevel/validation/galaxy/interweave/interweave_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-interweave-pilot/preflight/full",
+          "start",
+          "0",
+          "4"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-interweave-pilot/build/FML/FieldLevel/validation/galaxy/interweave/interweave_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-interweave-pilot/preflight/split",
+          "start",
+          "0",
+          "2"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-interweave-pilot/build/FML/FieldLevel/validation/galaxy/interweave/interweave_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-interweave-pilot/preflight/split",
+          "resume",
+          "0",
+          "2"
+        ],
+        "exit_code": 0
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-interweave-pilot/build/FML/FieldLevel/validation/galaxy/interweave/interweave_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-interweave-pilot/preflight/split",
+          "resume",
+          "1",
+          "0"
+        ],
+        "exit_code": 1
+      },
+      {
+        "argv": [
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-interweave-pilot/build/FML/FieldLevel/validation/galaxy/interweave/interweave_pilot",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-interweave-pilot/preflight/corrupt",
+          "resume",
+          "0",
+          "0"
+        ],
+        "exit_code": 1
+      }
+    ]
+  },
+  "kernel_tests": 26,
+  "max_prediction_error": 1.716587549445839e-16,
+  "max_prior_target_gap_error": 8.500455739997525e-15,
+  "failed_coordinates": [
+    "sigma8_ratio",
+    "b_delta",
+    "b_delta2",
+    "b_K2",
+    "b_laplacian",
+    "cos100",
+    "sin100",
+    "cos110",
+    "sin110",
+    "cos001",
+    "sin001"
+  ],
+  "chain_separation": [
+    {
+      "chain": 0,
+      "scalar_medians": [
+        0.657396523799265,
+        2.2551310569786422,
+        0.6985850890186188,
+        -1.4725484859202196,
+        10.226510099454988
+      ],
+      "white_prior_median": 30.36095719412414,
+      "data_quadratic_median": 10.944929817809705,
+      "relative_potential_q05_q50_q95": [
+        32.210960175347374,
+        41.695859654299085,
+        52.530806869397075
+      ],
+      "limits": "Uniform scalar priors; omits shared constants. Energy values do not give branch probability masses."
+    },
+    {
+      "chain": 1,
+      "scalar_medians": [
+        1.4604781644023768,
+        0.35604617038769426,
+        1.69680333781551,
+        3.748259985873081,
+        88.98968537940405
+      ],
+      "white_prior_median": 44.84015855863577,
+      "data_quadratic_median": 18.626850163897473,
+      "relative_potential_q05_q50_q95": [
+        54.43893802114895,
+        63.902906616402376,
+        74.2731314941993
+      ],
+      "limits": "Uniform scalar priors; omits shared constants. Energy values do not give branch probability masses."
+    },
+    {
+      "chain": 2,
+      "scalar_medians": [
+        0.7113749381606891,
+        2.1225023755171852,
+        0.4700802705139744,
+        -1.669341219126641,
+        8.751267873275687
+      ],
+      "white_prior_median": 30.579339852950895,
+      "data_quadratic_median": 10.819864696898007,
+      "relative_potential_q05_q50_q95": [
+        32.36835549853497,
+        41.92581176707249,
+        53.61144947850143
+      ],
+      "limits": "Uniform scalar priors; omits shared constants. Energy values do not give branch probability masses."
+    },
+    {
+      "chain": 3,
+      "scalar_medians": [
+        0.7310761238597574,
+        2.075466832949356,
+        0.4512546966088584,
+        -1.6604380121307765,
+        8.33667741031462
+      ],
+      "white_prior_median": 30.71089259761533,
+      "data_quadratic_median": 10.688012263672634,
+      "relative_potential_q05_q50_q95": [
+        32.26302321752585,
+        41.551328997957064,
+        52.63265657242456
+      ],
+      "limits": "Uniform scalar priors; omits shared constants. Energy values do not give branch probability masses."
+    }
+  ],
+  "runner_guards": {
+    "stale_summary_repaired_from_checkpoint": true,
+    "completed_resume_unchanged": true,
+    "changed_binary_refused": true,
+    "no_extra_transitions": true
+  },
+  "old_blocked_format_rejected": true
+}

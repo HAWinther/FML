@@ -1,0 +1,278 @@
+{
+  "scope": "Bounded synthetic joint field/sigma8-ratio/four-bias pilot; not calibration or real-catalog inference",
+  "passed": false,
+  "diagnostics": [
+    {
+      "parameter": "sigma8_ratio",
+      "rhat": 1.3171303751861048,
+      "bulk_ess": 10.436389898539247,
+      "tail_ess": 78.17590532406058,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "b_delta",
+      "rhat": 2.0917930001152243,
+      "bulk_ess": 5.347058300872506,
+      "tail_ess": 20.366202813967114,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "b_delta2",
+      "rhat": 2.876022011135649,
+      "bulk_ess": 4.610506803540918,
+      "tail_ess": 26.022352129891843,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "b_K2",
+      "rhat": 2.0596231510365794,
+      "bulk_ess": 5.388108634437743,
+      "tail_ess": 30.702688783749643,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "b_laplacian",
+      "rhat": 1.9100975741142927,
+      "bulk_ess": 5.627981478681055,
+      "tail_ess": 37.649075085599904,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "cos100",
+      "rhat": 2.1938728402336674,
+      "bulk_ess": 5.142510461434186,
+      "tail_ess": 32.130353115458924,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "sin100",
+      "rhat": 2.268042699623417,
+      "bulk_ess": 5.0407820215745645,
+      "tail_ess": 34.29588137063295,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "cos110",
+      "rhat": 2.500757624729665,
+      "bulk_ess": 4.84361479588998,
+      "tail_ess": 23.047370422418624,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "sin110",
+      "rhat": 1.958700080383932,
+      "bulk_ess": 5.6111980688022,
+      "tail_ess": 41.15273747139441,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "cos001",
+      "rhat": 1.9346791485290058,
+      "bulk_ess": 5.575261441759308,
+      "tail_ess": 25.546523490540388,
+      "status": "ok",
+      "passed": false
+    },
+    {
+      "parameter": "sin001",
+      "rhat": 2.5870773771809965,
+      "bulk_ess": 4.779042325719958,
+      "tail_ess": 13.87494722987271,
+      "status": "ok",
+      "passed": false
+    }
+  ],
+  "chains": [
+    {
+      "synthetic_joint_pilot": true,
+      "mesh": 4,
+      "product_mesh": 8,
+      "density_mesh": 16,
+      "ranks": 1,
+      "generation": "g-1410033760727920-0",
+      "completed_iterations": 1280,
+      "completed_samples": 1024,
+      "warmup": 256,
+      "samples": 1024,
+      "acceptance": 0.9717767922565191,
+      "step_size": 0.05447882224949101,
+      "divergences": 0
+    },
+    {
+      "synthetic_joint_pilot": true,
+      "mesh": 4,
+      "product_mesh": 8,
+      "density_mesh": 16,
+      "ranks": 1,
+      "generation": "g-1410028702075570-0",
+      "completed_iterations": 1280,
+      "completed_samples": 1024,
+      "warmup": 256,
+      "samples": 1024,
+      "acceptance": 0.9602570601229219,
+      "step_size": 0.10545601649849493,
+      "divergences": 0
+    },
+    {
+      "synthetic_joint_pilot": true,
+      "mesh": 4,
+      "product_mesh": 8,
+      "density_mesh": 16,
+      "ranks": 1,
+      "generation": "g-1410156652744500-0",
+      "completed_iterations": 1280,
+      "completed_samples": 1024,
+      "warmup": 256,
+      "samples": 1024,
+      "acceptance": 0.9438531668620187,
+      "step_size": 0.14740816155216802,
+      "divergences": 0
+    },
+    {
+      "synthetic_joint_pilot": true,
+      "mesh": 4,
+      "product_mesh": 8,
+      "density_mesh": 16,
+      "ranks": 1,
+      "generation": "g-1410160310662751-0",
+      "completed_iterations": 1280,
+      "completed_samples": 1024,
+      "warmup": 256,
+      "samples": 1024,
+      "acceptance": 0.9817623595480862,
+      "step_size": 0.024436966614082203,
+      "divergences": 0
+    }
+  ],
+  "pooled_descriptive_scalar_quantiles": {
+    "sigma8_ratio": [
+      1.0129537713692407,
+      1.3498964759357874,
+      1.488240650019056
+    ],
+    "b_delta": [
+      0.0036758407280228626,
+      0.12866853652175697,
+      1.5394460147621858
+    ],
+    "b_delta2": [
+      -2.4555989387852852,
+      -0.022004463095284366,
+      3.8880297879241628
+    ],
+    "b_K2": [
+      -3.314721551079724,
+      -0.5996370331962744,
+      3.7942210814470405
+    ],
+    "b_laplacian": [
+      -91.41194224142723,
+      79.61345867339445,
+      99.50376515631964
+    ]
+  },
+  "scalar_correlations": [
+    [
+      1.0,
+      0.011845965986719918,
+      -0.21429296030798992,
+      0.38123413964363834,
+      0.04169281090396177
+    ],
+    [
+      0.011845965986719918,
+      0.9999999999999998,
+      -0.6603113246915958,
+      -0.3637137118943625,
+      -0.5737978950668658
+    ],
+    [
+      -0.21429296030798994,
+      -0.6603113246915958,
+      1.0,
+      0.23136162858912404,
+      0.8332384813182964
+    ],
+    [
+      0.38123413964363834,
+      -0.36371371189436247,
+      0.23136162858912404,
+      0.9999999999999998,
+      0.5515328594317618
+    ],
+    [
+      0.04169281090396177,
+      -0.5737978950668658,
+      0.8332384813182964,
+      0.5515328594317618,
+      1.0
+    ]
+  ],
+  "residual_shells": [
+    {
+      "k": 0.06283185307179587,
+      "real_modes": 6.0,
+      "posterior_residual_power_q05_q50_q95": [
+        0.39695204885683105,
+        1.534835245102059,
+        3.8664722195446632
+      ],
+      "posterior_mean_residual_power": 0.3427214503017471
+    },
+    {
+      "k": 0.08885765876316733,
+      "real_modes": 12.0,
+      "posterior_residual_power_q05_q50_q95": [
+        0.5511007534171984,
+        1.6347885893771605,
+        4.898714226342708
+      ],
+      "posterior_mean_residual_power": 0.6408596631946961
+    },
+    {
+      "k": 0.10882796185405307,
+      "real_modes": 8.0,
+      "posterior_residual_power_q05_q50_q95": [
+        0.9936111400348463,
+        1.9529573126324913,
+        3.420541465245274
+      ],
+      "posterior_mean_residual_power": 0.9533311219574994
+    }
+  ],
+  "limits": [
+    "Synthetic same-model data; no coverage or real-catalog claim",
+    "Six field projections, not all field coordinates",
+    "Descriptive pooled quantiles are provisional when any mixing gates fail",
+    "Residuals use fitted data; not an independent predictive validation",
+    "Replay draws excluded; fixed budget not extended"
+  ],
+  "target_identical_across_chains": true,
+  "restart_replay": true,
+  "date": "2026-11-18",
+  "plan_sha256": "a2bac875657c6ce24a8bd1b3ce8b81cdba48e7ed8f5412ee53298a7ad0098986",
+  "binary_sha256": "2694a722a9ab877aea4afcd172f8c87a9affbffec9714c127925e34fe5a7c8f6",
+  "summed_main_chunk_wall_seconds": 525.1197103401646,
+  "failed_coordinates": [
+    "sigma8_ratio",
+    "b_delta",
+    "b_delta2",
+    "b_K2",
+    "b_laplacian",
+    "cos100",
+    "sin100",
+    "cos110",
+    "sin110",
+    "cos001",
+    "sin001"
+  ]
+}

@@ -27,3 +27,36 @@ frozen data. Both campaigns are retained separately.
 `galaxy/numerics/` contains a frozen, resumable synthetic numerical/resource
 screen. Keep its raw modes, logs and plots outside the library. See
 [the guide](../docs/NUMERICAL_SCREEN.md) for results and sampling-readiness limits.
+
+[galaxy/joint](galaxy/joint/README.md) declares the checkpointed four-chain joint
+initial-field/amplitude/four-bias pilot. Its [recorded result](../docs/validation/studies/joint_pilot/RESULTS.md)
+retains the original fixed budget and every failed gate.
+
+[galaxy/blocked](galaxy/blocked/README.md) compares alternating field HMC and
+cached scalar updates against the joint pilot at the same target/draw budget.
+Its [recorded result](../docs/validation/studies/blocked_pilot/RESULTS.md) preserves
+all gates and failures; the original joint campaign stays separate.
+
+### Amplitude/field rescaling (18 November 2026)
+
+[galaxy/interweave](galaxy/interweave/README.md) adds a separately declared amplitude/full-field MH block to the unchanged blocked sampler. [Results](../docs/validation/studies/interweave_pilot/RESULTS.md) retain the frozen gate **FAIL** and full comparison cost.
+
+### Geometry audit (18 November 2026)
+
+[galaxy/geometry](galaxy/geometry/README.md) diagnoses the separated interweaving chain using deterministic paths, exact bounded-bias profiles and endpoint finite differences. [Recorded results](../docs/validation/studies/geometry_audit/RESULTS.md) motivate a separate likelihood-tempering connectivity test.
+
+### Replica-exchange connectivity (18 November 2026)
+
+[galaxy/tempering](galaxy/tempering/README.md) implements a serial likelihood-only replica-exchange connectivity test with complete ensemble checkpoints. [Results](../docs/validation/studies/tempering_connectivity/RESULTS.md) retain the frozen gate **FAIL**, exchange counts and labeled transport; no cold-posterior convergence claim.
+
+### Configurable prior-bridge refinement (18 November 2026)
+
+[galaxy/tempering](galaxy/tempering/README.md) supports explicit runtime ladders and repeated exchange passes. [The separate eleven-level bridge result](../docs/validation/studies/tempering_bridge/RESULTS.md) retains connectivity gate **PASS** and the original failed six-level benchmark.
+
+- [Four-cold-chain tempering posterior campaign](../docs/validation/studies/tempering_posterior/RESULTS.md): frozen gate **FAIL**, 2/11 monitored coordinate gates fail; exact checkpoint/replay and pause recovery pass.
+
+- [Four-cold-chain tempering posterior campaign](../docs/validation/studies/tempering_long/RESULTS.md): frozen gate **PASS**, 0/11 monitored coordinate gates fail; exact checkpoint/replay and pause recovery pass.
+
+- [Posterior numerical refinement](../docs/validation/studies/posterior_refinement/RESULTS.md): **PASS**, six settings on all 8192 cold states, exact source replay and correlation-aware importance-sensitivity checks.
+
+- [Independent fixed-truth mocks](../docs/validation/studies/independent_mocks/RESULTS.md): two fresh four-chain budgets complete; computational gate **PASS**, descriptive recovery only; no coverage calibration claim.
