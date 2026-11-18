@@ -58,13 +58,14 @@ void test_field(int mesh) {
     FML::MaxOverTasks(&worst);
     int bad = !zeros;
     FML::MaxOverTasks(&bad);
-    check_local(!bad && worst < 2e-14,
+    check_local(!bad && worst < FML::TESTS::grid_tol(2e-14, 1e-6),
                 "Philox DC/Nyquist and fixed-amplitude phase conventions, " + std::to_string(N) + "D mesh " +
                     std::to_string(mesh));
     auto roundtrip = field;
     roundtrip.fftw_c2r();
     roundtrip.fftw_r2c();
-    check_local(difference(field, roundtrip) < 2e-14, "Philox satisfies Hermitian symmetry through FFT round trip");
+    check_local(difference(field, roundtrip) < FML::TESTS::grid_tol(2e-14, 1e-5),
+                "Philox satisfies Hermitian symmetry through FFT round trip");
     opts.stream++;
     generate_gaussian_random_field_fourier<N>(other, nullptr, power, false, opts);
     check_local(difference(field, other) > 0.1, "independent stream changes the realization");

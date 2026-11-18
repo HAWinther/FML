@@ -486,7 +486,7 @@ int main(int argc, char ** argv) {
             maxerr = std::max(maxerr, double(std::fabs(force[0].get_real_from_index(i))) * D4);
         }
         FML::MaxOverTasks(&maxerr);
-        check_local(maxerr < 1e-10,
+        check_local(maxerr < FML::TESTS::grid_tol(1e-10, 1e-5),
                     "Fourier force on a plane wave with the 4-point kernels is sin(kx)/D4(k) (rel. error " +
                         num(maxerr) + ")");
     }
@@ -535,7 +535,7 @@ int main(int argc, char ** argv) {
             NBODY::compute_potential_real_from_density_fourier<3>(density, potential, 1.5, c.stencil / 2, options);
             NBODY::compute_force_from_potential_real<3>(potential, force_fd, "CIC", c.stencil, options);
             const double err = rel_diff(force_fd, force_fourier);
-            check_local(err < 1e-10,
+            check_local(err < FML::TESTS::grid_tol(1e-10, 1e-5),
                         "finite difference force = Fourier force (" + c.name + ", rel. diff " + num(err) + ")");
         }
     }

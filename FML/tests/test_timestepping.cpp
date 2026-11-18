@@ -396,7 +396,9 @@ void test_cola_force_options() {
         FML::NBODY::compute_force_from_density_fourier<3>(density, expected, "CIC", 1.5 * 0.3 * 0.5, options);
         for (int d = 0; d < 3; d++)
             for (auto i : actual[d].get_real_range())
-                matches = matches && near(actual[d].get_real_from_index(i), expected[d].get_real_from_index(i), 1e-12);
+                matches = matches && near(actual[d].get_real_from_index(i),
+                                          expected[d].get_real_from_index(i),
+                                          FML::TESTS::grid_tol(1e-12, 1e-5));
     }
     check_local(matches,
                 "SimulationCode forwards explicit options through Fourier and finite-difference gravity paths");

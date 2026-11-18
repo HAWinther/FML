@@ -882,7 +882,7 @@ int main() {
                     -2 * M_PI * A * std::cos(2 * M_PI * x) + 4 * M_PI * B * std::sin(4 * M_PI * y);
                 maxerr = std::max(maxerr, std::abs(theta(ix, iy) - expected));
             }
-        check_local(maxerr < 1e-9 * 4 * M_PI * B,
+        check_local(maxerr < FML::TESTS::grid_tol(1e-9, 1e-5) * 4 * M_PI * B,
                     "images: the velocity divergence of a sine velocity field (max error " + num(maxerr) + ")");
         // TSC (extra slices on both sides): the weights 1/8, 3/4, 1/8 of the lattice points smooth v by the window
         // 3/4 + cos(k / 32) / 4 of each mode
@@ -898,7 +898,7 @@ int main() {
                     -2 * M_PI * A * w1 * std::cos(2 * M_PI * x) + 4 * M_PI * B * w2 * std::sin(4 * M_PI * y);
                 maxerr = std::max(maxerr, std::abs(theta_tsc(ix, iy) - expected));
             }
-        check_local(maxerr < 1e-9 * 4 * M_PI * B,
+        check_local(maxerr < FML::TESTS::grid_tol(1e-9, 1e-5) * 4 * M_PI * B,
                     "images: the velocity divergence with TSC (window 3/4 + cos(k h) / 4; max error " + num(maxerr) +
                         ")");
         const auto density = AN::project_image(

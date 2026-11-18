@@ -107,7 +107,7 @@ void test_interpolation_exact() {
             maxerr = std::max({maxerr, std::fabs(sc[i] - expected), std::fabs(out[1][i] - expected)});
         }
         MaxOverTasks(&maxerr);
-        check_local(maxerr < 1e-12,
+        check_local(maxerr < FML::TESTS::grid_tol(1e-12, 1e-5),
                     m + " interpolation (scalar and vector) of a linear field: max error " + num(maxerr, 3));
     }
 }
@@ -137,7 +137,9 @@ void test_slab_boundary_ulp() {
         for (auto && idx : g.get_real_range())
             sum += g.get_real_from_index(idx);
         SumOverTasks(&sum);
-        check_local(std::fabs(sum) < 1e-6,
+        // (one lost particle gives sum(delta) = -Nmesh^3 / NPT ~ -3.5 / NTasks: float round-off in the sum is far
+        // below that)
+        check_local(std::fabs(sum) < FML::TESTS::grid_tol(1e-6, 1e-2),
                     m + ": particles 1 ulp from the slab boundaries are all assigned: sum(delta) = " + num(sum, 3) +
                         " (were outside the grid: lost, or written out of bounds)");
     }
@@ -229,9 +231,11 @@ void test_convolve() {
     }
     MaxOverTasks(&err3);
     MaxOverTasks(&err1);
-    check_local(err3 < 1e-12, "convolve_grid_with_kernel, 3-cell top-hat on a cosine: max error " + num(err3, 3));
-    check_local(err1 < 1e-12, "convolve_grid_with_kernel, ORDER 1 multiplies by K(0): max error " + num(err1, 3) +
-                                  " (ignored the kernel; did not compile before)");
+    check_local(err3 < FML::TESTS::grid_tol(1e-12, 1e-6),
+                "convolve_grid_with_kernel, 3-cell top-hat on a cosine: max error " + num(err3, 3));
+    check_local(err1 < FML::TESTS::grid_tol(1e-12, 1e-6),
+                "convolve_grid_with_kernel, ORDER 1 multiplies by K(0): max error " + num(err1, 3) +
+                    " (ignored the kernel; did not compile before)");
 }
 
 int main(int argc, char ** argv) {

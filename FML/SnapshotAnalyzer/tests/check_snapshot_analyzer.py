@@ -138,7 +138,7 @@ def hybrid_bias_check(r, tasks):
                 return
             res[(key, n)] = table(workdir / name / 'hybridbias_z0.000.txt')
     for key in runs:
-        check(all(same(res[(key, tasks[0])], res[(key, n)], 1e-5) for n in tasks),
+        check(all(same(res[(key, tasks[0])], res[(key, n)], max(1e-5, ROUNDOFF)) for n in tasks),
               f'hybrid bias {key}: the same spectra on {tasks} tasks')
     c, a0, a2 = res[('C', tasks[0])], res[('A', tasks[0])], res[('A2lpt', tasks[0])]
     # Normalized differences |dP_ab| / sqrt(P_aa P_bb)
@@ -199,9 +199,19 @@ def table(path):
     return np.loadtxt(path, ndmin=2)
 
 
-def same(a, b, rtol=1e-6):
+# Relative tolerance of results that differ only by round-off (another number of tasks, read mode or input format):
+# set by --precision (float: the analyzer was built with SINGLE_PRECISION_FFTW)
+ROUNDOFF = 1e-6
+# With float grids also an absolute tolerance of ROUNDOFF x the largest value for the images (pixels near zero), and
+# no comparison of the watershed void catalogs (ties in the float density change the segmentation)
+SINGLE_PRECISION = False
+# The largest void must be centred within this distance (Mpc/h) of the hole (float grids move the watershed void a bit)
+HOLE_OFFSET = 3.0
+
+
+def same(a, b, rtol=1e-6, atol=1e-30):
     a, b = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
-    return a.shape == b.shape and np.all(np.abs(a - b) <= rtol * (np.abs(a) + np.abs(b)) + 1e-30)
+    return a.shape == b.shape and np.all(np.abs(a - b) <= rtol * (np.abs(a) + np.abs(b)) + atol)
 
 
 def same_voids(a, b):
@@ -209,7 +219,7 @@ def same_voids(a, b):
     threads or the per-particle masses of HDF5 input) only to 0.01 Mpc/h, and not the density ratio column 8
     (min/max density: ill conditioned when the minimum is ~0)"""
     exact = [0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 15, 16, 17]
-    return a.shape == b.shape and same(a[:, exact], b[:, exact], 1e-6) and \
+    return a.shape == b.shape and same(a[:, exact], b[:, exact], ROUNDOFF) and \
         np.all(np.abs(a[:, 12:15] - b[:, 12:15]) < 0.01)
 
 
@@ -245,7 +255,12 @@ def main():
     ap.add_argument('--mpirun', default='mpirun')
     ap.add_argument('--np', default='1 2 4')
     ap.add_argument('--workdir', default='check_snapshot_analyzer_output')
+    ap.add_argument('--precision', choices=['double', 'float'], default='double',
+                    help='float if the analyzer was built with SINGLE_PRECISION_FFTW (looser round-off tolerances)')
     args = ap.parse_args()
+    if args.precision == 'float':
+        global ROUNDOFF, HOLE_OFFSET, SINGLE_PRECISION
+        ROUNDOFF, HOLE_OFFSET, SINGLE_PRECISION = 1e-4, 4.0, True
     exe = str(Path(args.exe).resolve())
     workdir = Path(args.workdir).resolve()
     shutil.rmtree(workdir, ignore_errors=True)
@@ -317,11 +332,16 @@ def main():
             continue
         for f in ['pofk_z0.000.txt', 'pofk_multipole_z0.000.txt', 'bispectrum_z0.000.txt', 'cosmicweb_z0.000.txt',
                   'minkowski_z0.000.txt', 'pofk_baryonified_z0.000.txt', 'baryonification_z0.000.txt']:
-            check(same(sorted_rows(ref / f), sorted_rows(d / f), 1e-6), f'{name}: {f} as {ref_name}')
+            check(same(sorted_rows(ref / f), sorted_rows(d / f), ROUNDOFF), f'{name}: {f} as {ref_name}')
         for f in ['image_density_z0.000.npy', 'image_velocity_divergence_z0.000.npy']:
-            check(same(np.load(ref / f), np.load(d / f), 1e-6), f'{name}: {f} as {ref_name}')
+            a, b = np.load(ref / f), np.load(d / f)
+            atol = ROUNDOFF * np.abs(a).max() if SINGLE_PRECISION else 1e-30
+            check(same(a, b, ROUNDOFF, atol), f'{name}: {f} as {ref_name}')
         # Voids: the same voids (see same_voids)
         for f in ['voids_z0.000.txt', 'voids_spherical_z0.000.txt']:
+            if SINGLE_PRECISION and f == 'voids_z0.000.txt':
+                print(f'[SKIP] {name}: {f} as {ref_name} (the watershed segmentation changes with float round-off)')
+                continue
             check(same_voids(table(ref / f), table(d / f)), f'{name}: {f} as {ref_name}')
         halos_a, halos_b = sorted_rows(ref / 'halos_z0.000.txt'), sorted_rows(d / 'halos_z0.000.txt')
         big_a, big_b = halos_a[halos_a[:, 0] > 1000], halos_b[halos_b[:, 0] > 1000]
@@ -405,7 +425,7 @@ def main():
         v = table(ref / f)
         v = v[np.argmax(v[:, 4])]
         d = np.linalg.norm((v[1:4] - np.array(HOLE_CENTER) + BOX / 2) % BOX - BOX / 2)
-        check(d < 3.0 and abs(v[4] / HOLE_RADIUS - 1) < rtol,
+        check(d < HOLE_OFFSET and abs(v[4] / HOLE_RADIUS - 1) < rtol,
               f'{f}: the largest void is the hole (offset {d:.2f}, R = {v[4]:.2f} Mpc/h)')
     if have_cgal:
         text = (ref / 'dtfe_spectra_z0.000.txt').read_text()

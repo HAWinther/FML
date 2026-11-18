@@ -97,7 +97,8 @@ int main() {
         double d = 0.0;
         for (int ell = 0; ell <= 4; ell += 2)
             d = std::max(d, maxdiff(Pa[ell], Pc[ell], nb, Pa[0].pofk[nb / 2]));
-        check(d < 1e-12, "cross multipoles of a grid with itself = auto multipoles (" + num(d, 3) + ")");
+        check(d < FML::TESTS::grid_tol(1e-12, 1e-4),
+              "cross multipoles of a grid with itself = auto multipoles (" + num(d, 3) + ")");
 
         // delta_2 = (1 + beta mu^2) delta_1
         const double beta = 0.7;
@@ -132,7 +133,8 @@ int main() {
                                                     s.get(s.pairs[p][1], s.pairs[p][1]).pofk[10]));
             d = std::max(d, maxdiff(m.pofk[p][0], s.pofk[p], Nmesh / 2, scale));
         }
-        check(d < 1e-10, "f = 0: monopole of the redshift-space multipoles = real-space spectra (" + num(d, 3) + ")");
+        check(d < FML::TESTS::grid_tol(1e-10, 1e-5),
+              "f = 0: monopole of the redshift-space multipoles = real-space spectra (" + num(d, 3) + ")");
     }
 
     //==========================================================

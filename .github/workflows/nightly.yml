@@ -1,5 +1,5 @@
 # Longer accuracy checks of SimulationCode, every night and on demand. Also what CI (ci.yml) leaves out to stay fast:
-# the library and module tests on 2 MPI tasks too and the Einstein-Boltzmann solver's tests
+# the library and module tests on 2 MPI tasks too, the Einstein-Boltzmann solver's tests and a single precision build
 name: Nightly accuracy checks
 
 on:
@@ -100,3 +100,47 @@ jobs:
           name: nightly-logs
           path: nightly/**/log.txt
           retention-days: 14
+
+  # The library built with SINGLE_PRECISION_FFTW (float grids and FFTs): every example, SimulationCode and the library
+  # and module tests (round-off tolerances from FML::TESTS::grid_tol, FML_PRECISION=float for the python checks).
+  # Not FieldLevel (its gradient and Hermitian-symmetry checks need double precision grids) and not the
+  # Einstein-Boltzmann solver's tests (they do not use the grids)
+  single-precision:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      OMP_WAIT_POLICY: passive
+      FML_PRECISION: float
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: ./.github/actions/setup
+        with:
+          cache-key: nightly-single-precision
+
+      # The double precision FFTW library too: FFTLog, NoWiggle, FastOneLoop and LPT/ArbitraryOrder always use it
+      - name: Single precision Makefile.local
+        run: |
+          cat >> FML/Makefile.local <<'EOF'
+          OPTIONS       += -DSINGLE_PRECISION_FFTW
+          FFTW_LINK      = -lfftw3f -lfftw3
+          FFTW_MPI_LINK  = -lfftw3f_mpi
+          FFTW_OMP_LINK  = -lfftw3f_threads
+          EOF
+
+      - name: Build the examples
+        run: make -C FML examples -j4
+
+      - name: Build SimulationCode
+        if: always()
+        run: make -C FML/SimulationCode -j4
+
+      - name: Library tests (1 and 4 MPI tasks)
+        if: always()
+        run: make -C FML test -j4 MPIRUN="mpirun --oversubscribe" NP_LIST="1 4"
+
+      - name: Module tests (1 and 4 MPI tasks)
+        if: always()
+        run: |
+          NP_LIST="1 4" MPIRUN="mpirun --oversubscribe" .github/ci/run_module_tests.sh \
+            Cosmology/EinsteinBoltzmannSolver/tests FieldLevel/tests

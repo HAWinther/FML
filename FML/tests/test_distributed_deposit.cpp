@@ -163,7 +163,7 @@ void compare_with_slab_deposit(const std::vector<P> & all,
     const double err = max_difference(density, reference) / scale;
     char text[64];
     std::snprintf(text, sizeof text, " (relative difference %.1e)", err);
-    check(err < 1e-13, label + text);
+    check(err < FML::TESTS::grid_tol(1e-13, 1e-4), label + text);
 }
 
 /// PencilGrids (every P0 x P1 process grid that divides the mesh): the field equals the slab one, from particles on a
@@ -201,7 +201,7 @@ void test_pencils() {
         char text[128];
         std::snprintf(text, sizeof text, "PencilGrid %dx%d = slabs, MPIParticles on Peano-Hilbert (relative difference %.1e)",
                       p0, p1, err / scale);
-        check(err / scale < 1e-13, text);
+        check(err / scale < FML::TESTS::grid_tol(1e-13, 1e-4), text);
     }
 
     // deposit_to_partitioned_mesh with boxes split in x and y into a dense local array starting at -1
@@ -249,7 +249,7 @@ void test_pencils() {
     char text[128];
     std::snprintf(text, sizeof text, "%dx%d boxes into a plain array = slabs (relative difference %.1e)", P0, P1,
                   err / scale);
-    check(err / scale < 1e-13, text);
+    check(err / scale < FML::TESTS::grid_tol(1e-13, 1e-4), text);
 }
 
 void test_threads() {

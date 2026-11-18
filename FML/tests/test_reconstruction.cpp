@@ -192,7 +192,8 @@ void test_tensor_empty_storage() {
         }
     int bad = !good;
     FML::MaxOverTasks(&bad);
-    check_local(!bad && error < 1e-9,
+    // (absolute errors: the derivatives are up to (2 pi)^2 ~ 40)
+    check_local(!bad && error < FML::TESTS::grid_tol(1e-9, 1e-3),
                 std::to_string(N) +
                     "D empty tensor allocation preserves input, halos/padding and analytic derivatives");
 }
@@ -216,7 +217,8 @@ int main() {
             const double W = filter == "gaussian" ? std::exp(-x * x / 2) :
                              filter == "tophat"   ? 3 * (std::sin(x) - x * std::cos(x)) / (x * x * x) :
                                                     (x < 1 ? 1.0 : 0.0);
-            check_local(maxdiff<3>(g, [&](std::array<double, 3> & y) { return W * mode(y); }) < 1e-12,
+            check_local(maxdiff<3>(g, [&](std::array<double, 3> & y) { return W * mode(y); }) <
+                            FML::TESTS::grid_tol(1e-12, 1e-5),
                         "3D " + filter + " filter of a single mode");
         }
     }
@@ -260,7 +262,9 @@ int main() {
         for (int i = 0, n = 0; i < 3; i++)
             for (int j = i; j < 3; j++, n++)
                 md = std::max(md, maxdiff<3>(hess[n], [&](std::array<double, 3> & x) { return H(i, j, x); }));
-        check_local(hess.size() == 6 and md < 1e-9, "3D Hessian = analytic (" + num(md) + ")");
+        // (absolute errors: the components are up to 9 (2 pi)^2 ~ 360)
+        check_local(hess.size() == 6 and md < FML::TESTS::grid_tol(1e-9, 1e-2),
+                    "3D Hessian = analytic (" + num(md) + ")");
 
         Grid<3> lap(Nmesh);
         lap.fill_real_grid([&](std::array<double, 3> & x) { return H(0, 0, x) + H(1, 1, x) + H(2, 2, x); });
@@ -270,7 +274,7 @@ int main() {
         for (int i = 0, n = 0; i < 3; i++)
             for (int j = i; j < 3; j++, n++)
                 md = std::max(md, maxdiff<3>(hp[n], [&](std::array<double, 3> & x) { return H(i, j, x); }));
-        check_local(md < 1e-9, "3D Hessian of the potential = analytic (" + num(md) + ")");
+        check_local(md < FML::TESTS::grid_tol(1e-9, 1e-2), "3D Hessian of the potential = analytic (" + num(md) + ")");
 
         // Eigensystem against GSL per cell (and M v = lambda v), with threads
         std::vector<Grid<3>> eval, evec, eval2, evec2;
@@ -308,7 +312,7 @@ int main() {
         gsl_eigen_symm_free(w);
         FML::MaxOverTasks(&mde);
         FML::MaxOverTasks(&mdv);
-        check_local(mde < 1e-8 and mdv < 1e-8,
+        check_local(mde < FML::TESTS::grid_tol(1e-8, 1e-2) and mdv < FML::TESTS::grid_tol(1e-8, 1e-2),
                     "eigenvalues (" + num(mde) + ") and eigenvectors evec[i * N + k] (" + num(mdv) + ")");
     }
     {
@@ -329,7 +333,9 @@ int main() {
                                               return -4.0 * tp * tp * std::cos(tp * x[0]) * std::cos(tp * 2 * x[1]);
                                           }) :
                                1.0;
-        check_local(hess.size() == 3 and mxy < 1e-9 and myy < 1e-9, "2D Hessian: 3 components = analytic");
+        // (absolute errors: the components are up to 4 (2 pi)^2 ~ 160)
+        const double tol2d = FML::TESTS::grid_tol(1e-9, 5e-3);
+        check_local(hess.size() == 3 and mxy < tol2d and myy < tol2d, "2D Hessian: 3 components = analytic");
     }
     {
         // A Nyquist mode in x: f_xz = 0 on the grid
@@ -344,7 +350,8 @@ int main() {
         const double kny = M_PI * Nmesh;
         const double mxz = maxdiff<3>(hess[2], [](std::array<double, 3> &) { return 0.0; });
         const double mxx = maxdiff<3>(hess[0], [&](std::array<double, 3> & x) { return -kny * kny * nyq(x); });
-        check_local(mxz < 1e-9 and mxx < 1e-9 * kny * kny,
+        check_local(mxz < FML::TESTS::grid_tol(1e-9, 1e-5 * kny * kny) and
+                        mxx < FML::TESTS::grid_tol(1e-9, 1e-5) * kny * kny,
                     "Nyquist mode: f_xz = 0 (" + num(mxz) + "), f_xx = -k_ny^2 f");
     }
 

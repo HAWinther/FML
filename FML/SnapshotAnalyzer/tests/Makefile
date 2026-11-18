@@ -6,6 +6,8 @@ USE_MPI ?= true
 MPIRUN ?= mpirun
 NP_LIST ?= 1 2 4
 PYTHON ?= python3
+# float if FML is built with SINGLE_PRECISION_FFTW (in Makefile.local): looser round-off tolerances in the checks
+FML_PRECISION ?= double
 # Idle OpenMP threads sleep (more tasks x threads than cores; as in Makefile.config)
 export OMP_WAIT_POLICY ?= passive
 
@@ -18,7 +20,8 @@ endif
 .PHONY: run clean
 run:
 	$(MAKE) -C .. -B snapshot_analyzer USE_MPI=$(USE_MPI)
-	OMP_NUM_THREADS=2 $(PYTHON) check_snapshot_analyzer.py ../snapshot_analyzer $(RUNNER) --workdir check_output
+	OMP_NUM_THREADS=2 $(PYTHON) check_snapshot_analyzer.py ../snapshot_analyzer $(RUNNER) --workdir check_output \
+	  --precision $(FML_PRECISION)
 
 clean:
 	rm -rf check_output

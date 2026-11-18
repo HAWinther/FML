@@ -119,7 +119,9 @@ int main(int argc, char ** argv) {
     Force one(mesh, 1);
     auto af = one(tiny);
     auto rr = residuals(tiny, af);
-    check(rr.force_rms < 2e-7, "one periodic particle has zero net self force (including empty particle slabs)");
+    check(rr.force_rms < FML::TESTS::grid_tol(2e-7, 1e-4),
+          "one periodic particle has zero net self force (including empty particle slabs; rms " +
+              FML::TESTS::num(rr.force_rms, 3) + ")");
     auto pair = poisson_load(2, 1);
     for (size_t i = 0; i < pair.particles.get_npart(); ++i) {
         auto & p = pair.particles.get_particles_ptr()[i];

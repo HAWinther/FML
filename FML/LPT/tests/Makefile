@@ -1,7 +1,8 @@
 USE_MPI ?= true
 USE_OMP ?= true
 USE_FFTW ?= true
-LPT_PRECISION ?= double
+# FML_PRECISION = float (as for the other tests of a SINGLE_PRECISION_FFTW build) also selects float
+LPT_PRECISION ?= $(or $(FML_PRECISION),double)
 ifeq ($(LPT_PRECISION),float)
 OPTIONS += -DSINGLE_PRECISION_FFTW
 FFTW_LINK ?= -lfftw3f

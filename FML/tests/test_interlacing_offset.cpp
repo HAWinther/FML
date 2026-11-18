@@ -173,13 +173,15 @@ void run_case(const std::string & label, bool empty_rank = false) {
             FML::SumOverTasks(&mean_weight);
             mean_weight /= total;
         }
-        double dc = FML::ThisTask == 0 ? double(std::abs(actual.get_fourier_from_index(0) - FML::GRID::FloatType(mean_weight))) : 0;
+        double dc = FML::ThisTask == 0 ?
+                        double(std::abs(actual.get_fourier_from_index(0) - FML::GRID::FloatType(mean_weight))) :
+                        0;
         FML::MaxOverTasks(&dc);
-        conserved = conserved && dc < 1e-11;
+        conserved = conserved && dc < FML::TESTS::grid_tol(1e-11, 1e-5);
     }
-    check(worst_deposition < 2e-12, label + " shifted deposition matches explicit-shift reference");
-    check(worst_legacy < 2e-12, label + " legacy two-grid Fourier field unchanged");
-    check(worst_multi < 2e-12, label + " generalized 1/2/4/8-grid Fourier fields agree");
+    check(worst_deposition < FML::TESTS::grid_tol(2e-12, 1e-5), label + " shifted deposition matches explicit-shift reference");
+    check(worst_legacy < FML::TESTS::grid_tol(2e-12, 1e-5), label + " legacy two-grid Fourier field unchanged");
+    check(worst_multi < FML::TESTS::grid_tol(2e-12, 1e-5), label + " generalized 1/2/4/8-grid Fourier fields agree");
     check(conserved, label + " mass/weight is conserved");
     check(p.empty() || std::memcmp(original.data(), p.data(), original.size()) == 0,
           label + " all particle bytes preserved exactly");

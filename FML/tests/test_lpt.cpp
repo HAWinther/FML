@@ -304,9 +304,9 @@ void test_3LPT(bool alternate = false,
     FML::COSMOLOGY::LPT::compute_2LPT_potential_fourier(delta_fourier, phi2, dealiasing);
     double e1 = max_diff_fourier<3>(phi1, ref.p1) / maxabs<3>(ref.p1);
     double e2 = max_diff_fourier<3>(phi2, ref.p2) / maxabs<3>(ref.p2);
-    check_local(e1 < 1e-12,
+    check_local(e1 < FML::TESTS::grid_tol(1e-12, 1e-5),
                 "compute_1LPT_potential_fourier matches the plane-wave reference (rel err " + num(e1, 4) + ")");
-    check_local(e2 < 1e-12,
+    check_local(e2 < FML::TESTS::grid_tol(1e-12, 1e-5),
                 "compute_2LPT_potential_fourier matches the plane-wave reference (rel err " + num(e2, 4) + ")");
 
     // 3LPT potentials
@@ -322,11 +322,14 @@ void test_3LPT(bool alternate = false,
         Amax = std::max(Amax, maxabs<3>(ref.A[i]));
     for (int i = 0; i < 3; i++)
         rA = std::max(rA, max_diff_fourier<3>(A[i], ref.A[i]) / Amax);
-    check_local(r1 < 1e-12 and r2 < 1e-12,
+    check_local(r1 < FML::TESTS::grid_tol(1e-12, 1e-5) and r2 < FML::TESTS::grid_tol(1e-12, 1e-5),
                 "3LPT: phi_1LPT and phi_2LPT match the reference (rel err " + num(r1, 4) + ", " + num(r2, 4) + ")");
-    check_local(r3a < 1e-10, "3LPT: phi_3LPT_a matches the reference (rel err " + num(r3a, 4) + ")");
-    check_local(r3b < 1e-10, "3LPT: phi_3LPT_b matches the reference (rel err " + num(r3b, 4) + ")");
-    check_local(rA < 1e-10, "3LPT: curl term A_3LPT matches the reference (rel err " + num(rA, 4) + ")");
+    check_local(r3a < FML::TESTS::grid_tol(1e-10, 1e-4),
+                "3LPT: phi_3LPT_a matches the reference (rel err " + num(r3a, 4) + ")");
+    check_local(r3b < FML::TESTS::grid_tol(1e-10, 1e-4),
+                "3LPT: phi_3LPT_b matches the reference (rel err " + num(r3b, 4) + ")");
+    check_local(rA < FML::TESTS::grid_tol(1e-10, 1e-4),
+                "3LPT: curl term A_3LPT matches the reference (rel err " + num(rA, 4) + ")");
 
     // Without the curl term the scalar potentials are the same
     {
@@ -334,7 +337,8 @@ void test_3LPT(bool alternate = false,
         std::array<Grid, 3> B;
         FML::COSMOLOGY::LPT::compute_3LPT_potential_fourier<3>(delta_fourier, q1, q2, q3a, q3b, B, true, dealiasing);
         double s3b = max_diff_fourier<3>(q3b, ref.p3b) / maxabs<3>(ref.p3b);
-        check_local(s3b < 1e-10, "3LPT: phi_3LPT_b with ignore_curl_term (rel err " + num(s3b, 4) + ")");
+        check_local(s3b < FML::TESTS::grid_tol(1e-10, 1e-4),
+                    "3LPT: phi_3LPT_b with ignore_curl_term (rel err " + num(s3b, 4) + ")");
     }
 
     // The total displacement field and its time derivative
@@ -355,9 +359,9 @@ void test_3LPT(bool alternate = false,
         ePsi = std::max(ePsi, max_diff_real<3>(Psi[i], psi) / maxabs<3>(psi));
         edPsi = std::max(edPsi, max_diff_real<3>(dPsidt[i], dpsi) / maxabs<3>(dpsi));
     }
-    check_local(ePsi < 1e-10,
+    check_local(ePsi < FML::TESTS::grid_tol(1e-10, 1e-4),
                 "compute_3LPT_displacement_field: Psi matches the reference (rel err " + num(ePsi, 4) + ")");
-    check_local(edPsi < 1e-10,
+    check_local(edPsi < FML::TESTS::grid_tol(1e-10, 1e-4),
                 "compute_3LPT_displacement_field: dPsidt matches the reference (rel err " + num(edPsi, 4) + ")");
 }
 
@@ -557,7 +561,8 @@ void test_3LPT_2D() {
     FML::MaxOverTasks(&e);
     FML::MaxOverTasks(&ed);
     FML::MaxOverTasks(&scale);
-    check_local(e / scale < 1e-12 and ed / scale < 1e-12 and scale > 0.0,
+    check_local(e / scale < FML::TESTS::grid_tol(1e-12, 1e-5) and ed / scale < FML::TESTS::grid_tol(1e-12, 1e-5) and
+                    scale > 0.0,
                 "compute_3LPT_displacement_field<2>: Psi and dPsidt agree with the 2D potentials (rel err " +
                     num(e / scale, 4) + ", " + num(ed / scale, 4) + ")");
 }
@@ -596,7 +601,7 @@ void test_ALPT() {
         }
     FML::MaxOverTasks(&esc);
     FML::MaxOverTasks(&scmax);
-    check_local(esc / scmax < 1e-12,
+    check_local(esc / scmax < FML::TESTS::grid_tol(1e-12, 1e-5),
                 "spherical collapse potential = -source/k^2 with k=0 mode zero (rel err " + num(esc / scmax, 4) + ")");
 
     // To linear order phi_SC = D phi_1LPT
@@ -636,9 +641,10 @@ void test_ALPT() {
     FML::MaxOverTasks(&einf);
     FML::MaxOverTasks(&s0);
     FML::MaxOverTasks(&sinf);
-    check_local(e0 / s0 < 1e-12,
+    check_local(e0 / s0 < FML::TESTS::grid_tol(1e-12, 1e-5),
                 "ALPT with no smoothing (R=0) = phi_1LPT + phi_2LPT (rel err " + num(e0 / s0, 4) + ")");
-    check_local(einf / sinf < 1e-12, "ALPT with total smoothing = phi_SC (rel err " + num(einf / sinf, 4) + ")");
+    check_local(einf / sinf < FML::TESTS::grid_tol(1e-12, 1e-5),
+                "ALPT with total smoothing = phi_SC (rel err " + num(einf / sinf, 4) + ")");
 }
 
 void test_nongaussian_dc_mode() {
@@ -678,7 +684,7 @@ void test_nongaussian_dc_mode() {
         }
     FML::MaxOverTasks(&e);
     FML::MaxOverTasks(&s);
-    check_local(e / s < 1e-12,
+    check_local(e / s < FML::TESTS::grid_tol(1e-12, 1e-5),
                 "non-gaussian field: delta = sqrt(P/P_primordial) phi and delta(k=0) = 0 (rel err " + num(e / s, 4) +
                     ")");
     delta.fftw_c2r();

@@ -121,6 +121,30 @@ namespace FML {
             return check(ok, os.str());
         }
 
+        /// True if the grids store float (built with SINGLE_PRECISION_FFTW): FML::GRID::FloatType without including
+        /// the FFTW headers
+#ifdef SINGLE_PRECISION_FFTW
+        inline constexpr bool single_precision_grids = true;
+#else
+        inline constexpr bool single_precision_grids = false;
+#endif
+
+        /// Tolerance of a check limited by the round-off in grid values: tol_double in a double (or long double)
+        /// build, tol_float with SINGLE_PRECISION_FFTW. Use it only where the double tolerance is set by round-off,
+        /// not for discretization or physics errors
+        inline constexpr double grid_tol(double tol_double, double tol_float) {
+            return single_precision_grids ? tol_float : tol_double;
+        }
+
+        /// A check that cannot pass with float grids (e.g. a perturbation of 1e-4 on a field of order 1): prints
+        /// [SKIP] on task 0 and returns true with SINGLE_PRECISION_FFTW, otherwise returns false and the caller
+        /// makes the check. Use as: if (!skip_in_single_precision("label")) check(...)
+        inline bool skip_in_single_precision(const std::string & label) {
+            if (single_precision_grids && FML::ThisTask == 0)
+                std::cout << "[SKIP] " << label << " (needs double precision grids)\n";
+            return single_precision_grids;
+        }
+
         /// True if f() throws an exception of type E (or derived from it)
         template <class E = std::exception, class F>
         bool throws(F && f) {

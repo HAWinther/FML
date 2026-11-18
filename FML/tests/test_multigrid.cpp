@@ -488,9 +488,11 @@ int main() {
                     maxerr = std::max(maxerr, std::abs(phi.get_real_from_index(ri) - lin));
                 }
             FML::MaxOverTasks(&maxerr);
-            check_local(maxerr < 1e-4 * std::abs(amp),
-                        "Symmetron: linear theory for a small cosine perturbation (error " +
-                            num(maxerr / std::abs(amp), 3) + " of the amplitude)");
+            // (float grids: the field is f0 ~ 1 plus a perturbation of ~1e-5, resolved to only a few digits)
+            if (!FML::TESTS::skip_in_single_precision("Symmetron: linear theory for a small cosine perturbation"))
+                check_local(maxerr < 1e-4 * std::abs(amp),
+                            "Symmetron: linear theory for a small cosine perturbation (error " +
+                                num(maxerr / std::abs(amp), 3) + " of the amplitude)");
         }
         {
             // A halo: screened in the center (phi << phi0), unscreened far away
@@ -543,8 +545,11 @@ int main() {
                 chi_field(a, d, chi);
                 const double exact = std::pow(1.0 - fac * (1.0 + delta0), 1.0 / (Ms - Ns));
                 const double err = maxerr(chi, [&](auto &) { return exact; });
-                check_local(err < 1e-8, nm + ": uniform density 1 + delta = 1.5 gives the minimum of the effective "
-                                             "potential, chi = " + num(exact, 4) + " (error " + num(err, 3) + ")");
+                check_local(err < FML::TESTS::grid_tol(1e-8, 1e-6),
+                            nm +
+                                ": uniform density 1 + delta = 1.5 gives the minimum of the effective "
+                                "potential, chi = " +
+                                num(exact, 4) + " (error " + num(err, 3) + ")");
             }
             {
                 const double a = 1.0, A = 1e-5, fac = std::pow(assb / a, 3), xi = H0L;
@@ -563,8 +568,10 @@ int main() {
                 const double amp = -norm * fac * std::pow(c0, Ns - 1) * A /
                                    (k2 + norm * (Ms - Ns) * std::pow(c0, Ns - 2) * (1.0 - fac));
                 const double err = maxerr(chi, [&](auto & c) { return c0 + amp * std::cos(2 * M_PI * m * (c[0] + 0.5) / N); });
-                check_local(err < 1e-5 * std::abs(amp), nm + ": linear theory for a small cosine perturbation (error " +
-                                                            num(err / std::abs(amp), 3) + " of the amplitude)");
+                if (!FML::TESTS::skip_in_single_precision(nm + ": linear theory for a small cosine perturbation"))
+                    check_local(err < 1e-5 * std::abs(amp),
+                                nm + ": linear theory for a small cosine perturbation (error " +
+                                    num(err / std::abs(amp), 3) + " of the amplitude)");
             }
         }
 
@@ -617,9 +624,11 @@ int main() {
                 d.fill_real_grid(delta0);
                 dilaton_u(r, a, d, u);
                 const double err = max_over_grid(u, [&](auto &, double v) { return std::abs(v - uexact); });
-                check_local(err < 1e-8 * std::abs(uexact),
-                            "Dilaton r = " + num(r, 3) + ": uniform density 1 + delta = 3 gives the minimum of the "
-                            "effective potential, u = " + num(uexact, 4) + " (error " + num(err, 3) + ")");
+                check_local(err < FML::TESTS::grid_tol(1e-8, 1e-6) * std::abs(uexact),
+                            "Dilaton r = " + num(r, 3) +
+                                ": uniform density 1 + delta = 3 gives the minimum of the "
+                                "effective potential, u = " +
+                                num(uexact, 4) + " (error " + num(err, 3) + ")");
             }
             for (double xx : {1e-3, 1e-2}) {
                 // delta = A cos(2 pi m x): u = amp cos(2 pi m x) with -k^2 amp = norm a^-3 (A + 3 a^-p amp / s)
@@ -641,9 +650,13 @@ int main() {
                 const double err = max_over_grid(u, [&](auto & c, double v) {
                     return std::abs(v - amp * std::cos(2 * M_PI * m * (c[0] + 0.5) / N));
                 });
-                check_local(err < 1e-4 * std::abs(amp),
-                            "Dilaton xi = " + num(xi, 3) + ": linear theory for a small cosine perturbation (error " +
-                                num(err / std::abs(amp), 3) + " of the amplitude)");
+                // (float grids: the source is a difference of order-unity terms that is ~1e-5)
+                if (!FML::TESTS::skip_in_single_precision("Dilaton xi = " + num(xi, 3) +
+                                                          ": linear theory for a small cosine perturbation"))
+                    check_local(err < 1e-4 * std::abs(amp),
+                                "Dilaton xi = " + num(xi, 3) +
+                                    ": linear theory for a small cosine perturbation (error " +
+                                    num(err / std::abs(amp), 3) + " of the amplitude)");
             }
             // The long range from here on
             A2 = 5e3;
@@ -676,10 +689,11 @@ int main() {
                 FML::MinOverTasks(&dmin);
                 const int nv = dilaton_u(r, a, d, u, 1e-10);
                 const double err = max_over_grid(u, [&](auto & c, double v) { return std::abs(v - uexact(c[0])); });
-                check_local(dmin > -1.0 and err < 1e-8 and nv < 30,
-                            "Dilaton r = " + num(r, 3) + ", a = 0.7: the nonlinear sine profile (phi/phi_bar from 1/3 "
-                            "to 1) is the discrete solution (max error in u " + num(err, 3) + ", " +
-                                std::to_string(nv) + " V-cycles)");
+                check_local(dmin > -1.0 and err < FML::TESTS::grid_tol(1e-8, 1e-6) and nv < 30,
+                            "Dilaton r = " + num(r, 3) +
+                                ", a = 0.7: the nonlinear sine profile (phi/phi_bar from 1/3 "
+                                "to 1) is the discrete solution (max error in u " +
+                                num(err, 3) + ", " + std::to_string(nv) + " V-cycles)");
             }
             {
                 // A halo: screened in the center (phi << phi_bar), above the background in the voids. The warm start

@@ -131,13 +131,15 @@ void test_high_frequency_triangle_closure() {
                 "high-frequency fixture distinguishes true from wrapped triangle closure");
     compute_polyspectrum_bincount<3, 3>(Nmesh, b);
     const double measured = b.get_bincount(shell, shell, shell) * std::pow(2.0 * M_PI, 3);
-    check_local(std::abs(measured - double(closed)) < 1e-6,
+    // (integer counts: with float grids they are only within round-off of the integer)
+    const double count_tol = FML::TESTS::grid_tol(1e-6, 0.1);
+    check_local(std::abs(measured - double(closed)) < count_tol,
                 "high-frequency N123 counts exactly closed triangles: measured " + num(measured) + ", expected " +
                     std::to_string(closed) + ", modulo-grid count " + std::to_string(wrapped));
 
     b.dealias = false;
     compute_polyspectrum_bincount<3, 3>(Nmesh, b);
-    check_local(std::abs(b.get_bincount(shell, shell, shell) * std::pow(2 * M_PI, 3) - double(wrapped)) < 1e-6,
+    check_local(std::abs(b.get_bincount(shell, shell, shell) * std::pow(2 * M_PI, 3) - double(wrapped)) < count_tol,
                 "explicit legacy closure reproduces the modulo-grid count");
     b.dealias = true;
 
@@ -185,9 +187,12 @@ void test_four_point_closure() {
     compute_trispectrum(field, bins);
     const double measure = std::pow(2 * M_PI, 3);
     const double count = bins.get_bincount(shell, shell, shell, shell) * measure;
-    check_local(std::abs(count - double(exact)) < 1e-5, "four-point geometry matches unwrapped integer pair sums");
+    check_local(std::abs(count - double(exact)) < FML::TESTS::grid_tol(1e-5, 1e-6 * double(exact)),
+                "four-point geometry matches unwrapped integer pair sums (" + num(count, 10) + " vs " +
+                    std::to_string(exact) + ")");
     const double moment = bins.get_spectrum(shell, shell, shell, shell) * count;
-    check_local(std::abs(moment - 3.0 / 8) < 1e-12, "de-aliased fourth moment of cos(4x) is 3/8, not the wrapped 1/2");
+    check_local(std::abs(moment - 3.0 / 8) < FML::TESTS::grid_tol(1e-12, 1e-5),
+                "de-aliased fourth moment of cos(4x) is 3/8, not the wrapped 1/2");
 }
 
 void test_automatic_geometry_cache() {
@@ -311,7 +316,7 @@ void test_shell_workspace() {
                 "diagonal selection needs one shell even at higher order");
     const auto diagonal_index = selected.get_index_from_coord(diagonal);
     check_local(std::abs(selected.P123[diagonal_index] - full.P123[diagonal_index]) <
-                    2e-11 * std::max(1e-15, std::abs(full.P123[diagonal_index])),
+                    FML::TESTS::grid_tol(2e-11, 1e-5) * std::max(1e-15, std::abs(full.P123[diagonal_index])),
                 "a low-frequency selection agrees without padding the unrequested upper shells");
     bool rejected = false;
     try {
@@ -759,8 +764,10 @@ void test_shell_overlap_weights() {
                     maxerr = std::max(maxerr, std::fabs(b.N123[i] * std::pow(2.0 * M_PI, 3) - count[i]) /
                                                   std::max(1.0, count[i]));
                 }
-        check_local(maxerr < 1e-9, "shell overlap N123 x (2pi)^3 = brute-force weighted triangle count (max rel. "
-                                   "error " + num(maxerr) + ")");
+        check_local(maxerr < FML::TESTS::grid_tol(1e-9, 1e-4),
+                    "shell overlap N123 x (2pi)^3 = brute-force weighted triangle count (max rel. "
+                    "error " +
+                        num(maxerr) + ")");
     }
     {
         // Equilateral bins of width ~1 cell: the continuum count 8 pi^2 k^3 dk^3. The 0/1 shells scatter by tens of
@@ -888,8 +895,10 @@ void test_shell_overlap_weights() {
                 // The estimator: (2pi)^3 B = <d1 d2 d3> / Nmesh^9 relative to the FFT normalization of FFTWGrid
                 maxerr = std::max(maxerr, std::fabs(b.P123[i] - sum[i] / count[i]) / scale);
             }
-        check_local(maxerr < 1e-9, "shell overlap weights: B of a random field = brute-force weighted triangle sum "
-                                   "(max error " + num(maxerr) + " of the largest |B|)");
+        check_local(maxerr < FML::TESTS::grid_tol(1e-9, 1e-5),
+                    "shell overlap weights: B of a random field = brute-force weighted triangle sum "
+                    "(max error " +
+                        num(maxerr) + " of the largest |B|)");
     }
 }
 
@@ -913,7 +922,7 @@ int main(int argc, char ** argv) {
         const size_t Np = 400000 / FML::NTasks * FML::NTasks;
         auto part = make_particles<Particle>(Np, 1, [](Particle &, double) {});
         auto [d0, m0] = shotnoise_test(part, Np, 1.0 / double(Np));
-        check_local(d0 < 1e-12 and std::fabs(m0) < 0.08,
+        check_local(d0 < FML::TESTS::grid_tol(1e-12, 1e-5) and std::fabs(m0) < 0.08,
                     "equal masses: shot noise 1/N subtracted, mean P(k) - 1/N = " + num(m0) + " x 1/N");
 
         auto pm = make_particles<ParticleMass>(Np, 2, [](ParticleMass & p, double u) { p.mass = 0.2 + 2.8 * u; });
@@ -928,7 +937,7 @@ int main(int argc, char ** argv) {
         FML::SumOverTasks(&s3);
         const double S2 = s2 / (s1 * s1), S3 = s3 / (s1 * s1 * s1);
         auto [d1, m1] = shotnoise_test(pm, Np, S2);
-        check_local(d1 < 1e-10 and std::fabs(m1) < 0.08,
+        check_local(d1 < FML::TESTS::grid_tol(1e-10, 1e-5) and std::fabs(m1) < 0.08,
                     "masses: shot noise sum m^2/(sum m)^2 subtracted (" + num(d1) + "), mean P(k) - shot noise = " +
                         num(m1) + " x shot noise (" + num(1.0 - 1.0 / (Np * S2)) + " with 1/N)");
 
@@ -938,7 +947,7 @@ int main(int argc, char ** argv) {
             w2 += p.w * p.w;
         FML::SumOverTasks(&w2);
         auto [d2, m2] = shotnoise_test(pw, Np, w2 / double(Np) / double(Np));
-        check_local(d2 < 1e-10 and std::fabs(m2) < 0.08,
+        check_local(d2 < FML::TESTS::grid_tol(1e-10, 1e-5) and std::fabs(m2) < 0.08,
                     "delta-f weights: shot noise sum w^2/N^2 subtracted, mean P(k) - shot noise = " + num(m2) +
                         " x shot noise");
 
@@ -959,9 +968,9 @@ int main(int argc, char ** argv) {
             maxerr = std::max(maxerr, std::fabs((bnosub.P123[i] - bsub.P123[i]) / expected - 1.0));
             nconf++;
         }
-        check_local(nconf > 0 and maxerr < 1e-8,
+        check_local(nconf > 0 and maxerr < FML::TESTS::grid_tol(1e-8, 1e-2),
                     "bispectrum with masses: S2 (P1 + P2 + P3) + S3 subtracted (" + std::to_string(nconf) +
-                        " configurations)");
+                        " configurations, max rel. error " + num(maxerr, 3) + ")");
     }
 
     // NGP (and CIC) with interlacing conserves the mass: the k = 0 mode (mean delta) is 0
@@ -976,7 +985,8 @@ int main(int argc, char ** argv) {
         FML::INTERPOLATION::particles_to_fourier_grid_interlacing(part.data(), part.size(), Np, grid, method);
         double dc = FML::ThisTask == 0 ? std::abs(grid.get_fourier_from_index(0)) : 0.0;
         FML::SumOverTasks(&dc);
-        check_local(dc < 1e-12, method + " with interlacing: mean density contrast " + num(dc) + " (should be 0)");
+        check_local(dc < FML::TESTS::grid_tol(1e-12, 1e-6),
+                    method + " with interlacing: mean density contrast " + num(dc) + " (should be 0)");
     }
 
     // The number of triangles in the bispectrum bins against a brute-force count (small bins included)
@@ -1025,7 +1035,7 @@ int main(int argc, char ** argv) {
             nchecked++;
             nsmall += count[i] > 0 and count[i] < 248;
         }
-        check_local(maxerr < 1e-6,
+        check_local(maxerr < FML::TESTS::grid_tol(1e-6, 0.1),
                     "N123 x (2pi)^3 = brute-force number of triangles (" + std::to_string(nchecked) + " bins, " +
                         std::to_string(nsmall) + " with < (2pi)^3 triangles), max error " + num(maxerr));
     }

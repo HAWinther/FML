@@ -115,7 +115,7 @@ void test_nufft(int nmesh, size_t npart, double epsilon, double sigma = 2.0) {
     }
     FML::MaxOverTasks(&maxerr);
     FML::MaxOverTasks(&maxval);
-    check_local(maxerr < 10 * epsilon * maxval,
+    check_local(maxerr < 10 * std::max(epsilon, FML::TESTS::grid_tol(0.0, 1e-6)) * maxval,
                 "NUFFT type 1 (" + std::to_string(N) + "D, eps = " + sci(epsilon) + ", sigma = " + sci(sigma) +
                     ") matches direct sum: max rel err " + sci(maxerr / maxval));
 
@@ -147,7 +147,7 @@ void test_nufft(int nmesh, size_t npart, double epsilon, double sigma = 2.0) {
     }
     FML::MaxOverTasks(&maxerr);
     FML::MaxOverTasks(&maxval);
-    check_local(maxerr < 10 * epsilon * maxval,
+    check_local(maxerr < 10 * std::max(epsilon, FML::TESTS::grid_tol(0.0, 1e-6)) * maxval,
                 "NUFFT type 2 (" + std::to_string(N) + "D, eps = " + sci(epsilon) + ", sigma = " + sci(sigma) +
                     ") matches direct sum: max rel err " + sci(maxerr / maxval));
 }
@@ -327,7 +327,8 @@ int main(int argc, char ** argv) {
             maxerr = std::max(maxerr, std::abs(grid.get_real_from_index(real_index) - fshift(x)));
         }
         FML::MaxOverTasks(&maxerr);
-        check_local(maxerr < 1e-10, "shift_grid_fourier is exact for a band-limited field (err " + sci(maxerr) + ")");
+        check_local(maxerr < FML::TESTS::grid_tol(1e-10, 1e-5),
+                    "shift_grid_fourier is exact for a band-limited field (err " + sci(maxerr) + ")");
     }
 
     //===========================================================
@@ -557,7 +558,7 @@ int main(int argc, char ** argv) {
         }
         FML::MaxOverTasks(&maxerr);
         FML::MaxOverTasks(&outside);
-        check_local(ntracers == size_t(Np * Np * Np) and outside == 0 and maxerr < 1e-10,
+        check_local(ntracers == size_t(Np * Np * Np) and outside == 0 and maxerr < FML::TESTS::grid_tol(1e-10, 1e-6),
                     "sheet_tracers are at q + s + Psi(q + s) (max err " + sci(maxerr) + ")");
 
         // Sheet density with R = 2 on a 32^3 grid equals the density of the analytic tracers
@@ -593,7 +594,7 @@ int main(int argc, char ** argv) {
         }
         FML::MaxOverTasks(&maxdiff);
         FML::MaxOverTasks(&maxref);
-        check_local(maxdiff < 1e-8 * maxref,
+        check_local(maxdiff < FML::TESTS::grid_tol(1e-8, 1e-5) * maxref,
                     "particles_to_fourier_grid_sheet (R = 2) equals the analytic sheet density");
 
         // The same with the exact Fourier modes of the tracers (NUFFT)
@@ -660,7 +661,7 @@ int main(int argc, char ** argv) {
             maxdiff =
                 std::max(maxdiff, std::fabs(double(g1.get_real_from_index(index)) - g2.get_real_from_index(index)));
         FML::MaxOverTasks(&maxdiff);
-        check_local(nok == 1 and maxdiff < 1e-12,
+        check_local(nok == 1 and maxdiff < FML::TESTS::grid_tol(1e-12, 1e-5),
                     "sort_particles_by_position = stable sort by block, density unchanged (" + sci(maxdiff) + ")");
     }
 
@@ -699,7 +700,7 @@ int main(int argc, char ** argv) {
             }
             FML::MaxOverTasks(&maxdiff);
             FML::MaxOverTasks(&maxdiff23);
-            ok = ok and maxdiff < 1e-12 and (not chunked or maxdiff23 == 0.0);
+            ok = ok and maxdiff < FML::TESTS::grid_tol(1e-12, 1e-5) and (not chunked or maxdiff23 == 0.0);
             info += " " + method + ": " + sci(maxdiff) + (chunked ? " (2 = 3 threads: " + sci(maxdiff23) + ")" : "");
         }
         check_local(ok, "particles_to_grid with threads equals one thread, deterministic:" + info);

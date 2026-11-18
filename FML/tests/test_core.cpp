@@ -183,7 +183,8 @@ int main(int argc, char ** argv) {
             err = std::max(err, fft_roundtrip_error(a, 2)); // reuses the cached plan
             err = std::max(err, fft_roundtrip_error(b, 3));
             err = std::max(err, fft_roundtrip_error(c, 4));
-            check_local(err < 1e-12, "FFT roundtrip with cached plans (different sizes/padding)");
+            check_local(err < FML::TESTS::grid_tol(1e-12, 1e-5),
+                        "FFT roundtrip with cached plans (different sizes/padding)");
 
             // Same transform with FFTW_ESTIMATE and FFTW_MEASURE plans must agree
             FML::GRID::FFTWGrid<3> d(16), e(16);
