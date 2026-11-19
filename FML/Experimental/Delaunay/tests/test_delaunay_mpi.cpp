@@ -7,6 +7,7 @@
 #include <FML/Experimental/Delaunay/PeriodicVoronoi.h>
 #include <FML/tests/TestHelpers.h>
 
+#include <cstring>
 #include <map>
 #include <random>
 #include <tuple>
@@ -83,6 +84,15 @@ namespace {
             return p;
         }
         p.resize(n);
+        if (type == "blob") { // one clump in an otherwise empty box
+            std::normal_distribution<double> B(0.5 * L, 0.1 * L);
+            for (auto & x : p)
+                for (int d = 0; d < D; d++) {
+                    x[d] = B(rng);
+                    x[d] -= L * std::floor(x[d] / L);
+                }
+            return p;
+        }
         for (size_t i = 0; i < n; i++)
             for (int d = 0; d < D; d++) {
                 double x = (type == "clustered" && i % 2 == 0) ? 0.97 * L + G(rng) : U(rng);
@@ -447,6 +457,66 @@ namespace {
                   "(also after update)");
     }
 
+    /// A clump in an empty box: the hull simplices have huge circumspheres before the ghosts close the cells. The
+    /// ghosts must stay few (a search returning every point in such a sphere brought in all 124 images of every
+    /// point)
+    template <int D>
+    void test_blob(size_t n) {
+        const auto p = make_points<D>("blob", n, 1.0, 9);
+        const auto owner = distribute<D>("slab", p, 1.0);
+        std::vector<std::array<double, D>> mine;
+        for (size_t i = 0; i < p.size(); i++)
+            if (owner[i] == FML::ThisTask)
+                mine.push_back(p[i]);
+        PeriodicVoronoi<D> V(mine, 1.0);
+        size_t nghosts = V.statistics().nghosts;
+        FML::SumOverTasks(&nghosts);
+        double volume = 0.0;
+        for (const auto & c : V.cells())
+            volume += c.volume;
+        FML::SumOverTasks(&volume);
+        check(nghosts < 4 * n and std::abs(volume - 1.0) < 1e-10,
+              std::to_string(D) + "D clump in an empty box: " + std::to_string(nghosts) + " ghosts for " +
+                  std::to_string(n) + " points, the cells fill the box");
+    }
+
+    /// compute_faces = false: the cells are bitwise the same as with the faces, and the neighbours of every cell
+    /// are the points on the other side of its faces
+    template <int D>
+    void test_cells_only(const std::string & type, const std::string & how, size_t n) {
+        const auto p = make_points<D>(type, n, 1.0, 17);
+        const auto owner = distribute<D>(how, p, 1.0);
+        std::vector<std::array<double, D>> mine;
+        for (size_t i = 0; i < p.size(); i++)
+            if (owner[i] == FML::ThisTask)
+                mine.push_back(p[i]);
+        typename PeriodicVoronoi<D>::Options with, without;
+        without.compute_faces = false;
+        PeriodicVoronoi<D> A(mine, 1.0, with), B(mine, 1.0, without);
+        int bad = A.cells().size() != B.cells().size() || !B.faces().empty();
+        for (size_t c = 0; !bad && c < A.cells().size(); c++) {
+            const auto &x = A.cells()[c], &y = B.cells()[c];
+            bad = x.id != y.id || std::memcmp(&x.volume, &y.volume, sizeof(double)) != 0 ||
+                  std::memcmp(x.centroid.data(), y.centroid.data(), sizeof(double) * D) != 0;
+            std::vector<std::pair<int, size_t>> fa, fb;
+            const auto range = A.cell_faces(c);
+            for (auto it = range.first; it != range.second; ++it) {
+                const auto & F = A.faces()[size_t(*it >= 0 ? *it : -*it - 1)];
+                fa.push_back(*it >= 0 ? std::make_pair(F.task_j, F.index_j) : std::make_pair(F.task_i, F.index_i));
+            }
+            const auto nb = B.cell_neighbors(c);
+            for (auto it = nb.first; it != nb.second; ++it)
+                fb.push_back({it->task, it->index});
+            std::sort(fa.begin(), fa.end());
+            std::sort(fb.begin(), fb.end());
+            bad = bad || fa != fb;
+        }
+        FML::MaxOverTasks(&bad);
+        check(!bad,
+              std::to_string(D) + "D " + type + ", " + how +
+                  ": without the faces the cells are bitwise the same and the neighbours those of the faces");
+    }
+
 } // namespace
 
 int main(int argc, char ** argv) {
@@ -457,6 +527,13 @@ int main(int argc, char ** argv) {
     test_distributions<3>("random", 20000);
     test_distributions<3>("clustered", 20000);
     test_distributions<3>("lattice", 4096);
+    test_distributions<3>("blob", 20000);
+    test_blob<2>(20000);
+    test_cells_only<2>("random", "random", 8000);
+    test_cells_only<2>("lattice", "slab", 4900);
+    test_cells_only<3>("clustered", "hilbert", 8000);
+    test_cells_only<3>("lattice", "pencil", 4096);
+    test_blob<3>(50000);
     test_update<2>("random", 6000);
     test_update<2>("lattice", 4900);
     test_update<3>("random", 6000);

@@ -322,6 +322,18 @@ namespace FML {
                 }
             }
 
+            /// Reserve memory for about nv vertices (the simplices are about 6.7 per vertex in 3D, 2 in 2D), so that
+            /// the arrays do not grow by doubling (up to twice the memory needed)
+            void reserve(size_t nv) {
+                const size_t ns = size_t(double(nv) * (D == 3 ? 6.9 : 2.05)) + 64;
+                simplices.reserve(ns);
+                births.reserve(ns);
+                mark.reserve(ns);
+                vertices.reserve(nv + NV);
+                keys.reserve(nv + NV);
+                vertex_simplex.reserve(nv + NV);
+            }
+
             int nvertices() const { return int(vertices.size()); }
             static constexpr int nsuper() { return NV; }
             bool is_super(int v) const { return v < NV; }

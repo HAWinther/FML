@@ -94,6 +94,10 @@ namespace FML {
                 bool verbose = false;
                 /// Compute the cells and faces (false: only the triangulation, e.g. for point location)
                 bool compute_geometry = true;
+                /// Keep the faces (false: only the cells and, per cell, its neighbours (cell_neighbors()); each face
+                /// between two local cells is then computed twice, but the faces, the largest part of the memory,
+                /// are never stored). The cells are the same (bitwise) either way
+                bool compute_faces = true;
             };
 
             struct Cell {
@@ -209,6 +213,16 @@ namespace FML {
             size_t ncells() const { return cells_.size(); }
             const std::vector<Cell> & cells() const { return cells_; }
             const std::vector<Face> & faces() const { return faces_; }
+
+            /// A neighbour of a cell: the point on the other side of a face (its task and index there)
+            struct Neighbor {
+                int task;
+                size_t index;
+            };
+            /// The neighbours of local cell c, in the order of the faces (only with compute_faces = false)
+            std::pair<const Neighbor *, const Neighbor *> cell_neighbors(size_t c) const {
+                return {neighbor_list.data() + neighbor_offset[c], neighbor_list.data() + neighbor_offset[c + 1]};
+            }
             /// The faces of local cell c (see the class description for the sign convention)
             std::pair<const int64_t *, const int64_t *> cell_faces(size_t c) const {
                 return {cell_face_list.data() + cell_face_offset[c], cell_face_list.data() + cell_face_offset[c + 1]};
@@ -216,6 +230,16 @@ namespace FML {
             const Statistics & statistics() const { return stats; }
             const Delaunay<D> & triangulation() const { return dt; }
             double boxsize() const { return L; }
+            /// Free the faces (faces(), cell_faces()) and neighbours (cell_neighbors()) once they are not needed (the
+            /// cells are kept)
+            void release_faces() {
+                std::vector<Face>().swap(faces_);
+                std::vector<size_t>().swap(neighbor_offset);
+                std::vector<Neighbor>().swap(neighbor_list);
+                std::vector<size_t>().swap(cell_face_offset);
+                std::vector<int64_t>().swap(cell_face_list);
+            }
+
             /// The vertex of the triangulation of local point c
             int local_vertex(size_t c) const { return vertex_of_local[c]; }
             /// The point of vertex v of the triangulation (v >= Delaunay<D>::nsuper()): its task, its index on that
@@ -325,6 +349,8 @@ namespace FML {
             std::vector<VertexInfo> info{}; // per vertex (index - NV)
             std::vector<Cell> cells_{};
             std::vector<Face> faces_{};
+            std::vector<size_t> neighbor_offset{};
+            std::vector<Neighbor> neighbor_list{};
             std::vector<size_t> cell_face_offset{};
             std::vector<int64_t> cell_face_list{};
             Statistics stats{};
@@ -690,6 +716,9 @@ namespace FML {
                 lo.fill(-2.0 * MAXSHIFT - 0.5);
                 hi.fill(1.0 + 2.0 * MAXSHIFT + 0.5);
                 dt.init(lo, hi);
+                // The local points and the ghosts (a guess: a layer of a few spacings around the points)
+                dt.reserve(N + N / 4 + 1000);
+                info.reserve(N + N / 4 + 1000);
                 info.clear();
                 vertex_of_local.assign(N, -1);
                 present.clear();
@@ -804,11 +833,11 @@ namespace FML {
                         [&](const Query * r, size_t n) { received.insert(received.end(), r, r + n); },
                         opt.max_message_bytes);
                     std::vector<std::vector<Reply>> replies(size_t(FML::NTasks));
+                    std::vector<std::pair<double, size_t>> candidates;
+                    const size_t max_per_ball = 8;
                     for (const auto & qr : received) {
                         auto & seen = sent[size_t(qr.requester)];
-                        search(qr, [&](size_t i, const Point & y) {
-                            if (!seen.insert(make_key(gid_local[i], qr.shift)).second)
-                                return;
+                        auto reply = [&](size_t i, const Point & y) {
                             Reply rep;
                             rep.gid = gid_local[i];
                             rep.index = i;
@@ -818,7 +847,41 @@ namespace FML {
                             for (int d = 0; d < D; d++)
                                 rep.pos[d] = y[d];
                             replies[size_t(qr.requester)].push_back(rep);
+                        };
+                        if (!qr.ball) {
+                            search(qr, [&](size_t i, const Point & y) {
+                                if (seen.insert(make_key(gid_local[i], qr.shift)).second)
+                                    reply(i, y);
+                            });
+                            continue;
+                        }
+                        // A ball (circumsphere): only the points closest to the centre that the requester does not
+                        // have. One point strictly inside is enough to destroy the simplex (and a point strictly
+                        // inside is closer to the centre than any on the sphere), so the simplex is never certified
+                        // wrongly, and a huge sphere (e.g. on the hull of a clump in an empty box) does not bring in
+                        // every point inside it
+                        candidates.clear();
+                        search(qr, [&](size_t i, const Point & y) {
+                            if (seen.count(make_key(gid_local[i], qr.shift)))
+                                return;
+                            double r2 = 0.0;
+                            for (int d = 0; d < D; d++)
+                                r2 += (y[d] - qr.a[d]) * (y[d] - qr.a[d]);
+                            candidates.push_back({r2, i});
                         });
+                        if (candidates.size() > max_per_ball)
+                            std::nth_element(candidates.begin(),
+                                             candidates.begin() + max_per_ball,
+                                             candidates.end());
+                        const size_t nsend = std::min(candidates.size(), max_per_ball);
+                        for (size_t k = 0; k < nsend; k++) {
+                            const size_t i = candidates[k].second;
+                            seen.insert(make_key(gid_local[i], qr.shift));
+                            Point y;
+                            for (int d = 0; d < D; d++)
+                                y[d] = u[i][d] + double(qr.shift[d]);
+                            reply(i, y);
+                        }
                     }
                     std::vector<Reply> got;
                     FML::COMMUNICATION::exchange_records_chunked(
@@ -1059,19 +1122,40 @@ namespace FML {
                     sg[s].cc = circumcenter_rel(v);
                 }
 
-                std::vector<FaceInternal> all;
+                faces_.clear();
+                cell_face_offset.clear();
+                cell_face_list.clear();
+                neighbor_offset.clear();
+                neighbor_list.clear();
+                if (!opt.compute_faces) {
+                    compute_cells_only(sg);
+                    return;
+                }
+
+                // The faces (in faces_) and, per face, the centroid and the vector between the points in internal
+                // units relative to point i (in extra), kept separate so that only faces_ is kept at the end
+                struct FaceExtra {
+                    Point centroid_rel;
+                    Point delta;
+                };
+                std::vector<FaceExtra> extra;
+                faces_.clear();
                 size_t ndropped = 0;
                 int error = 0;
 #ifdef USE_OMP
 #pragma omp parallel reduction(+ : ndropped)
 #endif
                 {
-                    std::vector<FaceInternal> mine;
-                    mine.reserve(8 * N / size_t(std::max(1, nthreads_now())) + 16);
+                    std::vector<Face> mine;
+                    std::vector<FaceExtra> mine_extra;
+                    const size_t guess = 8 * N / size_t(std::max(1, nthreads_now())) + 16;
+                    mine.reserve(guess);
+                    mine_extra.reserve(guess);
                     std::vector<int> star, ring;
                     std::vector<Point> pts;
                     std::vector<unsigned> visited, vseen(size_t(dt.nvertices()), 0u);
                     unsigned stamp = 0;
+                    FaceInternal F;
 #ifdef USE_OMP
 #pragma omp for schedule(dynamic, 256)
 #endif
@@ -1098,12 +1182,10 @@ namespace FML {
                                 const bool canon_vi = W.gid > I.gid || (W.gid == I.gid && shift_positive(W.shift));
                                 if (!canon_vi && W.task == FML::ThisTask)
                                     continue; // computed for the local cell of W
-                                mine.emplace_back();
-                                FaceInternal & F = mine.back();
+                                F = FaceInternal{};
                                 const int base = canon_vi ? vi : w;
                                 const int other = canon_vi ? w : vi;
                                 if (!face_geometry(base, other, s, sg, ring, pts, F)) {
-                                    mine.pop_back();
                                     ndropped++;
                                     continue;
                                 }
@@ -1123,6 +1205,8 @@ namespace FML {
                                 const Point & pb = dt.vertex(base);
                                 for (int d = 0; d < D; d++)
                                     F.f.centroid[d] = (pb[d] - double(Bi.shift[d] + Bi.wrap[d])) + F.centroid_rel[d];
+                                mine.push_back(F.f);
+                                mine_extra.push_back({F.centroid_rel, F.delta});
                             }
                         }
                     }
@@ -1130,28 +1214,32 @@ namespace FML {
 #pragma omp critical
 #endif
                     {
-                        if (all.empty())
-                            all.swap(mine);
-                        else
-                            all.insert(all.end(), mine.begin(), mine.end());
+                        if (faces_.empty()) {
+                            faces_.swap(mine);
+                            extra.swap(mine_extra);
+                        } else {
+                            faces_.insert(faces_.end(), mine.begin(), mine.end());
+                            extra.insert(extra.end(), mine_extra.begin(), mine_extra.end());
+                        }
                     }
                 }
+                std::vector<SimplexGeometry>().swap(sg);
                 FML::MaxOverTasks(&error);
                 if (error)
                     throw std::runtime_error("[PeriodicVoronoi] Internal error: incomplete cell");
 
-                // Faces sorted by (i, j, shift) (unique on a task), via an index sort
+                // Faces sorted by (i, j, shift) (unique on a task): sort keys, then permute the faces in place
                 stats.nfaces_dropped = ndropped;
-                std::vector<size_t> perm(all.size()); // face f (sorted) is all[perm[f]]
+                const size_t nf = faces_.size();
                 {
                     struct SortKey {
                         size_t i, j;
                         uint64_t code;
                         size_t index;
                     };
-                    std::vector<SortKey> keys(all.size());
-                    for (size_t k = 0; k < all.size(); k++)
-                        keys[k] = {all[k].f.i, all[k].f.j, shift_code(all[k].f.shift), k};
+                    std::vector<SortKey> keys(nf);
+                    for (size_t k = 0; k < nf; k++)
+                        keys[k] = {faces_[k].i, faces_[k].j, shift_code(faces_[k].shift), k};
                     std::sort(keys.begin(), keys.end(), [](const SortKey & a, const SortKey & b) {
                         if (a.i != b.i)
                             return a.i < b.i;
@@ -1159,27 +1247,49 @@ namespace FML {
                             return a.j < b.j;
                         return a.code < b.code;
                     });
-                    for (size_t k = 0; k < keys.size(); k++)
-                        perm[k] = keys[k].index;
+                    // Position f of the sorted order gets the face now at keys[f].index (cycle by cycle)
+                    std::vector<bool> done(nf, false);
+                    for (size_t f = 0; f < nf; f++) {
+                        if (done[f])
+                            continue;
+                        const Face first = faces_[f];
+                        const FaceExtra first_extra = extra[f];
+                        size_t cur = f;
+                        while (true) {
+                            done[cur] = true;
+                            const size_t from = keys[cur].index;
+                            if (from == f) {
+                                faces_[cur] = first;
+                                extra[cur] = first_extra;
+                                break;
+                            }
+                            faces_[cur] = faces_[from];
+                            extra[cur] = extra[from];
+                            cur = from;
+                        }
+                    }
                 }
                 std::vector<size_t> count(N + 1, 0);
-                for (const auto & F : all) {
-                    if (F.f.local_i != npos)
-                        count[F.f.local_i + 1]++;
-                    if (F.f.local_j != npos)
-                        count[F.f.local_j + 1]++;
+                for (const auto & F : faces_) {
+                    if (F.local_i != npos)
+                        count[F.local_i + 1]++;
+                    if (F.local_j != npos)
+                        count[F.local_j + 1]++;
                 }
                 cell_face_offset.assign(N + 1, 0);
                 for (size_t i = 0; i < N; i++)
                     cell_face_offset[i + 1] = cell_face_offset[i] + count[i + 1];
+                std::vector<size_t>().swap(count);
                 cell_face_list.assign(cell_face_offset[N], 0);
-                std::vector<size_t> fill(cell_face_offset.begin(), cell_face_offset.end() - 1);
-                for (size_t f = 0; f < all.size(); f++) {
-                    const Face & F = all[perm[f]].f;
-                    if (F.local_i != npos)
-                        cell_face_list[fill[F.local_i]++] = int64_t(f);
-                    if (F.local_j != npos)
-                        cell_face_list[fill[F.local_j]++] = -int64_t(f) - 1;
+                {
+                    std::vector<size_t> fill(cell_face_offset.begin(), cell_face_offset.end() - 1);
+                    for (size_t f = 0; f < nf; f++) {
+                        const Face & F = faces_[f];
+                        if (F.local_i != npos)
+                            cell_face_list[fill[F.local_i]++] = int64_t(f);
+                        if (F.local_j != npos)
+                            cell_face_list[fill[F.local_j]++] = -int64_t(f) - 1;
+                    }
                 }
 
                 // Cells: volumes and centroids from the faces in the canonical (sorted) order
@@ -1192,11 +1302,13 @@ namespace FML {
                     Point cen{};
                     for (size_t k = cell_face_offset[c]; k < cell_face_offset[c + 1]; k++) {
                         const int64_t code = cell_face_list[k];
-                        const FaceInternal & F = all[perm[size_t(code >= 0 ? code : -code - 1)]];
-                        const double cone = F.f.area * 0.5 * F.f.distance / D;
+                        const size_t f = size_t(code >= 0 ? code : -code - 1);
+                        const Face & F = faces_[f];
+                        const FaceExtra & X = extra[f];
+                        const double cone = F.area * 0.5 * F.distance / D;
                         vol += cone;
                         for (int d = 0; d < D; d++) {
-                            const double rel = code >= 0 ? F.centroid_rel[d] : F.centroid_rel[d] - F.delta[d];
+                            const double rel = code >= 0 ? X.centroid_rel[d] : X.centroid_rel[d] - X.delta[d];
                             cen[d] += cone * (D * rel) / (D + 1);
                         }
                     }
@@ -1205,6 +1317,7 @@ namespace FML {
                     for (int d = 0; d < D; d++)
                         cells_[c].centroid[d] = (u[c][d] - double(wrap[c][d])) + (vol > 0.0 ? cen[d] / vol : 0.0);
                 }
+                std::vector<FaceExtra>().swap(extra);
 
                 // To the user's units
                 const double LD1 = std::pow(L, D - 1);
@@ -1213,15 +1326,143 @@ namespace FML {
                     for (auto & x : c.centroid)
                         x *= L;
                 }
-                faces_.resize(all.size());
 #ifdef USE_OMP
 #pragma omp parallel for schedule(static)
 #endif
-                for (size_t f = 0; f < all.size(); f++) {
-                    faces_[f] = all[perm[f]].f;
+                for (size_t f = 0; f < nf; f++) {
                     faces_[f].area *= LD1;
                     faces_[f].distance *= L;
                     for (auto & x : faces_[f].centroid)
+                        x *= L;
+                }
+            }
+
+            /// The cells (volumes, centroids) and their neighbours without storing the faces: per local cell its faces
+            /// are computed (relative to the canonical point, as in compute_geometry), sorted in the canonical order
+            /// and summed, so the cells are bitwise the same as with the faces
+            void compute_cells_only(std::vector<SimplexGeometry> & sg) {
+                const size_t N = vertex_of_local.size();
+                struct CellFace {
+                    size_t i, j;
+                    uint64_t code;
+                    double cone;
+                    Point rel;
+                    Neighbor nb;
+                };
+                cells_.assign(N, Cell{});
+                std::vector<size_t> count(N + 1, 0);
+                std::vector<std::vector<std::pair<size_t, Neighbor>>> found;
+                size_t ndropped = 0;
+                int error = 0;
+#ifdef USE_OMP
+#pragma omp parallel reduction(+ : ndropped)
+#endif
+                {
+                    std::vector<std::pair<size_t, Neighbor>> mine;
+                    std::vector<CellFace> cf;
+                    std::vector<int> star, ring;
+                    std::vector<Point> pts;
+                    std::vector<unsigned> visited, vseen(size_t(dt.nvertices()), 0u);
+                    unsigned stamp = 0;
+                    FaceInternal F;
+#ifdef USE_OMP
+#pragma omp for schedule(dynamic, 256)
+#endif
+                    for (size_t k = 0; k < N; k++) {
+                        const int vi = NV + int(k);
+                        const VertexInfo & I = vinfo(vi);
+                        const size_t c = I.index;
+                        cf.clear();
+                        dt.incident_simplices(vi, star, visited, ++stamp);
+                        for (int s : star) {
+                            const auto & S = dt.simplex(s);
+                            for (int kk = 0; kk < NV; kk++) {
+                                const int w = S.v[kk];
+                                if (w == vi || vseen[size_t(w)] == stamp)
+                                    continue;
+                                vseen[size_t(w)] = stamp;
+                                if (dt.is_super(w)) {
+#ifdef USE_OMP
+#pragma omp atomic write
+#endif
+                                    error = 1;
+                                    continue;
+                                }
+                                const VertexInfo & W = vinfo(w);
+                                const bool canon_vi = W.gid > I.gid || (W.gid == I.gid && shift_positive(W.shift));
+                                F = FaceInternal{};
+                                const int base = canon_vi ? vi : w;
+                                const int other = canon_vi ? w : vi;
+                                if (!face_geometry(base, other, s, sg, ring, pts, F)) {
+                                    if (canon_vi || W.task != FML::ThisTask)
+                                        ndropped++;
+                                    continue;
+                                }
+                                const VertexInfo & Bi = vinfo(base);
+                                const VertexInfo & Bj = vinfo(other);
+                                Shift sh;
+                                for (int d = 0; d < D; d++)
+                                    sh[d] = (Bj.shift[d] + Bj.wrap[d]) - (Bi.shift[d] + Bi.wrap[d]);
+                                CellFace x;
+                                x.i = Bi.gid;
+                                x.j = Bj.gid;
+                                x.code = shift_code(sh);
+                                x.cone = F.f.area * 0.5 * F.f.distance / D;
+                                for (int d = 0; d < D; d++)
+                                    x.rel[d] = canon_vi ? F.centroid_rel[d] : F.centroid_rel[d] - F.delta[d];
+                                x.nb = {W.task, W.index};
+                                cf.push_back(x);
+                            }
+                        }
+                        std::sort(cf.begin(), cf.end(), [](const CellFace & a, const CellFace & b) {
+                            if (a.i != b.i)
+                                return a.i < b.i;
+                            if (a.j != b.j)
+                                return a.j < b.j;
+                            return a.code < b.code;
+                        });
+                        double vol = 0.0;
+                        Point cen{};
+                        for (const auto & x : cf) {
+                            vol += x.cone;
+                            for (int d = 0; d < D; d++)
+                                cen[d] += x.cone * (D * x.rel[d]) / (D + 1);
+                            mine.push_back({c, x.nb});
+                        }
+                        cells_[c].id = gid_local[c];
+                        cells_[c].volume = vol;
+                        for (int d = 0; d < D; d++)
+                            cells_[c].centroid[d] = (u[c][d] - double(wrap[c][d])) + (vol > 0.0 ? cen[d] / vol : 0.0);
+                        count[c + 1] = cf.size();
+                    }
+#ifdef USE_OMP
+#pragma omp critical
+#endif
+                    found.push_back(std::move(mine));
+                }
+                std::vector<SimplexGeometry>().swap(sg);
+                FML::MaxOverTasks(&error);
+                if (error)
+                    throw std::runtime_error("[PeriodicVoronoi] Internal error: incomplete cell");
+                stats.nfaces_dropped = ndropped;
+
+                // The neighbours by cell (in each cell in the order of its faces: the threads keep it)
+                neighbor_offset.assign(N + 1, 0);
+                for (size_t c = 0; c < N; c++)
+                    neighbor_offset[c + 1] = neighbor_offset[c] + count[c + 1];
+                neighbor_list.resize(neighbor_offset[N]);
+                std::vector<size_t> fill(neighbor_offset.begin(), neighbor_offset.end() - 1);
+                for (auto & m : found) {
+                    for (const auto & cn : m)
+                        neighbor_list[fill[cn.first]++] = cn.second;
+                    std::vector<std::pair<size_t, Neighbor>>().swap(m);
+                }
+
+                // To the user's units
+                const double LD1 = std::pow(L, D - 1);
+                for (auto & c : cells_) {
+                    c.volume *= LD1 * L;
+                    for (auto & x : c.centroid)
                         x *= L;
                 }
             }

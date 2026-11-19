@@ -46,6 +46,9 @@ namespace FML {
                 bool verbose = false;
                 /// false: only the triangulation (no volumes or neighbours), e.g. for the DTFE
                 bool compute_geometry = true;
+                /// Compute and keep the Voronoi faces (voronoi().faces()); otherwise only the volumes and the
+                /// neighbours are kept (much less memory)
+                bool keep_faces = false;
             };
 
             PeriodicVoronoiTessellation() = default;
@@ -68,10 +71,14 @@ namespace FML {
                 opt.drop_zero_area_faces = options.drop_zero_area_faces;
                 opt.verbose = options.verbose;
                 opt.compute_geometry = options.compute_geometry;
+                opt.compute_faces = options.keep_faces;
                 if (FML::ThisTask == 0 and options.verbose)
                     std::cout << "[PeriodicVoronoiTessellation::create] Tessellating\n";
                 V.build(points, 1.0, opt);
                 make_graph();
+                // The neighbours are in the graph now
+                if (not options.keep_faces)
+                    V.release_faces();
             }
 
             /// The underlying tessellation (cells, faces, triangulation)
@@ -196,39 +203,59 @@ namespace FML {
                 boundary_task.clear();
                 boundary_index.clear();
                 boundary_slot.clear();
-                // (local particle, neighbour) pairs from the faces
-                std::vector<std::pair<size_t, size_t>> pairs;
-                auto add = [&](size_t c, int task, size_t index) {
-                    size_t w;
-                    if (task == FML::ThisTask) {
-                        w = index;
-                    } else {
-                        auto ins = boundary_slot.insert({task_index_key(task, index), boundary_task.size()});
-                        if (ins.second) {
-                            boundary_task.push_back(task);
-                            boundary_index.push_back(index);
-                        }
-                        w = npart + ins.first->second;
+                auto index_of = [&](int task, size_t index) -> size_t {
+                    if (task == FML::ThisTask)
+                        return index;
+                    auto ins = boundary_slot.insert({task_index_key(task, index), boundary_task.size()});
+                    if (ins.second) {
+                        boundary_task.push_back(task);
+                        boundary_index.push_back(index);
                     }
-                    if (w != c) // not a periodic image of itself
-                        pairs.push_back({c, w});
+                    return npart + ins.first->second;
                 };
-                for (auto & f : V.faces()) {
-                    if (f.local_i != Voronoi::npos)
-                        add(f.local_i, f.task_j, f.index_j);
-                    if (f.local_j != Voronoi::npos)
-                        add(f.local_j, f.task_i, f.index_i);
-                }
-                std::sort(pairs.begin(), pairs.end());
-                pairs.erase(std::unique(pairs.begin(), pairs.end()), pairs.end());
                 neighbor_offset.assign(npart + 1, 0);
-                neighbor_list.resize(pairs.size());
-                for (size_t n = 0; n < pairs.size(); n++) {
-                    neighbor_offset[pairs[n].first + 1]++;
-                    neighbor_list[n] = pairs[n].second;
+                neighbor_list.clear();
+                if (V.faces().empty()) {
+                    // Cell by cell from the neighbour lists
+                    std::vector<size_t> nb;
+                    for (size_t c = 0; c < V.cells().size(); c++) {
+                        nb.clear();
+                        const auto range = V.cell_neighbors(c);
+                        for (auto it = range.first; it != range.second; ++it) {
+                            const size_t w = index_of(it->task, it->index);
+                            if (w != c) // not a periodic image of itself
+                                nb.push_back(w);
+                        }
+                        std::sort(nb.begin(), nb.end());
+                        nb.erase(std::unique(nb.begin(), nb.end()), nb.end());
+                        neighbor_list.insert(neighbor_list.end(), nb.begin(), nb.end());
+                        neighbor_offset[c + 1] = neighbor_list.size();
+                    }
+                    neighbor_list.shrink_to_fit();
+                } else {
+                    // (local particle, neighbour) pairs from the faces
+                    std::vector<std::pair<size_t, size_t>> pairs;
+                    auto add = [&](size_t c, int task, size_t index) {
+                        const size_t w = index_of(task, index);
+                        if (w != c)
+                            pairs.push_back({c, w});
+                    };
+                    for (auto & f : V.faces()) {
+                        if (f.local_i != Voronoi::npos)
+                            add(f.local_i, f.task_j, f.index_j);
+                        if (f.local_j != Voronoi::npos)
+                            add(f.local_j, f.task_i, f.index_i);
+                    }
+                    std::sort(pairs.begin(), pairs.end());
+                    pairs.erase(std::unique(pairs.begin(), pairs.end()), pairs.end());
+                    neighbor_list.resize(pairs.size());
+                    for (size_t n = 0; n < pairs.size(); n++) {
+                        neighbor_offset[pairs[n].first + 1]++;
+                        neighbor_list[n] = pairs[n].second;
+                    }
+                    for (size_t i = 0; i < npart; i++)
+                        neighbor_offset[i + 1] += neighbor_offset[i];
                 }
-                for (size_t i = 0; i < npart; i++)
-                    neighbor_offset[i + 1] += neighbor_offset[i];
 
                 // Tell the owners which of their particles we need
                 struct Request {
