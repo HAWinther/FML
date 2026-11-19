@@ -13,7 +13,8 @@ make
 ```
 
 Lua and FFTW are required. MPI and OpenMP follow the normal `Makefile.config`
-options. ZOBOV and DTFE are optional and require CGAL; enable them with `make USE_CGAL=true`. Gadget HDF5 snapshots
+options. DTFE is optional and requires CGAL; enable it with `make USE_CGAL=true`. ZOBOV works without CGAL (FML's own
+tessellation) and can use CGAL's with `zobov_tessellation = "cgal"` in a CGAL build. Gadget HDF5 snapshots
 need `make USE_HDF5=true`.
 
 ## Capabilities
@@ -101,7 +102,7 @@ and output files as SimulationCode, so the two give the same result for the same
   zone-merging controls (`voids_z<z>.txt`).
 - Spherical underdensity voids with configurable density threshold, radius cuts, recentering, and overlap removal
   (`voids_spherical_z<z>.txt`).
-- ZOBOV Voronoi-watershed void catalogues when built with CGAL (`voids_zobov_z<z>.txt`).
+- ZOBOV Voronoi-watershed void catalogues (`voids_zobov_z<z>.txt`).
 - DTFE density contrast, peculiar velocity (km/s), divergence and vorticity (km/s per Mpc/h) spectra when built with
   CGAL (`dtfe_spectra_z<z>.txt`); optionally the fields as one text file per MPI task
   (`dtfe_fields_z<z>.rank<NNNNN>.txt`).
@@ -229,7 +230,7 @@ fof_relaxed_r0_min = 0.0 -- floor of r0 (0: none)
 
 voids = false
 spherical_voids = false
-zobov_voids = false -- requires a USE_CGAL=true build
+zobov_voids = false
 void_nmesh = 0 -- Revolver default; explicit sizes must be divisible by MPI task count
 void_smoothing_scale = -1.0 -- negative selects mean particle spacing
 void_smoothing_method = "revolver" -- or "gaussian"
@@ -243,8 +244,9 @@ spherical_void_max_radius_mean_separation = 8.0
 spherical_void_min_radius_mean_separation = 2.0
 spherical_void_recentering_steps = 0
 spherical_void_max_overlap = 0.0
-zobov_buffer_fraction = 0.5
-zobov_random_fraction = 0.3
+zobov_tessellation = "native" -- or "cgal" (USE_CGAL=true builds, where it is the default)
+zobov_buffer_fraction = 0.5 -- cgal only
+zobov_random_fraction = 0.3 -- cgal only
 zobov_min_density_cut = 1.0
 zobov_min_particles = 5
 

@@ -19,6 +19,7 @@
 #include <FML/Global/Global.h>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
+#include <FML/Triangulation/Watershed.h>
 #include <FML/Triangulation/WatershedBinning.h>
 
 #ifndef CGAL_NDIM
@@ -143,35 +144,8 @@ namespace FML {
                 sendrecv_bytes(&send, sizeof(Q), dest, &recv, sizeof(Q), source);
             }
 
-            /// MPI reduction operation that merges watershed groups
-            template <class U>
-            void merge_groups_op(void * in, void * inout, int * len, MPI_Datatype *) {
-                U * a = static_cast<U *>(in);
-                U * b = static_cast<U *>(inout);
-                for (int k = 0; k < *len; k++)
-                    b[k].merge(a[k]);
-            }
 #endif
 
-            /// Does the watershed group class have a set_pos_circ(const double *) method
-            template <class U, class = void>
-            struct has_set_pos_circ : std::false_type {};
-            template <class U>
-            struct has_set_pos_circ<U, std::void_t<decltype(std::declval<U &>().set_pos_circ((const double *)nullptr))>>
-                : std::true_type {};
-
-            /// Does the watershed group class have a set_leak_quantity(double) method
-            template <class U, class = void>
-            struct has_set_leak_quantity : std::false_type {};
-            template <class U>
-            struct has_set_leak_quantity<U, std::void_t<decltype(std::declval<U &>().set_leak_quantity(0.0))>>
-                : std::true_type {};
-
-            /// Map x into [0,1)
-            inline double wrap_periodic(double x) {
-                x -= std::floor(x);
-                return x >= 1.0 ? 0.0 : x;
-            }
         } // namespace detail
 
         /// Fiducial assignment function for when we have info at vertices
@@ -982,44 +956,6 @@ namespace FML {
             }
         };
 
-        //===============================================================================
-        // Keep track of which type of point we are adding
-        //===============================================================================
-        enum PointType : char { REGULAR_POINT, BOUNDARY_POINT, GUARD_POINT };
-
-        // Type definitions
-        using IDType = int;
-        using QuantityType = double;
-        const IDType NoWatershedID = std::numeric_limits<IDType>::max();
-        const QuantityType Infinity = std::numeric_limits<QuantityType>::infinity();
-
-        /// A link between two watershed basins: the lowest quantity at which they connect. For a pair of neighboring
-        /// particles in the two basins the link has the larger of the two quantities
-        struct WatershedLink {
-            long long int a{0};
-            long long int b{0};
-            double quantity{0.0};
-        };
-
-        namespace detail {
-            /// Keep only the lowest link for each pair (a < b)
-            inline void reduce_links(std::vector<WatershedLink> & links) {
-                std::sort(links.begin(), links.end(), [](const WatershedLink & x, const WatershedLink & y) {
-                    if (x.a != y.a)
-                        return x.a < y.a;
-                    if (x.b != y.b)
-                        return x.b < y.b;
-                    return x.quantity < y.quantity;
-                });
-                links.erase(std::unique(links.begin(),
-                                        links.end(),
-                                        [](const WatershedLink & x, const WatershedLink & y) {
-                                            return x.a == y.a and x.b == y.b;
-                                        }),
-                            links.end());
-            }
-        } // namespace detail
-
         /// The vertex base for the CGAL tessellation needed for the Watershed algorithm.
         struct VertexDataWatershed {
             void * part_ptr{nullptr};
@@ -1029,16 +965,58 @@ namespace FML {
             char point_type{GUARD_POINT};
         };
 
+        /// The neighbour graph of MPIPeriodicDelaunay for WatershedOnGraph (Watershed.h): the vertices must have
+        /// VertexDataWatershed with index and point_type set
+        template <class T>
+        class CGALWatershedGraph {
+          public:
+            using Delaunay = MPIPeriodicDelaunay<T, VertexDataWatershed>;
+            using Vertex_handle = typename Delaunay::Vertex_handle;
+
+            explicit CGALWatershedGraph(Delaunay & D) : D(D) {
+                const auto & vs = D.get_vertex_handles_regular();
+                const auto & vsb = D.get_vertex_handles_boundary();
+                NumPart = vs.size();
+                handles = vs;
+                handles.insert(handles.end(), vsb.begin(), vsb.end());
+                pos.resize(handles.size() * CGAL_NDIM);
+                for (size_t k = 0; k < handles.size(); k++)
+                    for (int d = 0; d < CGAL_NDIM; d++)
+                        pos[k * CGAL_NDIM + d] = handles[k]->point()[d];
+            }
+            size_t nboundary() const { return handles.size() - NumPart; }
+            const double * position(size_t k) const { return &pos[k * CGAL_NDIM]; }
+            template <class F>
+            void for_each_neighbor(size_t i, F && f) {
+                D.for_each_adjacent_vertex(handles[i], work, [&](Vertex_handle w) {
+                    if (w->info().point_type != GUARD_POINT)
+                        f(size_t(w->info().index));
+                });
+            }
+            template <class Q>
+            std::vector<Q> communicate_boundary_values(const std::vector<Q> & local) {
+                return D.communicate_boundary_values(local);
+            }
+            void boundary_neighbors(const std::vector<size_t> & k, std::vector<std::vector<size_t>> & out) {
+                out.assign(k.size(), {});
+                for (size_t n = 0; n < k.size(); n++)
+                    for_each_neighbor(k[n], [&](size_t w) { out[n].push_back(w); });
+            }
+
+          private:
+            Delaunay & D;
+            size_t NumPart{0};
+            std::vector<Vertex_handle> handles;
+            std::vector<double> pos;
+            std::vector<Vertex_handle> work;
+        };
+
         //===============================================================================
-        /// In this method we take a tessellation, assign [quantity] to vertices
-        /// and walk the tessellation assigning the particles to Watershed basins:
-        /// every particle is linked to the neighbor with the smallest quantity (steepest descent)
-        /// and a basin is all the particles that end up at the same local minimum.
-        /// Ties are broken using the positions, so the result does not depend on the number of tasks.
-        /// When quantity is the density or inverse density of the particle then we get a Void or Cluster finder
-        ///
-        /// If the buffer is too small the results will not be perfect, we give warnings
-        /// when this is the case (instead of just throwing) as some times this is fine.
+        /// The watershed on a CGAL tessellation (see WatershedOnGraph in Watershed.h): every particle is linked to
+        /// the neighbor with the smallest quantity (steepest descent) and a basin is all the particles that end up
+        /// at the same local minimum. Ties are broken using the positions, so the result does not depend on the
+        /// number of tasks. When quantity is the density or inverse density of the particle then we get a Void or
+        /// Cluster finder
         ///
         /// @tparam T The particle class
         /// @tparam U The watershed binning class
@@ -1052,7 +1030,6 @@ namespace FML {
         /// @param[out] links Optional: the links between the basins (index into watershed_groups), only on task 0.
         ///
         //===============================================================================
-
         template <class T, class U>
         void WatershedGeneral(MPIPeriodicDelaunay<T, VertexDataWatershed> & D,
                               T * p,
@@ -1060,18 +1037,14 @@ namespace FML {
                               std::vector<double> & quantity,
                               std::vector<U> & watershed_groups,
                               std::vector<WatershedLink> * links = nullptr) {
-
-            using Delaunay = MPIPeriodicDelaunay<T, VertexDataWatershed>;
-            using Vertex_handle = typename Delaunay::Vertex_handle;
-            using Point = typename Delaunay::Point;
-
             assert_mpi(quantity.size() == NumPart, "[WatershedGeneral] quantity must have size NumPart");
             const auto & vs = D.get_vertex_handles_regular();
             const auto & vs_boundary = D.get_vertex_handles_boundary();
             assert_mpi(vs.size() == NumPart, "[WatershedGeneral] The tessellation was not made with these particles");
             const size_t nboundary = vs_boundary.size();
 
-            // Assign quantity to the regular and boundary vertices
+            // Index and type of the regular and boundary vertices (the rest are guard points)
+            const std::vector<double> quantity_boundary = D.communicate_boundary_values(quantity);
             for (size_t i = 0; i < NumPart; i++) {
                 auto & info = vs[i]->info();
                 info.quantity = quantity[i];
@@ -1079,7 +1052,6 @@ namespace FML {
                 info.index = (long long int)(i);
                 info.WatershedID = NoWatershedID;
             }
-            const std::vector<double> quantity_boundary = D.communicate_boundary_values(quantity);
             for (size_t j = 0; j < nboundary; j++) {
                 auto & info = vs_boundary[j]->info();
                 info.quantity = quantity_boundary[j];
@@ -1088,338 +1060,15 @@ namespace FML {
                 info.WatershedID = NoWatershedID;
             }
 
-            // Ordering of the vertices: by quantity and then by position to break ties
-            auto lower = [](Vertex_handle a, Vertex_handle b) {
-                const auto qa = a->info().quantity;
-                const auto qb = b->info().quantity;
-                if (qa != qb)
-                    return qa < qb;
-                const auto & pa = a->point();
-                const auto & pb = b->point();
-                for (int idim = 0; idim < CGAL_NDIM; idim++)
-                    if (pa[idim] != pb[idim])
-                        return pa[idim] < pb[idim];
-                return false;
-            };
-
-            // For each regular particle find the neighbor with the lowest quantity (the particle
-            // itself if its a local minimum). Index i < NumPart is a regular particle, i >= NumPart a boundary particle
-            std::vector<long long int> parent(NumPart);
-            std::vector<Vertex_handle> work;
-            for (size_t i = 0; i < NumPart; i++) {
-                Vertex_handle best = vs[i];
-                D.for_each_adjacent_vertex(vs[i], work, [&](Vertex_handle w) {
-                    if (w->info().point_type != GUARD_POINT and lower(w, best))
-                        best = w;
-                });
-                parent[i] = best->info().index;
-            }
-
-            // Find the minima and give them an ID that is unique across tasks
-            std::vector<size_t> minima;
-            for (size_t i = 0; i < NumPart; i++)
-                if (parent[i] == (long long int)(i))
-                    minima.push_back(i);
-            std::vector<long long int> nminima_per_task(FML::NTasks, 0);
-            nminima_per_task[FML::ThisTask] = (long long int)(minima.size());
-            FML::SumArrayOverTasks(nminima_per_task.data(), nminima_per_task.size());
-            FML::COMMUNICATION::checked_size_layout(
-                std::vector<FML::COMMUNICATION::Count>(nminima_per_task.begin(), nminima_per_task.end()),
-                size_t(LLONG_MAX));
-            long long int id_start = 0;
-            for (int i = 0; i < FML::ThisTask; i++)
-                id_start += nminima_per_task[i];
-            long long int ntotal_minima_ll = 0;
-            for (int i = 0; i < FML::NTasks; i++)
-                ntotal_minima_ll += nminima_per_task[i];
-            assert_mpi(ntotal_minima_ll < (long long int)(NoWatershedID), "[WatershedGeneral] Too many minima");
-            const size_t ntotal_minima = size_t(ntotal_minima_ll);
-
-            if (FML::ThisTask == 0)
-                std::cout << "[WatershedGeneral] We found " << ntotal_minima << " minimum points\n";
-
-            // Labels for the regular and boundary particles
-            std::vector<IDType> label(NumPart + nboundary, NoWatershedID);
-            for (size_t k = 0; k < minima.size(); k++)
-                label[minima[k]] = IDType(id_start + (long long int)(k));
-
-            // Follow the parent links until we reach a particle with a label. If we end up at a boundary
-            // particle we don't have the label for yet we have to wait until we get it from the neighbor task
-            std::vector<char> stuck;
-            std::vector<long long int> path;
-            auto assign_labels = [&]() -> size_t {
-                stuck.assign(NumPart, 0);
-                size_t nassigned = 0;
-                for (size_t i = 0; i < NumPart; i++) {
-                    if (label[i] != NoWatershedID or stuck[i])
-                        continue;
-                    path.clear();
-                    long long int j = (long long int)(i);
-                    while (j < (long long int)(NumPart) and label[j] == NoWatershedID and not stuck[j]) {
-                        path.push_back(j);
-                        j = parent[j];
-                    }
-                    const bool found = (j >= (long long int)(NumPart) or not stuck[j]) and label[j] != NoWatershedID;
-                    for (auto k : path) {
-                        if (found)
-                            label[k] = label[j];
-                        else
-                            stuck[k] = 1;
-                    }
-                    if (found)
-                        nassigned += path.size();
-                }
-                return nassigned;
-            };
-            assign_labels();
-
-            // Exchange labels of the boundary particles with the neighbor tasks until no more particles get assigned
-            if (FML::NTasks > 1) {
-                const int max_iterations = 1000;
-                int iteration = 0;
-                for (; iteration < max_iterations; iteration++) {
-                    const std::vector<IDType> label_regular(label.begin(), label.begin() + NumPart);
-                    const std::vector<IDType> label_boundary = D.communicate_boundary_values(label_regular);
-                    std::copy(label_boundary.begin(), label_boundary.end(), label.begin() + NumPart);
-                    long long int nassigned = (long long int)(assign_labels());
-                    FML::SumOverTasks(&nassigned);
-                    if (nassigned == 0)
-                        break;
-                }
-#ifdef DEBUG_TESSELATION
-                if (FML::ThisTask == 0)
-                    std::cout << "[WatershedGeneral] Labels converged after " << iteration << " exchanges\n";
-#endif
-            }
-
-            // The leak quantity of each basin (as in ZOBOV): the lowest quantity at which the basin links to a
-            // neighboring basin. A link between two neighboring particles in different basins has the larger
-            // of the two quantities. Pairs that cross tasks are seen by the task that owns one of the particles
-            std::vector<double> leak_quantity(ntotal_minima, std::numeric_limits<double>::infinity());
-            std::vector<WatershedLink> local_links;
-            for (size_t i = 0; i < NumPart; i++) {
-                const IDType a = label[i];
-                if (a == NoWatershedID)
-                    continue;
-                const double qi = vs[i]->info().quantity;
-                D.for_each_adjacent_vertex(vs[i], work, [&](Vertex_handle w) {
-                    if (w->info().point_type == GUARD_POINT)
-                        return;
-                    const IDType b = label[w->info().index];
-                    if (b == NoWatershedID or b == a)
-                        return;
-                    const double link = std::max(qi, double(w->info().quantity));
-                    leak_quantity[a] = std::min(leak_quantity[a], link);
-                    leak_quantity[b] = std::min(leak_quantity[b], link);
-                    if (links)
-                        local_links.push_back({std::min(a, b), std::max(a, b), link});
-                });
-                // Keep only the lowest link for each pair of basins now and then to save memory
-                if (links and local_links.size() > 4 * ntotal_minima + 1000000)
-                    detail::reduce_links(local_links);
-            }
-            if (links) {
-                detail::reduce_links(local_links);
-                // Gather on task 0 (where the groups are)
-                links->clear();
-#ifdef USE_MPI
-                if (FML::NTasks > 1) {
-                    *links = FML::COMMUNICATION::gather_records_checked(local_links);
-
-                    if (FML::ThisTask == 0)
-                        detail::reduce_links(*links);
-                } else {
-                    *links = std::move(local_links);
-                }
-#else
-                *links = std::move(local_links);
-#endif
-            }
-            FML::MinArrayOverTasks(leak_quantity.data(), leak_quantity.size());
+            CGALWatershedGraph<T> G(D);
+            std::vector<IDType> label;
+            WatershedOnGraph<CGAL_NDIM>(G, p, NumPart, quantity, watershed_groups, links, &label);
 
             // Store the labels in the tessellation
             for (size_t i = 0; i < NumPart; i++)
                 vs[i]->info().WatershedID = label[i];
             for (size_t j = 0; j < nboundary; j++)
                 vs_boundary[j]->info().WatershedID = label[NumPart + j];
-
-            // Count how many regular particles we have assigned
-            long long int assigned = 0;
-            int nwarnings = 0;
-            for (size_t i = 0; i < NumPart; i++) {
-                if (label[i] != NoWatershedID) {
-                    assigned++;
-                } else if (nwarnings++ < 10) {
-                    std::cout << "[WatershedGeneral] Warning: on task " << FML::ThisTask << " particle " << i
-                              << " pos: " << vs[i]->point() << " has not been assigned!\n";
-                }
-            }
-            long long int npartotal = (long long int)(NumPart);
-            FML::SumOverTasks(&assigned);
-            FML::SumOverTasks(&npartotal);
-            if (FML::ThisTask == 0) {
-                std::cout << "[WatershedGeneral] Total particles assigned " << assigned << " / " << npartotal << "\n";
-                if (assigned < npartotal) {
-                    std::cout << "[WatershedGeneral] Warning we have not managed to assign all particles to their "
-                                 "respective minima, cannot guarantee the results are perfect\n";
-                }
-            }
-
-            // The position of the minima and the circumcenter of the minimum and its NDIM lowest-quantity mutually
-            // adjacent neighbors (as in Revolver, Nadathur et al.): the first neighbor is the neighbor of the minimum
-            // with the lowest quantity, the second the one with the lowest quantity among the common neighbors of
-            // the minimum and the first neighbor, etc. In 3D this is the center of an empty sphere in the basin.
-            // If we can't find such neighbors (or they are degenerate) we use the minimum. Make sure all tasks have
-            // this
-            std::vector<double> pos_minima(ntotal_minima * CGAL_NDIM, 0.0);
-            std::vector<double> pos_circumcenter(ntotal_minima * CGAL_NDIM, 0.0);
-            long long int ncircumcenter_failed = 0;
-            {
-                auto neighbors = [&](Vertex_handle v) {
-                    std::vector<Vertex_handle> result;
-                    D.for_each_adjacent_vertex(v, work, [&](Vertex_handle w) {
-                        if (w->info().point_type != GUARD_POINT)
-                            result.push_back(w);
-                    });
-                    return result;
-                };
-                for (size_t k = 0; k < minima.size(); k++) {
-                    const Vertex_handle vmin = vs[minima[k]];
-                    const auto & pmin = vmin->point();
-                    double * pos = &pos_minima[(size_t(id_start) + k) * CGAL_NDIM];
-                    double * circ = &pos_circumcenter[(size_t(id_start) + k) * CGAL_NDIM];
-                    for (int idim = 0; idim < CGAL_NDIM; idim++)
-                        circ[idim] = pos[idim] = pmin[idim];
-
-                    // Pick the neighbors
-                    std::vector<Vertex_handle> chosen{vmin};
-                    std::vector<Vertex_handle> candidates = neighbors(vmin);
-                    bool ok = true;
-                    for (int n = 0; n < CGAL_NDIM; n++) {
-                        if (n > 0) {
-                            const auto nbor = neighbors(chosen.back());
-                            std::vector<Vertex_handle> common;
-                            for (auto & w : candidates)
-                                if (std::find(nbor.begin(), nbor.end(), w) != nbor.end())
-                                    common.push_back(w);
-                            candidates = common;
-                        }
-                        if (candidates.empty()) {
-                            ok = false;
-                            break;
-                        }
-                        Vertex_handle best = candidates[0];
-                        for (auto & w : candidates)
-                            if (lower(w, best))
-                                best = w;
-                        chosen.push_back(best);
-                    }
-
-                    // The circumcenter (positions relative to the minimum so that it works across the boundary)
-                    if (ok) {
-                        Point q[CGAL_NDIM + 1];
-                        for (int j = 0; j <= CGAL_NDIM; j++) {
-                            double x[CGAL_NDIM];
-                            for (int idim = 0; idim < CGAL_NDIM; idim++) {
-                                double dx = chosen[j]->point()[idim] - pmin[idim];
-                                dx -= std::round(dx);
-                                x[idim] = dx;
-                            }
-#if CGAL_NDIM == 3
-                            q[j] = Point(x[0], x[1], x[2]);
-#elif CGAL_NDIM == 2
-                            q[j] = Point(x[0], x[1]);
-#endif
-                        }
-#if CGAL_NDIM == 3
-                        ok = not CGAL::coplanar(q[0], q[1], q[2], q[3]);
-                        const Point cc = ok ? CGAL::circumcenter(q[0], q[1], q[2], q[3]) : q[0];
-#elif CGAL_NDIM == 2
-                        ok = not CGAL::collinear(q[0], q[1], q[2]);
-                        const Point cc = ok ? CGAL::circumcenter(q[0], q[1], q[2]) : q[0];
-#endif
-                        for (int idim = 0; idim < CGAL_NDIM; idim++)
-                            ok = ok and std::isfinite(cc[idim]);
-                        if (ok)
-                            for (int idim = 0; idim < CGAL_NDIM; idim++)
-                                circ[idim] = detail::wrap_periodic(pmin[idim] + cc[idim]);
-                    }
-                    if (not ok)
-                        ncircumcenter_failed++;
-                }
-            }
-            FML::SumOverTasks(&ncircumcenter_failed);
-            if (FML::ThisTask == 0 and ncircumcenter_failed > 0)
-                std::cout << "[WatershedGeneral] Warning: could not compute the circumcenter for "
-                          << ncircumcenter_failed << " basins, using the position of the minimum for these\n";
-            for (auto * vec : {&pos_minima, &pos_circumcenter})
-                FML::SumArrayOverTasks(vec->data(), vec->size());
-
-            // Make the groups and bin up the particles
-            watershed_groups.resize(ntotal_minima);
-            for (size_t k = 0; k < ntotal_minima; k++) {
-                watershed_groups[k].init(&pos_minima[k * CGAL_NDIM]);
-                if constexpr (detail::has_set_pos_circ<U>::value)
-                    watershed_groups[k].set_pos_circ(&pos_circumcenter[k * CGAL_NDIM]);
-                if constexpr (detail::has_set_leak_quantity<U>::value)
-                    watershed_groups[k].set_leak_quantity(leak_quantity[k]);
-            }
-            pos_circumcenter = std::vector<double>();
-            pos_minima = std::vector<double>();
-            for (size_t i = 0; i < NumPart; i++)
-                if (label[i] != NoWatershedID)
-                    watershed_groups[label[i]].add_particle(&p[i], quantity[i]);
-
-            // Merge the groups from all tasks on task 0
-            // NB: assumes U is a simple type so that we can send it as bytes
-#ifdef USE_MPI
-            if (FML::NTasks > 1) {
-                static_assert(std::is_trivially_copyable_v<U>, "The watershed group class must be trivially copyable");
-                static_assert(sizeof(U) <= size_t(INT_MAX), "Watershed MPI record extent exceeds int");
-                MPI_Datatype group_type;
-                MPI_Type_contiguous(int(sizeof(U)), MPI_BYTE, &group_type);
-                MPI_Type_commit(&group_type);
-                MPI_Op merge_op;
-                MPI_Op_create(&detail::merge_groups_op<U>, 1, &merge_op);
-                const size_t chunk = size_t(1) << 20;
-                for (size_t offset = 0; offset < ntotal_minima; offset += chunk) {
-                    const int count = int(std::min(chunk, ntotal_minima - offset));
-                    if (FML::ThisTask == 0)
-                        MPI_Reduce(MPI_IN_PLACE,
-                                   watershed_groups.data() + offset,
-                                   count,
-                                   group_type,
-                                   merge_op,
-                                   0,
-                                   FML::communicator);
-                    else
-                        MPI_Reduce(watershed_groups.data() + offset,
-                                   nullptr,
-                                   count,
-                                   group_type,
-                                   merge_op,
-                                   0,
-                                   FML::communicator);
-                }
-                MPI_Op_free(&merge_op);
-                MPI_Type_free(&group_type);
-            }
-#endif
-
-            // Finalize the binning
-            if (FML::ThisTask == 0) {
-                for (size_t i = 0; i < ntotal_minima; i++) {
-                    watershed_groups[i].finalize();
-                }
-            } else {
-                // We only keep the data on task 0 so clear the rest to avoid any confusion
-                watershed_groups.clear();
-                watershed_groups.shrink_to_fit();
-            }
-
-            // TODO: second step of ZOBOV, merging the basins (zones) into voids. Compile up the links between
-            // neighboring basins (from the Delaunay links between particles in different basins), communicate
-            // these to task 0, sort the basins by their minimum quantity and merge them
         }
 
         //==========================================================================================

@@ -303,8 +303,8 @@ namespace FML {
                                                 " (the other fields need a simulation: SimulationCode)");
                 }
 #ifndef USE_CGAL
-                if (zobov_voids or dtfe)
-                    throw std::runtime_error("zobov_voids and dtfe need a USE_CGAL=true build");
+                if (dtfe)
+                    throw std::runtime_error("dtfe needs a USE_CGAL=true build");
 #endif
             }
         };
@@ -696,7 +696,6 @@ namespace FML {
             }
 
             void find_zobov_voids() {
-#ifdef USE_CGAL
                 const auto catalogue = ANALYSIS::find_zobov_voids(mpiparticles.get_particles_ptr(),
                                                                   mpiparticles.get_npart(),
                                                                   options.zobov_settings,
@@ -706,7 +705,6 @@ namespace FML {
                 if (FML::ThisTask == 0)
                     std::cout << "ZOBOV void catalogue written: " << filename << " (" << catalogue.size()
                               << " voids)\n";
-#endif
             }
 
             std::string baryonified_gadget_prefix() const {

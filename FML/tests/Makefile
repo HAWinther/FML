@@ -16,6 +16,7 @@ TARGETS += test_baryonification test_numericalmethods test_interlacing_offset te
 TARGETS += test_fourier_resampling test_testhelpers test_review_fixes
 TARGETS += test_four_point
 TARGETS += test_cosmicweb test_short_range test_yukawa test_phase_space_halos test_control test_morphology test_environment test_pt_direct test_halo_history
+TARGETS += test_watershed_native
 
 include ../Makefile.config
 
@@ -455,6 +456,17 @@ ifeq ($(CGAL2D),true)
 test_delaunay_domain.o: OPTIONS += -DCGAL_NDIM=2
 endif
 test_delaunay_domain: test_delaunay_domain.o Global.o
+	$(LINK_EXE)
+
+# The watershed and ZOBOV on the native tessellation (with USE_CGAL=true also compared with CGAL; 2D: TEST2D=true,
+# with CGAL also CGAL2D=true)
+ifeq ($(TEST2D),true)
+test_watershed_native.o: OPTIONS += -DTEST_NDIM=2
+endif
+ifeq ($(CGAL2D),true)
+test_watershed_native.o: OPTIONS += -DCGAL_NDIM=2 -DTEST_NDIM=2
+endif
+test_watershed_native: test_watershed_native.o Global.o
 	$(LINK_EXE)
 
 # The DTFE on pencils (USE_CGAL=true)

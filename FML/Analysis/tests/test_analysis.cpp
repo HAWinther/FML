@@ -498,11 +498,20 @@ int main() {
         auto bad = vs;
         bad.merging = "sometimes";
         check(FML::TESTS::throws<std::runtime_error>([&] { bad.validate(); }), "invalid void settings are rejected");
-#ifdef USE_CGAL
         AN::ZobovSettings zs;
+        zs.tessellation = "native";
         const auto zobov = AN::find_zobov_voids(local.data(), local.size(), zs, vs);
         check(not zobov.empty() and distance_to_hole(zobov[largest(zobov)]) < 0.05,
-              "ZOBOV: the largest void is the hole");
+              "ZOBOV (native tessellation): the largest void is the hole");
+        auto bad_zobov = zs;
+        bad_zobov.tessellation = "voronoi";
+        check(FML::TESTS::throws<std::runtime_error>([&] { bad_zobov.validate(); }),
+              "an unknown ZOBOV tessellation is rejected");
+#ifdef USE_CGAL
+        zs.tessellation = "cgal";
+        const auto zobov_cgal = AN::find_zobov_voids(local.data(), local.size(), zs, vs);
+        check(zobov_cgal.size() == zobov.size() and distance_to_hole(zobov_cgal[largest(zobov_cgal)]) < 0.05,
+              "ZOBOV (CGAL tessellation): the largest void is the hole, as many voids as with the native one");
         // DTFE of a uniform distribution with a uniform velocity: density ~1 on average, velocity in km/s
         for (auto & p : local)
             p.vel[0] = 10.0, p.vel[1] = p.vel[2] = 0.0;

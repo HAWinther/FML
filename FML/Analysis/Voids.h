@@ -8,9 +8,7 @@
 #include <FML/VoidFinders/SphericalVoidFinder.h>
 #include <FML/VoidFinders/Void.h>
 #include <FML/VoidFinders/VoxelVoidFinder.h>
-#ifdef USE_CGAL
 #include <FML/VoidFinders/ZobovVoidFinder.h>
-#endif
 
 #include <cmath>
 #include <iomanip>
@@ -21,7 +19,7 @@
 //=============================================================================
 // Void catalogues of a particle set with FML/VoidFinders: the voxel watershed (Revolver, Nadathur et al. 2019, with
 // VIDE zone merging, Sutter et al. 2015), spherical underdensities (Padilla, Ceccarelli & Lambas 2005) and ZOBOV
-// (Neyrinck 2008, needs CGAL). The catalogues are the same on every task; the files are written by task 0:
+// (Neyrinck 2008; on CGAL's or FML's own tessellation). The catalogues are the same on every task; the files are written by task 0:
 // voids_z<z>.txt, voids_spherical_z<z>.txt and voids_zobov_z<z>.txt.
 //=============================================================================
 
@@ -132,6 +130,7 @@ namespace FML {
         /// ZOBOV (the zone merging from the void_ settings). Keys zobov_<name>
         struct ZobovSettings {
             static constexpr const char * prefix = "zobov_";
+            std::string tessellation;
             double buffer_fraction;
             double random_fraction;
             double min_density_cut;
@@ -145,8 +144,16 @@ namespace FML {
 
             template <class F>
             void parameters(F && f) {
-                f("buffer_fraction", buffer_fraction, 0.5, "Buffer copied from the neighbor tasks (fraction of a slab)");
-                f("random_fraction", random_fraction, 0.3, "Guard points (fraction)");
+#ifdef USE_CGAL
+                f("tessellation", tessellation, std::string("cgal"), "cgal or native (FML's own, no buffer to choose)");
+#else
+                f("tessellation", tessellation, std::string("native"), "native (FML's own) or cgal (USE_CGAL builds)");
+#endif
+                f("buffer_fraction",
+                  buffer_fraction,
+                  0.5,
+                  "cgal: buffer copied from the neighbor tasks (fraction of a slab)");
+                f("random_fraction", random_fraction, 0.3, "cgal: guard points (fraction)");
                 f("min_density_cut", min_density_cut, 1.0, "Keep voids with minimum density below this (mean units)");
                 f("min_particles", min_particles, 5, "Minimum number of particles in a void");
             }
@@ -155,6 +162,12 @@ namespace FML {
                 if (not(buffer_fraction >= 0.0) or not(random_fraction >= 0.0) or not(min_density_cut > 0.0) or
                     min_particles < 1)
                     throw std::runtime_error("Invalid zobov_* settings");
+                if (tessellation != "native" and tessellation != "cgal")
+                    throw std::runtime_error("zobov_tessellation must be native or cgal");
+#ifndef USE_CGAL
+                if (tessellation == "cgal")
+                    throw std::runtime_error("zobov_tessellation = cgal needs a USE_CGAL=true build");
+#endif
             }
         };
 
@@ -183,7 +196,6 @@ namespace FML {
             return FML::VOIDFINDER::SphericalVoidFinder<P, AnalysisGrid>(part, npart, o);
         }
 
-#ifdef USE_CGAL
         template <class P>
         std::vector<FML::VOIDFINDER::Void> find_zobov_voids(P * part,
                                                             size_t npart,
@@ -198,9 +210,10 @@ namespace FML {
             o.min_num_particles = settings.min_particles;
             o.link_density_threshold = merging.link_density_threshold;
             o.merging = merging.zone_merging();
+            o.tessellation = settings.tessellation == "cgal" ? FML::VOIDFINDER::ZobovTessellation::CGAL :
+                                                               FML::VOIDFINDER::ZobovTessellation::Native;
             return FML::VOIDFINDER::ZobovVoidFinder(part, npart, o);
         }
-#endif
 
         /// A void catalogue (the same columns as FML::VOIDFINDER::write_catalogue; positions and radii in Mpc/h),
         /// written by task 0. Collective

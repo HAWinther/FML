@@ -9,7 +9,7 @@ catalogue of `Void` (Void.h) that is the same on every rank:
   overlaps in descending radius order (`max_overlap` in [0, 1)).
 - `VoxelVoidFinder` ([Revolver](https://github.com/seshnadathur/Revolver)): a smoothed CIC density grid and a watershed (`VoxelWatershed`, which also works on
   any density grid, e.g. from the DTFE).
-- `ZobovVoidFinder` (the [ZOBOV method of Neyrinck (2008)](https://arxiv.org/abs/0712.3049)): the watershed of the Voronoi densities (needs CGAL, FML/Triangulation).
+- `ZobovVoidFinder` (the [ZOBOV method of Neyrinck (2008)](https://arxiv.org/abs/0712.3049)): the watershed of the Voronoi densities, on CGAL's tessellation (`USE_CGAL=true`, the default there) or FML's own (`ZobovOptions::tessellation = ZobovTessellation::Native`, no CGAL; Triangulation/VoronoiTessellation.h).
 - Zones are merged by `ZoneMerging`: `None` (every zone is a void, Revolver), `Threshold` (merge through links below
   `link_density_threshold` times the mean, 0.2 as in [VIDE (Sutter et al. 2015)](https://arxiv.org/abs/1406.1191)) or `Full` (the ZOBOV hierarchy;
   `parent` gives the void a void merges into). With `find_clusters` the same is done on 1/density; clusters with

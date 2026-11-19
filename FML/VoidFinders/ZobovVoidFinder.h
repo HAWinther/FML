@@ -4,21 +4,34 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <stdexcept>
 #include <vector>
 
 #include <FML/Global/Global.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
+#ifdef USE_CGAL
 #include <FML/Triangulation/PeriodicDelaunay.h>
+#endif
+#include <FML/Triangulation/VoronoiTessellation.h>
 #include <FML/VoidFinders/Void.h>
 
 namespace FML {
     namespace VOIDFINDER {
 
+        /// The tessellation: CGAL's MPIPeriodicDelaunay (needs USE_CGAL) or FML's own (PeriodicVoronoiTessellation)
+        enum class ZobovTessellation { CGAL, Native };
+
         /// Options for ZobovVoidFinder (defaults as in Revolver)
         struct ZobovOptions {
-            /// How large part of the neighbor domains we include in the tessellation (MPI)
+            /// The tessellation (CGAL by default if we have it)
+#ifdef USE_CGAL
+            ZobovTessellation tessellation{ZobovTessellation::CGAL};
+#else
+            ZobovTessellation tessellation{ZobovTessellation::Native};
+#endif
+            /// CGAL: how large part of the neighbor domains we include in the tessellation (MPI)
             double buffer_fraction{0.5};
-            /// How many guard points we add (fraction of the particles) to speed up the tessellation (MPI)
+            /// CGAL: how many guard points we add (fraction of the particles) to speed up the tessellation (MPI)
             double random_fraction{0.3};
             /// Find overdensities (clusters) instead of voids
             bool find_clusters{false};
@@ -126,7 +139,9 @@ namespace FML {
         //========================================================================================
         template <class T>
         std::vector<Void> ZobovVoidFinder(T * p, size_t NumPart, const ZobovOptions & options = ZobovOptions()) {
+#ifdef USE_CGAL
             static_assert(CGAL_NDIM == 3, "ZobovVoidFinder is only implemented in 3D");
+#endif
             assert_mpi(FML::PARTICLE::GetNDIM(T()) == 3, "[ZobovVoidFinder] Only implemented in 3D");
             // Clusters merge across links above the threshold: the void default (0.2) would merge everything
             assert_mpi(not(options.find_clusters and options.merging == ZoneMerging::Threshold and
@@ -155,13 +170,22 @@ namespace FML {
             // The watershed. For voids the quantity is mass/volume, for clusters volume/mass
             std::vector<detail::ZobovZone> zones;
             std::vector<FML::TRIANGULATION::WatershedLink> links;
-            FML::TRIANGULATION::WatershedDensity(parts.data(),
-                                                 NumPart,
-                                                 zones,
-                                                 options.buffer_fraction,
-                                                 options.random_fraction,
-                                                 options.find_clusters,
-                                                 &links);
+            if (options.tessellation == ZobovTessellation::CGAL) {
+#ifdef USE_CGAL
+                FML::TRIANGULATION::WatershedDensity(parts.data(),
+                                                     NumPart,
+                                                     zones,
+                                                     options.buffer_fraction,
+                                                     options.random_fraction,
+                                                     options.find_clusters,
+                                                     &links);
+#else
+                throw std::runtime_error("[ZobovVoidFinder] The CGAL tessellation needs a USE_CGAL=true build");
+#endif
+            } else {
+                FML::TRIANGULATION::WatershedDensityNative(
+                    parts.data(), NumPart, zones, options.find_clusters, &links);
+            }
             parts = std::vector<detail::ZobovParticle>();
 
             // Merge the zones and make the catalogue (the zones are only on task 0)

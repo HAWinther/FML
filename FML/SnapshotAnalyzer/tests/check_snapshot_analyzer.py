@@ -14,7 +14,7 @@ a spherical hole of radius 15 Mpc/h (a void). Checks:
     scipy) the same halos as the independent implementation in FriendsOfFriends/tests/make_rfof_reference.py;
   - baryonification: the hosts are blobs, the corrected snapshot has the same particles (IDs, velocities, masses)
     and only moved positions near the hosts;
-  - the largest void (voxel and spherical finders, and ZOBOV with CGAL) is the hole;
+  - the largest void (voxel, spherical and ZOBOV finders) is the hole;
   - with an HDF5 build (and h5py): the same snapshot in HDF5 with per-particle masses gives the same results;
   - errors stop every task with a clear message (no hang): old parameter names, a missing snapshot.
 Requires numpy (and h5py for the HDF5 check).
@@ -291,18 +291,19 @@ def main():
         'fof': True, 'fof_so_definitions': ['200m', '200c', 'vir'], 'fof_buffer_length_mpch': 5.0,
         'baryonification': True, 'baryonification_output_particles': True, 'baryonification_baryon_fraction': 0.16,
         'baryonification_fof_buffer_mpch': 5.0, 'baryonification_max_radius_over_r200': SUPPORT,
-        'voids': True, 'spherical_voids': True, 'void_nmesh': 64,
+        'voids': True, 'spherical_voids': True, 'void_nmesh': 64, 'zobov_voids': True,
         'images': True, 'images_fields': ['density', 'velocity_divergence'], 'images_nmesh': 32,
         'images_slab_thickness': 1.0, 'images_npy': True,
     }
     if have_cgal:
-        base.update({'zobov_voids': True, 'dtfe': True, 'dtfe_nmesh': 32, 'dtfe_buffer_fraction': 1.0})
+        base.update({'dtfe': True, 'dtfe_nmesh': 32, 'dtfe_buffer_fraction': 1.0})
     files = ['pofk_z0.000.txt', 'pofk_multipole_z0.000.txt', 'bispectrum_z0.000.txt', 'cosmicweb_z0.000.txt',
              'minkowski_z0.000.txt', 'halos_z0.000.txt', 'massfunc_z0.000.txt',
              'massfunc_so200m_z0.000.txt', 'massfunc_so200c_z0.000.txt', 'massfunc_sovir_z0.000.txt',
              'baryonification_z0.000.txt', 'pofk_baryonified_z0.000.txt', 'voids_z0.000.txt',
              'voids_spherical_z0.000.txt', 'image_density_z0.000.png', 'image_density_z0.000.npy',
-             'image_velocity_divergence_z0.000.png'] + (['voids_zobov_z0.000.txt', 'dtfe_spectra_z0.000.txt'] if have_cgal else [])
+             'image_velocity_divergence_z0.000.png', 'voids_zobov_z0.000.txt'] + \
+        (['dtfe_spectra_z0.000.txt'] if have_cgal else [])
 
     runs = [(n, 'files_per_task') for n in tasks] + [(max(tasks), 'all_tasks')]
     results = {}
@@ -420,8 +421,7 @@ def main():
           f'baryonified snapshot: {moved.sum()} particles moved, all within the support of a host')
 
     # Voids: the largest is the hole
-    for f, rtol in [('voids_z0.000.txt', 0.5), ('voids_spherical_z0.000.txt', 0.3)] + \
-            ([('voids_zobov_z0.000.txt', 0.5)] if have_cgal else []):
+    for f, rtol in [('voids_z0.000.txt', 0.5), ('voids_spherical_z0.000.txt', 0.3), ('voids_zobov_z0.000.txt', 0.5)]:
         v = table(ref / f)
         v = v[np.argmax(v[:, 4])]
         d = np.linalg.norm((v[1:4] - np.array(HOLE_CENTER) + BOX / 2) % BOX - BOX / 2)
