@@ -85,10 +85,10 @@ cosmological model you add.
 - Halos and structures: friends-of-friends (also relaxed FoF), spherical-overdensity masses, a phase-space halo and
   subhalo finder, merger histories, void finders (ZOBOV, voxel watershed, spherical), the DTFE, and cosmic-web
   classification.
-- FML's own [Delaunay triangulation and periodic Voronoi tessellation](FML/Experimental/Delaunay/README.md) (2D and
+- FML's own [Delaunay triangulation and periodic Voronoi tessellation](FML/Triangulation/DELAUNAY.md) (2D and
   3D): exact predicates, MPI parallel for any distribution of the particles with results bitwise identical for any
-  number of tasks, fast updates when the points move, no dependencies, and 1.5–4 times faster than CGAL. The watershed,
-  ZOBOV and the ORIGAMI halos run on it (or on the older CGAL-based tessellation).
+  number of tasks, fast updates when the points move, no dependencies, and 1.5–4 times faster than CGAL. The DTFE,
+  the watershed, ZOBOV and the ORIGAMI halos use it by default; CGAL's tessellation is an option.
 - Summary statistics: counts-in-cells, kNN distributions, density-split and marked statistics, Minkowski functionals,
   weak-lensing maps, and HOD mocks and baryonification.
 - [SnapshotAnalyzer](FML/SnapshotAnalyzer/README.md): all of this on Gadget snapshots from a parameter file.

@@ -1,10 +1,10 @@
-// MPI tests of PeriodicVoronoi (FML/Experimental/Delaunay): the cells and faces must be bitwise identical for any
+// MPI tests of PeriodicVoronoi (FML/Triangulation): the cells and faces must be bitwise identical for any
 // distribution of the points over the tasks. The reference is the run with all points on task 0 (the other tasks
 // empty); then the same points distributed in x slabs, x-y pencils, Peano-Hilbert ranges, at random, and all on the
 // last task. Every task's cells and faces are gathered on task 0 and compared with the reference: every cell
 // identical, every face present on the task(s) of its two points (twice if they are on different tasks) and
 // identical there. Random, clustered and lattice (degenerate) points in 2D and 3D.
-#include <FML/Experimental/Delaunay/PeriodicVoronoi.h>
+#include <FML/Triangulation/PeriodicVoronoi.h>
 #include <FML/tests/TestHelpers.h>
 
 #include <cstring>

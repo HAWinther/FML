@@ -20,7 +20,7 @@
 <hr/>
 
 <p>
-The <a href="https://www.astro.rug.nl/~voronoi/DTFE/dtfe.html" style="display: inline">DTFE</a> uses the <a href="tesselation.php" style="display: inline">Delaunay triangulation</a> (currently CGAL's; it is being ported to FML's own tessellation, after which it needs no CGAL) of a set of particles to interpolate quantities known at the particles to a regular grid. The density estimate and volume-covering interpolation follow <a href="https://arxiv.org/abs/astro-ph/0011007" style="display: inline">Schaap &amp; van de Weygaert (2000)</a>; see also the public-code paper by <a href="https://arxiv.org/abs/1105.0370" style="display: inline">Cautun &amp; van de Weygaert (2011)</a>. FML uses CGAL for tessellation geometry and has its own MPI slab/buffer and grid-sampling implementation. Resolution adapts to local point density. The density at a particle is
+The <a href="https://www.astro.rug.nl/~voronoi/DTFE/dtfe.html" style="display: inline">DTFE</a> uses the <a href="tesselation.php" style="display: inline">Delaunay triangulation</a> (FML's own by default, or CGAL's) of a set of particles to interpolate quantities known at the particles to a regular grid. The density estimate and volume-covering interpolation follow <a href="https://arxiv.org/abs/astro-ph/0011007" style="display: inline">Schaap &amp; van de Weygaert (2000)</a>; see also the public-code paper by <a href="https://arxiv.org/abs/1105.0370" style="display: inline">Cautun &amp; van de Weygaert (2011)</a>. The tessellation is FML's own (or optionally CGAL's) and the MPI distribution and grid sampling are FML's. Resolution adapts to local point density. The density at a particle is
 $$\rho_i = (D+1)\frac{m_i}{W_i}$$
 where $W_i$ is the volume of all the tetrahedra that have the particle as a vertex (the contiguous Voronoi cell). Any quantity known at the particles (the velocity, the density, ...) is then interpolated linearly inside each Delaunay tetrahedron, so its gradient is constant in each tetrahedron. This gives us the velocity divergence, vorticity and shear directly from the particles without having to assign the velocity to a grid first (which suffers from empty cells in underdense regions). The interpolated density integrates exactly to the total mass.
 </p>
@@ -30,7 +30,7 @@ The grid values are either the field at the grid point or the average over the g
 </p>
 
 <p>
-With MPI each task computes the part of the grid it owns (the slab in $[x_{\rm min}, x_{\rm max})$) so the grid slabs need to match the particle domains: Nmesh must be divisible by the number of tasks. The buffer must be large enough for the tetrahedra the samples land in to be correct; we count the samples that land in tetrahedra that might not be correct and give a warning (increase buffer_fraction if this happens). This is only implemented in 3D and requires CGAL. Everything is in the namespace FML::TRIANGULATION (Triangulation/DTFE.h).
+With MPI each task computes the part of the grid it owns. With FML's own tessellation (<tt>DTFETessellation::Native</tt>, the default) the particles can be on any task and there is no buffer to choose: before sampling, the triangulation is made exact over the grid cells the task fills (the particles needed are fetched from the other tasks), so every sample lands in a true Delaunay tetrahedron. With CGAL's (<tt>DTFE&lt;Particle&gt; dtfe(DTFETessellation::CGAL)</tt>, needs USE_CGAL) the grid slabs must match the particle domains (Nmesh divisible by the number of tasks) and the buffer must be large enough for the tetrahedra the samples land in to be correct; samples in tetrahedra that might not be are counted and a warning given (increase buffer_fraction). The two give the same grids (to $10^{-10}$ on a $128^3$ simulation). This is implemented in 3D. Everything is in the namespace FML::TRIANGULATION (Triangulation/DTFE.h).
 </p>
 
 <p>
@@ -47,12 +47,16 @@ With MPI each task computes the part of the grid it owns (the slab in $[x_{\rm m
   <div style="width:600px;display: inline-block;text-align: left">
     <pre class="prettyprint">
 // Make the tessellation and compute the DTFE density at the particles
-// The particles must be inside the local domain (e.g. MPIParticles)
-// and must not move while we use this
+// (FML's own tessellation: the particles can be on any task; they must
+// not move while we use this)
 FML::TRIANGULATION::DTFE&lt;Particle&gt; dtfe;
 dtfe.create(part.get_particles_ptr(), part.get_npart());
 
-// The full signature
+// CGAL's tessellation instead (USE_CGAL; the particles must be in the
+// local domain, e.g. MPIParticles)
+FML::TRIANGULATION::DTFE&lt;Particle&gt; dtfe_cgal(FML::TRIANGULATION::DTFETessellation::CGAL);
+
+// The full signature (the buffer and guard points are only used by CGAL)
 void create(T * p, size_t NumPart, double buffer_fraction = 0.5, double random_fraction = 0.3);
 
 // The DTFE density at the particles (the first NumPart elements are the local particles)

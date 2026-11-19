@@ -34,10 +34,10 @@ MCMC/tests/test_*
 !MCMC/tests/test_*.cpp
 FriendsOfFriends/tests/test_*
 !FriendsOfFriends/tests/test_*.cpp
-Experimental/Delaunay/tests/test_*
-!Experimental/Delaunay/tests/test_*.cpp
-Experimental/Delaunay/tests/compare_cgal
-Experimental/Delaunay/tests/compare_library
+Triangulation/tests/test_*
+!Triangulation/tests/test_*.cpp
+Triangulation/tests/compare_cgal
+Triangulation/tests/compare_library
 Emulator/example/ee2
 FFTLog/example/fftlog
 FFTWGrid/example/fftwgrid

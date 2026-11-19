@@ -6,7 +6,7 @@
 //   - (3D) the DTFE density at the particles, (D+1) m / volume of the incident simplices (DTFE::create)
 // and the timings. Build with make compare_library [CGAL2D=true] CGAL_INCLUDE=... ; run
 // mpirun -np N ./compare_library [npart]
-#include <FML/Experimental/Delaunay/PeriodicVoronoi.h>
+#include <FML/Triangulation/PeriodicVoronoi.h>
 #include <FML/Global/Global.h>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/Triangulation/PeriodicDelaunay.h>

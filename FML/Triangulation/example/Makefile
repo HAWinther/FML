@@ -7,7 +7,7 @@
 #===================================================================
 
 USE_MPI             ?= true
-USE_CGAL            ?= true
+USE_CGAL            ?= false
 USE_OMP             ?= false
 USE_DEBUG           ?= false
 

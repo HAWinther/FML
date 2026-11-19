@@ -20,7 +20,7 @@ EXAMPLE_DIRS := $(sort $(dir $(wildcard */example/Makefile */examples/Makefile *
                 RamsesUtils/ramses2pk/ SimulationCode/ AMRCode/
 
 # Examples that need extra libraries (built with make examples-extra)
-#   LuaFileParser: LUA   Triangulation: CGAL   VoidFinders: CGAL + FFTW   Plotting: python + matplotlib
+#   LuaFileParser: LUA   Triangulation: FFTW   VoidFinders: FFTW   Plotting: python + matplotlib
 EXTRA_DIRS   := LuaFileParser/example/ Triangulation/example/ VoidFinders/example/ Plotting/example/
 # Python wrappers (built with make python): MakePythonWrapper (SWIG), HaloModel (pybind11)
 PYTHON_DIRS  := MakePythonWrapper/ HaloModel/PythonWrapper/

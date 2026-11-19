@@ -22,7 +22,7 @@ LOCAL_PREFIX = /path/to/dependencies
 | `USE_FFTW_THREADS=true` | FFTW thread support and corresponding FFTW thread library; separate from ordinary OpenMP loops |
 | `USE_GSL=true` | GSL-backed splines, ODEs and relevant numerical/cosmology workflows |
 | `USE_LUA=true` | Lua parameter-file parsing; configure matching version/include/library paths |
-| `USE_CGAL=true` | CGAL's tessellation as an option for DTFE, ZOBOV, the watershed and ORIGAMI halos (FML's own is the default) and the CGAL examples |
+| `USE_CGAL=true` | CGAL's tessellation as an option for DTFE, ZOBOV, the watershed and ORIGAMI halos (FML's own is the default; off in every Makefile) |
 | `USE_HDF5=true` | HDF5-enabled snapshot/output paths; configure appropriate includes/libraries |
 | `USE_PYTHON=true` | Python/NumPy includes and embedding link options for applicable legacy examples; does not build/install the analysis package |
 | `USE_MEMORYLOG=true` | Enable the shared build's memory logging defines; coverage is module dependent |
@@ -58,7 +58,7 @@ cmake -S FML/SimulationCode -B build -DFML_USE_HDF5=ON && cmake --build build -j
 
 Tests use the shared helpers in [`tests/TestHelpers.h`](tests/TestHelpers.h) (`FML::TESTS`): `check(ok, label)` is collective (every task must call it; it fails on every task if it fails on any), `check_local(ok, label)` makes no MPI calls and may be used on some tasks only, `check_close`/`check_rel` print the error, and `return summary("name");` ends `main` with the exit code. The header also has tolerance (`near`) and exception (`throws`, `throws_with`) helpers. Only tests include it, and a test that includes it must link `Global.o`.
 
-`examples-extra` selects dependency-heavy examples such as CGAL/Python-related workflows. The python wrappers (SWIG for MakePythonWrapper, pybind11 for HaloModel) are built by `make -C FML python`; import with the interpreter matching their build headers and NumPy installation. The new [analysis package](PythonAnalysis/README.md) instead uses `python -m pip install ./FML/PythonAnalysis` from the repository root, or `make -C FML python-analysis PYTHON=/path/to/venv/bin/python`. `make -C FML test-python-analysis PYTHON=...` tests an already installed package.
+`examples-extra` selects examples with extra dependencies (Lua, FFTW, Python). The python wrappers (SWIG for MakePythonWrapper, pybind11 for HaloModel) are built by `make -C FML python`; import with the interpreter matching their build headers and NumPy installation. The new [analysis package](PythonAnalysis/README.md) instead uses `python -m pip install ./FML/PythonAnalysis` from the repository root, or `make -C FML python-analysis PYTHON=/path/to/venv/bin/python`. `make -C FML test-python-analysis PYTHON=...` tests an already installed package.
 
 The [CI workflow](../.github/workflows/ci.yml) records the Linux regression configuration. Linked tests describe coverage; listing a target here does not assert every example was rerun during the current documentation change. Optional libraries are required only by the targets that use them. Production convergence/accuracy checks remain separate from build/unit tests.
 

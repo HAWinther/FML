@@ -30,7 +30,7 @@
 <p>
 We provide three void finders for periodic boxes, the first two following <a href="https://github.com/seshnadathur/Revolver" style="display: inline">Revolver</a> (Nadathur et al. 2019):
 <ul>
-<li>ZobovVoidFinder: watershed on the Voronoi densities of the particles (<a href="https://arxiv.org/abs/0712.3049" style="display: inline">ZOBOV</a>, Neyrinck 2008), on FML's own <a href="tesselation.php" style="display: inline">tessellation</a> (no CGAL needed) or on CGAL's.</li>
+<li>ZobovVoidFinder: watershed on the Voronoi densities of the particles (<a href="https://arxiv.org/abs/0712.3049" style="display: inline">ZOBOV</a>, Neyrinck 2008), on FML's own <a href="tesselation.php" style="display: inline">tessellation</a> (the default, no CGAL needed) or on CGAL's.</li>
 <li>VoxelVoidFinder: watershed on a smoothed density field on a grid. The watershed step, VoxelWatershed, can be used directly on any density field (e.g. from the <a href="dtfe.php" style="display: inline">DTFE</a>).</li>
 <li>SphericalVoidFinder: spheres with a given integrated density contrast, following <a href="https://doi.org/10.1111/j.1365-2966.2005.09500.x" style="display: inline">Padilla, Ceccarelli &amp; Lambas (2005)</a>; FML's recentering, overlap and distributed search policies are implementation details.</li>
 </ul>
@@ -107,7 +107,7 @@ We make a periodic Delaunay tessellation of the particles, compute the Voronoi d
 // Options for ZobovVoidFinder (defaults as in Revolver)
 enum class ZobovTessellation { CGAL, Native };
 struct ZobovOptions {
-  ZobovTessellation tessellation;     // CGAL in CGAL builds, Native (FML's own) otherwise
+  ZobovTessellation tessellation;     // Native (FML's own, the default) or CGAL
   double buffer_fraction{0.5};        // Tessellation buffer (MPI, CGAL only)
   double random_fraction{0.3};        // Guard points (MPI, CGAL only)
   bool find_clusters{false};          // Find overdensities instead of voids

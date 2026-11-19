@@ -10,7 +10,7 @@
 #include <type_traits>
 #include <vector>
 
-#include <FML/Experimental/Delaunay/Predicates.h>
+#include <FML/Triangulation/Predicates.h>
 #include <FML/Global/Global.h>
 #include <FML/Global/MPICounts.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>

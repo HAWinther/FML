@@ -16,7 +16,7 @@ Everything is in `FML::ANALYSIS` and header-only (C++17).
 | `Halos.h` | FoF (or relaxed FoF, `fof_relaxed`) halos, spherical overdensity (SO) masses, overlap flags, halo catalogue (text/HDF5), mass functions |
 | `Baryonification.h` | Position-only baryonification (FoF/M200c hosts + FML/Baryonification profiles) |
 | `Voids.h` | Void catalogues: voxel watershed, spherical underdensities, ZOBOV (CGAL or FML's own tessellation, `zobov_tessellation`) |
-| `DTFE.h` | DTFE density and velocity fields and their power spectra (CGAL) |
+| `DTFE.h` | DTFE density and velocity fields and their power spectra (FML's own or CGAL's tessellation, `dtfe_tessellation`) |
 | `Images.h` | Images of fields (`images_*`): the density and the velocity divergence of particles, projected slabs, PNG/.npy files with FML/Visualization |
 | `ParticleUtils.h` | `redistribute_particles`: move displaced particles to their owner task, growing storage as needed |
 | `Output.h` | `write_on_root` and `throw_if_any_task_failed`: errors are agreed on by all tasks (no deadlocks) |
@@ -115,5 +115,5 @@ comes from, and switching it over is a separate step.
 `tests/test_analysis.cpp` (`make run`, or `make run USE_MPI=true` for 1, 2 and 4 tasks): the context and units, SO
 definitions and thresholds, FoF/SO/overlap on particles with known halos, the mass function, redistribution and
 baryonification (particles conserved and owned, hosts, P(k) unchanged on large scales), the void finders on a
-particle distribution with a spherical hole (ZOBOV on the native tessellation), and (with `USE_CGAL=true`) ZOBOV on
-CGAL's and the DTFE velocity units.
+particle distribution with a spherical hole (ZOBOV on the native tessellation), the DTFE velocity units, and (with
+`USE_CGAL=true`) ZOBOV and the DTFE on CGAL's tessellation.

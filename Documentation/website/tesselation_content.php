@@ -29,7 +29,7 @@ Delaunay triangulation is loosely speaking a way of linking together particles t
 </p>
 
 <p>
-FML has two implementations. Its <b>own</b> Delaunay triangulation and periodic Voronoi tessellation (2D and 3D, header-only, no dependencies; <tt>FML/Experimental/Delaunay</tt> while it is developed) is exact, MPI parallel for any distribution of the particles, gives results that do not depend on the number of tasks, can follow moving points (the building block of a future moving-mesh hydro solver) and is 1.5-4 times faster than CGAL. ZOBOV and the ORIGAMI halos run on it without CGAL; the DTFE is being ported now, after which CGAL will be optional everywhere. The <b>CGAL</b>-based tessellation (sections 6-9) is the older one.
+FML has two implementations. Its <b>own</b> Delaunay triangulation and periodic Voronoi tessellation (2D and 3D, header-only, no dependencies; <tt>Triangulation/Predicates.h</tt>, <tt>Delaunay.h</tt> and <tt>PeriodicVoronoi.h</tt>) is exact, MPI parallel for any distribution of the particles, gives results that do not depend on the number of tasks, can follow moving points (the building block of a future moving-mesh hydro solver) and is 1.5-4 times faster than CGAL. The DTFE, the watershed, ZOBOV and the ORIGAMI halos use it by default. The <b>CGAL</b>-based tessellation (sections 6-9) is the older one and is optional (USE_CGAL). On a $128^3$ COLA simulation the two give the same ZOBOV voids, ORIGAMI halos and DTFE grids, the native one 1.2-3 times faster and with less memory per task on several tasks.
 </p>
 
 <p>
@@ -64,7 +64,7 @@ Everything rests on two exact predicates: <tt>orient</tt> (the sign of the deter
 <div style="text-align: center">
   <div style="width:700px;display: inline-block;text-align: left">
     <pre class="prettyprint">
-#include &lt;FML/Experimental/Delaunay/PeriodicVoronoi.h&gt;
+#include &lt;FML/Triangulation/PeriodicVoronoi.h&gt;
 using namespace FML::DELAUNAY;
 
 std::vector&lt;std::array&lt;double, 3&gt;&gt; points = ...; // this task's points in [0, boxsize)^3
@@ -110,7 +110,7 @@ The predicates equal exact 128-bit integer determinants on 400000 small-integer 
 <tr><td>3D, $10^6$ random</td><td>7.3 s</td><td>7.5 s</td><td>18.0 s</td></tr>
 </table>
 <p>
-With MPI (3D, $4\times10^5$ points in slabs) a build takes 5.7 s on one task and 3.2 s on two. See <tt>Experimental/Delaunay/README.md</tt> for the details.
+With MPI (3D, $4\times10^5$ points in slabs) a build takes 5.7 s on one task and 3.2 s on two. See <tt>Triangulation/DELAUNAY.md</tt> for the details; the tests are in <tt>Triangulation/tests</tt>.
 </p>
 
 <header class="entry-header text-center">
@@ -261,5 +261,5 @@ PdT.free();
 <hr/>
 
 <p>
-The triangulation is the basis of several other methods in the library: the <a href="watershed.php">watershed</a> algorithm (the ZOBOV void finder), <a href="dtfe.php">DTFE</a> for interpolating fields from particles to a grid, the <a href="voidfinders.php">void finders</a> and <a href="cosmicweb.php">ORIGAMI</a> halo finding. ZOBOV and the ORIGAMI halos can use either tessellation (FML's own is the default in builds without CGAL); the DTFE still uses CGAL and is being ported. FML's own tessellation is also the first step towards an AREPO-style moving-mesh hydro solver.
+The triangulation is the basis of several other methods in the library: the <a href="watershed.php">watershed</a> algorithm (the ZOBOV void finder), <a href="dtfe.php">DTFE</a> for interpolating fields from particles to a grid, the <a href="voidfinders.php">void finders</a> and <a href="cosmicweb.php">ORIGAMI</a> halo finding. All of them use FML's own tessellation by default and CGAL's as an option. FML's own tessellation is also the first step towards an AREPO-style moving-mesh hydro solver.
 </p>                          

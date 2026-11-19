@@ -3,7 +3,7 @@
 // timings. Build with make compare_cgal (CGAL >= 5, header only, with GMP/MPFR); run ./compare_cgal [N]
 // [random|clustered]. Faces are kept down to zero area here (drop_zero_area_faces = false) since CGAL lists every
 // Delaunay edge.
-#include <FML/Experimental/Delaunay/PeriodicVoronoi.h>
+#include <FML/Triangulation/PeriodicVoronoi.h>
 #include <FML/Global/Global.h>
 
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>

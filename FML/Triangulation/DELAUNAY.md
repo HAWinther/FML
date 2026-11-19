@@ -1,10 +1,9 @@
-# Native Delaunay triangulation and periodic Voronoi tessellation (experimental)
+# Native Delaunay triangulation and periodic Voronoi tessellation
 
-Experimental: kept in `FML/Experimental/` while it is developed (MPI, moving mesh); the interface may change and it
-is not yet used by other modules.
-
-Header-only C++17 module in `FML::DELAUNAY` (2D and 3D), with no external dependencies: the building block for a
-moving-mesh (AREPO-style) hydro solver and an alternative to the CGAL-based [Triangulation](../../Triangulation) module.
+`Predicates.h`, `Delaunay.h` and `PeriodicVoronoi.h` in `FML/Triangulation`: header-only C++17 code in `FML::DELAUNAY`
+(2D and 3D) with no external dependencies. It is the default tessellation of the library's DTFE, ZOBOV, watershed and
+ORIGAMI halos (through `VoronoiTessellation.h`, see [README.md](README.md)), replacing CGAL, and the building block for a
+moving-mesh (AREPO-style) hydro solver.
 MPI parallel (any distribution of the points over the tasks), with OpenMP for the Voronoi geometry; the results are
 bitwise identical for any number of tasks and any distribution of the points.
 
@@ -17,7 +16,7 @@ bitwise identical for any number of tasks and any distribution of the points.
 ## Usage
 
 ```cpp
-#include <FML/Experimental/Delaunay/PeriodicVoronoi.h>
+#include <FML/Triangulation/PeriodicVoronoi.h>
 using namespace FML::DELAUNAY;
 
 std::vector<std::array<double, 3>> points = ...; // this task's points, in [0, boxsize)^3 (others are wrapped)
@@ -122,7 +121,7 @@ the simplices for new positions keeping vertex indices and keys.
 
 ## Validation
 
-`make -C Experimental/Delaunay/tests run` runs `test_delaunay` (69 checks, about 25 s; also clean under
+`make -C Triangulation/tests run` runs `test_delaunay` (69 checks, about 25 s; also clean under
 AddressSanitizer/UBSan) and `test_delaunay_mpi` on 1, 2, 3 and 4 tasks (54 checks each):
 
 - Predicates equal exact 128-bit integer determinants for 2x200000 random small-integer cases (thousands of exactly
@@ -146,7 +145,7 @@ AddressSanitizer/UBSan) and `test_delaunay_mpi` on 1, 2, 3 and 4 tasks (54 check
   task and box boundaries; automatic and incremental) 3 updates are bitwise identical to builds on task 0, on 1-4
   tasks.
 
-`make -C Experimental/Delaunay/tests compare_cgal CGAL_INCLUDE=...` compares with CGAL 5.6's periodic triangulations: the Delaunay
+`make -C Triangulation/tests compare_cgal CGAL_INCLUDE=...` compares with CGAL 5.6's periodic triangulations: the Delaunay
 edges (with periodic offsets) are identical for random and clustered sets of 1e5 points and random sets of 1e6
 points in 2D and 3D. Timings (one core of a cloud VM, GCC 13 -O2; FML includes the ghosts and the certification):
 

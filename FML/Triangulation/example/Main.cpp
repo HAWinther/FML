@@ -1,11 +1,11 @@
 #include <FML/MPIParticles/MPIParticles.h>
-#include <FML/Triangulation/PeriodicDelaunay.h>
+#include <FML/Triangulation/VoronoiTessellation.h>
 #include <FML/ExampleData/ExampleData.h>
 
 //=======================================================================================
 // The simple particle in 3D with pos, mass and volume
 //=======================================================================================
-const int NDIM = CGAL_NDIM;
+const int NDIM = 3;
 struct Particle {
     double Pos[NDIM];
     double volume{0.0};
@@ -42,23 +42,16 @@ int main() {
     // Do a Delaunay tessellation, compute voronoi volumes, locate density minima (or maximima, see h-file)
     // Assign particles to the local density minima using the Delaunay links and bin up data
     // according to what is defined in the class WatershedBasins. In the end all the info about the groups are on task 0
-    // This only works in 3D currently, the missing piece is to compute voronoi volumes (i.e. area)
-    // from the tessellation in 2D
-    //
     // This is basically the ZOBOV void finder without the additional watershed merging of zones
     // (and we use the Delaunay tessellation instead of the Voronoi tessellation to propagate
     // the particles to their density minima)
     //=======================================================================================
 
-    const double random_fraction = 0.33;
-    const double buffer_fraction = 0.33;
+    // FML's own tessellation (no CGAL). With CGAL (USE_CGAL=true, Triangulation/PeriodicDelaunay.h) the same is
+    // FML::TRIANGULATION::WatershedDensity(p, n, watershed_groups, buffer_fraction, random_fraction)
     using WatershedBasin = FML::TRIANGULATION::WatershedBasin<Particle, NDIM>;
     std::vector<WatershedBasin> watershed_groups;
-    FML::TRIANGULATION::WatershedDensity(part.get_particles_ptr(),
-                                         part.get_npart(),
-                                         watershed_groups,
-                                         buffer_fraction,
-                                         random_fraction);
+    FML::TRIANGULATION::WatershedDensityNative(part.get_particles_ptr(), part.get_npart(), watershed_groups);
 
     // Output the resulting (what is here basically a zobov void) catalogue
     if (FML::ThisTask == 0) {
@@ -91,29 +84,17 @@ int main() {
     // Other examples:
 
     //=======================================================================================
-    // Compute tessellation from MPIParticles and get volume of the particles
-    // FML::TRIANGULATION::MPIPeriodicDelaunay<Particle> d;
-    // const double random_fraction = 0.5;
-    // const double buffer_fraction = 1.0;
-    // d.create(part.get_particles_ptr(), part.get_npart(), buffer_fraction, random_fraction);
-    // // Compute Voronoi volumes
+    // The tessellation itself: the Voronoi volume and the neighbours of the particles (the particles can be on any
+    // task; neighbours on other tasks are boundary particles whose values come from their owners)
+    // FML::TRIANGULATION::PeriodicVoronoiTessellation<NDIM> d;
+    // d.create(part.get_particles_ptr(), part.get_npart());
     // std::vector<double> volumes;
     // d.VoronoiVolume(volumes);
-    // // Assign them to particles
-    // for(size_t i = 0; i < part.get_npart(); i++) part[i].set_volume(volumes[i]);
-    //=======================================================================================
-
-    //=======================================================================================
-    // More general: assign data to the vertices when doing the tessellation.
-    // Define a vertex data struct and give the function the assigns the data.
-    // Note that p might be null for which we have a boundary/random particle. Example:
-    // struct VertexData{ double mass; };
-    // FML::TRIANGULATION::MPIPeriodicDelaunay<struct VertexData> d;
-    // std::function<void(struct VertexData *, Particle *)> vertex_assignment_function = [](VertexData *v, Particle *p){
-    //    if(p) v->mass = p->get_mass();
-    // };
-    // d.create(part.get_particles_ptr(), part.get_npart(), buffer_fraction, random_fraction,
-    // vertex_assignment_function);
-    // // We now have the mass assigned to the vertices of the tessellation and can do stuff with it
+    // for (size_t i = 0; i < part.get_npart(); i++) part[i].set_volume(volumes[i]);
+    // d.for_each_neighbor(0, [&](size_t k) { /* k < npart: local particle, else boundary particle k - npart */ });
+    // const auto volume_boundary = d.communicate_boundary_values(volumes);
+    //
+    // The faces (area, centroid, normal), moving points (update) and point location: FML::DELAUNAY::PeriodicVoronoi
+    // in Triangulation/PeriodicVoronoi.h (see Triangulation/DELAUNAY.md)
     //=======================================================================================
 }

@@ -1,7 +1,7 @@
 #ifndef FML_DELAUNAY_PERIODICVORONOI_HEADER
 #define FML_DELAUNAY_PERIODICVORONOI_HEADER
 
-#include <FML/Experimental/Delaunay/Delaunay.h>
+#include <FML/Triangulation/Delaunay.h>
 #include <FML/Global/ChunkedExchange.h>
 #include <FML/Global/Global.h>
 

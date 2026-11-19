@@ -1,4 +1,4 @@
-// Tests of the native Delaunay triangulation and periodic Voronoi tessellation (FML/Experimental/Delaunay):
+// Tests of the native Delaunay triangulation and periodic Voronoi tessellation (FML/Triangulation):
 //   - exact predicates: orient/insphere in 2D and 3D against exact 128-bit integer determinants on small integer
 //     coordinates (many exact degeneracies), and the floating-point filter against the exact evaluation on nearly
 //     degenerate double input
@@ -7,7 +7,7 @@
 //   - PeriodicVoronoi<D>: volumes sum to the box, closed cells (sum of A n = 0), divergence-theorem volumes from the
 //     face centroids, exact lattices (cubes/squares), translation invariance, tiny point sets (cells neighbouring
 //     their own images), clustered sets (buffer growth), thread-count independence, invalid input
-#include <FML/Experimental/Delaunay/PeriodicVoronoi.h>
+#include <FML/Triangulation/PeriodicVoronoi.h>
 #include <FML/tests/TestHelpers.h>
 
 #include <numeric>

@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include <FML/Experimental/Delaunay/PeriodicVoronoi.h>
+#include <FML/Triangulation/PeriodicVoronoi.h>
 #include <FML/Global/ChunkedExchange.h>
 #include <FML/Global/Global.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
@@ -22,7 +22,7 @@ namespace FML {
 
         //==========================================================================================
         /// The periodic Voronoi tessellation of the particles in the unit box with FML's own Delaunay triangulation
-        /// (Experimental/Delaunay, no CGAL), in the form the library's tessellation users need: the Voronoi volume
+        /// (Triangulation/PeriodicVoronoi.h, no CGAL), in the form the library's tessellation users need: the Voronoi volume
         /// and the neighbours (Delaunay edges) of every local particle, with the neighbours on other tasks as
         /// boundary particles whose values we can fetch from their owners (like MPIPeriodicDelaunay).
         ///

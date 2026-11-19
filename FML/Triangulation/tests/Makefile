@@ -5,7 +5,7 @@ USE_MPI ?= true
 USE_OMP ?= true
 USE_FFTW ?= false
 TARGETS := test_delaunay test_delaunay_mpi
-include ../../../Makefile.config
+include ../../Makefile.config
 FML_MODULES := Global
 Global.o: $(FML_ROOT)/Global/Global.cpp
 	$(CC) $(DEPFLAGS) -c -o $@ $< $(OPTIONS) $(INC)

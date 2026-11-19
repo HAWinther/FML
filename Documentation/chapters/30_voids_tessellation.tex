@@ -8,15 +8,15 @@ future moving-mesh hydro solver); the older tessellation uses CGAL. ZOBOV, the O
 native one by default; CGAL is optional. \fml{} has four void finders sharing one
 catalogue format: spherical, voxel watershed (Revolver-like) and ZOBOV, with optional zone merging.
 
-\begin{modulebox}{Experimental/Delaunay, Triangulation, VoidFinders}
-\nsp{FML::DELAUNAY} (header-only, no dependencies; in \file{Experimental/} while it is developed):
-\file{Experimental/Delaunay/Predicates.h}, \file{Delaunay.h} (\cls{Delaunay}), \file{PeriodicVoronoi.h} (\cls{PeriodicVoronoi}).
+\begin{modulebox}{Triangulation, VoidFinders}
+\nsp{FML::DELAUNAY} (header-only, no dependencies):
+\file{Triangulation/Predicates.h}, \file{Delaunay.h} (\cls{Delaunay}), \file{PeriodicVoronoi.h} (\cls{PeriodicVoronoi}).
 \nsp{FML::TRIANGULATION}: \file{Triangulation/VoronoiTessellation.h} (\cls{PeriodicVoronoiTessellation}, native),
 \file{Triangulation/Watershed.h} (\code{WatershedOnGraph}), \file{Triangulation/PeriodicDelaunay.h} (\cls{MPIPeriodicDelaunay},
 CGAL), \file{Triangulation/DTFE.h} (\cls{DTFE}, either), \file{Triangulation/WatershedBinning.h}. \file{VoidFinders/Void.h}
 (\cls{Void}), \file{SphericalVoidFinder.h}, \file{VoxelVoidFinder.h} (also \code{VoxelWatershed}), \file{ZobovVoidFinder.h},
 \file{ZoneMerging.h}.\par
-Documentation: \file{Experimental/Delaunay/README.md}, \file{VoidFinders/README.md}. Tests: \file{Experimental/Delaunay/tests}
+Documentation: \file{Triangulation/DELAUNAY.md}, \file{Triangulation/README.md}, \file{VoidFinders/README.md}. Tests: \file{Triangulation/tests}
 (\file{test_delaunay.cpp}, \file{test_delaunay_mpi.cpp}, \file{compare_cgal.cpp}, \file{compare_library.cpp}),
 \file{tests/test_watershed_native.cpp}, \file{tests/test_origami_halos.cpp}, \file{tests/test_dtfe_native.cpp}, \file{VoidFinders/tests} (\file{test_spherical.cpp}),
 \file{tests/test_delaunay_domain.cpp}, \file{tests/test_dtfe_pencil.cpp}, \file{tests/test_voids_pencil.cpp}. CGAL \cite{CGAL}
@@ -60,7 +60,7 @@ triangulation takes 0.39\,s instead of 1.71\,s); when all points move by more th
 as much as a build. The geometry is still recomputed in full.
 
 \begin{cppcode}[Periodic Voronoi tessellation with MPI]
-#include <FML/Experimental/Delaunay/PeriodicVoronoi.h>
+#include <FML/Triangulation/PeriodicVoronoi.h>
 using namespace FML::DELAUNAY;
 std::vector<std::array<double, 3>> points = ...;  // this task's points in [0, L)^3
 PeriodicVoronoi<3> voronoi(points, L);            // collective

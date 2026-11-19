@@ -6,7 +6,9 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 ## [Unreleased]
 
 ### Native Delaunay triangulation; DTFE, ZOBOV, watershed and ORIGAMI halos without CGAL (native is the default)
-- `Experimental/Delaunay` (`FML::DELAUNAY`, header only): Shewchuk's adaptive exact predicates, Bowyer-Watson insertion
+- `Triangulation/Predicates.h`, `Delaunay.h`, `PeriodicVoronoi.h` (`FML::DELAUNAY`, header only; developed in
+  `Experimental/Delaunay`, moved to `Triangulation`, documentation in `Triangulation/DELAUNAY.md`, tests in
+  `Triangulation/tests`): Shewchuk's adaptive exact predicates, Bowyer-Watson insertion
   in Hilbert order with symbolic perturbation (as CGAL), 2D and 3D (`Delaunay<D>`), and `PeriodicVoronoi<D>`: the
   periodic Voronoi tessellation of points on any MPI tasks in any distribution, with certified ghosts (box then
   circumsphere searches; a search returns only the 8 points nearest the centre, so a clump in an empty box does not
@@ -37,6 +39,8 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
   the particles are spread over the tasks and identical to CGAL. SnapshotAnalyzer's check runs ZOBOV and the DTFE
   always, and with CGAL compares the two tessellations.
 - `ORIGAMIHalos` accepts particles with a non-constexpr `get_ndim`. `Triangulation/README.md`.
+- `USE_CGAL` is false by default in every Makefile (also the Triangulation and VoidFinders examples, which now run on
+  FML's own tessellation).
 
 ### CosmologyFitting: DESI DR1 full shape, Planck PR4 CamSpec, Planck low-ell, ACT DR6 lensing, DES-Dovekie, Fading Dark Sector
 - `planck_lowl_TT` (Commander) and `planck_lowl_EE` (SimAll), Planck 2018's low-ell likelihoods, and

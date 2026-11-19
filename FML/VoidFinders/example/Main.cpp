@@ -8,8 +8,8 @@
 //=======================================================================================
 // Example of the void finders (as in Revolver, github.com/seshnadathur/Revolver):
 //
-// ZobovVoidFinder: watershed on the Voronoi densities of the particles (CGAL with USE_CGAL=true, else FML's own
-// tessellation)
+// ZobovVoidFinder: watershed on the Voronoi densities of the particles (FML's own tessellation; CGAL's is an option
+// with USE_CGAL=true)
 // VoxelVoidFinder: watershed on the CIC density field smoothed with a Gaussian (needs FFTW)
 // VoxelWatershed : the watershed on any density grid, here the DTFE density field
 // SphericalVoidFinder: spheres with integrated density contrast Delta = -0.8 (needs FFTW for the candidates)

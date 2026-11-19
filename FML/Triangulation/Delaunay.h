@@ -1,7 +1,7 @@
 #ifndef FML_DELAUNAY_HEADER
 #define FML_DELAUNAY_HEADER
 
-#include <FML/Experimental/Delaunay/Predicates.h>
+#include <FML/Triangulation/Predicates.h>
 #include <FML/PeanoHilbertDomain/HilbertCurve.h>
 
 #include <algorithm>
