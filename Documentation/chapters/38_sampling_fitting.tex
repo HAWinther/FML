@@ -1,5 +1,5 @@
 \chapter{Sampling, optimisation and cosmology fitting}\label{ch:sampling-fitting}
-\chapterstatus{written}{2026-11-14}
+\chapterstatus{written}{2026-11-19}
 
 General samplers and optimisers for any posterior (adaptive Metropolis--Hastings, Hamiltonian Monte Carlo, Nelder--Mead with profile
 likelihoods), convergence diagnostics, and the program \file{./mcmc} that fits cosmological parameters to supernova, BAO and CMB data with
@@ -72,6 +72,18 @@ CMB likelihoods. The likelihoods:
       (linear in the spectra, precomputed as matrices on the bandpowers), and an exact mock Gaussian likelihood of TT, TE, EE (and BB) for forecasts and tests.
 \end{itemize}
 With several likelihoods each $\chi^2$ is a derived parameter, as are $H_0$, $\Om$, the age, $r_d$, $\theta_*$, $\sigma_8$ and $S_8$.
+
+\paragraph*{The Fading Dark Sector.} \file{params/mcmc_fds_cmb_desi_dovekie.ini} and \file{mcmc_fds_cmb_desi15_dovekie.ini} are the fits
+of Obied, Vafa \& Wu \cite{ObiedVafaWu2026} (\code{model = fading_dark_sector}, $c$ and $c'\ge0$ sampled): CamSpec PR4, the Planck low-$\ell$ TT
+and EE, ACT DR6 + Planck PR4 lensing, DESI DR2 BAO and DES-Dovekie, with the DESI DR1 full shape in the second. The nonlinear lensing and shear
+spectra can use \code{nonlinear = react}, which supports the coupled dark matter (\cref{sec:hm-react}). The full shape uses EdS loop kernels
+with the model's linear $P_{cb}$, $P_{\theta\theta}$ and growth, whereas the paper uses exact-time two-fluid kernels (CDM with the fifth force
+and the drag, baryons without). \file{tests/check_fds_kernels} computes both for the same linear $P_{cb}$: at $c=-0.85$, $c'=0.053$,
+$z=0.3$--1.5 and $k\le0.2\hMpc$ the exact-time $\delta\delta$ loop differs from EdS by $\le3\times10^{-3}$ of $P_L$ and the $\theta\theta$
+loop by $\le1\%$ of $f^2P_L$, almost all of it present in $\Lambda$CDM as well; the part due to the fifth force and the drag is
+$\le4\times10^{-4}$ and $3\times10^{-3}$. Mapped onto the DESI multipoles (\file{python/fds_kernels_dchi2.py}) the whole difference
+changes $\chi^2$ by 0.011 (0.001 after refitting $b_1$, $\alpha_0$, $\alpha_2$ and the shot noise) and the FDS-specific part by 0.001,
+against the model's $\Delta\chi^2\approx-14$ to $-20$: EdS kernels are enough for these fits.
 
 \begin{paramfile}[A w0wa fit to DESI DR2, Planck distance priors and Pantheon+]
 model       = w0wa

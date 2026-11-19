@@ -1,5 +1,5 @@
 \chapter{Cosmic web, tidal fields and morphology}\label{ch:cosmic-web}
-\chapterstatus{written}{2026-11-14}
+\chapterstatus{written}{2026-11-19}
 
 The large-scale structure is classified into voids, sheets, filaments and knots from the eigenvalues of the tidal and
 velocity-shear tensors (T-web, V-web) or from the stream crossings of the particles (ORIGAMI), and its morphology is measured
@@ -56,9 +56,13 @@ plane), grouped into four orthogonal triads, and the morphology is the largest n
 3 halo. The lattice coordinate comes from the particle ID (the numbering of \code{create_particle_grid} and the initial conditions); with MPI the
 rows are moved to the tasks as needed.
 
-\code{ORIGAMIHalos} groups the halo particles on the Delaunay tessellation of all particles (\cref{sec:voids-dtfe}): Voronoi densities of all
+\code{ORIGAMIHalos} groups the halo particles on the Delaunay tessellation of all particles (\cref{sec:voids-native}): Voronoi densities of all
 particles, cores of Delaunay-connected halo particles above a density threshold, and the other halo particles attached in rounds to the halo of
 their densest neighbour already in a halo (independent of order and number of tasks); groups without a core can be kept; no unbinding is done.
+The tessellation is CGAL's \cls{MPIPeriodicDelaunay} (\code{OrigamiHaloOptions::tessellation = CGAL}, the default in CGAL builds;
+\code{buffer_fraction}, \code{random_fraction}) or \fml{}'s own \cls{PeriodicVoronoiTessellation} (\code{Native}, the default otherwise,
+\cref{sec:voids-native}), which needs no buffer and works for particles on any task; both give the same halos
+(\file{tests/test_origami_halos.cpp}).
 
 \section{Minkowski functionals}\label{sec:web-minkowski}
 

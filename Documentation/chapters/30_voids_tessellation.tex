@@ -1,20 +1,109 @@
 \chapter{Voids and tessellations}\label{ch:voids}
-\chapterstatus{written}{2026-11-14}
+\chapterstatus{written}{2026-11-19}
 
 The Delaunay tessellation of the particles gives density and velocity fields without a grid (DTFE) and the Voronoi densities of
-watershed void finders. \fml{} has four void finders sharing one catalogue format: spherical, voxel watershed (Revolver-like) and
-ZOBOV, with optional zone merging.
+watershed void finders. \fml{} has its own MPI-parallel Delaunay triangulation and periodic Voronoi tessellation in 2D and 3D, with
+exact predicates and results that do not depend on the number of tasks, which can follow moving points (the building block of a
+future moving-mesh hydro solver); the older tessellation uses CGAL. ZOBOV and the ORIGAMI halos run on either; the DTFE is
+being ported to the native tessellation, after which CGAL will be optional everywhere. \fml{} has four void finders sharing one
+catalogue format: spherical, voxel watershed (Revolver-like) and ZOBOV, with optional zone merging.
 
-\begin{modulebox}{Triangulation, VoidFinders}
-\nsp{FML::TRIANGULATION}: \file{Triangulation/PeriodicDelaunay.h} (\cls{MPIPeriodicDelaunay}), \file{Triangulation/DTFE.h}
-(\cls{DTFE}), \file{Triangulation/WatershedBinning.h}. \file{VoidFinders/Void.h} (\cls{Void}), \file{SphericalVoidFinder.h},
-\file{VoxelVoidFinder.h} (also \code{VoxelWatershed}), \file{ZobovVoidFinder.h}, \file{ZoneMerging.h}.\par
-Documentation: \file{VoidFinders/README.md}. Tests: \file{VoidFinders/tests} (\file{test_spherical.cpp}),
-\file{tests/test_delaunay_domain.cpp}, \file{tests/test_dtfe_pencil.cpp}, \file{tests/test_voids_pencil.cpp}. CGAL \cite{CGAL} is needed for
-the tessellations (\code{USE_CGAL}).
+\begin{modulebox}{Experimental/Delaunay, Triangulation, VoidFinders}
+\nsp{FML::DELAUNAY} (header-only, no dependencies; in \file{Experimental/} while it is developed):
+\file{Experimental/Delaunay/Predicates.h}, \file{Delaunay.h} (\cls{Delaunay}), \file{PeriodicVoronoi.h} (\cls{PeriodicVoronoi}).
+\nsp{FML::TRIANGULATION}: \file{Triangulation/VoronoiTessellation.h} (\cls{PeriodicVoronoiTessellation}, native),
+\file{Triangulation/Watershed.h} (\code{WatershedOnGraph}), \file{Triangulation/PeriodicDelaunay.h} (\cls{MPIPeriodicDelaunay},
+CGAL), \file{Triangulation/DTFE.h} (\cls{DTFE}, CGAL), \file{Triangulation/WatershedBinning.h}. \file{VoidFinders/Void.h}
+(\cls{Void}), \file{SphericalVoidFinder.h}, \file{VoxelVoidFinder.h} (also \code{VoxelWatershed}), \file{ZobovVoidFinder.h},
+\file{ZoneMerging.h}.\par
+Documentation: \file{Experimental/Delaunay/README.md}, \file{VoidFinders/README.md}. Tests: \file{Experimental/Delaunay/tests}
+(\file{test_delaunay.cpp}, \file{test_delaunay_mpi.cpp}, \file{compare_cgal.cpp}, \file{compare_library.cpp}),
+\file{tests/test_watershed_native.cpp}, \file{tests/test_origami_halos.cpp}, \file{VoidFinders/tests} (\file{test_spherical.cpp}),
+\file{tests/test_delaunay_domain.cpp}, \file{tests/test_dtfe_pencil.cpp}, \file{tests/test_voids_pencil.cpp}. CGAL \cite{CGAL}
+(\code{USE_CGAL}) is needed only for \cls{MPIPeriodicDelaunay} and the DTFE.
 \end{modulebox}
 
-\section{Periodic Delaunay tessellation and the DTFE}\label{sec:voids-dtfe}
+\section{FML's own Delaunay triangulation}\label{sec:voids-native}
+
+\paragraph*{Predicates.} Everything rests on two exact predicates, \code{orient} (the sign of
+$\det[\bm p_1-\bm p_0,\dots,\bm p_D-\bm p_0]$) and \code{insphere} (+1 if $\bm q$ is inside the circumsphere of a positively
+oriented simplex), with CGAL's conventions. The determinant is evaluated in floating point with Shewchuk's a priori error bound
+\cite{Shewchuk1997} (times a safety factor 4); when the sign is uncertain it is recomputed exactly with floating-point expansions
+of the input coordinates, with a fixed-size stack version when all coordinate differences are exact doubles (lattices, quantized
+coordinates). The result is exact for any double input barring overflow.
+
+\paragraph*{Triangulation.} \cls{Delaunay}$\langle D\rangle$ ($D=2,3$) inserts the points in Peano--Hilbert order into a super
+simplex (Bowyer--Watson): a visibility walk from the last new simplex locates the point, a breadth-first search finds the cavity of
+simplices whose circumspheres contain it, and the cavity is replaced by the simplices joining its boundary facets to the point.
+Cospherical points (lattices) are resolved by the symbolic perturbation of Devillers \& Teillaud \cite{DevillersTeillaud2011},
+as in CGAL: the result is the Delaunay triangulation of the points perturbed in the order of a per-vertex key, a valid and unique
+Delaunay triangulation of the input. Duplicates are detected. \code{move(v, p)} moves a vertex (in place if its star stays valid
+and locally Delaunay, otherwise by removal, filling the hole with the Delaunay triangulation of its link, and reinsertion).
+
+\paragraph*{Periodic Voronoi tessellation with MPI.} \cls{PeriodicVoronoi}$\langle D\rangle$ is collective: each task gives its
+points (any distribution: slabs, pencils, Peano--Hilbert ranges, random, empty tasks) and gets the Voronoi cells of its points
+(volume, centroid) and every face touching them (area, centroid, normal, the neighbour's global id, task and index, the periodic
+shift). Each task triangulates its points with \emph{ghosts}, copies of other tasks' points and periodic images: an initial
+buffer of two mean spacings around the bounding box of its points, then rounds of \emph{certification}, in which the
+circumsphere of every simplex with a local vertex is searched on every task (and image) whose bounding box it meets; the points
+found are inserted, and a simplex that was searched and survives is final. This needs no assumption on how the points are
+distributed and is exact. Coordinates are quantized to $2^{-40}$ of the box so that images are exact translates, perturbation keys
+are (global id, image shift), and circumcentres, face rings and sums are computed in an order fixed by the keys, so the cells and
+faces are \emph{bitwise identical for any number of tasks and any distribution}, and a face shared by two tasks is identical on
+both (a flux can be computed once). The geometry is computed with OpenMP.
+
+\paragraph*{Moving points.} \code{update(new_points)} gives exactly (bitwise) what a new tessellation of the new positions gives,
+reusing the ghosts and the triangulation: the ghosts follow their points, points may cross the box and other tasks' bounding boxes
+(positions carry a wrap count), and the simplices are certified again. \code{update_method = Automatic} chooses from sampled costs
+between moving the vertices and retriangulating; it pays off when few points move (with 1\% of $2\times10^5$ points moving the
+triangulation takes 0.39\,s instead of 1.71\,s); when all points move by more than $\sim1\%$ of the spacing an update costs about
+as much as a build. The geometry is still recomputed in full.
+
+\begin{cppcode}[Periodic Voronoi tessellation with MPI]
+#include <FML/Experimental/Delaunay/PeriodicVoronoi.h>
+using namespace FML::DELAUNAY;
+std::vector<std::array<double, 3>> points = ...;  // this task's points in [0, L)^3
+PeriodicVoronoi<3> voronoi(points, L);            // collective
+for (size_t i = 0; i < voronoi.ncells(); i++) {
+    const auto & cell = voronoi.cells()[i];       // cell.id, cell.volume, cell.centroid
+    auto [begin, end] = voronoi.cell_faces(i);    // codes of the faces of cell i
+    // faces()[code >= 0 ? code : -code - 1]: area, centroid, normal, neighbour, shift, tasks
+}
+voronoi.update(new_points);                       // = a new build, reusing ghosts and triangulation
+\end{cppcode}
+
+\paragraph*{In the library.} \cls{PeriodicVoronoiTessellation}$\langle D\rangle$ (\file{Triangulation/VoronoiTessellation.h})
+gives the tessellation in the form the library's users need: the Voronoi volume and the neighbours (Delaunay edges) of every local
+particle, with neighbours on other tasks as boundary particles whose values are fetched from their owners. Unlike
+\cls{MPIPeriodicDelaunay} there is no buffer or guard points to choose, the particles can be on any domain, and every local cell
+is exact. \code{WatershedOnGraph} (\file{Triangulation/Watershed.h}) is the watershed on the neighbour graph of either
+tessellation (steepest descent to a local minimum, ties broken by position, links between basins at the lowest connecting
+value), \code{WatershedDensityNative} the density watershed on the native one. ZOBOV (\code{ZobovOptions::tessellation =
+Native}) and the ORIGAMI halos (\code{OrigamiHaloOptions::tessellation}, \cref{sec:web-origami}) use it by default in builds
+without CGAL, as do the Analysis library (\code{zobov_tessellation}) and SnapshotAnalyzer.
+
+\begin{validation}[Validation: native triangulation]
+\file{test_delaunay} (69 checks): the predicates equal exact 128-bit integer determinants for $4\times10^5$ small-integer cases
+(thousands exactly degenerate) and the filter agrees with exact evaluation on $10^5$ nearly degenerate configurations;
+triangulations of random, clustered, lattice and duplicated points are valid and Delaunay (brute force: no vertex inside any
+circumsphere); periodic volumes sum to the box to $10^{-15}$, cells close to $10^{-13}$, divergence-theorem volumes agree to
+$10^{-12}$, lattices give cubes, results are translation and thread invariant; \code{move}, \code{retriangulate} and
+\code{update} equal fresh triangulations. \file{test_delaunay_mpi} (54 checks on 1--4 tasks): slab, pencil, Peano--Hilbert, random
+and last-task distributions give cells and faces bitwise identical to all points on task 0, also after updates with points
+crossing task and box boundaries. \file{compare_cgal}: the Delaunay edges (with periodic offsets) are identical to CGAL~5.6's
+periodic triangulations for $10^5$ and $10^6$ random and clustered points in 2D and 3D, and the triangulation is 1.5--4 times
+faster (3D, $10^6$ points: 7.3\,s against 18.0\,s on one core). \file{tests/test_watershed_native} and
+\file{tests/test_origami_halos}: native Voronoi volumes, basins, links, ZOBOV catalogues and ORIGAMI halos are independent of how
+the particles are spread over the tasks and identical to CGAL's in 2D and 3D. \file{compare_library}: volumes, neighbour graph
+and DTFE vertex densities against \cls{MPIPeriodicDelaunay}.
+\end{validation}
+
+\begin{planned}[Planned: CGAL optional]
+The DTFE is being ported to the native tessellation; then CGAL will be optional everywhere (only \cls{MPIPeriodicDelaunay}
+for comparisons). Next for the moving mesh: recomputing only the geometry around moved points, and load balancing.
+\end{planned}
+
+\section{Periodic Delaunay tessellation with CGAL and the DTFE}\label{sec:voids-dtfe}
 
 \cls{MPIPeriodicDelaunay} builds the 3D Delaunay tessellation of particles spread over the tasks with CGAL: each task triangulates its
 particles plus a buffer from the neighbours (slabs or pencils, \cref{sec:par-communication}), and cells whose tetrahedra might be affected by the
@@ -53,6 +142,8 @@ find overdense ``clusters'' by running on $1/\rho$.
 \item \emph{Voxel} (Revolver \cite{Nadathur2019}): a watershed of a smoothed CIC density grid; \code{VoxelWatershed} works on any density grid, e.g.\
       the DTFE's.
 \item \emph{ZOBOV} \cite{Neyrinck2008}: the watershed of the Voronoi densities of the particles; zones are the basins of local minima.
+      \code{ZobovOptions::tessellation} selects CGAL's (\code{CGAL}, the default in CGAL builds) or the native tessellation
+      (\code{Native}, the default otherwise); both give the same catalogue.
 \item \emph{Zone merging}: \code{None} (every zone is a void, as Revolver), \code{Threshold} (merge through links below $0.2\bar\rho$, as VIDE
       \cite{Sutter2015}) or \code{Full} (the ZOBOV hierarchy with parents).
 \end{itemize}
@@ -63,6 +154,7 @@ number of tasks; for a given grid the spherical and voxel catalogues are identic
 \file{tests/test_delaunay_domain.cpp}: on slabs and every pencil layout the same Voronoi volumes, no unreliable cells, and the same watershed basins;
 \file{tests/test_dtfe_pencil.cpp}: DTFE densities, gradients and velocity fields on pencils equal those on slabs. \file{test_spherical.cpp}: exact ghost
 IDs with tiny messages, periodic and slab boundaries, buffers wider than a slab, empty and non-uniform slabs, and a brute-force catalogue reference (radii,
-centres, masses, members, overlap removal); \file{tests/test_voids_pencil.cpp}: voxel and spherical catalogues on pencils equal those on slabs. The voxel,
-ZOBOV and merging code has no unit test of its own; it was checked against an independent watershed implementation.
+centres, masses, members, overlap removal); \file{tests/test_voids_pencil.cpp}: voxel and spherical catalogues on pencils equal those on slabs;
+\file{tests/test_watershed_native.cpp}: ZOBOV on the native tessellation independent of the particle distribution and identical to CGAL's. The
+voxel and merging code has no unit test of its own; it was checked against an independent watershed implementation.
 \end{validation}

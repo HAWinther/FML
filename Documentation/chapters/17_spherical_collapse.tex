@@ -1,5 +1,5 @@
 \chapter{Spherical collapse}\label{ch:spherical-collapse}
-\chapterstatus{written}{2026-11-14}
+\chapterstatus{written}{2026-11-19}
 
 The collapse of a spherical top-hat overdensity gives the linear threshold $\delta_c$ of halo formation and the virial
 overdensity $\Delta_{\rm vir}$, the two numbers that connect the linear field to halos in the mass function and the halo
@@ -28,7 +28,10 @@ in which the background acceleration cancels and the fifth force $F=G_{\rm eff}/
 \delta''=-\left(2+\frac{\dd\ln E}{\dd x}\right)\delta'+\frac43\frac{\delta'^2}{1+\delta}+\frac32\Om(x)(1+F)\,\delta(1+\delta),
 \end{equation}
 which is integrated together with its linearisation $\delta_{\rm lin}''=-(2+\dd\ln E/\dd x)\delta_{\rm lin}'+\frac32\Om\mu\delta_{\rm lin}$.
-For a scale-independent modification $1+F=\mu(x)$. The initial conditions at $a_{\rm ini}=10^{-5}$ are in the growing
+For a scale-independent modification $1+F=\mu(x)$. An extra friction $\Gamma(x)$ in the velocity equation of the matter
+(\code{SphericalCollapseModel::frictionofx}; zero by default) replaces $2+\dd\ln E/\dd x$ by $2+\dd\ln E/\dd x+\Gamma$ in both
+equations and in the environment, with the virial condition unchanged: CDM whose particle mass varies as $e^{-\beta\phi}$ in
+coupled quintessence has $\Gamma=-\beta\phi_x$ (\cref{sec:hm-react}). The initial conditions at $a_{\rm ini}=10^{-5}$ are in the growing
 mode with the second-order correction for the nonlinear solution. The initial overdensity is found by bisection such that
 $\delta\to\infty$ (in practice $\delta>10^{16}$) at the requested collapse time; $\delta_c=\delta_{\rm lin}(a_c)$.
 

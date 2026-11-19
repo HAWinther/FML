@@ -57,7 +57,7 @@ Each page below explains the theory behind the methods and shows how to use them
   <a href="statistics.php">kNN-CDFs, counts-in-cells, density split, Minkowski functionals and control variates</a><br>
   <a href="fof.php">Friends-of-Friends, relaxed FoF and spherical-overdensity halos (FML::FOF)</a><br>
   <a href="phasespace.php">Phase-space halo finder and merger histories (FML::PHASE_SPACE_HALOS)</a><br>
-  <a href="tesselation.php">Periodic Delaunay tessellation and Voronoi diagram using CGAL (FML::TRIANGULATION)</a><br>
+  <a href="tesselation.php">Periodic Delaunay tessellation and Voronoi diagram: FML's own (FML::DELAUNAY, MPI, no dependencies) and CGAL's (FML::TRIANGULATION)</a><br>
   <a href="dtfe.php">Delaunay Tessellation Field Estimator, DTFE (FML::TRIANGULATION)</a><br>
   <a href="watershed.php">Watershed groups from the Delaunay tessellation (FML::TRIANGULATION)</a><br>
   <a href="voidfinders.php">Void finders: ZOBOV, voxel watershed and spherical (FML::VOIDFINDER)</a><br>

@@ -32,7 +32,7 @@ API reference in `doxygen/` (`./run_doxygen.sh` there).
 
 ## Status
 
-All 39 chapters and the appendix are written (2026-11-17; 247 pages). The build has no errors, unresolved references or
+All 39 chapters and the appendix are written (2026-11-19; 255 pages). The build has no errors, unresolved references or
 overfull boxes. When a module changes, update its chapter (facts, defaults, validation numbers) and the date in
 `\chapterstatus`.
 

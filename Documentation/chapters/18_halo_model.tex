@@ -1,5 +1,5 @@
 \chapter{The halo model}\label{ch:halo-model}
-\chapterstatus{written}{2026-11-14}
+\chapterstatus{written}{2026-11-19}
 
 The halo model writes the nonlinear matter field as a sum over halos with universal profiles, so the power spectrum is a
 two-halo term (correlated halos) plus a one-halo term (pairs in one halo) \cite{CooraySheth2002}. \fml{} has a general
@@ -152,8 +152,26 @@ P_h=\left[(1-\mathcal E)e^{-k/k_*}+\mathcal E\right]P_{L,cb}+P_{1h,\rm real}.
       \file{MGOneLoop.h}, \cref{sec:pt-mg}); both only for modified gravity.
 \end{itemize}
 In the solver (\code{nonlinear = react}) the reaction multiplies HMcode-2020 of the pseudo cosmology for $\Lambda$CDM,
-Hu--Sawicki $f(R)$, $w_0w_a$ and nDGP, with neutrinos, up to \param{react_z_max} (default 2.5). The third-order screening
-term of $f(R)$ is the correct one, three times ReACT's; \param{react_compat_gamma3} reproduces ACTio-ReACTio.
+Hu--Sawicki $f(R)$, $w_0w_a$, nDGP, coupled quintessence and the Fading Dark Sector, with neutrinos, up to
+\param{react_z_max} (default 2.5). The third-order screening term of $f(R)$ is the correct one, three times ReACT's;
+\param{react_compat_gamma3} reproduces ACTio-ReACTio.
+
+\paragraph*{Coupled dark matter.} For \code{coupled_quintessence} and \code{fading_dark_sector}
+(\cref{sec:bg-coupledquintessence}) the CDM particles have the mass $m\propto e^{-\beta\phi}$ and feel the unscreened fifth force of the
+light field. With the CDM and baryons as one momentum-weighted fluid (as in SimulationCode, \cref{ch:mg-simulations}) the real
+collapses and the one-loop kernels for $k_*$ use
+\begin{equation}
+\frac{G_{\rm eff}}{G}=1+2\beta^2f_c^2,\qquad \Gamma=f_c\,(-\beta\phi_x)=f_c\left(3+\frac{\dd\ln\rho_c}{\dd x}\right),\qquad
+f_c=\frac{\rho_c}{\rho_c+\rho_b},
+\end{equation}
+the extra friction $\Gamma$ entering as $\delta''+(2+\dd\ln E/\dd x+\Gamma)\delta'$ (\code{SphericalCollapseModel::frictionofx},
+\code{MGKernelModel::friction}), in the target background without radiation and with its clustering density
+$\Omega_{cb}(x)$ (\code{HaloModelReaction::Cosmology::OmegaCBofx}, \code{muofx}, \code{frictionofx}). Since the growth is
+scale independent, the real halos take $\sigma(M)$ from the target $P_{cb}$ and extrapolate $\delta_c$ with the model's own
+growth (\code{target_linear}); no $\Lambda$CDM reference run is needed. The concentrations keep $g=D_{\Lambda\rm
+CDM}/D_{\rm target}$, so halos of a model with more late growth are less concentrated, as in coupled dark energy
+simulations \cite{Baldi2010}; this is the least certain choice and is being checked against simulations
+(\cref{sec:mgsims-fds-boost}). For $\beta=0$ the field is uncoupled quintessence (only the expansion differs).
 
 \begin{cppcode}[The reaction in f(R)]
 #include <FML/HaloModel/HaloModelReaction.h>
@@ -173,6 +191,15 @@ one-halo terms to $2\times10^{-3}$ and $\mathcal R$ to $10^{-3}$ for $k=0.01$--$
 \file{MGOneLoop.h} with ReACT's $\gamma_3$): $\mathcal R$ to $2\times10^{-4}$ ($f(R)$) and $6\times10^{-4}$ (nDGP). The
 correct $\gamma_3$ changes $\mathcal R$ by up to $3\times10^{-3}$. Identical real and pseudo cosmologies give $\mathcal R=1$
 exactly. About 1\,s per redshift for $f(R)$, 0.1\,s for GR or dark energy.
+
+Coupled dark matter (\file{tests/test_react_fds.cpp}): $c=c'=0$ equals $\Lambda$CDM with \code{nonlinear = hmcode2020} to
+$<10^{-4}$; the linear growth of the one-fluid collapse model equals the Boltzmann solver's $P_{cb}$ growth to $2\times10^{-3}$
+for $z\le19$ at $c'=0.2$ (where the growth differs from $\Lambda$CDM by 15\%); $P_{\rm NL}/P_L\to$ its $\Lambda$CDM value on
+large scales. At the FDS best fit ($c=-0.85$, $c'=0.053$) $|\mathcal R-1|<0.5\%$ for $k\le1\hMpc$: the nonlinear spectrum
+is mostly HMcode-2020 of the matched pseudo cosmology. Against $\Lambda$CDM with the same $A_s$ and matter--radiation
+equality the extra nonlinear boost $(P_{\rm NL}/P_L)_{\rm FDS}/(P_{\rm NL}/P_L)_{\Lambda\rm CDM}$ at $k=1\hMpc$ is 1.2\%,
+1.6\%, 2.2\% and 2.5\% at $z=0$, 0.5, 1 and 2; a 64$^3$ pair of simulations follows it to $\sim0.3\%$ for $k\le0.7\hMpc$
+(\cref{sec:mgsims-fds-boost}).
 \end{validation}
 
 \section{Ultralight axions: AxionHMcode}\label{sec:hm-axion}

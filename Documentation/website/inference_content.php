@@ -130,20 +130,28 @@ const auto hmc = FML::MCMC::diagnose_hmc_chains(runs, 0);    // several HMCResul
 <tt>./mcmc</tt> in <tt>FML/CosmologyFitting</tt> samples (or minimizes, profiles, or computes the Hessian of) the posterior of any parameter of the Einstein&ndash;Boltzmann solver, including the parameters of the models beyond $\Lambda$CDM, from a parameter file in the same format as <tt>./cmb</tt>. The theory is computed only as far as the likelihoods need (supernovae need only the background, BAO also the recombination history). Available likelihoods:
 </p>
 <ul>
-<li>Supernovae: Pantheon+, DES-SN5YR and Union3 (absolute magnitude marginalized analytically), and binned JLA.</li>
-<li>BAO: DESI DR1 and DR2 with their full covariance; BBN prior on $\omega_b$.</li>
-<li>CMB: Planck 2018 distance priors, Planck 2018 plik_lite TT/TE/EE (+ low-$\ell$ TT), Planck 2018 lensing (also CMB-marginalized), and an exact Gaussian mock CMB likelihood for forecasts.</li>
+<li>Supernovae: Pantheon+, DES-SN5YR, DES-Dovekie (DES-SN5YR recalibrated) and Union3 (absolute magnitude marginalized analytically), and binned JLA.</li>
+<li>BAO and RSD: DESI DR1 and DR2 with their full covariance; BOSS DR12 (BAO and full shape) and eBOSS DR16 LRG and quasars; BBN prior on $\omega_b$.</li>
+<li>Galaxy clustering: DESI DR1 ShapeFit, and the DESI DR1 full-shape power spectra as DESI's own likelihood (velocileptors' REPT, the physical bias basis, analytic marginalization of the counterterms and stochastic terms; equal to DESI's code path to $10^{-7}$ in $\ln L$).</li>
+<li>Weak lensing: KiDS-1000 cosmic shear (COSEBIs).</li>
+<li>CMB: Planck 2018 distance priors, Planck 2018 plik_lite TT/TE/EE (+ low-$\ell$ TT), Planck 2018 low-$\ell$ TT (Commander) and EE (SimAll), the high-$\ell$ Planck PR4 CamSpec (NPIPE) TTTEEE likelihood, Planck 2018 lensing (also CMB-marginalized), ACT DR6 (+ Planck PR4) lensing, and an exact Gaussian mock CMB likelihood for forecasts. The ported likelihoods equal the reference codes (Cobaya, act_dr6_lenslike) to $10^{-8}$-$10^{-14}$.</li>
 </ul>
+<p>
+The fits of the <a href="https://arxiv.org/abs/2611.17422" style="display: inline">Fading Dark Sector</a> paper (CamSpec PR4 + low-$\ell$ + ACT DR6 lensing + DESI DR2 BAO + DES-Dovekie, with or without the DESI DR1 full shape) are ready as parameter files. A check with exact-time two-fluid loop kernels (CDM with the fifth force and drag, baryons without) shows that the EdS kernels used by the full-shape likelihood change $\chi^2$ by only 0.001 after refitting the nuisance parameters, and the nonlinear spectra can use <tt>nonlinear = react</tt>, which now supports the coupled dark matter (<a href="halomodel.php#Reaction" style="display: inline">halo model</a>).
+</p>
 <div style="text-align: center">
   <div style="width:700px;display: inline-block;text-align: left">
     <pre class="prettyprint">
 cd FML/CosmologyFitting
 make
-python3 python/fetch_sn_data.py               # Pantheon+ and DES-SN5YR data (once)
+python3 python/fetch_sn_data.py               # Pantheon+, DES-SN5YR and DES-Dovekie data (once)
+python3 python/fetch_planck_data.py           # CamSpec PR4 and the Planck 2018 low-ell data (once)
 ./mcmc params/mcmc_lcdm.ini                     # flat LCDM: DESI DR2 + Planck distance priors + Pantheon+
 ./mcmc params/mcmc_w0wa.ini                     # w0-wa dark energy
 ./mcmc params/mcmc_w0wa.ini sampler=minimize minimize_profile=w0,-1.05,-0.65,9 minimize_hessian=true
 ./mcmc params/mcmc_planck_lite_lcdm.ini         # Planck 2018 plik_lite (use precision = fast)
+./mcmc params/mcmc_lcdm_desi_fs_bbn.ini         # DESI DR1 full shape + BBN
+./mcmc params/mcmc_fds_cmb_desi_dovekie.ini     # the Fading Dark Sector: CMB + DESI DR2 BAO + DES-Dovekie
 python3 python/plot_chains.py chains/lcdm_desi_planckdp_pantheonplus
 
 # params/mcmc_w0wa.ini: any ./cmb parameter fixes a value; sample_* = start, min, max, step

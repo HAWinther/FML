@@ -25,6 +25,7 @@ FML has two independent, header-only solvers for an ideal gas, a grid code and a
 <ul>
 <li><a href="#FiniteVolume" style="display: inline">$\texttt{FML::HYDRODYNAMICS}$</a>: Riemann solvers (Rusanov, HLLE, HLLC), an exact Riemann solver as a reference, and a conservative finite-volume solver on a uniform Cartesian grid in 1D, 2D and 3D.</li>
 <li><a href="#SPH" style="display: inline">$\texttt{FML::SPH}$</a>: conservative density&ndash;energy smoothed particle hydrodynamics with adaptive smoothing lengths in 1D, 2D and 3D.</li>
+<li>Planned: an AREPO-style moving-mesh solver. Its building block, an exact MPI-parallel <a href="tesselation.php" style="display: inline">periodic Voronoi tessellation</a> with cell volumes, face areas and normals that follows moving points, is done.</li>
 </ul>
 <p>
 Both run in serial, with MPI (slabs in $x$, empty tasks allowed, no global gathers) and OpenMP, and need neither FFTW nor GSL. Both take gravity (or any external force) through a callback and can evolve the gas in a prescribed expanding background, but neither is coupled to SimulationCode yet. Units are the user's: any consistent length, mass and time.

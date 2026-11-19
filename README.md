@@ -36,7 +36,8 @@ cosmological model you add.
 - **Lightweight.** You need a C++17 compiler and make. FFTW (Fourier transforms) and GSL (splines, ODEs) are used by
   most of the library; MPI, OpenMP, Lua, HDF5, CGAL and Python are optional and only needed by the modules that use
   them. There are no large dependencies such as Boost: the multigrid solvers, halo finders, KD-tree, FFTLog, samplers,
-  the Boltzmann solver and so on are all part of the library.
+  the Boltzmann solver and so on are all part of the library. This now includes the Delaunay triangulation: ZOBOV and
+  the ORIGAMI halos no longer need CGAL, and once the DTFE is ported (in progress) CGAL will be optional everywhere.
 - **Any cosmological model.** The physics is implemented once and shared: the same background and the same
   quasi-static gravity (μ and Σ) drive the Einstein–Boltzmann solver, the growth factors, LPT, the halo model and the
   simulations. A new model (dark energy, modified gravity, interacting dark sectors, ...) is a header and an entry in
@@ -67,7 +68,7 @@ cosmological model you add.
 **Simulations**
 - [SimulationCode](FML/SimulationCode/README.md): a complete PM/COLA N-body code driven by a parameter file. Many
   cosmologies and theories of gravity (f(R), DGP, symmetron, dilaton, Jordan–Brans–Dicke, cubic Galileon, reduced
-  Horndeski, coupled and interacting dark energy, dark scattering, μ–Σ), screening solved exactly with multigrid or
+  Horndeski, coupled and interacting dark energy, the Fading Dark Sector, dark scattering, μ–Σ), screening solved exactly with multigrid or
   approximated, massive neutrinos, separate CDM and baryons, lightcones, and power spectra, bispectra, halos and
   more computed on the fly.
 - The pieces to build your own: Gaussian and non-Gaussian initial conditions (N-GenIC compatible), 1LPT–3LPT and
@@ -75,15 +76,19 @@ cosmological model you add.
   modified-gravity solvers.
 - Smaller, newer codes: an [AMR N-body code](FML/AMRCode/README.md), [wave dark matter](FML/WaveDarkMatter/README.md)
   (Schrödinger–Poisson), and gas dynamics with [finite volumes](FML/Hydrodynamics/README.md) and
-  [SPH](FML/SPH/README.md).
+  [SPH](FML/SPH/README.md). A moving-mesh (AREPO-style) solver is planned; its tessellation is done (below).
 
 **Analysing simulations and surveys**
 - Power spectra, multipoles, bispectra and higher polyspectra; pair counting and 2- and 3-point correlation
   functions.
 - Surveys: power-spectrum multipoles with window functions, and BAO reconstruction.
 - Halos and structures: friends-of-friends (also relaxed FoF), spherical-overdensity masses, a phase-space halo and
-  subhalo finder, merger histories, void finders (ZOBOV, voxel watershed, spherical), Delaunay tessellations and the
-  DTFE, and cosmic-web classification.
+  subhalo finder, merger histories, void finders (ZOBOV, voxel watershed, spherical), the DTFE, and cosmic-web
+  classification.
+- FML's own [Delaunay triangulation and periodic Voronoi tessellation](FML/Experimental/Delaunay/README.md) (2D and
+  3D): exact predicates, MPI parallel for any distribution of the particles with results bitwise identical for any
+  number of tasks, fast updates when the points move, no dependencies, and 1.5–4 times faster than CGAL. The watershed,
+  ZOBOV and the ORIGAMI halos run on it (or on the older CGAL-based tessellation).
 - Summary statistics: counts-in-cells, kNN distributions, density-split and marked statistics, Minkowski functionals,
   weak-lensing maps, and HOD mocks and baryonification.
 - [SnapshotAnalyzer](FML/SnapshotAnalyzer/README.md): all of this on Gadget snapshots from a parameter file.
@@ -93,14 +98,18 @@ cosmological model you add.
   perturbations, CMB and matter spectra, lensing) for ΛCDM and many extensions, validated against CLASS.
 - Perturbation theory: one-loop SPT, Lagrangian and IR-resummed Eulerian PT for biased tracers in redshift space,
   TNS and EFTofLSS, and hybrid-bias spectra.
-- Nonlinear power spectra: Halofit, HMcode-2016/2020, a general halo model, ReACT, EuclidEmulator2, and spherical
-  collapse with screening.
+- Nonlinear power spectra: Halofit, HMcode-2016/2020, a general halo model, ReACT (modified gravity, dark energy,
+  massive neutrinos and coupled dark matter such as the Fading Dark Sector), EuclidEmulator2, and spherical collapse
+  with screening.
 
 **Inference**
-- MCMC (adaptive Metropolis–Hastings) and HMC samplers, cosmological fits with supernova, BAO, BBN and CMB
-  likelihoods, and trainable neural-network emulators.
+- MCMC (adaptive Metropolis–Hastings) and HMC samplers, a minimizer with profile likelihoods, and
+  [cosmological fits](FML/CosmologyFitting/README.md) with supernovae (Pantheon+, DES-SN5YR, DES-Dovekie, Union3), BAO
+  and RSD (DESI DR1/DR2, BOSS, eBOSS), DESI DR1 ShapeFit and full-shape power spectra, KiDS-1000 cosmic shear, BBN and
+  the CMB (Planck 2018 plik_lite, low-ℓ and lensing, Planck PR4 CamSpec, ACT DR6 lensing), and trainable
+  neural-network emulators.
 - [Field-level inference](FML/FieldLevel/README.md) with linear, LPT and particle-mesh forward models and their
-  adjoints, on slabs or pencils.
+  adjoints, on slabs or pencils, and joint sampling of the field, amplitude and bias with replica-exchange tempering.
 
 The [capability matrix](FML/CAPABILITIES.md) lists every module with its scope, dependencies, parallel behaviour and
 tests, and the [website](https://fml.wintherscoming.no/) explains the methods.
@@ -179,7 +188,8 @@ module folder also has examples (`example/`) and a README with its conventions.
 ## Building
 
 You need a C++17 compiler and make. FFTW is needed for anything with Fourier transforms. MPI, OpenMP, GSL, Lua, HDF5,
-CGAL and Python are optional and only needed by the modules that use them. Set paths and compilers in
+CGAL and Python are optional and only needed by the modules that use them (CGAL now only for the DTFE, which is being
+moved to FML's own triangulation). The tests also run in single precision (`SINGLE_PRECISION_FFTW`) every night. Set paths and compilers in
 `FML/Makefile.local`; the defaults are in [Makefile.config](FML/Makefile.config).
 
 ```sh

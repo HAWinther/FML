@@ -1,5 +1,5 @@
 \chapter{Perturbation theory}\label{ch:perturbation-theory}
-\chapterstatus{written}{2026-11-14}
+\chapterstatus{written}{2026-11-19}
 
 On mildly nonlinear scales the clustering of matter and tracers is described by perturbation theory. \fml{} has
 one-loop standard perturbation theory (SPT) of the matter, with a fast FFTLog algorithm and a direct quadrature
@@ -69,7 +69,9 @@ screening sources $\gamma_2$, $\gamma_3$ of the scalar field equation: GR on any
 $f(R)$ with $n=1$ (\code{mg_hu_sawicki}), normal-branch DGP (\code{mg_ndgp}) or any \cls{MGKernelModel}. The kernels are
 evolved with RK4 in $\ln a$ from $a=10^{-5}$, so $P_0=P_L/F_1^2$ uses the model's own linear growth. It provides $k_*$ of
 the halo-model reaction (\cref{sec:hm-react}). For $f(R)$ the third-order screening term $\gamma_3$ is the correct one;
-ReACT's is $1/3$ of it.
+ReACT's is $1/3$ of it. A model can give the clustering density as a function of time (\code{Omega_source_of_a}, in place of
+$\Omega_{m,0}a^{-3}/E^2$) and an extra friction $\Gamma(a)$ (\code{friction}: $2+\dd\ln E/\dd\ln a\to2+\dd\ln E/\dd\ln a+\Gamma$),
+as for the coupled dark matter of coupled quintessence and the Fading Dark Sector.
 
 \begin{validation}[Validation: modified-gravity loops]
 EdS reproduces \file{OneLoop.h} ($6\times10^{-4}$ of the loop); $|f_{R0}|=10^{-10}$ and $\Om_{rc}=10^{-8}$ give GR; the

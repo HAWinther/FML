@@ -1,5 +1,5 @@
 \chapter{Introduction}\label{ch:introduction}
-\chapterstatus{written}{2026-11-18}
+\chapterstatus{written}{2026-11-19}
 
 \section{What FML is}
 
@@ -76,7 +76,9 @@ mostly a matter of writing the method itself.
 \paragraph*{Lightweight.} A C++17 compiler and make are all that is required. FFTW (Fourier transforms) and GSL
 (splines, ODEs) are used by most of the library; MPI, OpenMP, Lua, HDF5, CGAL and Python are optional and only needed
 by the modules that use them. There are no large dependencies: the multigrid solvers, halo and void finders, KD-tree,
-FFTLog, samplers, the Einstein--Boltzmann solver and so on are part of the library.
+FFTLog, samplers, the Einstein--Boltzmann solver and so on are part of the library. This now includes the Delaunay
+triangulation (\cref{sec:voids-native}): ZOBOV and the ORIGAMI halos no longer need CGAL, and once the DTFE is ported
+CGAL will only be needed for comparisons.
 
 \paragraph*{Any cosmological model, and one implementation of each physical quantity.} The library is not written for
 $\Lambda$CDM alone. The expansion history, the quasi-static limits of modified-gravity theories, the growth factors,
@@ -100,14 +102,14 @@ structure, SI or Mpc units in the Boltzmann code; \cref{ch:conventions} lists th
 as important as adding to it. Every module has regression tests: analytic limits, manufactured solutions,
 conservation laws and comparisons with external codes such as CLASS, CAMB, hi\_class, CCL, FAST-PT, velocileptors,
 ReACT, ROCKSTAR, FINUFFT or MG-PICOLA. They run in continuous integration on every change (with 1 and 4 MPI tasks) and
-with longer accuracy checks every night. The validation boxes in this book summarise them; the scope statements of the
+with longer accuracy checks, and the whole suite in single precision, every night. The validation boxes in this book summarise them; the scope statements of the
 module guides say what a passed test does and does not establish.
 
 \section{Building}
 
 \fml{} needs a C++17 compiler. The optional dependencies are switched on with make variables: \code{USE_MPI},
 \code{USE_OMP}, \code{USE_FFTW} (FFTW3, with its MPI build for MPI runs), \code{USE_FFTW_THREADS}, \code{USE_GSL},
-\code{USE_LUA} (parameter files), \code{USE_CGAL} (triangulations), \code{USE_HDF5} and \code{USE_PYTHON}. Machine
+\code{USE_LUA} (parameter files), \code{USE_CGAL} (CGAL's triangulation and the DTFE), \code{USE_HDF5} and \code{USE_PYTHON}. Machine
 specific paths go in \file{FML/Makefile.local}; the shared rules are in \file{FML/Makefile.config}.
 \begin{paramfile}[Makefile.local]
 CXX_SERIAL   = c++

@@ -17,7 +17,7 @@
 </figure>
 
 <p><tt>FML/SnapshotAnalyzer</tt> is a standalone post-processing executable for Gadget binary and HDF5 snapshots. It reads positions, velocities, IDs, types and masses, redistributes particles to their owning MPI slabs, and runs the library's analysis kernels without depending on SimulationCode. The default <tt>files_per_task</tt> reader reads each file once across the tasks; <tt>all_tasks</tt> is also available.</p>
-<p>Lua and FFTW are required. MPI and OpenMP use the normal FML build configuration. HDF5 snapshots/catalogues need <tt>USE_HDF5=true</tt>; ZOBOV and DTFE additionally need CGAL. See <a href="https://github.com/HAWinther/FML/blob/master/FML/SnapshotAnalyzer/README.md" style="display: inline">the complete build and parameter guide</a>.</p><div style="text-align: center"><div style="max-width:800px;display:inline-block;text-align:left;width:100%"><pre class="prettyprint">make -C FML/SnapshotAnalyzer
+<p>Lua and FFTW are required. MPI and OpenMP use the normal FML build configuration. HDF5 snapshots/catalogues need <tt>USE_HDF5=true</tt>; the DTFE additionally needs CGAL; ZOBOV runs on FML's own tessellation (<tt>zobov_tessellation = "native"</tt>, or <tt>"cgal"</tt> in a CGAL build). See <a href="https://github.com/HAWinther/FML/blob/master/FML/SnapshotAnalyzer/README.md" style="display: inline">the complete build and parameter guide</a>.</p><div style="text-align: center"><div style="max-width:800px;display:inline-block;text-align:left;width:100%"><pre class="prettyprint">make -C FML/SnapshotAnalyzer
 mpirun -np 4 FML/SnapshotAnalyzer/snapshot_analyzer analysis.lua</pre></div></div>
 
 <header class="entry-header text-center">

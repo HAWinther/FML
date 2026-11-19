@@ -140,6 +140,9 @@ The whole chain (forward model, gradients and sampler) is tested statistically w
 These tests check that the sampler recovers the posterior of the model that generated the data; they do not test the forward model against simulations. The separate framework now supports joint field/bias/noise inference and MPI linear/1LPT/2LPT models (see below). Dealiasing and tests against independent N-body mocks remain separate requirements for scientific use.
 </p>
 
+<p>
+<b>Joint sampling of the field, amplitude and bias.</b> For the Eulerian model the initial field, the amplitude and the bias parameters are sampled jointly in a series of studies with frozen plans, reproducible random streams and exact restarts (<a href="https://github.com/HAWinther/FML/blob/master/FML/FieldLevel/docs/VALIDATION.md" style="display: inline">VALIDATION.md</a>). Plain joint, blocked and amplitude/field-interweaving chains fail the frozen mixing gate (the failures are kept), and a geometry audit traces this to barriers along profiled paths. Replica exchange with a prior bridge (tempering down to the prior with a refresh) passes the connectivity gate, and four cold chains of 2048 retained draws with eleven replicas pass the posterior gate on all eleven coordinates. The posterior is stable to numerical refinement, two independent fixed-truth mocks are recovered, and the prior sensitivity is bounded. The calibration runner and prior-predictive truth controls are ready; the full calibration campaign, production MPI replicas and real catalogues are next.
+</p>
 <header class="entry-header text-center">
   <h1 class="entry-title" id="Framework">Periodic field-level inference: serial and MPI</h1>
 </header>

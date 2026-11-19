@@ -140,6 +140,21 @@ For $f(R)$, DGP, Symmetron, Dilaton and <tt>mbeta</tt>, screening can be linear-
 Dark scattering changes CDM velocities while leaving the wCDM background unchanged. With <tt>particle_baryons = true</tt>, CDM receives the full drag and baryons none, with species-specific kick, drift and growth factors. With one CDM+baryon particle fluid, the drag is weighted by the CDM fraction. Coupled quintessence also changes CDM mass and adds a CDM-sourced fifth force; the matching cosmology and gravity models are required. The species paths support Quinn/FastPM and their COLA frames; do not assume BullFrog or massive-neutrino-particle compatibility.
 </p>
 <p>
+<b>Fading Dark Sector vs LCDM.</b> <tt>scripts/fds_vs_lcdm_simulations.py</tt> sets up paired full N-body runs of the Fading Dark Sector and of LCDM with the same $A_s$ and the same matter-radiation equality (the LCDM $\Omega_{\rm cdm}$ is computed from the solver's FDS background), the same phases (fixed amplitude, paired), in a large and a small box. It writes a <tt>run_all.sh</tt> that first computes the Einstein-Boltzmann solver's predictions (<tt>nonlinear = react</tt> for the FDS, <tt>hmcode2020</tt> for LCDM) and then runs the simulations, and it plots $P_{\rm FDS}/P_{\rm LCDM}$ and the ratio of the nonlinear boosts against the predictions:
+</p>
+<div style="text-align: center">
+  <div style="width:700px;display: inline-block;text-align: left">
+    <pre class="prettyprint">
+python3 scripts/fds_vs_lcdm_simulations.py setup runs/fds   # --preset production|test
+cd runs/fds &amp;&amp; MPIRUN="mpirun -np 64" ./run_all.sh
+python3 ../../scripts/fds_vs_lcdm_simulations.py analyse .
+</pre>
+</div>
+</div>
+<p>
+A $64^3$ test already follows the <a href="halomodel.php#Reaction" style="display: inline">halo-model reaction</a> to about 0.3% in the boost ratio for $k\leq0.7\,h/$Mpc.
+</p>
+<p>
 IDE differs from these momentum-exchange models: particle masses respond to the local expansion as well as the background. Its volume estimate is smoothed on the particle grid, so the mass response and growth depend on resolution; limiting densities in deep voids are part of the implementation. Internal-solver initial conditions include the corresponding linear perturbations. Smooth dark energy at rest is an N-body-scale approximation and can differ from the full solver on the largest scales.
 </p><p><a href="https://github.com/HAWinther/FML/blob/master/FML/SimulationCode/MODELS.md" style="display: inline">Model equations and restrictions</a> and <a href="https://github.com/HAWinther/FML/blob/master/FML/SimulationCode/SPECIES.md" style="display: inline">species validation</a> give the supported combinations and measured limits.</p>
 

@@ -1,5 +1,5 @@
 \chapter{Field-level inference}\label{ch:field-level}
-\chapterstatus{written}{2026-11-14}
+\chapterstatus{written}{2026-11-19}
 
 Field-level inference samples the joint posterior of the initial density field and the parameters given a tracer field, without
 compressing the data into summary statistics \cite{JascheWandelt2013,Stadler2024}. \fml{} has a periodic framework (forward models,
@@ -96,4 +96,13 @@ the 2LPT+bias+RSD prediction equals $(b+f\mu^2)\delta_L$ in the linear regime to
 the posterior quantiles are uniform (KS $p=0.57$--0.85). The distributed backends agree with the serial ones for any decomposition; the survey layer is validated with
 dispersed 2LPT chains against exact active-mode and masked linear-Gaussian references (\file{FieldLevel/validation/survey}). These checks establish the numerics and sampler, not
 nonlinear accuracy against simulations or a production survey analysis.
+
+Joint sampling of the Eulerian initial field, the amplitude and the bias (\file{FieldLevel/docs/VALIDATION.md}, each study with a frozen plan,
+reproducible random streams and exact restarts): plain joint, blocked and amplitude/field-interweaving chains fail the frozen mixing gate (kept as
+recorded failures), which a geometry audit traces to barriers along profiled paths. Replica exchange with a prior bridge (tempering to $\beta=0$ with a
+prior refresh) passes the connectivity gate, and four cold chains of 2048 retained draws with eleven replicas pass the posterior gate on all eleven
+coordinates; the posterior is stable to numerical refinement ($1.6\times10^{-7}$ posterior standard deviations), two independent fixed-truth mocks
+are recovered (descriptive, not calibration), and the prior sensitivity is bounded ($-0.23$ to $+0.41$ standard deviations in the amplitude).
+Prior-predictive truth controls and a calibration runner (likelihood-$Q$ diagnostics, pause and resume) are in place; the eight-dataset calibration
+pilot, production MPI replicas and real-catalogue inference are still open.
 \end{validation}

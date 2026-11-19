@@ -17,7 +17,7 @@
 <hr/>  
 
 <p>
-Create a <a href="tesselation.php" style="display: inline">Delaunay triangulation</a> and assign a quantity (for example the particle density) to each vertex. From this locate the local minima, i.e. vertices where all of the neighbors have a larger value of the quantity. Every particle is then linked to the neighbor with the smallest quantity (steepest descent) and a watershed basin is the collection of particles that end up at the same local minimum (ties are broken using the positions so the result does not depend on the number of tasks). We can also go further and continue filling "water" into the basins until they overflow into a neighboring basin and thereby get larger and larger basins: for this we can return the links between the basins (the lowest value of the quantity at which two basins connect) and the zone merging is done in the <a href="voidfinders.php" style="display: inline">ZOBOV void finder</a>. This can be used as a void and halo finder (which also gives us sub-voids and sub-halos). Everything is in the namespace FML::TRIANGULATION (Triangulation/PeriodicDelaunay.h and Triangulation/WatershedBinning.h).
+Create a <a href="tesselation.php" style="display: inline">Delaunay triangulation</a> (FML's own <tt>PeriodicVoronoiTessellation</tt> or CGAL's <tt>MPIPeriodicDelaunay</tt>: the algorithm, <tt>WatershedOnGraph</tt> in Triangulation/Watershed.h, works on the neighbour graph of either and gives the same basins) and assign a quantity (for example the particle density) to each vertex. From this locate the local minima, i.e. vertices where all of the neighbors have a larger value of the quantity. Every particle is then linked to the neighbor with the smallest quantity (steepest descent) and a watershed basin is the collection of particles that end up at the same local minimum (ties are broken using the positions so the result does not depend on the number of tasks). We can also go further and continue filling "water" into the basins until they overflow into a neighboring basin and thereby get larger and larger basins: for this we can return the links between the basins (the lowest value of the quantity at which two basins connect) and the zone merging is done in the <a href="voidfinders.php" style="display: inline">ZOBOV void finder</a>. This can be used as a void and halo finder (which also gives us sub-voids and sub-halos). Everything is in the namespace FML::TRIANGULATION (Triangulation/PeriodicDelaunay.h and Triangulation/WatershedBinning.h).
 </p>
 <figure class="science-figure">
 <img src="images/watershed-basins.svg" alt="Schematic density landscape with watershed minima and ridges separating catchment basins">
@@ -56,6 +56,16 @@ template&lt;class T, class U&gt;
       double random_fraction = 0.5,
       bool do_density_maximum = false,
       std::vector&lt;WatershedLink&gt; * links = nullptr);
+
+// The same on FML's own tessellation (Triangulation/VoronoiTessellation.h, no CGAL needed;
+// no buffer or guard points, particles on any task)
+template&lt;class T, class U, int NDIM&gt;
+  void WatershedGeneral(PeriodicVoronoiTessellation&lt;NDIM&gt; &amp; D, T *p, size_t NumPart,
+      std::vector&lt;double&gt; &amp; quantity, std::vector&lt;U&gt; &amp; watershed_groups,
+      std::vector&lt;WatershedLink&gt; * links = nullptr);
+template&lt;class T, class U&gt;
+  void WatershedDensityNative(T *p, size_t NumPart, std::vector&lt;U&gt; &amp; watershed_groups,
+      bool do_density_maximum = false, std::vector&lt;WatershedLink&gt; * links = nullptr);
 
 // A link between two basins (index into watershed_groups) and the
 // lowest value of the quantity at which they connect

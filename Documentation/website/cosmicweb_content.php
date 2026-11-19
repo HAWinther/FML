@@ -170,7 +170,7 @@ void ORIGAMI(
 <hr/>
 
 <p>
-The halo grouping step of ORIGAMI. The halo particles (morphology 3) are linked on the <a href="tesselation.php" style="display: inline">Delaunay tessellation</a> of all the particles (this requires CGAL):
+The halo grouping step of ORIGAMI. The halo particles (morphology 3) are linked on the <a href="tesselation.php" style="display: inline">Delaunay tessellation</a> of all the particles: FML's own tessellation (<tt>OrigamiHaloOptions::tessellation = OrigamiTessellation::Native</tt>, the default without CGAL; no buffer, particles on any task) or CGAL's (the default in CGAL builds); both give the same halos:
 <ol>
 <li>The density of every particle is mass / Voronoi volume in units of the mean (VTFE).</li>
 <li>Halo particles above core_density_threshold that are Delaunay neighbors form the cores.</li>
