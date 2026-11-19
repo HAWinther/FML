@@ -39,6 +39,9 @@ Triangulation/tests/test_*
 Triangulation/tests/compare_cgal
 Triangulation/tests/compare_library
 Emulator/example/ee2
+Emulator/EMantis/example/emantis
+Emulator/EMantis/tests/test_*
+!Emulator/EMantis/tests/test_*.cpp
 FFTLog/example/fftlog
 FFTWGrid/example/fftwgrid
 FileUtils/example/fileutils
