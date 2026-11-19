@@ -30,8 +30,17 @@ FML_MODULES := $(COSMO_MODULES) $(COSMO_FML_MODULES) MCMC Global CosmologyFittin
 MCMC_OBJS   := Posterior.o Sampler.o Minimizer.o Parallel.o Global.o
 FIT_OBJS    := Theory.o Likelihoods.o PlanckLikelihoods.o DESIFullShape.o SampledParameterMap.o
 
-# (this folder's Main.o by its full path: the vpath of Cosmology.mk would otherwise find ./cmb's Main.o)
-mcmc: $(CURDIR)/Main.o $(FIT_OBJS) $(MCMC_OBJS) $(COSMO_OBJS)
+EXTRA_CLEAN := build
+
+# The objects go to build/: this folder is also a source folder of tests/, and objects here would be found through
+# VPATH (and reused with the wrong flags, e.g. MPI) there. Main.cpp is this folder's (found before the solver's ./cmb)
+OBJ := $(CURDIR)/build
+$(OBJ)/%.o: %.cpp
+	@mkdir -p $(OBJ)
+	$(CC) $(DEPFLAGS) -c -o $@ $< $(OPTIONS) $(INC)
+-include $(wildcard $(OBJ)/*.d)
+
+mcmc: $(addprefix $(OBJ)/,Main.o $(FIT_OBJS) $(MCMC_OBJS) $(COSMO_OBJS))
 	$(LINK_EXE)
 
 .PHONY: test

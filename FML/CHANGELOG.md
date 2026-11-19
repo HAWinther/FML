@@ -5,6 +5,14 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Build: no objects reused from other folders through VPATH
+- The solver's `./cmb` and CosmologyFitting's `./mcmc` put their objects in `build/`: both folders are also source
+  folders (FML_MODULES) of other programs, whose make found and reused the objects there through VPATH, with other
+  flags (MPI) or headers that had changed since (make does not see those dependencies). This crashed `./mcmc` with
+  "free(): invalid pointer" when ./cmb had been built in the solver's folder before a pull. `LINK_EXE` now stops with
+  an error naming such objects; SnapshotAnalyzer finds only PencilGrid.cpp in PencilDomain. After pulling, run
+  `make clean` once in Cosmology/EinsteinBoltzmannSolver and CosmologyFitting.
+
 ### MCMC: faster mixing of the slow parameters with many fast ones
 - `Sampler`: the slow update now draws only the slow coordinates (L z with z_fast = 0; the fast parameters follow
   their regression on the slow ones), as CosmoMC/Cobaya, so its step size is set by the number of slow parameters

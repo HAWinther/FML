@@ -17,8 +17,8 @@ include ../Makefile.config
 
 ifeq ($(USE_PENCIL_GRID),true)
 OPTIONS     += -DUSE_PENCIL_GRID -DFML_ANALYSIS_PENCIL_GRID
-FML_MODULES += PencilDomain
-VPATH       += $(FML_ROOT)/PencilDomain
+# (only the source: objects of the PencilDomain example there must not be found through VPATH)
+vpath PencilGrid.cpp $(FML_ROOT)/PencilDomain
 PENCIL_OBJS := PencilGrid.o
 endif
 

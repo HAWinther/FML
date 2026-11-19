@@ -20,15 +20,23 @@ include ../../Makefile.config
 include Cosmology.mk
 
 FML_MODULES := $(COSMO_MODULES) $(COSMO_FML_MODULES)
-EXTRA_CLEAN := milestones benchmark
+EXTRA_CLEAN := milestones benchmark build
 
-cmb: Main.o $(COSMO_OBJS)
+# The objects go to build/: this folder is also a source folder of the solver, and objects here would be found
+# through VPATH (and reused with the wrong flags) by the other programs that link the solver (CosmologyFitting, ...)
+OBJ := $(CURDIR)/build
+$(OBJ)/%.o: %.cpp
+	@mkdir -p $(OBJ)
+	$(CC) $(DEPFLAGS) -c -o $@ $< $(OPTIONS) $(INC)
+-include $(wildcard $(OBJ)/*.d)
+
+cmb: $(addprefix $(OBJ)/,Main.o $(COSMO_OBJS))
 	$(LINK_EXE)
 
-milestones: Milestones.o $(COSMO_OBJS)
+milestones: $(addprefix $(OBJ)/,Milestones.o $(COSMO_OBJS))
 	$(LINK_EXE)
 
-benchmark: Benchmark.o $(COSMO_OBJS)
+benchmark: $(addprefix $(OBJ)/,Benchmark.o $(COSMO_OBJS))
 	$(LINK_EXE)
 
 .PHONY: test
