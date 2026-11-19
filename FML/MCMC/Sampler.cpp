@@ -127,12 +127,19 @@ namespace FML::MCMC {
         std::normal_distribution<double> N(0.0, 1.0);
         std::uniform_real_distribution<double> U(0.0, 1.0);
         std::vector<double> z(d, 0.0), y(d);
-        for (size_t i = fast_only ? n_slow : 0; i < d; i++)
+        // With fast parameters (and fast updates) the slow step draws only the slow coordinates: y - x = L z with
+        // z_fast = 0 moves the slow parameters with their covariance and the fast ones along their regression on
+        // them (L is lower triangular, slow first), as CosmoMC/Cobaya. Drawing z_fast as well would only add a
+        // random fast move, which the fast updates do anyway, and force a slow step size of ~2.38/sqrt(d)
+        // instead of ~2.38/sqrt(n_slow)
+        const bool slow_only = !fast_only && n_slow < d && opt.oversample_fast > 0;
+        const size_t z_begin = fast_only ? n_slow : 0, z_end = slow_only ? n_slow : d;
+        for (size_t i = z_begin; i < z_end; i++)
             z[i] = N(c.rng);
         const double sq = std::sqrt(fast_only ? c.scale_fast : c.scale);
         for (size_t i = 0; i < d; i++) {
             double v = 0.0;
-            for (size_t j = fast_only ? n_slow : 0; j <= i; j++)
+            for (size_t j = z_begin; j <= std::min(i, z_end - 1); j++)
                 v += c.L[i][j] * z[j];
             y[i] = c.x[i] + sq * v;
         }

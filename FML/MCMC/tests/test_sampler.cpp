@@ -326,6 +326,43 @@ int main() {
         check(threw, "fast parameters must come last");
     }
 
+    std::cout << "Fast/slow sampling with many fast parameters\n";
+    {
+        // Two slow parameters with correlation 0.9 (like tau and logA) and 24 fast nuisance parameters, each
+        // correlated with the first slow one (x_i = 0.3 a + e_i): the slow step must move the slow parameters as
+        // far as a 2D problem would (it proposes in the slow coordinates only, the fast ones follow their
+        // conditional mean), so the effective sample size of a and b must not degrade with the number of fast ones
+        const int nf = 24;
+        const double rho = 0.9;
+        LikelihoodFunction like = [&](const std::vector<double> & x) {
+            LikelihoodResult r;
+            const double a = x[0], b = x[1];
+            r.loglike = -0.5 * (a * a - 2.0 * rho * a * b + b * b) / (1.0 - rho * rho);
+            for (int i = 0; i < nf; i++)
+                r.loglike -= 0.5 * std::pow(x[2 + i] - 0.3 * a, 2);
+            return r;
+        };
+        std::vector<SampledParameter> ps = {P("a", 0.5, -10, 10, 0.3), P("b", 0.5, -10, 10, 0.3)};
+        for (int i = 0; i < nf; i++) {
+            auto q = P("f" + std::to_string(i), 0.0, -10, 10, 0.3);
+            q.fast = true;
+            ps.push_back(q);
+        }
+        SamplerOptions o = quiet(4, 3000, 6000);
+        o.threads = 1;
+        o.oversample_fast = 4;
+        Sampler mc(ps, {}, {}, like, o);
+        mc.run();
+        const auto m = mc.mean(), sd = mc.stddev();
+        const auto da = mc.diagnostics(0), db = mc.diagnostics(1), df = mc.diagnostics(2);
+        std::cout << "  acceptance " << mc.acceptance() << ", ESS (bulk) of a " << da.ess_bulk << ", b "
+                  << db.ess_bulk << ", f0 " << df.ess_bulk << " of 24000 steps\n";
+        check_close(m[0], 0.0, 0.1, "mean of a");
+        check_rel(sd[0], 1.0, 0.1, "sigma of a");
+        check_rel(sd[2], std::sqrt(1.09), 0.05, "sigma of a fast parameter");
+        check(da.ess_bulk > 1500 && db.ess_bulk > 1500, "slow parameters mix as in 2D (ESS > 1500 of 24000 steps; ~280 if the slow step also draws the fast coordinates)");
+    }
+
     std::cout << "Checkpoint and resume\n";
     {
         const std::string dir = "test_output_mcmc_ckpt";

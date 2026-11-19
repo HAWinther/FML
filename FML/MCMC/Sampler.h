@@ -20,10 +20,12 @@
 //     chain means; 1 chain: infinite); the run stops when R-1 < Rminus1_stop and every chain has min_samples
 //     samples (converged() is then true), or after max_steps steps per chain (with a warning).
 //   * Fast/slow parameters (Lewis 2013, as CosmoMC): parameters marked fast (likelihood nuisance parameters, cheap
-//     to vary because the theory is cached) come last. Each step is one update of all parameters followed by
-//     oversample_fast updates of the fast ones only, with the proposal L z restricted to z_slow = 0 (L is the
-//     lower-triangular Cholesky factor of the proposal covariance, so these move only the fast parameters with
-//     their conditional covariance given the slow ones); the fast updates have their own scale, tuned to 25%
+//     to vary because the theory is cached) come last. Each step is one slow update followed by oversample_fast
+//     updates of the fast ones only. The slow update draws only the slow coordinates (L z with z_fast = 0, L the
+//     lower-triangular Cholesky factor of the proposal covariance: the slow parameters move with their covariance
+//     and the fast ones along their regression on them), so its step size is set by the number of slow
+//     parameters, not by all of them; the fast updates use z_slow = 0 (the fast parameters with their
+//     conditional covariance given the slow ones) and have their own scale. Both scales are tuned to 25%
 //     acceptance in the burn-in. One row per step is stored.
 //   * Checkpoints (output_root set): after every round each chain writes <root>_<i>.txt (its samples so far) and
 //     <root>_<i>.checkpoint (its full state: position, proposal, scales, counters, burn-in history, random

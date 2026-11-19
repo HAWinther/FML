@@ -5,6 +5,14 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### MCMC: faster mixing of the slow parameters with many fast ones
+- `Sampler`: the slow update now draws only the slow coordinates (L z with z_fast = 0; the fast parameters follow
+  their regression on the slow ones), as CosmoMC/Cobaya, so its step size is set by the number of slow parameters
+  instead of all of them. With CamSpec + DESI full shape (6 slow, 27 fast) the effective sample size of the
+  cosmological parameters is 7-9 times larger (a Gaussian with the posterior covariance of those chains: tau ESS
+  830 against 90 in 16000 steps); `test_sampler` checks it (2 slow + 24 fast: ESS 2600 against 280). Runs without
+  fast parameters are unchanged. Restart, rather than resume, runs made before this change.
+
 ### Emulator/EMantis: the e-MANTIS emulators in C++
 - `Emulator/EMantis/EMantis.h` (header only, `FML::EMULATOR::EMANTIS`): a port of the prediction part of e-MANTIS
   1.4.0 (I. Saez-Casares et al., GPL-3.0-or-later; arXiv:2303.08899, arXiv:2410.05226): `NonLinearMGBoostEmulator`

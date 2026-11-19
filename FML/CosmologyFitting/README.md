@@ -52,6 +52,10 @@ How the sampler works:
 - Fast/slow (Lewis 2013, as CosmoMC): likelihood nuisance parameters are fast. The theory of the last two slow
   points is cached, and each step is followed by `mcmc_oversample_fast` updates that move only the fast parameters
   (the proposal L z with z_slow = 0, L the Cholesky factor, i.e. their conditional covariance), with their own scale.
+  The slow update draws only the slow coordinates (the fast ones follow their regression on the slow ones), so its
+  step size is set by the number of slow parameters: with the 27 nuisance parameters of CamSpec + DESI full shape
+  the cosmological parameters mix 7-9 times faster than when the slow step also drew the fast coordinates. Restart
+  (do not resume) runs made before this change: their frozen scale was tuned for the old proposal.
 - Checkpoints: after every round the chains and the full state of each chain (position, proposal, scales,
   counters, burn-in history, random generator) are written; a resumed run continues exactly as an uninterrupted one.
 

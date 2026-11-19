@@ -59,9 +59,12 @@ the processes and every process gets all results.
   which also catches unconverged combinations of parameters. One chain has no R−1 and always runs to `max_steps`.
 - A point where the likelihood throws or is not finite, or that is outside the prior, is rejected.
 - Fast/slow (Lewis 2013, as CosmoMC): fast parameters (cheap to vary, e.g. likelihood nuisance parameters when the
-  likelihood caches the rest) come last. Each step is followed by `oversample_fast` updates that move only the fast
-  parameters (the proposal L z with z_slow = 0, L the Cholesky factor, i.e. their conditional covariance), with
-  their own scale.
+  likelihood caches the rest) come last. Each step is a slow update followed by `oversample_fast` updates that move
+  only the fast parameters (the proposal L z with z_slow = 0, L the Cholesky factor, i.e. their conditional
+  covariance), with their own scale. The slow update draws only the slow coordinates (z_fast = 0: the fast
+  parameters follow their regression on the slow ones), so its step size is set by the number of slow parameters.
+  With 6 slow and 27 fast parameters (a CMB + DESI full-shape posterior) this gives 7-9 times the effective sample
+  size of drawing all 33 coordinates in the slow step (`test_sampler`: 2 slow + 24 fast, ESS 2600 against 280).
 - Checkpoints: after every round the chains and the full state of each chain (position, proposal, scales,
   counters, burn-in history, random generator) are written; with `resume = true` a run continues exactly as an
   uninterrupted one (with any number of MPI processes).
