@@ -73,6 +73,9 @@ add a model is in [DEVELOPING.md](DEVELOPING.md#adding-a-model).
   CoupledQuintessence with lambda = c, beta = c' (the same background, IC and N-body code): the CDM feels G (1 + 2
   c'^2) from the CDM and the drag -c' dphi/dlna. The paper's best fit (CMB + DESI DR1 full shape + DR2 BAO +
   DES-Dovekie) is c = -0.85, c' = 0.05 (w0 ≈ -0.91, 2 c'^2 = 0.5%). Use it with `gravity_model = FadingDarkSector`.
+  `scripts/fds_vs_lcdm_simulations.py` sets up paired FDS and LCDM N-body runs (same A_s and matter-radiation
+  equality, same phases) and compares P_FDS/P_LCDM and the nonlinear boost with the solver's `nonlinear = react`
+  (a 64^3 test, `--preset test`, already agrees with it to ~0.3% in the boost ratio for k <= 0.7 h/Mpc).
 
 * IDE: interacting dark energy (Valiviita, Majerotto & Maartens 2008, arXiv:0804.0232), the internal solver's `ide`: a dark-energy
   fluid with a constant `cosmology_ide_w` (!= -1) and the energy exchange Q = xi H rho_DE along the dark-matter

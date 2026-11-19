@@ -32,6 +32,8 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
   (`SphericalCollapseModel::frictionofx`) and the one-loop kernels (`MGKernelModel::friction`, `Omega_source_of_a`),
   the target's Omega_cb(x) and linear growth for the real halos (`HaloModelReaction::Cosmology::OmegaCBofx`, `muofx`,
   `frictionofx`, `target_linear`). `tests/test_react_fds`: LCDM limit, collapse-model growth = Boltzmann growth to 2e-3.
+- `SimulationCode/scripts/fds_vs_lcdm_simulations.py`: FDS vs LCDM N-body runs (paired phases, same A_s and z_eq) and
+  their comparison with `nonlinear = react` (`setup`, `run_all.sh`, `analyse`).
 - `tests/check_fds_kernels` (with `python/fds_kernels_dchi2.py`): the one-loop P_cb and P_thetatheta of the Fading Dark
   Sector with exact-time two-fluid kernels against EdS kernels; the difference changes the DESI DR1 full-shape chi^2 by
   0.01 (0.001 after refitting the linear nuisance parameters), so EdS kernels suffice for the FDS fits.
