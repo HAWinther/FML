@@ -72,7 +72,7 @@ void output_pofk_for_every_step(const NBodySimulation<NDIM, T> & sim) {
         auto pofk_cb = [&](double k) { return sim.linear_pofk_cb(k, 1.0 / (1.0 + redshift)); };
 
         // The nonlinear prediction P_NL / P_linear (if there is one for the model): the EuclidEmulator2 boost for LCDM
-        // and w0waCDM, with the fitted boost over GR for f(R) (n = 1)
+        // and w0waCDM, with the e-MANTIS boost over GR for f(R) (n = 1)
         const auto non_linear_boost_of_k = sim.nonlinear_over_linear_prediction(redshift);
 
         std::string filename =
@@ -146,7 +146,7 @@ void output_pofk_for_every_step(const NBodySimulation<NDIM, T> & sim) {
             params.output.path("pofk_" + params.simulation.name + "_total_z" + redshift_to_string(redshift) + ".txt");
 
         // The nonlinear prediction P_NL / P_linear (if there is one for the model): the EuclidEmulator2 boost for LCDM
-        // and w0waCDM, with the fitted boost over GR for f(R) (n = 1)
+        // and w0waCDM, with the e-MANTIS boost over GR for f(R) (n = 1)
         const auto non_linear_boost_of_k = sim.nonlinear_over_linear_prediction(redshift);
 
         std::ofstream fp(filename.c_str());
@@ -1207,7 +1207,7 @@ void write_power_spectra(NBodySimulation<NDIM, T> & sim,
     if (FML::ThisTask == 0) {
 
         // The nonlinear prediction P_NL / P_linear (if there is one for the model): the EuclidEmulator2 boost for LCDM
-        // and w0waCDM, with the fitted boost over GR for f(R) (n = 1)
+        // and w0waCDM, with the e-MANTIS boost over GR for f(R) (n = 1)
         const auto non_linear_boost_of_k = sim.nonlinear_over_linear_prediction(redshift);
 
         std::string filename = snapshot_folder + "/pofk_z" + redshiftstring + ".txt";

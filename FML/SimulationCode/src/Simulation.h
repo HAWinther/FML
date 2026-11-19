@@ -292,15 +292,18 @@ class NBodySimulation {
         return 0.0;
     }
     /// P_NL(k) / P_linear(k) of the nonlinear predictions in the P(k) outputs at a redshift (k in h/Mpc): the
-    /// EuclidEmulator2 boost of the cosmology (LCDM, w0waCDM) and, for a gravity model with a fitted nonlinear boost
-    /// over GR (f(R) with n = 1), also that boost times the ratio of the linear P(k) of GR and of the model
-    /// ((D_GR(k, a) / D_GR(k, aini))^2 / (D(k, a) / D(k, aini))^2), i.e. P_NL = P_lin,GR B_EE2 B_model. Empty (no
-    /// prediction: the outputs repeat linear theory) without the EuclidEmulator2 boost
+    /// EuclidEmulator2 boost of the cosmology (LCDM, w0waCDM) and, for a gravity model with a nonlinear boost over GR
+    /// (f(R) with n = 1: the e-MANTIS emulator), also that boost times the ratio of the linear P(k) of GR and of the
+    /// model ((D_GR(k, a) / D_GR(k, aini))^2 / (D(k, a) / D(k, aini))^2), i.e. P_NL = P_lin,GR B_EE2 B_model. Empty
+    /// (no prediction: the outputs repeat linear theory) without the EuclidEmulator2 boost, or where the model's boost
+    /// is not available
     std::function<double(double)> nonlinear_over_linear_prediction(double redshift) const {
         auto ee2 = std::make_shared<Spline>(cosmo->get_nonlinear_matter_power_spectrum_boost(redshift));
         if (not *ee2)
             return {};
         auto boost = grav->nonlinear_boost_over_GR(redshift);
+        if (grav_gr and not boost)
+            return {}; // a model with a boost over GR, but not at this redshift (e-MANTIS f(R): z > 3)
         if (not boost or not grav_gr)
             return [ee2](double k) { return (*ee2)(k); };
         const double a = 1.0 / (1.0 + redshift), aini = 1.0 / (1.0 + params.ic.initial_redshift);

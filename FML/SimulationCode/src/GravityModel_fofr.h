@@ -9,8 +9,13 @@
 #include <FML/ParameterMap/ParameterMap.h>
 #include <FML/Spline/Spline.h>
 
+#include <algorithm>
+#include <cmath>
+#include <memory>
+#include <string>
+
 #include <FML/Cosmology/Perturbations/QuasiStaticGravity_HuSawicky.h>
-#include <FML/Emulator/FofrFittingFunction.h>
+#include <FML/Emulator/EMantis/EMantis.h>
 #include <FML/MultigridSolver/FofrSolver.h>
 
 /// Hu-Sawicky f(R): mu(k, a), f_R(a) and the scalaron mass from the shared quasi-static theory
@@ -23,6 +28,11 @@ class GravityModelFofR final : public GravityModelScreened<NDIM> {
     double nfofr{1.0};
 
     std::string multigrid_method{"sqrt"}; // The field the multigrid solver solves for (sqrt or log)
+
+    // The nonlinear boost P_f(R)/P_GR: the e-MANTIS emulator (n = 1 only; null if not available) and its parameters
+    std::shared_ptr<const FML::EMULATOR::EMANTIS::NonLinearMGBoostEmulator> emantis;
+    FML::EMULATOR::EMANTIS::Parameters emantis_params;
+    std::string emantis_status; // why there is no boost, or what was clamped (for info_model)
 
   public:
     template <int N>
@@ -51,6 +61,57 @@ class GravityModelFofR final : public GravityModelScreened<NDIM> {
         this->quasi_static =
             std::make_shared<const QuasiStaticGravity_HuSawicky>(this->cosmo->background(), fofr0, nfofr);
         GravityModelScreened<NDIM>::init();
+        init_emantis();
+    }
+
+    /// The e-MANTIS f(R) boost (Saez-Casares et al., arXiv:2303.08899): Hu-Sawicky n = 1, 1e-7 <= |fR0| <= 1e-4.
+    /// The cosmology is Omega_b, Omega_m, h, n_s and sigma8_lcdm, the sigma8 of LCDM with the same A_s (from A_s with
+    /// e-MANTIS' own sigma8 emulator, A_s converted to the pivot 0.05/Mpc). Parameters outside the emulation range are
+    /// clamped to it (extrapolate_cosmo)
+    void init_emantis() {
+        namespace EM = FML::EMULATOR::EMANTIS;
+        emantis.reset();
+        emantis_status.clear();
+        if (nfofr != 1.0) {
+            emantis_status = "none (the e-MANTIS f(R) emulator is for n = 1)";
+            return;
+        }
+        double logfR0 = -std::log10(std::abs(fofr0));
+        if (logfR0 < 4.0 - 1e-10 or logfR0 > 7.0 + 1e-10) {
+            emantis_status = "none (|fR0| outside the e-MANTIS range 1e-7 - 1e-4)";
+            return;
+        }
+        logfR0 = std::clamp(logfR0, 4.0, 7.0); // (rounding at the ends)
+        try {
+            auto emu = std::make_shared<EM::NonLinearMGBoostEmulator>("fR");
+            EM::Parameters p;
+            p.Omega_b = this->cosmo->get_Omegab();
+            p.Omega_m = this->cosmo->get_OmegaM();
+            p.h = this->cosmo->get_h();
+            p.n_s = this->cosmo->get_ns();
+            p.logfR0 = logfR0;
+            p.A_s = this->cosmo->get_As() * std::pow(0.05 / this->cosmo->get_kpivot_mpc(), p.n_s - 1.0);
+            EM::Sigma8Emulator s8("LCDM");
+            p.sigma8 = s8.sigma8(p);
+            p.A_s = NAN;
+            // The parameters that will be clamped to the emulation range
+            std::string clamped;
+            for (auto [name, value] : {std::pair<std::string, double>{"Omega_b", p.Omega_b},
+                                       {"Omega_m", p.Omega_m},
+                                       {"h", p.h},
+                                       {"n_s", p.n_s},
+                                       {"sigma8_lcdm", p.sigma8}}) {
+                auto r = emu->range(name);
+                if (value < r.first or value > r.second)
+                    clamped += (clamped.empty() ? "" : ", ") + name + " = " + std::to_string(value);
+            }
+            if (not clamped.empty())
+                emantis_status = "[outside the e-MANTIS range, clamped: " + clamped + "]";
+            emantis_params = p;
+            emantis = emu;
+        } catch (std::exception & e) {
+            emantis_status = std::string("none (e-MANTIS: ") + e.what() + ")";
+        }
     }
 
     void solve_exact_fifth_force(double a,
@@ -78,28 +139,30 @@ class GravityModelFofR final : public GravityModelScreened<NDIM> {
 
     std::string fifth_force_label() const override { return "f(R)"; }
 
-    /// The nonlinear P_f(R)/P_GR of Winther et al. 2019 (FML/Emulator/FofrFittingFunction.h): Hu-Sawicky n = 1 only,
-    /// fitted for 1e-7 <= |fR0| <= 1e-4, z <= 3 and k <= 10 h/Mpc (the closest value outside)
+    /// The nonlinear P_f(R)/P_GR (same initial conditions) of the e-MANTIS emulator (FML/Emulator/EMantis):
+    /// Hu-Sawicky n = 1, 1e-7 <= |fR0| <= 1e-4, z <= 3 (none at higher redshifts), k <= 9.7 h/Mpc (the value there
+    /// above it), extrapolated below its first bin (0.029 h/Mpc) as in e-MANTIS
     std::function<double(double)> nonlinear_boost_over_GR(double redshift) const override {
-        if (nfofr != 1.0)
+        if (not emantis)
             return {};
-        return [fR0 = fofr0, redshift](double k) {
-            return FML::EMULATOR::FOFRFITTINGFUNCTION::nonlinear_boost(redshift, fR0, k);
+        const double a = 1.0 / (1.0 + redshift);
+        if (a < emantis->range("aexp").first)
+            return {};
+        const double kmax = emantis->range("k").second;
+        return [emu = emantis, p = emantis_params, a, kmax](double k) {
+            return emu->boost(p, a, {std::min(k, kmax)}, true, true)[0];
         };
     }
     void info_model() const override {
         GravityModelScreened<NDIM>::info_model();
         if (FML::ThisTask != 0)
             return;
-        namespace FIT = FML::EMULATOR::FOFRFITTINGFUNCTION;
-        if (nfofr != 1.0)
-            std::cout << "# Nonlinear P(k) prediction: none (the f(R) fitting function is for n = 1)\n";
+        if (not emantis)
+            std::cout << "# Nonlinear P(k) prediction: " << emantis_status << "\n";
         else
-            std::cout << "# Nonlinear P(k) prediction: f(R) fitting function (Winther et al. 2019)"
-                      << (std::abs(fofr0) < FIT::nonlinear_fR0min or std::abs(fofr0) > FIT::nonlinear_fR0max ?
-                              " [|fR0| outside the fitted 1e-7 - 1e-4: the closest value is used]" :
-                              "")
-                      << "\n";
+            std::cout << "# Nonlinear P(k) prediction: e-MANTIS f(R) boost (Saez-Casares et al.; z <= 3), "
+                      << "sigma8_lcdm = " << emantis_params.sigma8
+                      << (emantis_status.empty() ? "" : " " + emantis_status) << "\n";
     }
 
     //========================================================================

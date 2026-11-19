@@ -252,9 +252,9 @@ class GravityModel {
     /// The model's own lines of info() (what follows from its parameters, which info() prints; task 0 only)
     virtual void info_model() const {}
 
-    /// A fitted nonlinear P(k) boost over GR, P_model(k, z) / P_GR(k, z) with the same initial conditions (k in h/Mpc),
-    /// for the nonlinear predictions in the P(k) outputs (Simulation::nonlinear_over_linear_prediction). Empty (the
-    /// default) if the model has none
+    /// A nonlinear P(k) boost over GR (fit or emulator), P_model(k, z) / P_GR(k, z) with the same initial conditions
+    /// (k in h/Mpc), for the nonlinear predictions in the P(k) outputs (Simulation::nonlinear_over_linear_prediction).
+    /// Empty (the default) if the model has none, or none at this redshift (then the outputs repeat linear theory)
     virtual std::function<double(double)> nonlinear_boost_over_GR([[maybe_unused]] double redshift) const { return {}; }
 
     //========================================================================

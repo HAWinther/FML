@@ -36,7 +36,7 @@ snapshots from other simulations. There is more documentation on [the website](h
   - Massive neutrinos as a linear field (with any masses) or as δf particles.
   - The N-body gauge, for radiation and GR on the largest scales.
 - **[On-the-fly analysis and output](ANALYSIS.md)**
-  - P(k) at every step with nonlinear predictions (EuclidEmulator2, and the f(R) fitting function).
+  - P(k) at every step with nonlinear predictions (EuclidEmulator2, and the e-MANTIS f(R) emulator).
   - Redshift-space multipoles and bispectra.
   - Hybrid-bias spectra (real and redshift space) with Zel'dovich and one-loop predictions.
   - FoF and spherical-overdensity halos with mass functions.
