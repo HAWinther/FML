@@ -222,7 +222,7 @@ namespace FML {
                         nb.clear();
                         const auto range = V.cell_neighbors(c);
                         for (auto it = range.first; it != range.second; ++it) {
-                            const size_t w = index_of(it->task, it->index);
+                            const size_t w = index_of(it->task(), it->index());
                             if (w != c) // not a periodic image of itself
                                 nb.push_back(w);
                         }

@@ -506,7 +506,7 @@ namespace {
             }
             const auto nb = B.cell_neighbors(c);
             for (auto it = nb.first; it != nb.second; ++it)
-                fb.push_back({it->task, it->index});
+                fb.push_back({it->task(), it->index()});
             std::sort(fa.begin(), fa.end());
             std::sort(fb.begin(), fb.end());
             bad = bad || fa != fb;

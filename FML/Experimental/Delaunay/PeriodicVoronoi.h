@@ -214,10 +214,13 @@ namespace FML {
             const std::vector<Cell> & cells() const { return cells_; }
             const std::vector<Face> & faces() const { return faces_; }
 
-            /// A neighbour of a cell: the point on the other side of a face (its task and index there)
+            /// A neighbour of a cell: the point on the other side of a face (its task and index there), packed in 64
+            /// bits (index < 2^40, task < 2^24)
             struct Neighbor {
-                int task;
-                size_t index;
+                uint64_t packed;
+                int task() const { return int(packed >> 40); }
+                size_t index() const { return size_t(packed & ((uint64_t(1) << 40) - 1)); }
+                static Neighbor make(int task, size_t index) { return {(uint64_t(task) << 40) | uint64_t(index)}; }
             };
             /// The neighbours of local cell c, in the order of the faces (only with compute_faces = false)
             std::pair<const Neighbor *, const Neighbor *> cell_neighbors(size_t c) const {
@@ -317,12 +320,11 @@ namespace FML {
                 double pos[D];
             };
 
-            // Per simplex: the vertex keys in increasing order, the lowest-key vertex and the circumcentre relative to
-            // it
+            // Per simplex: the circumcentre relative to its lowest-key vertex (base). The sorted vertex keys, which
+            // order the simplices around an edge, are computed when needed (sorted_keys) to save memory
             struct SimplexGeometry {
-                std::array<uint64_t, NV> keys;
-                int base;
                 Point cc;
+                int base;
             };
 
             // Geometry of a face in internal units, relative to the canonical point i
@@ -870,9 +872,7 @@ namespace FML {
                             candidates.push_back({r2, i});
                         });
                         if (candidates.size() > max_per_ball)
-                            std::nth_element(candidates.begin(),
-                                             candidates.begin() + max_per_ball,
-                                             candidates.end());
+                            std::nth_element(candidates.begin(), candidates.begin() + max_per_ball, candidates.end());
                         const size_t nsend = std::min(candidates.size(), max_per_ball);
                         for (size_t k = 0; k < nsend; k++) {
                             const size_t i = candidates[k].second;
@@ -1116,8 +1116,6 @@ namespace FML {
                     if (!simplices[s].alive() || !has_local_vertex(simplices[s]))
                         continue;
                     const auto v = sorted_vertices(int(s));
-                    for (int k = 0; k < NV; k++)
-                        sg[s].keys[k] = dt.key(v[k]);
                     sg[s].base = v[0];
                     sg[s].cc = circumcenter_rel(v);
                 }
@@ -1152,6 +1150,7 @@ namespace FML {
                     mine.reserve(guess);
                     mine_extra.reserve(guess);
                     std::vector<int> star, ring;
+                    std::vector<std::array<uint64_t, NV - 2>> ringkeys;
                     std::vector<Point> pts;
                     std::vector<unsigned> visited, vseen(size_t(dt.nvertices()), 0u);
                     unsigned stamp = 0;
@@ -1185,7 +1184,7 @@ namespace FML {
                                 F = FaceInternal{};
                                 const int base = canon_vi ? vi : w;
                                 const int other = canon_vi ? w : vi;
-                                if (!face_geometry(base, other, s, sg, ring, pts, F)) {
+                                if (!face_geometry(base, other, s, sg, ring, ringkeys, pts, F)) {
                                     ndropped++;
                                     continue;
                                 }
@@ -1349,18 +1348,28 @@ namespace FML {
                     Point rel;
                     Neighbor nb;
                 };
+                if (N >= (size_t(1) << 40) || FML::NTasks > (1 << 23))
+                    throw std::runtime_error("[PeriodicVoronoi] Too many points or tasks for the neighbour lists");
                 cells_.assign(N, Cell{});
-                std::vector<size_t> count(N + 1, 0);
-                std::vector<std::vector<std::pair<size_t, Neighbor>>> found;
+                // The neighbours, per thread in the order the cells are done, and where each cell's are
+                struct Segment {
+                    size_t cell;
+                    size_t start;
+                    size_t count;
+                };
+                std::vector<std::vector<Neighbor>> found;
+                std::vector<std::vector<Segment>> segments;
                 size_t ndropped = 0;
                 int error = 0;
 #ifdef USE_OMP
 #pragma omp parallel reduction(+ : ndropped)
 #endif
                 {
-                    std::vector<std::pair<size_t, Neighbor>> mine;
+                    std::vector<Neighbor> mine;
+                    std::vector<Segment> mine_segments;
                     std::vector<CellFace> cf;
                     std::vector<int> star, ring;
+                    std::vector<std::array<uint64_t, NV - 2>> ringkeys;
                     std::vector<Point> pts;
                     std::vector<unsigned> visited, vseen(size_t(dt.nvertices()), 0u);
                     unsigned stamp = 0;
@@ -1393,7 +1402,7 @@ namespace FML {
                                 F = FaceInternal{};
                                 const int base = canon_vi ? vi : w;
                                 const int other = canon_vi ? w : vi;
-                                if (!face_geometry(base, other, s, sg, ring, pts, F)) {
+                                if (!face_geometry(base, other, s, sg, ring, ringkeys, pts, F)) {
                                     if (canon_vi || W.task != FML::ThisTask)
                                         ndropped++;
                                     continue;
@@ -1410,7 +1419,7 @@ namespace FML {
                                 x.cone = F.f.area * 0.5 * F.f.distance / D;
                                 for (int d = 0; d < D; d++)
                                     x.rel[d] = canon_vi ? F.centroid_rel[d] : F.centroid_rel[d] - F.delta[d];
-                                x.nb = {W.task, W.index};
+                                x.nb = Neighbor::make(W.task, W.index);
                                 cf.push_back(x);
                             }
                         }
@@ -1423,22 +1432,25 @@ namespace FML {
                         });
                         double vol = 0.0;
                         Point cen{};
+                        mine_segments.push_back({c, mine.size(), cf.size()});
                         for (const auto & x : cf) {
                             vol += x.cone;
                             for (int d = 0; d < D; d++)
                                 cen[d] += x.cone * (D * x.rel[d]) / (D + 1);
-                            mine.push_back({c, x.nb});
+                            mine.push_back(x.nb);
                         }
                         cells_[c].id = gid_local[c];
                         cells_[c].volume = vol;
                         for (int d = 0; d < D; d++)
                             cells_[c].centroid[d] = (u[c][d] - double(wrap[c][d])) + (vol > 0.0 ? cen[d] / vol : 0.0);
-                        count[c + 1] = cf.size();
                     }
 #ifdef USE_OMP
 #pragma omp critical
 #endif
-                    found.push_back(std::move(mine));
+                    {
+                        found.push_back(std::move(mine));
+                        segments.push_back(std::move(mine_segments));
+                    }
                 }
                 std::vector<SimplexGeometry>().swap(sg);
                 FML::MaxOverTasks(&error);
@@ -1446,16 +1458,21 @@ namespace FML {
                     throw std::runtime_error("[PeriodicVoronoi] Internal error: incomplete cell");
                 stats.nfaces_dropped = ndropped;
 
-                // The neighbours by cell (in each cell in the order of its faces: the threads keep it)
+                // The neighbours by cell (in each cell in the order of its faces)
                 neighbor_offset.assign(N + 1, 0);
+                for (const auto & seg : segments)
+                    for (const auto & g : seg)
+                        neighbor_offset[g.cell + 1] = g.count;
                 for (size_t c = 0; c < N; c++)
-                    neighbor_offset[c + 1] = neighbor_offset[c] + count[c + 1];
+                    neighbor_offset[c + 1] += neighbor_offset[c];
                 neighbor_list.resize(neighbor_offset[N]);
-                std::vector<size_t> fill(neighbor_offset.begin(), neighbor_offset.end() - 1);
-                for (auto & m : found) {
-                    for (const auto & cn : m)
-                        neighbor_list[fill[cn.first]++] = cn.second;
-                    std::vector<std::pair<size_t, Neighbor>>().swap(m);
+                for (size_t t = 0; t < found.size(); t++) {
+                    for (const auto & g : segments[t])
+                        std::copy(found[t].begin() + std::ptrdiff_t(g.start),
+                                  found[t].begin() + std::ptrdiff_t(g.start + g.count),
+                                  neighbor_list.begin() + std::ptrdiff_t(neighbor_offset[g.cell]));
+                    std::vector<Neighbor>().swap(found[t]);
+                    std::vector<Segment>().swap(segments[t]);
                 }
 
                 // To the user's units
@@ -1474,6 +1491,7 @@ namespace FML {
                                int s,
                                const std::vector<SimplexGeometry> & sg,
                                std::vector<int> & ring,
+                               std::vector<std::array<uint64_t, NV - 2>> & ringkeys,
                                std::vector<Point> & pts,
                                FaceInternal & F) const {
                 const Point & rb = dt.vertex(base);
@@ -1487,8 +1505,11 @@ namespace FML {
                 for (int d = 0; d < D; d++)
                     F.f.normal[d] = F.delta[d] / F.f.distance;
 
-                // The simplices around the edge in cyclic order
+                // The simplices around the edge in cyclic order, and (3D) the keys of the rim vertices: simplex k of
+                // the ring has the vertices base, other, rim k and rim k + 1 (cyclic)
                 ring.clear();
+                thread_local std::vector<uint64_t> rimkeys;
+                rimkeys.clear();
                 const auto & S0 = dt.simplex(s);
                 if constexpr (D == 2) {
                     int third = -1;
@@ -1505,6 +1526,8 @@ namespace FML {
                     int shared = S0.v[y];
                     int cur = S0.n[x];
                     ring.push_back(s);
+                    rimkeys.push_back(dt.key(S0.v[x]));
+                    rimkeys.push_back(dt.key(S0.v[y]));
                     int guard = 0;
                     while (cur != s) {
                         if (cur < 0 || ++guard > 100000)
@@ -1521,17 +1544,35 @@ namespace FML {
                         }
                         cur = C.n[ks];
                         shared = z;
+                        if (cur != s)
+                            rimkeys.push_back(dt.key(z));
                     }
                 }
                 // Canonical start (the smallest simplex) and direction (towards its smaller ring neighbour); the
                 // circumcentres relative to base from exact differences
                 const size_t n = ring.size();
+                // The simplices around the edge all have base and other as vertices, so comparing their sorted
+                // vertex keys is the same as comparing the sorted keys of their other vertices
+                ringkeys.resize(n);
+                if constexpr (D == 2) {
+                    for (size_t k = 0; k < n; k++) {
+                        const auto & S = dt.simplex(ring[k]);
+                        for (int i = 0; i < NV; i++)
+                            if (S.v[i] != base && S.v[i] != other)
+                                ringkeys[k][0] = dt.key(S.v[i]);
+                    }
+                } else {
+                    for (size_t k = 0; k < n; k++) {
+                        const uint64_t a = rimkeys[k], b = rimkeys[(k + 1) % n];
+                        ringkeys[k][0] = std::min(a, b);
+                        ringkeys[k][size_t(NV - 3)] = std::max(a, b);
+                    }
+                }
                 size_t m = 0;
                 for (size_t k = 1; k < n; k++)
-                    if (sg[size_t(ring[k])].keys < sg[size_t(ring[m])].keys)
+                    if (ringkeys[k] < ringkeys[m])
                         m = k;
-                const bool forward =
-                    n < 3 || sg[size_t(ring[(m + 1) % n])].keys < sg[size_t(ring[(m + n - 1) % n])].keys;
+                const bool forward = n < 3 || ringkeys[(m + 1) % n] < ringkeys[(m + n - 1) % n];
                 pts.resize(n);
                 for (size_t k = 0; k < n; k++) {
                     const SimplexGeometry & G = sg[size_t(ring[forward ? (m + k) % n : (m + n - k) % n])];
