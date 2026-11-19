@@ -512,26 +512,34 @@ int main() {
         const auto zobov_cgal = AN::find_zobov_voids(local.data(), local.size(), zs, vs);
         check(zobov_cgal.size() == zobov.size() and distance_to_hole(zobov_cgal[largest(zobov_cgal)]) < 0.05,
               "ZOBOV (CGAL tessellation): the largest void is the hole, as many voids as with the native one");
+#endif
         // DTFE of a uniform distribution with a uniform velocity: density ~1 on average, velocity in km/s
         for (auto & p : local)
             p.vel[0] = 10.0, p.vel[1] = p.vel[2] = 0.0;
-        AN::DTFESettings ds;
-        ds.nmesh = 16;
-        ds.buffer_fraction = 1.0; // the tetrahedra across the hole need particles beyond half a slab with 4 tasks
         auto context = make_context(100.0, 1.0);
         context.velocity_to_kms = 2.0;
-        const auto fields = AN::compute_dtfe_fields(local.data(), local.size(), ds, context);
-        double vmean = 0.0, cells = 0.0;
-        for (int ix = 0; ix < fields.density.get_local_nx(); ix++)
-            for (int iy = 0; iy < 16; iy++)
-                for (int iz = 0; iz < 16; iz++) {
-                    vmean += fields.velocity.velocity[0].get_real({ix, iy, iz});
-                    cells += 1.0;
-                }
-        FML::SumOverTasks(&vmean);
-        FML::SumOverTasks(&cells);
-        check(std::abs(vmean / cells - 20.0) < 1e-6, "DTFE velocity in km/s (" + num(vmean / cells) + ")");
+        std::vector<std::string> tessellations{"native"};
+#ifdef USE_CGAL
+        tessellations.push_back("cgal");
 #endif
+        for (const auto & tess : tessellations) {
+            AN::DTFESettings ds;
+            ds.tessellation = tess;
+            ds.nmesh = 16;
+            ds.buffer_fraction = 1.0; // cgal: the tetrahedra across the hole need particles beyond half a slab
+            const auto fields = AN::compute_dtfe_fields(local.data(), local.size(), ds, context);
+            double vmean = 0.0, cells = 0.0;
+            for (int ix = 0; ix < fields.density.get_local_nx(); ix++)
+                for (int iy = 0; iy < 16; iy++)
+                    for (int iz = 0; iz < 16; iz++) {
+                        vmean += fields.velocity.velocity[0].get_real({ix, iy, iz});
+                        cells += 1.0;
+                    }
+            FML::SumOverTasks(&vmean);
+            FML::SumOverTasks(&cells);
+            check(std::abs(vmean / cells - 20.0) < 1e-6,
+                  "DTFE (" + tess + " tessellation) velocity in km/s (" + num(vmean / cells) + ")");
+        }
     }
 
     //=========================================================================

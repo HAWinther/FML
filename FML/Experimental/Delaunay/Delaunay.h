@@ -289,6 +289,39 @@ namespace FML {
             }
 
             // Accessors
+            /// A simplex whose closure contains x, by a visibility walk from the simplex hint (rng: the state of the
+            /// random choices of the walk, any nonzero value; the walk does not change the triangulation)
+            int locate(const Point & x, int hint, uint64_t & rng) const {
+                int s = hint;
+                if (s < 0 || s >= int(simplices.size()) || !simplices[size_t(s)].alive())
+                    s = vertex_simplex[0];
+                if (rng == 0)
+                    rng = 0x9E3779B97F4A7C15ull;
+                while (true) {
+                    const Simplex & S = simplices[size_t(s)];
+                    std::array<const double *, NV> p;
+                    for (int k = 0; k < NV; k++)
+                        p[k] = vertices[S.v[k]].data();
+                    rng ^= rng << 13;
+                    rng ^= rng >> 7;
+                    rng ^= rng << 17;
+                    const int k0 = int(rng % NV);
+                    int next = -1;
+                    for (int t = 0; t < NV; t++) {
+                        const int k = (k0 + t) % NV;
+                        std::array<const double *, NV> pk = p;
+                        pk[k] = x.data();
+                        if (orient<D>(pk) < 0) {
+                            next = S.n[k];
+                            break;
+                        }
+                    }
+                    if (next < 0)
+                        return s;
+                    s = next;
+                }
+            }
+
             int nvertices() const { return int(vertices.size()); }
             static constexpr int nsuper() { return NV; }
             bool is_super(int v) const { return v < NV; }

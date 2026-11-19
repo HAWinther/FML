@@ -202,21 +202,19 @@ namespace FML {
                 throw std::runtime_error("[ORIGAMIHalos] The CGAL tessellation needs a USE_CGAL=true build");
 #endif
             } else {
-                if constexpr (FML::PARTICLE::GetNDIM(T{}) == 3) {
-                    FML::TRIANGULATION::PeriodicVoronoiTessellation<3> D;
-                    D.create(p, NumPart);
-                    D.VoronoiVolume(volume);
-                    detail::origami_halos_on_graph(D,
-                                                   volume,
-                                                   p,
-                                                   NumPart,
-                                                   Nlattice,
-                                                   morphology,
-                                                   halo_id,
-                                                   halos,
-                                                   options,
-                                                   lattice_coordinate);
-                }
+                FML::TRIANGULATION::PeriodicVoronoiTessellation<3> D;
+                D.create(p, NumPart);
+                D.VoronoiVolume(volume);
+                detail::origami_halos_on_graph(D,
+                                               volume,
+                                               p,
+                                               NumPart,
+                                               Nlattice,
+                                               morphology,
+                                               halo_id,
+                                               halos,
+                                               options,
+                                               lattice_coordinate);
             }
         }
 

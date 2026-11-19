@@ -344,6 +344,109 @@ namespace {
         }
     }
 
+    /// cover(): every task makes the triangulation exact over a box (its x-slab with margins, also outside the unit
+    /// box) for points spread over the tasks; then (and after moving the points with update()) the
+    /// simplex located at random points of the box is a true Delaunay simplex: no super vertex and no point (with
+    /// its periodic images) strictly inside its circumsphere (exact test, brute force over all the points)
+    template <int D>
+    void test_cover(const std::string & type, const std::string & how, size_t n) {
+        const double L = 1.0;
+        auto p = make_points<D>(type, n, L, 31);
+        const double q = std::ldexp(1.0, 40); // on the quantization grid, so the vertices are the points
+        for (auto & x : p)
+            for (auto & xi : x) {
+                xi = std::round(xi * q) / q;
+                if (xi >= L)
+                    xi -= L;
+            }
+        const auto owner = distribute<D>(how, p, L);
+        std::vector<std::array<double, D>> mine;
+        std::vector<size_t> ids, mine_index;
+        for (size_t i = 0; i < p.size(); i++)
+            if (owner[i] == FML::ThisTask) {
+                mine.push_back(p[i]);
+                ids.push_back(i);
+                mine_index.push_back(i);
+            }
+        PeriodicVoronoi<D> V(mine, L, typename PeriodicVoronoi<D>::Options{}, &ids);
+        std::array<double, D> lo, hi;
+        for (int d = 0; d < D; d++) {
+            lo[d] = -0.05;
+            hi[d] = 1.03;
+        }
+        lo[0] = double(FML::ThisTask) / FML::NTasks - 0.07;
+        hi[0] = double(FML::ThisTask + 1) / FML::NTasks + 0.04;
+        auto verify = [&](const std::vector<std::array<double, D>> & pts) {
+            V.cover(lo, hi);
+            const auto & dt = V.triangulation();
+            std::mt19937_64 rng(1000 + FML::ThisTask);
+            std::uniform_real_distribution<double> U(0.0, 1.0);
+            uint64_t state = 1;
+            int hint = -1;
+            long long nbad = 0;
+            for (int s = 0; s < 150; s++) {
+                std::array<double, D> x;
+                for (int d = 0; d < D; d++)
+                    x[d] = lo[d] + (hi[d] - lo[d]) * U(rng);
+                const int t = dt.locate(x, hint, state);
+                hint = t;
+                const auto & S = dt.simplex(t);
+                std::array<const double *, D + 1> v;
+                bool super = false;
+                for (int k = 0; k <= D; k++) {
+                    super = super || dt.is_super(S.v[k]);
+                    v[k] = dt.vertex(S.v[k]).data();
+                }
+                if (super) {
+                    nbad++;
+                    continue;
+                }
+                const int o = orient<D>(v);
+                for (const auto & y : pts) {
+                    std::array<int, D> im{};
+                    for (int d = 0; d < D; d++)
+                        im[d] = -1;
+                    while (true) {
+                        std::array<double, D> z;
+                        for (int d = 0; d < D; d++)
+                            z[d] = y[d] + im[d] * L;
+                        if (o * insphere<D>(v, z.data()) > 0)
+                            nbad++;
+                        int d = D - 1;
+                        while (d >= 0 && im[d] == 1)
+                            im[d--] = -1;
+                        if (d < 0)
+                            break;
+                        im[d]++;
+                    }
+                }
+            }
+            FML::SumOverTasks(&nbad);
+            return nbad;
+        };
+        const long long nbad = verify(p);
+        // Move the points a little (update keeps the box)
+        std::mt19937_64 rng(5);
+        std::normal_distribution<double> G(0.0, 0.002);
+        auto moved = p;
+        for (auto & x : moved)
+            for (auto & xi : x) {
+                xi = std::round((xi + G(rng)) * q) / q;
+                xi -= L * std::floor(xi / L);
+                if (xi >= L)
+                    xi -= L;
+            }
+        std::vector<std::array<double, D>> mine_moved;
+        for (size_t i : mine_index)
+            mine_moved.push_back(moved[i]);
+        V.update(mine_moved);
+        const long long nbad_moved = verify(moved);
+        check(nbad == 0 && nbad_moved == 0,
+              std::to_string(D) + "D " + type + ", " + how +
+                  ": cover(): the simplices located in the box are Delaunay simplices "
+                  "(also after update)");
+    }
+
 } // namespace
 
 int main(int argc, char ** argv) {
@@ -358,5 +461,9 @@ int main(int argc, char ** argv) {
     test_update<2>("lattice", 4900);
     test_update<3>("random", 6000);
     test_update<3>("clustered", 6000);
+    test_cover<2>("random", "slab", 4000);
+    test_cover<2>("clustered", "random", 4000);
+    test_cover<3>("random", "slab", 3000);
+    test_cover<3>("clustered", "hilbert", 3000);
     return FML::TESTS::summary("Delaunay MPI");
 }

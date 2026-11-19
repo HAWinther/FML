@@ -302,10 +302,6 @@ namespace FML {
                     image_settings.check_fields({"density", "velocity_divergence"},
                                                 " (the other fields need a simulation: SimulationCode)");
                 }
-#ifndef USE_CGAL
-                if (dtfe)
-                    throw std::runtime_error("dtfe needs a USE_CGAL=true build");
-#endif
             }
         };
 
@@ -871,7 +867,6 @@ namespace FML {
             }
 
             void analyze_dtfe() {
-#ifdef USE_CGAL
                 const auto fields = ANALYSIS::compute_dtfe_fields(
                     mpiparticles.get_particles_ptr(), mpiparticles.get_npart(), options.dtfe_settings, context);
                 const std::string z = redshift_label();
@@ -882,7 +877,6 @@ namespace FML {
                 ANALYSIS::write_dtfe_spectra(filename, spectra, context);
                 if (FML::ThisTask == 0)
                     std::cout << "DTFE spectra written: " << filename << "\n";
-#endif
             }
         };
     } // namespace SNAPSHOTANALYZER

@@ -92,6 +92,8 @@ namespace FML {
                 /// after the last build
                 double max_ghost_growth = 3.0;
                 bool verbose = false;
+                /// Compute the cells and faces (false: only the triangulation, e.g. for point location)
+                bool compute_geometry = true;
             };
 
             struct Cell {
@@ -154,10 +156,12 @@ namespace FML {
                 opt = options;
                 L = boxsize;
                 stats = Statistics{};
+                region = BBox{};
                 const auto t0 = std::chrono::steady_clock::now();
                 triangulate(points, ids);
                 const auto t1 = std::chrono::steady_clock::now();
-                compute_geometry();
+                if (opt.compute_geometry)
+                    compute_geometry();
                 const auto t2 = std::chrono::steady_clock::now();
                 stats.time_triangulation = std::chrono::duration<double>(t1 - t0).count();
                 stats.time_geometry = std::chrono::duration<double>(t2 - t1).count();
@@ -181,7 +185,10 @@ namespace FML {
                 if (rebuild) {
                     const Statistics old = stats;
                     const std::vector<size_t> ids = gid_local;
+                    const BBox reg = region;
                     build(points, L, opt, &ids);
+                    region = reg;
+                    certify(false, region.nonempty != 0);
                     stats.nupdates = old.nupdates + 1;
                     stats.nrebuilds = old.nrebuilds + 1;
                     return;
@@ -191,7 +198,8 @@ namespace FML {
                 exchange_boxes();
                 certify(false);
                 const auto t1 = std::chrono::steady_clock::now();
-                compute_geometry();
+                if (opt.compute_geometry)
+                    compute_geometry();
                 const auto t2 = std::chrono::steady_clock::now();
                 stats.time_triangulation = std::chrono::duration<double>(t1 - t0).count();
                 stats.time_geometry = std::chrono::duration<double>(t2 - t1).count();
@@ -208,6 +216,38 @@ namespace FML {
             const Statistics & statistics() const { return stats; }
             const Delaunay<D> & triangulation() const { return dt; }
             double boxsize() const { return L; }
+            /// The vertex of the triangulation of local point c
+            int local_vertex(size_t c) const { return vertex_of_local[c]; }
+            /// The point of vertex v of the triangulation (v >= Delaunay<D>::nsuper()): its task, its index on that
+            /// task and the image (periodic shift) of it the vertex is
+            void vertex_owner(int v, int & task, size_t & index, Shift & image) const {
+                const VertexInfo & I = vinfo(v);
+                task = I.task;
+                index = I.index;
+                image = I.shift;
+            }
+
+            /// Collective. Make the triangulation exact also in the box [lo, hi] (user units, need not be inside the
+            /// box [0, L): positions there are those of the triangulation, i.e. of the images of the points): every
+            /// simplex meeting the box is a Delaunay simplex of all the points, so point location there
+            /// (triangulation() locate) gives the true Delaunay simplex. Fetches the ghosts needed. A task with nothing
+            /// to cover passes an empty box (lo > hi). The box is kept (as the union with earlier ones) for later
+            /// updates
+            void cover(const Point & lo, const Point & hi) {
+                bool any = true;
+                for (int d = 0; d < D; d++)
+                    any = any && lo[d] <= hi[d];
+                if (any) {
+                    for (int d = 0; d < D; d++) {
+                        const double a = lo[d] / L, b = hi[d] / L;
+                        region.lo[d] = region.nonempty ? std::min(region.lo[d], a) : a;
+                        region.hi[d] = region.nonempty ? std::max(region.hi[d], b) : b;
+                    }
+                    region.nonempty = 1;
+                }
+                certify(false, any);
+            }
+
             /// The (quantized) position of local point c used for the tessellation, in the user's units
             Point position(size_t c) const {
                 Point x = dt.vertex(vertex_of_local[c]);
@@ -274,6 +314,7 @@ namespace FML {
             std::vector<Point> u{};    // internal positions of the local points: quantized box position + wrap
             std::vector<Shift> wrap{}; // per local point, in [-1, 1] per axis (0 after build)
             BBox mine{};
+            BBox region{}; // extra box (internal units) where the triangulation must be exact (cover())
             std::vector<BBox> boxes{};
             std::unordered_set<uint64_t> present{};           // keys of the vertices
             std::vector<std::unordered_set<uint64_t>> sent{}; // keys sent to each task
@@ -321,6 +362,91 @@ namespace FML {
                     if (S.v[k] >= NV && S.v[k] < hi)
                         return true;
                 return false;
+            }
+
+            /// Must a simplex be certified: it has a local vertex or it meets the region to cover
+            bool relevant(const typename Delaunay<D>::Simplex & S) const {
+                if (has_local_vertex(S))
+                    return true;
+                if (!region.nonempty)
+                    return false;
+                std::array<Point, NV> q;
+                for (int k = 0; k < NV; k++)
+                    q[k] = dt.vertex(S.v[k]);
+                return simplex_meets_box(q, region);
+            }
+
+            /// Does the simplex q meet the box B (separating axes: the box axes, the simplex facet normals and, in
+            /// 3D, the cross products of the simplex edges with the box axes; touching counts as meeting)
+            static bool simplex_meets_box(const std::array<Point, NV> & q, const BBox & B) {
+                auto separated = [&](const Point & a) {
+                    double smin = 0.0, smax = 0.0, scale = 0.0;
+                    for (int k = 0; k < NV; k++) {
+                        double t = 0.0;
+                        for (int d = 0; d < D; d++) {
+                            t += a[d] * q[k][d];
+                            scale = std::max(scale, std::abs(a[d] * q[k][d]));
+                        }
+                        smin = k == 0 ? t : std::min(smin, t);
+                        smax = k == 0 ? t : std::max(smax, t);
+                    }
+                    double bmin = 0.0, bmax = 0.0;
+                    for (int d = 0; d < D; d++) {
+                        bmin += a[d] * (a[d] > 0 ? B.lo[d] : B.hi[d]);
+                        bmax += a[d] * (a[d] > 0 ? B.hi[d] : B.lo[d]);
+                        scale = std::max({scale, std::abs(a[d] * B.lo[d]), std::abs(a[d] * B.hi[d])});
+                    }
+                    const double eps = 1e-12 * scale;
+                    return smax < bmin - eps || smin > bmax + eps;
+                };
+                Point a{};
+                for (int d = 0; d < D; d++) {
+                    a.fill(0.0);
+                    a[d] = 1.0;
+                    if (separated(a))
+                        return false;
+                }
+                if constexpr (D == 2) {
+                    for (int i = 0; i < NV; i++) {
+                        const Point & p0 = q[i];
+                        const Point & p1 = q[(i + 1) % NV];
+                        a = {p1[1] - p0[1], p0[0] - p1[0]};
+                        if (separated(a))
+                            return false;
+                    }
+                } else {
+                    std::array<Point, 6> edges;
+                    int ne = 0;
+                    for (int i = 0; i < NV; i++)
+                        for (int j = i + 1; j < NV; j++) {
+                            for (int d = 0; d < D; d++)
+                                edges[ne][d] = q[j][d] - q[i][d];
+                            ne++;
+                        }
+                    auto cross = [](const Point & u, const Point & v) {
+                        return Point{u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]};
+                    };
+                    // Facet normals (facet opposite vertex k: edges from one of its vertices)
+                    for (int k = 0; k < NV; k++) {
+                        const int i0 = (k + 1) % NV, i1 = (k + 2) % NV, i2 = (k + 3) % NV;
+                        Point u, v;
+                        for (int d = 0; d < D; d++) {
+                            u[d] = q[i1][d] - q[i0][d];
+                            v[d] = q[i2][d] - q[i0][d];
+                        }
+                        if (separated(cross(u, v)))
+                            return false;
+                    }
+                    for (int e = 0; e < ne; e++)
+                        for (int d = 0; d < D; d++) {
+                            Point axis{};
+                            axis[d] = 1.0;
+                            const Point c = cross(edges[e], axis);
+                            if ((c[0] != 0.0 || c[1] != 0.0 || c[2] != 0.0) && separated(c))
+                                return false;
+                        }
+                }
+                return true;
             }
 
             //======================================================================
@@ -590,8 +716,14 @@ namespace FML {
                 ghosts_after_build = stats.nghosts;
             }
 
-            /// Ghost searches until every simplex with a local vertex is certified (first: start with the buffer)
-            void certify(bool first) {
+            /// Ghost searches until every simplex with a local vertex (or meeting the region) is certified (first:
+            /// start with the buffer around the points; first_region: around the region)
+            void certify(bool first, bool first_region = false) {
+                {
+                    int fr = first_region ? 1 : 0;
+                    FML::MaxOverTasks(&fr);
+                    first_region = fr != 0;
+                }
                 const size_t N = u.size();
                 double bsuper = 0.0;
                 std::vector<uint64_t> certified; // birth + 1 of the certified simplex in a slot
@@ -603,18 +735,20 @@ namespace FML {
                     std::vector<std::pair<int, uint64_t>> searched;
                     size_t nq = 0;
                     int error = 0;
-                    auto box_queries = [&](double margin) {
-                        if (!mine.nonempty)
-                            return;
-                        Point a, b;
-                        for (int d = 0; d < D; d++) {
-                            a[d] = mine.lo[d] - margin;
-                            b[d] = mine.hi[d] + margin;
+                    auto box_queries = [&](double margin, bool points, bool reg) {
+                        for (const BBox * B : {points ? &mine : nullptr, reg ? &region : nullptr}) {
+                            if (B == nullptr || !B->nonempty)
+                                continue;
+                            Point a, b;
+                            for (int d = 0; d < D; d++) {
+                                a[d] = B->lo[d] - margin;
+                                b[d] = B->hi[d] + margin;
+                            }
+                            add_queries(boxes, false, a, b, 0.0, queries, nq);
                         }
-                        add_queries(boxes, false, a, b, 0.0, queries, nq);
                     };
-                    if (round == 0 && first) {
-                        box_queries(b0);
+                    if (round == 0 && (first || first_region)) {
+                        box_queries(b0, first, true);
                     } else {
                         // Every live simplex with a local vertex (the local points are vertices NV .. NV+N-1)
                         const auto & simplices = dt.get_simplices();
@@ -622,7 +756,7 @@ namespace FML {
                         bool need_super = false;
                         for (size_t sl = 0; sl < simplices.size(); sl++) {
                             const auto & S = simplices[sl];
-                            if (!S.alive() || certified[sl] == dt.birth(int(sl)) + 1 || !has_local_vertex(S))
+                            if (!S.alive() || certified[sl] == dt.birth(int(sl)) + 1 || !relevant(S))
                                 continue;
                             bool super = false;
                             for (int k = 0; k < NV; k++)
@@ -648,7 +782,7 @@ namespace FML {
                             if (bsuper > double(MAXSHIFT))
                                 error = 1;
                             else
-                                box_queries(bsuper);
+                                box_queries(bsuper, true, true);
                         }
                     }
                     FML::MaxOverTasks(&error);
@@ -660,7 +794,7 @@ namespace FML {
                     stats.nqueries += nq;
                     if (opt.verbose && FML::ThisTask == 0)
                         std::cout << "[PeriodicVoronoi] round " << round << ": " << nq_all << " searches\n";
-                    if (nq_all == 0 && (round > 0 || !first))
+                    if (nq_all == 0 && (round > 0 || !(first || first_region)))
                         break;
 
                     // Searches to the tasks, replies back

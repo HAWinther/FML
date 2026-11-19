@@ -13,8 +13,8 @@ make
 ```
 
 Lua and FFTW are required. MPI and OpenMP follow the normal `Makefile.config`
-options. DTFE is optional and requires CGAL; enable it with `make USE_CGAL=true`. ZOBOV works without CGAL (FML's own
-tessellation) and can use CGAL's with `zobov_tessellation = "cgal"` in a CGAL build. Gadget HDF5 snapshots
+options. ZOBOV and DTFE use FML's own tessellation, or CGAL's in a `make USE_CGAL=true` build (where it is the default;
+`zobov_tessellation`, `dtfe_tessellation`). Gadget HDF5 snapshots
 need `make USE_HDF5=true`.
 
 ## Capabilities
@@ -103,8 +103,8 @@ and output files as SimulationCode, so the two give the same result for the same
 - Spherical underdensity voids with configurable density threshold, radius cuts, recentering, and overlap removal
   (`voids_spherical_z<z>.txt`).
 - ZOBOV Voronoi-watershed void catalogues (`voids_zobov_z<z>.txt`).
-- DTFE density contrast, peculiar velocity (km/s), divergence and vorticity (km/s per Mpc/h) spectra when built with
-  CGAL (`dtfe_spectra_z<z>.txt`); optionally the fields as one text file per MPI task
+- DTFE density contrast, peculiar velocity (km/s), divergence and vorticity (km/s per Mpc/h) spectra
+  (`dtfe_spectra_z<z>.txt`); optionally the fields as one text file per MPI task
   (`dtfe_fields_z<z>.rank<NNNNN>.txt`).
 - Images (`images = true`): PNG pictures of a slab of the density (1 + delta) and the velocity divergence
   (-div v / (a H) = f delta in linear theory) projected along an axis, `image_density_z<z>.png` and
@@ -250,10 +250,11 @@ zobov_random_fraction = 0.3 -- cgal only
 zobov_min_density_cut = 1.0
 zobov_min_particles = 5
 
-dtfe = false -- requires a USE_CGAL=true build
+dtfe = false
+dtfe_tessellation = "native" -- or "cgal" (USE_CGAL=true builds, where it is the default)
 dtfe_nmesh = 128 -- must be divisible by MPI task count
-dtfe_buffer_fraction = 0.5 -- increase if cells come out as NaN (large voids, many tasks)
-dtfe_random_fraction = 0.3
+dtfe_buffer_fraction = 0.5 -- cgal only: increase if cells come out as NaN (large voids, many tasks)
+dtfe_random_fraction = 0.3 -- cgal only
 dtfe_sampling = "cell_average" -- or "grid_point"
 dtfe_weighting = "volume" -- or "mass"
 dtfe_nsub = 2 -- samples per dimension for cell_average

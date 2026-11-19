@@ -21,7 +21,7 @@ TARGETS += test_watershed_native test_origami_halos
 include ../Makefile.config
 
 ifeq ($(USE_FFTW),true)
-TARGETS += test_spectra test_perturbation test_four_point_fourier test_distributed_deposit
+TARGETS += test_spectra test_perturbation test_four_point_fourier test_distributed_deposit test_dtfe_native
 all: test_spectra test_perturbation test_four_point_fourier test_distributed_deposit
 endif
 
@@ -471,6 +471,13 @@ test_watershed_native: test_watershed_native.o Global.o
 
 # ORIGAMIHalos on the native tessellation (with USE_CGAL=true also compared with CGAL)
 test_origami_halos: test_origami_halos.o Global.o
+	$(LINK_EXE)
+
+# The DTFE on the native tessellation (with USE_CGAL=true also compared with CGAL)
+ifeq ($(USE_MPI),true)
+TEST_DTFE_NATIVE_PENCIL = PencilGrid.o
+endif
+test_dtfe_native: test_dtfe_native.o $(TEST_DTFE_NATIVE_PENCIL) Global.o
 	$(LINK_EXE)
 
 # The DTFE on pencils (USE_CGAL=true)

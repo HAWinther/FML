@@ -8,9 +8,7 @@
 #include <FML/ComputePowerSpectra/PowerSpectrumBinning.h>
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Global/Global.h>
-#ifdef USE_CGAL
 #include <FML/Triangulation/DTFE.h>
-#endif
 
 #include <array>
 #include <memory>
@@ -24,7 +22,7 @@
 #include <vector>
 
 //=============================================================================
-// DTFE (Schaap & van de Weygaert 2000; Cautun & van de Weygaert 2011; needs CGAL) density and velocity fields of a
+// DTFE (Schaap & van de Weygaert 2000; Cautun & van de Weygaert 2011; on CGAL's or FML's own tessellation) density and velocity fields of a
 // particle set on a grid and their power spectra: the density contrast, the peculiar velocity components (km/s),
 // the divergence and the vorticity (km/s per Mpc/h). Files: dtfe_spectra_z<z>.txt and, optionally, the fields as
 // one text file per task, dtfe_fields_z<z>.rank<NNNNN>.txt.
@@ -36,6 +34,7 @@ namespace FML {
         /// Keys dtfe_<name>
         struct DTFESettings {
             static constexpr const char * prefix = "dtfe_";
+            std::string tessellation;
             int nmesh;
             double buffer_fraction;
             double random_fraction;
@@ -53,9 +52,17 @@ namespace FML {
 
             template <class F>
             void parameters(F && f) {
+#ifdef USE_CGAL
+                f("tessellation", tessellation, std::string("cgal"), "cgal or native (FML's own, no buffer to choose)");
+#else
+                f("tessellation", tessellation, std::string("native"), "native (FML's own) or cgal (USE_CGAL builds)");
+#endif
                 f("nmesh", nmesh, 128, "Grid size; divisible by the number of MPI tasks");
-                f("buffer_fraction", buffer_fraction, 0.5, "Buffer copied from the neighbor tasks (fraction of a slab)");
-                f("random_fraction", random_fraction, 0.3, "Guard points (fraction)");
+                f("buffer_fraction",
+                  buffer_fraction,
+                  0.5,
+                  "cgal: buffer copied from the neighbor tasks (fraction of a slab)");
+                f("random_fraction", random_fraction, 0.3, "cgal: guard points (fraction)");
                 f("sampling", sampling, std::string("cell_average"), "cell_average or grid_point");
                 f("weighting", weighting, std::string("volume"), "Velocity cell average: volume or mass weighted");
                 f("nsub", nsub, 2, "Samples per dimension per cell for cell_average");
@@ -72,10 +79,15 @@ namespace FML {
                     throw std::runtime_error("dtfe_sampling must be grid_point or cell_average");
                 if (weighting != "volume" and weighting != "mass")
                     throw std::runtime_error("dtfe_weighting must be volume or mass");
+                if (tessellation != "native" and tessellation != "cgal")
+                    throw std::runtime_error("dtfe_tessellation must be native or cgal");
+#ifndef USE_CGAL
+                if (tessellation == "cgal")
+                    throw std::runtime_error("dtfe_tessellation = cgal needs a USE_CGAL=true build");
+#endif
             }
         };
 
-#ifdef USE_CGAL
         /// The DTFE fields on a grid: density in units of the mean, velocity in peculiar km/s, divergence and
         /// vorticity in km/s per Mpc/h
         struct DTFEFields {
@@ -91,8 +103,9 @@ namespace FML {
             const auto sampling = settings.sampling == "grid_point" ? DTFESampling::GridPoint : DTFESampling::CellAverage;
             const auto weighting = settings.weighting == "mass" ? DTFEWeighting::Mass : DTFEWeighting::Volume;
             // (slabs: the slabs of FML::domain; other domains: the particles are on FML::domain)
-            auto dtfe_ptr = analysis_grid_is_fftwgrid<3> ? std::make_unique<DTFE<P>>() :
-                                                           std::make_unique<DTFE<P>>(FML::domain);
+            const auto tess = settings.tessellation == "cgal" ? DTFETessellation::CGAL : DTFETessellation::Native;
+            auto dtfe_ptr = analysis_grid_is_fftwgrid<3> ? std::make_unique<DTFE<P>>(tess) :
+                                                           std::make_unique<DTFE<P>>(FML::domain, tess);
             auto & dtfe = *dtfe_ptr;
             dtfe.create(part, npart, settings.buffer_fraction, settings.random_fraction);
             DTFEFields f;
@@ -214,7 +227,6 @@ namespace FML {
             }
             throw_if_any_task_failed(error, "Writing the DTFE field files");
         }
-#endif
 
     } // namespace ANALYSIS
 } // namespace FML

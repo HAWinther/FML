@@ -274,7 +274,7 @@ def main():
 
     # What the build supports
     probe = {'snapshot_input': 'snap', 'output_folder': 'probe', 'pofk': False}
-    code, out = r.run('probe_cgal', {**probe, 'dtfe': True})
+    code, out = r.run('probe_cgal', {**probe, 'dtfe': True, 'dtfe_nmesh': 8, 'dtfe_tessellation': 'cgal'})
     have_cgal = 'USE_CGAL=true build' not in out
     code, out = r.run('probe_hdf5', {**probe, 'pofk': True, 'snapshot_format': 'gadget_hdf5'})
     have_hdf5 = 'USE_HDF5=true build' not in out
@@ -292,18 +292,16 @@ def main():
         'baryonification': True, 'baryonification_output_particles': True, 'baryonification_baryon_fraction': 0.16,
         'baryonification_fof_buffer_mpch': 5.0, 'baryonification_max_radius_over_r200': SUPPORT,
         'voids': True, 'spherical_voids': True, 'void_nmesh': 64, 'zobov_voids': True,
+        'dtfe': True, 'dtfe_nmesh': 32, 'dtfe_buffer_fraction': 1.0,
         'images': True, 'images_fields': ['density', 'velocity_divergence'], 'images_nmesh': 32,
         'images_slab_thickness': 1.0, 'images_npy': True,
     }
-    if have_cgal:
-        base.update({'dtfe': True, 'dtfe_nmesh': 32, 'dtfe_buffer_fraction': 1.0})
     files = ['pofk_z0.000.txt', 'pofk_multipole_z0.000.txt', 'bispectrum_z0.000.txt', 'cosmicweb_z0.000.txt',
              'minkowski_z0.000.txt', 'halos_z0.000.txt', 'massfunc_z0.000.txt',
              'massfunc_so200m_z0.000.txt', 'massfunc_so200c_z0.000.txt', 'massfunc_sovir_z0.000.txt',
              'baryonification_z0.000.txt', 'pofk_baryonified_z0.000.txt', 'voids_z0.000.txt',
              'voids_spherical_z0.000.txt', 'image_density_z0.000.png', 'image_density_z0.000.npy',
-             'image_velocity_divergence_z0.000.png', 'voids_zobov_z0.000.txt'] + \
-        (['dtfe_spectra_z0.000.txt'] if have_cgal else [])
+             'image_velocity_divergence_z0.000.png', 'voids_zobov_z0.000.txt', 'dtfe_spectra_z0.000.txt']
 
     runs = [(n, 'files_per_task') for n in tasks] + [(max(tasks), 'all_tasks')]
     results = {}
@@ -427,9 +425,8 @@ def main():
         d = np.linalg.norm((v[1:4] - np.array(HOLE_CENTER) + BOX / 2) % BOX - BOX / 2)
         check(d < HOLE_OFFSET and abs(v[4] / HOLE_RADIUS - 1) < rtol,
               f'{f}: the largest void is the hole (offset {d:.2f}, R = {v[4]:.2f} Mpc/h)')
-    if have_cgal:
-        text = (ref / 'dtfe_spectra_z0.000.txt').read_text()
-        check('nan' not in text.lower(), 'DTFE spectra are finite')
+    text = (ref / 'dtfe_spectra_z0.000.txt').read_text()
+    check('nan' not in text.lower(), 'DTFE spectra are finite')
 
     # HDF5 input with per-particle masses: the same results as the binary snapshot
     if have_hdf5:

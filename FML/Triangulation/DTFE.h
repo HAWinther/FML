@@ -10,7 +10,13 @@
 #include <FML/FFTWGrid/GridInterface.h>
 #include <FML/Global/Global.h>
 #include <FML/ParticleTypes/ReflectOnParticleMethods.h>
+#ifdef USE_CGAL
 #include <FML/Triangulation/PeriodicDelaunay.h>
+#endif
+#include <FML/Global/ChunkedExchange.h>
+#include <FML/Triangulation/VoronoiTessellation.h>
+#include <FML/Triangulation/Watershed.h>
+#include <unordered_map>
 
 namespace FML {
     namespace TRIANGULATION {
@@ -19,7 +25,8 @@ namespace FML {
         ///
         /// Delaunay Tessellation Field Estimator (DTFE), see Schaap & van de Weygaert (2000),
         /// https://arxiv.org/abs/astro-ph/0011007, and Cautun & van de Weygaert (2011),
-        /// https://arxiv.org/abs/1105.0370. This implementation uses CGAL for tessellation geometry.
+        /// https://arxiv.org/abs/1105.0370. The tessellation is CGAL's (MPIPeriodicDelaunay, USE_CGAL) or FML's own
+        /// (PeriodicVoronoiTessellation, DTFETessellation::Native; the default without CGAL).
         ///
         /// We make a periodic Delaunay tessellation of the particles (in 3D). The density at a particle is
         /// \f$ \rho_i = (D+1) m_i / W_i \f$ where \f$ W_i \f$ is the volume of all the tetrahedra that have the
@@ -35,10 +42,11 @@ namespace FML {
         /// and the grid cell is the cube of size 1/Nmesh centered on the grid point. Gradients are with respect to
         /// the positions in units of the box. Densities are in units of the mean density (i.e. 1 + delta).
         ///
-        /// With MPI each task computes the part of the grid it owns (the x-slab in [xmin_domain, xmax_domain)), so we
-        /// need the grid slabs to match the particle domains: Nmesh must be divisible by the number of tasks.
-        /// The buffer must be large enough for the tetrahedra the samples land in to be correct; we count the samples
-        /// that land in tetrahedra that might not be and warn (increase buffer_fraction if this happens).
+        /// With MPI each task computes the part of the grid it owns. CGAL: the grid slabs must match the particle
+        /// domains (Nmesh divisible by the number of tasks) and the buffer must be large enough for the tetrahedra
+        /// the samples land in to be correct; we count the samples that land in tetrahedra that might not be and warn
+        /// (increase buffer_fraction if this happens). Native: the particles can be on any task (no buffer); the
+        /// tessellation is made exact over the part of the grid we own (the ghosts needed are fetched).
         ///
         /// Example:
         ///
@@ -63,6 +71,17 @@ namespace FML {
             Volume, ///< Volume weighted average
             Mass    ///< Mass weighted average (weighted by the DTFE density)
         };
+
+        /// The tessellation the DTFE uses
+        enum class DTFETessellation {
+            CGAL,  ///< CGAL's MPIPeriodicDelaunay (needs USE_CGAL)
+            Native ///< FML's own PeriodicVoronoiTessellation (Triangulation/VoronoiTessellation.h)
+        };
+#ifdef USE_CGAL
+        constexpr DTFETessellation DTFETessellationDefault = DTFETessellation::CGAL;
+#else
+        constexpr DTFETessellation DTFETessellationDefault = DTFETessellation::Native;
+#endif
 
         /// The data we store at the vertices of the tessellation
         struct DTFEVertexData {
@@ -90,10 +109,13 @@ namespace FML {
         template <class T>
         class DTFE {
           public:
+#ifdef USE_CGAL
             using Delaunay = MPIPeriodicDelaunay<T, DTFEVertexData>;
+#endif
             using Grid = FML::GRID::FFTWGrid<3>;
 
           private:
+#ifdef USE_CGAL
 #if CGAL_NDIM != 3
             static_assert(CGAL_NDIM == 3, "DTFE is only implemented in 3D");
 #endif
@@ -102,6 +124,15 @@ namespace FML {
             using Cell_handle = typename Delaunay::Cell_handle;
 
             Delaunay D;
+#endif
+            DTFETessellation tessellation{DTFETessellationDefault};
+            // The native tessellation (mutable: the grid methods extend it over the grid region they fill)
+            mutable PeriodicVoronoiTessellation<3> V;
+            // Native: per vertex of the triangulation the index into [local particles | ghosts] (-1: super vertex),
+            // the number of ghosts and which of our particles are ghosts on each task (local index, ghost slot)
+            mutable std::vector<long long int> vindex;
+            mutable size_t nghosts{0};
+            mutable std::vector<std::vector<std::pair<size_t, size_t>>> serve;
             size_t NumPart{0};
             // The particles are on a given domain (Slab or Pencil) instead of the slabs of FML::domain
             bool on_domain{false};
@@ -119,6 +150,7 @@ namespace FML {
             // DTFE density (in units of the mean) at the regular and boundary particles
             std::vector<double> density{};
 
+#ifdef USE_CGAL
             // Values (nfields per particle) at the regular and boundary particles
             std::vector<double> values_with_boundary(const std::vector<double> & values, int nfields) const {
                 const size_t nboundary = D.get_vertex_handles_boundary().size();
@@ -151,49 +183,127 @@ namespace FML {
                     q[k] = dt.point(ptet[k]);
             }
 
+#endif
+
+            // Native: make the tessellation exact over the box [lo, hi] and index its vertices (collective)
+            void native_prepare(const std::array<double, 3> & lo, const std::array<double, 3> & hi) const {
+                V.cover_region(lo, hi);
+                const auto & PV = V.voronoi();
+                const auto & dt = PV.triangulation();
+                vindex.assign(size_t(dt.nvertices()), -1);
+                std::unordered_map<uint64_t, size_t> slot;
+                struct Request {
+                    int from;
+                    size_t index;
+                    size_t slot;
+                };
+                std::vector<std::vector<Request>> requests(FML::NTasks);
+                for (int v = dt.nsuper(); v < dt.nvertices(); v++) {
+                    int task;
+                    size_t index;
+                    std::array<int, 3> image;
+                    PV.vertex_owner(v, task, index, image);
+                    if (task == FML::ThisTask) {
+                        vindex[size_t(v)] = (long long int)(index);
+                        continue;
+                    }
+                    auto ins = slot.insert({(uint64_t(task) << 40) | uint64_t(index), slot.size()});
+                    if (ins.second)
+                        requests[task].push_back({FML::ThisTask, index, ins.first->second});
+                    vindex[size_t(v)] = (long long int)(NumPart + ins.first->second);
+                }
+                nghosts = slot.size();
+                serve.assign(FML::NTasks, {});
+                FML::COMMUNICATION::exchange_records_chunked(requests, [&](const Request * r, size_t n) {
+                    for (size_t k = 0; k < n; k++)
+                        serve[r[k].from].push_back({r[k].index, r[k].slot});
+                });
+            }
+
+            // Native: the values (nfields per particle) of the local particles followed by those of the ghosts
+            std::vector<double> native_with_ghosts(const std::vector<double> & values, int nfields) const {
+                struct Record {
+                    size_t slot;
+                    int field;
+                    double value;
+                };
+                std::vector<std::vector<Record>> outgoing(FML::NTasks);
+                for (int t = 0; t < FML::NTasks; t++)
+                    for (auto & r : serve[t])
+                        for (int f = 0; f < nfields; f++)
+                            outgoing[t].push_back({r.second, f, values[r.first * nfields + f]});
+                std::vector<double> result((NumPart + nghosts) * nfields);
+                std::copy(values.begin(), values.end(), result.begin());
+                FML::COMMUNICATION::exchange_records_chunked(outgoing, [&](const Record * r, size_t n) {
+                    for (size_t k = 0; k < n; k++)
+                        result[(NumPart + r[k].slot) * nfields + r[k].field] = r[k].value;
+                });
+                return result;
+            }
+
+            static double volume_of_tetrahedron(const double (&q)[4][3]) {
+                const double a[3] = {q[1][0] - q[0][0], q[1][1] - q[0][1], q[1][2] - q[0][2]};
+                const double b[3] = {q[2][0] - q[0][0], q[2][1] - q[0][1], q[2][2] - q[0][2]};
+                const double c[3] = {q[3][0] - q[0][0], q[3][1] - q[0][1], q[3][2] - q[0][2]};
+                const double det = a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) +
+                                   a[2] * (b[0] * c[1] - b[1] * c[0]);
+                return std::abs(det) / 6.0;
+            }
+
           public:
             DTFE() = default;
+            explicit DTFE(DTFETessellation t) : tessellation(t) {}
             /// The particles are on this domain (Slab or Pencil; e.g. MPIParticles::get_domain()) instead
             /// of the slabs of FML::domain. The grids are then made on this domain (PencilGrid for pencils)
-            explicit DTFE(const FML::Domain & domain) : D(domain), on_domain(true), domain_given(domain) {}
+            explicit DTFE(const FML::Domain & domain, DTFETessellation t = DTFETessellationDefault)
+                :
+#ifdef USE_CGAL
+                  D(domain),
+#endif
+                  tessellation(t), on_domain(true), domain_given(domain) {
+            }
+
+            /// The tessellation used
+            DTFETessellation get_tessellation_type() const { return tessellation; }
 
             /// The domain of the particles
             const FML::Domain & particle_domain() const { return on_domain ? domain_given : FML::domain; }
 
             /// Free all the memory
             void free() {
+#ifdef USE_CGAL
                 D.free();
+#endif
+                V = PeriodicVoronoiTessellation<3>();
+                vindex = std::vector<long long int>();
+                serve = {};
+                nghosts = 0;
                 density = std::vector<double>();
                 NumPart = 0;
             }
 
-            /// The tessellation
+#ifdef USE_CGAL
+            /// The tessellation (CGAL)
             Delaunay & get_tessellation() { return D; }
+#endif
+            /// The tessellation (native)
+            const PeriodicVoronoiTessellation<3> & get_native_tessellation() const { return V; }
 
             /// The DTFE density at the local particles in units of the mean density.
-            /// Only the first NumPart elements are the local particles (the rest are the boundary particles)
+            /// Only the first NumPart elements are the local particles (CGAL: the rest are the boundary particles)
             const std::vector<double> & get_density() const { return density; }
 
             /// Make the tessellation and compute the DTFE density at the particles.
-            /// The particles must be inside the local domain (e.g. MPIParticles) and must not move while we use this
+            /// CGAL: the particles must be inside the local domain (e.g. MPIParticles). Native: any task. The
+            /// particles must not move while we use this
             ///
             /// @param[in] p Pointer to the particles
             /// @param[in] NumPart Number of local particles
-            /// @param[in] buffer_fraction How large part of the neighbor domains we include as a buffer
-            /// @param[in] random_fraction How many guard points we add (as a fraction of NumPart) to speed things up
+            /// @param[in] buffer_fraction CGAL: how large part of the neighbor domains we include as a buffer
+            /// @param[in] random_fraction CGAL: how many guard points we add (as a fraction of NumPart)
             ///
             void create(T * p, size_t _NumPart, double buffer_fraction = 0.5, double random_fraction = 0.3) {
                 NumPart = _NumPart;
-                D.create(p, NumPart, buffer_fraction, random_fraction);
-
-                // Index of the vertices so that we can look up the values
-                const auto & vs = D.get_vertex_handles_regular();
-                const auto & vs_boundary = D.get_vertex_handles_boundary();
-                const size_t nboundary = vs_boundary.size();
-                for (size_t i = 0; i < NumPart; i++)
-                    vs[i]->info().index = (long long int)(i);
-                for (size_t j = 0; j < nboundary; j++)
-                    vs_boundary[j]->info().index = (long long int)(NumPart + j);
 
                 // Total mass for normalizing the density
                 std::vector<double> mass(NumPart, 1.0);
@@ -206,6 +316,48 @@ namespace FML {
                     total_mass += m;
                 FML::SumOverTasks(&total_mass);
                 assert_mpi(total_mass > 0.0, "[DTFE::create] Total mass is zero");
+
+                if (tessellation == DTFETessellation::Native) {
+                    (void)buffer_fraction;
+                    (void)random_fraction;
+                    V = PeriodicVoronoiTessellation<3>();
+                    vindex.clear();
+                    typename PeriodicVoronoiTessellation<3>::Options options;
+                    options.compute_geometry = false;
+                    V.create(p, NumPart, options);
+                    // Density at the particles: (D+1) m / volume of all the incident tetrahedra
+                    const auto & PV = V.voronoi();
+                    const auto & dt = PV.triangulation();
+                    density.assign(NumPart, 0.0);
+                    std::vector<int> star;
+                    double q[4][3];
+                    for (size_t i = 0; i < NumPart; i++) {
+                        dt.incident_simplices(PV.local_vertex(i), star);
+                        double volume = 0.0;
+                        for (int s : star) {
+                            const auto & S = dt.simplex(s);
+                            for (int k = 0; k < 4; k++)
+                                for (int d = 0; d < 3; d++)
+                                    q[k][d] = dt.vertex(S.v[k])[d];
+                            volume += volume_of_tetrahedron(q);
+                        }
+                        density[i] = 4.0 * mass[i] / volume / total_mass;
+                    }
+                    return;
+                }
+#ifndef USE_CGAL
+                assert_mpi(false, "[DTFE::create] The CGAL tessellation needs a USE_CGAL=true build");
+#else
+                D.create(p, NumPart, buffer_fraction, random_fraction);
+
+                // Index of the vertices so that we can look up the values
+                const auto & vs = D.get_vertex_handles_regular();
+                const auto & vs_boundary = D.get_vertex_handles_boundary();
+                const size_t nboundary = vs_boundary.size();
+                for (size_t i = 0; i < NumPart; i++)
+                    vs[i]->info().index = (long long int)(i);
+                for (size_t j = 0; j < nboundary; j++)
+                    vs_boundary[j]->info().index = (long long int)(NumPart + j);
 
                 // Density at the particles: (D+1) m / volume of all the incident tetrahedra
                 const auto & dt = D.get_delaunay_triangulation();
@@ -223,6 +375,7 @@ namespace FML {
                     rho[i] = 4.0 * mass[i] / volume / total_mass;
                 }
                 density = values_with_boundary(rho, 1);
+#endif
             }
 
             /// Interpolate fields to the grid and call store(ix, iy, iz, rho, values, gradients) for every grid cell
@@ -273,12 +426,14 @@ namespace FML {
                            "[DTFE::interpolate_to_grid] values must have size NumPart * nfields");
                 assert_mpi(Nmesh > 0 and nsub > 0, "[DTFE::interpolate_to_grid] Nmesh and nsub must be positive");
                 const double h = 1.0 / Nmesh;
-                if (local_nx > 0 and local_ny > 0 and not on_domain)
+                const bool native = tessellation == DTFETessellation::Native;
+                const bool have_cells = local_nx > 0 and local_ny > 0;
+                if (not native and have_cells and not on_domain)
                     assert_mpi(local_x_start * h >= FML::xmin_domain - 1e-12 and
                                    (local_x_start + local_nx - 1) * h < FML::xmax_domain,
                                "[DTFE::interpolate_to_grid] The grid slab is not inside the particle domain. Nmesh "
                                "must be divisible by the number of tasks");
-                if (local_nx > 0 and local_ny > 0 and on_domain) {
+                if (not native and have_cells and on_domain) {
                     // The centers of the first and the last of our cells are owned by us
                     const double lo[3] = {(local_x_start + 0.5) * h, (local_y_start + 0.5) * h, 0.0};
                     const double hi[3] = {(local_x_start + local_nx - 0.5) * h, (local_y_start + local_ny - 0.5) * h,
@@ -287,8 +442,28 @@ namespace FML {
                                "[DTFE::interpolate_to_grid] The grid cells are not inside the particle domain");
                 }
 
-                const auto & dt = D.get_delaunay_triangulation();
-                const std::vector<double> vals = values_with_boundary(values, nfields);
+                // The density and the values at the vertices: [local particles | boundary particles (CGAL) or ghosts
+                // (native)]
+                std::vector<double> rho_all, vals;
+                if (native) {
+                    // The samples are in the grid cells we own: [start - 1/2, start + n - 1/2] cells (unwrapped)
+                    std::array<double, 3> lo{1.0, 1.0, 1.0}, hi{0.0, 0.0, 0.0};
+                    if (have_cells) {
+                        const double eps = 1e-6 * h;
+                        lo = {(local_x_start - 0.5) * h - eps, (local_y_start - 0.5) * h - eps, -0.5 * h - eps};
+                        hi = {(local_x_start + local_nx - 0.5) * h + eps,
+                              (local_y_start + local_ny - 0.5) * h + eps,
+                              (Nmesh - 0.5) * h + eps};
+                    }
+                    native_prepare(lo, hi);
+                    rho_all = native_with_ghosts(density, 1);
+                    vals = native_with_ghosts(values, nfields);
+                } else {
+#ifdef USE_CGAL
+                    rho_all = density;
+                    vals = values_with_boundary(values, nfields);
+#endif
+                }
 
                 // Positions of the samples relative to the grid point in units of the cell size
                 std::vector<double> offsets;
@@ -298,37 +473,80 @@ namespace FML {
                     for (int a = 0; a < nsub; a++)
                         offsets.push_back((a + 0.5) / nsub - 0.5);
 
+                // The tetrahedron a sample is in: its vertices and their indices into rho_all / vals. locate(x)
+                // finds it and returns true if it is another one than the last
+                struct SampleCell {
+                    bool ok{false};
+                    double q[4][3];
+                    long long int index[4];
+                };
+                SampleCell sc;
+                bool have_cell = false;
+#ifdef USE_CGAL
+                Cell_handle cgal_hint{};
+#endif
+                int native_hint = -1;
+                uint64_t rng = 0x2545F4914F6CDD1Dull;
+                auto locate = [&](const double(&x)[3]) -> bool {
+                    if (native) {
+                        const auto & PV = V.voronoi();
+                        const auto & dt = PV.triangulation();
+                        const int s = dt.locate({x[0], x[1], x[2]}, native_hint, rng);
+                        if (have_cell and s == native_hint)
+                            return false;
+                        native_hint = s;
+                        const auto & S = dt.simplex(s);
+                        sc.ok = true;
+                        for (int k = 0; k < 4; k++) {
+                            sc.index[k] = vindex[size_t(S.v[k])];
+                            sc.ok = sc.ok and sc.index[k] >= 0;
+                            for (int d = 0; d < 3; d++)
+                                sc.q[k][d] = dt.vertex(S.v[k])[d];
+                        }
+                        return true;
+                    }
+#ifdef USE_CGAL
+                    const auto & dt = D.get_delaunay_triangulation();
+                    const Cell_handle c = dt.locate(Point(x[0], x[1], x[2]), cgal_hint);
+                    if (have_cell and c == cgal_hint)
+                        return false;
+                    cgal_hint = c;
+                    sc.ok = D.cell_is_reliable(c);
+                    for (int k = 0; k < 4; k++) {
+                        sc.index[k] = c->vertex(k)->info().index;
+                        if (sc.index[k] < 0)
+                            sc.ok = false;
+                    }
+                    if (sc.ok) {
+                        Point q[4];
+                        get_cell_points(c, q);
+                        for (int k = 0; k < 4; k++)
+                            for (int d = 0; d < 3; d++)
+                                sc.q[k][d] = q[k][d];
+                    }
+#endif
+                    return true;
+                };
+
                 // The linear interpolation in the current cell: field(x) = f0 + grad.(x - q0)
                 // The fields are the density (index 0) and then the nfields fields
                 const int nf = nfields + 1;
-                Cell_handle cell{};
                 bool cell_ok = false;
                 double q0[3] = {0.0, 0.0, 0.0};
                 double minv[3][3] = {}; // lambda_k = sum_j minv[j][k] dx_j are the barycentric coordinates 1,2,3
                 std::vector<double> f0(nf), grad(3 * nf);
-                auto set_cell = [&](Cell_handle c) {
-                    cell = c;
-                    cell_ok = D.cell_is_reliable(c);
-                    long long int index[4];
-                    for (int k = 0; k < 4; k++) {
-                        index[k] = c->vertex(k)->info().index;
-                        if (index[k] < 0)
-                            cell_ok = false;
-                    }
+                auto set_cell = [&]() {
+                    have_cell = true;
+                    cell_ok = sc.ok;
                     if (not cell_ok)
                         return;
-                    Point q[4];
-                    get_cell_points(c, q);
-                    q0[0] = q[0].x();
-                    q0[1] = q[0].y();
-                    q0[2] = q[0].z();
+                    for (int d = 0; d < 3; d++)
+                        q0[d] = sc.q[0][d];
                     // The rows of m are the edges from vertex 0. The gradient solves m.grad = df
                     double m[3][3];
-                    for (int k = 0; k < 3; k++) {
-                        m[k][0] = q[k + 1].x() - q0[0];
-                        m[k][1] = q[k + 1].y() - q0[1];
-                        m[k][2] = q[k + 1].z() - q0[2];
-                    }
+                    for (int k = 0; k < 3; k++)
+                        for (int d = 0; d < 3; d++)
+                            m[k][d] = sc.q[k + 1][d] - q0[d];
                     const double det = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) -
                                        m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
                                        m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
@@ -344,7 +562,7 @@ namespace FML {
                         }
                     for (int f = 0; f < nf; f++) {
                         auto value = [&](int k) {
-                            return f == 0 ? density[index[k]] : vals[index[k] * nfields + (f - 1)];
+                            return f == 0 ? rho_all[sc.index[k]] : vals[sc.index[k] * nfields + (f - 1)];
                         };
                         f0[f] = value(0);
                         const double df[3] = {value(1) - f0[f], value(2) - f0[f], value(3) - f0[f]};
@@ -388,15 +606,19 @@ namespace FML {
                             for (auto ox : offsets)
                                 for (auto oy : offsets)
                                     for (auto oz : offsets) {
-                                        const double x[3] = {detail::wrap_periodic((local_x_start + ix + ox) * h),
-                                                             detail::wrap_periodic((local_y_start + iy + oy) * h),
-                                                             detail::wrap_periodic((iz + oz) * h)};
+                                        // The sample: unwrapped for the native tessellation (it is exact over our
+                                        // cells), in the box for CGAL
+                                        double x[3] = {(local_x_start + ix + ox) * h,
+                                                       (local_y_start + iy + oy) * h,
+                                                       (iz + oz) * h};
+                                        if (not native)
+                                            for (auto & xi : x)
+                                                xi = detail::wrap_periodic(xi);
                                         double dx[3];
                                         relative(x, dx);
-                                        if (cell == Cell_handle() or not cell_ok or not inside_cell(dx)) {
-                                            Cell_handle c = dt.locate(Point(x[0], x[1], x[2]), cell);
-                                            if (c != cell)
-                                                set_cell(c);
+                                        if (not have_cell or not cell_ok or not inside_cell(dx)) {
+                                            if (locate(x))
+                                                set_cell();
                                             relative(x, dx);
                                         }
                                         if (not cell_ok) {

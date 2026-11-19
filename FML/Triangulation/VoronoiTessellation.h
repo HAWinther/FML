@@ -44,6 +44,8 @@ namespace FML {
                 /// Keep the Delaunay edges whose Voronoi face has (numerically) zero area, as CGAL does
                 bool drop_zero_area_faces = false;
                 bool verbose = false;
+                /// false: only the triangulation (no volumes or neighbours), e.g. for the DTFE
+                bool compute_geometry = true;
             };
 
             PeriodicVoronoiTessellation() = default;
@@ -51,8 +53,8 @@ namespace FML {
             /// Collective. Tessellate the local particles p[0], ..., p[NumPart-1]
             template <class T>
             void create(T * p, size_t NumPart, const Options & options = Options()) {
-                constexpr int N = FML::PARTICLE::GetNDIM(T{});
-                static_assert(N == NDIM, "[PeriodicVoronoiTessellation] The particles have the wrong dimension");
+                assert_mpi(FML::PARTICLE::GetNDIM(T{}) == NDIM,
+                           "[PeriodicVoronoiTessellation] The particles have the wrong dimension");
                 npart = NumPart;
                 std::vector<typename Voronoi::Point> points(NumPart);
                 pos.assign(NumPart * NDIM, 0.0);
@@ -65,6 +67,7 @@ namespace FML {
                 opt.quantization_bits = options.quantization_bits;
                 opt.drop_zero_area_faces = options.drop_zero_area_faces;
                 opt.verbose = options.verbose;
+                opt.compute_geometry = options.compute_geometry;
                 if (FML::ThisTask == 0 and options.verbose)
                     std::cout << "[PeriodicVoronoiTessellation::create] Tessellating\n";
                 V.build(points, 1.0, opt);
@@ -74,6 +77,14 @@ namespace FML {
             /// The underlying tessellation (cells, faces, triangulation)
             const Voronoi & voronoi() const { return V; }
 
+            /// Collective. Make the triangulation exact also over the box [lo, hi] (in the coordinates of the
+            /// triangulation: the unit box and the images of the points around it), e.g. for point location in the
+            /// region of a grid this task fills. A task with nothing to cover passes lo > hi. Fetches ghosts; the
+            /// cells, neighbours and boundary particles do not change
+            void cover_region(const std::array<double, NDIM> & lo, const std::array<double, NDIM> & hi) {
+                V.cover(lo, hi);
+            }
+
             size_t get_npart() const { return npart; }
             size_t nboundary() const { return boundary_task.size(); }
             /// Owner and index on the owner of boundary particle j
@@ -82,6 +93,8 @@ namespace FML {
 
             /// The Voronoi volume of each local particle
             void VoronoiVolume(std::vector<double> & volumes) const {
+                assert_mpi(V.cells().size() == npart,
+                           "[PeriodicVoronoiTessellation] The volumes were not computed (compute_geometry = false)");
                 volumes.resize(npart);
                 for (size_t i = 0; i < npart; i++)
                     volumes[i] = V.cells()[i].volume;
@@ -270,7 +283,7 @@ namespace FML {
         //==========================================================================================
         /// WatershedDensity (PeriodicDelaunay.h) with the native tessellation: tessellate, set the Voronoi volume
         /// of the particles (set_volume), and watershed on the density mass/volume (voids) or, with
-        /// do_density_maximum, on volume/mass (clusters)
+        /// do_density_maximum, on volume/mass (clusters). The particle's get_ndim must be constexpr
         //==========================================================================================
         template <class T, class U>
         void WatershedDensityNative(
