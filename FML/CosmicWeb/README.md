@@ -44,6 +44,14 @@ existing options so existing aggregate initialization keeps its meaning.
 Requesting eigenvalues and computing volume/mass fractions work in either mode.
 Reusing a result with a different mode releases the previous label allocation.
 
+## ORIGAMI halos
+
+`ORIGAMIHalos` groups the ORIGAMI halo particles into halos on the Delaunay tessellation of all the particles. The
+tessellation is CGAL's `MPIPeriodicDelaunay` (`USE_CGAL=true`, the default there; `buffer_fraction`,
+`random_fraction`) or FML's own `PeriodicVoronoiTessellation` (`OrigamiHaloOptions::tessellation =
+OrigamiTessellation::Native`, the default without CGAL), which needs no buffer and works for particles on any task.
+Both give the same halos (`tests/test_origami_halos.cpp`).
+
 ## Method references
 
 - T-web tidal-tensor classification: Hahn et al. (2007), [arXiv:astro-ph/0610280](https://arxiv.org/abs/astro-ph/0610280), and Forero-Romero et al. (2009), [arXiv:0809.4135](https://arxiv.org/abs/0809.4135).

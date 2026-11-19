@@ -965,15 +965,16 @@ namespace FML {
             char point_type{GUARD_POINT};
         };
 
-        /// The neighbour graph of MPIPeriodicDelaunay for WatershedOnGraph (Watershed.h): the vertices must have
-        /// VertexDataWatershed with index and point_type set
-        template <class T>
-        class CGALWatershedGraph {
+        /// The neighbour graph of MPIPeriodicDelaunay in the form of Watershed.h (local particle i has index i,
+        /// boundary particle j index NumPart + j). The vertex data VD must have a long long int index: the index of
+        /// the regular and boundary vertices must be set before (guard points keep index < 0 and are left out)
+        template <class T, class VD>
+        class CGALTessellationGraph {
           public:
-            using Delaunay = MPIPeriodicDelaunay<T, VertexDataWatershed>;
+            using Delaunay = MPIPeriodicDelaunay<T, VD>;
             using Vertex_handle = typename Delaunay::Vertex_handle;
 
-            explicit CGALWatershedGraph(Delaunay & D) : D(D) {
+            explicit CGALTessellationGraph(Delaunay & D) : D(D) {
                 const auto & vs = D.get_vertex_handles_regular();
                 const auto & vsb = D.get_vertex_handles_boundary();
                 NumPart = vs.size();
@@ -989,7 +990,7 @@ namespace FML {
             template <class F>
             void for_each_neighbor(size_t i, F && f) {
                 D.for_each_adjacent_vertex(handles[i], work, [&](Vertex_handle w) {
-                    if (w->info().point_type != GUARD_POINT)
+                    if (w->info().index >= 0)
                         f(size_t(w->info().index));
                 });
             }
@@ -1010,6 +1011,10 @@ namespace FML {
             std::vector<double> pos;
             std::vector<Vertex_handle> work;
         };
+
+        /// The graph for the watershed (VertexDataWatershed)
+        template <class T>
+        using CGALWatershedGraph = CGALTessellationGraph<T, VertexDataWatershed>;
 
         //===============================================================================
         /// The watershed on a CGAL tessellation (see WatershedOnGraph in Watershed.h): every particle is linked to

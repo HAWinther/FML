@@ -1,8 +1,6 @@
 #include <FML/CosmicWeb/CosmicWeb.h>
 #include <FML/CosmicWeb/ORIGAMI.h>
-#ifdef USE_CGAL
 #include <FML/CosmicWeb/ORIGAMIHalos.h>
-#endif
 #include <FML/MPIParticles/MPIParticles.h>
 #include <random>
 
@@ -14,7 +12,7 @@
 // ORIGAMI: the number of orthogonal axes of the initial lattice along which a particle
 //         has been crossed by other particles: 0 = void, 1 = wall, 2 = filament, 3 = halo
 // ORIGAMIHalos: group the ORIGAMI halo particles into halos on the Delaunay tessellation
-//         (needs CGAL: compile with USE_CGAL = true)
+//         (CGAL's tessellation with USE_CGAL = true, otherwise FML's own)
 // (V-web: the same as the T-web for the velocity shear, e.g. from the DTFE, see CosmicWeb.h)
 //
 // We make particles on a lattice and displace them with some plane waves strong enough
@@ -85,7 +83,6 @@ int main() {
     std::vector<int> morphology;
     FML::COSMICWEB::ORIGAMI(part.get_particles_ptr(), part.get_npart(), Nlattice, morphology);
 
-#ifdef USE_CGAL
     // ORIGAMI halos: cores above 20 times the mean density here (Falck et al. use 200 for simulations)
     std::vector<long long int> halo_id;
     std::vector<FML::COSMICWEB::OrigamiHalo> halos;
@@ -104,7 +101,6 @@ int main() {
             std::cout << "  " << halos[h].npart << " particles at (" << halos[h].pos[0] << ", " << halos[h].pos[1]
                       << ", " << halos[h].pos[2] << ") max density " << halos[h].density_max << "\n";
     }
-#endif
 
     // How the two compare: the T-web class of the cell of each particle vs its ORIGAMI morphology
     // (NB: with MPI the particles are inside the local domain and the grid slab matches it)

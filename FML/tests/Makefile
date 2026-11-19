@@ -16,7 +16,7 @@ TARGETS += test_baryonification test_numericalmethods test_interlacing_offset te
 TARGETS += test_fourier_resampling test_testhelpers test_review_fixes
 TARGETS += test_four_point
 TARGETS += test_cosmicweb test_short_range test_yukawa test_phase_space_halos test_control test_morphology test_environment test_pt_direct test_halo_history
-TARGETS += test_watershed_native
+TARGETS += test_watershed_native test_origami_halos
 
 include ../Makefile.config
 
@@ -467,6 +467,10 @@ ifeq ($(CGAL2D),true)
 test_watershed_native.o: OPTIONS += -DCGAL_NDIM=2 -DTEST_NDIM=2
 endif
 test_watershed_native: test_watershed_native.o Global.o
+	$(LINK_EXE)
+
+# ORIGAMIHalos on the native tessellation (with USE_CGAL=true also compared with CGAL)
+test_origami_halos: test_origami_halos.o Global.o
 	$(LINK_EXE)
 
 # The DTFE on pencils (USE_CGAL=true)
