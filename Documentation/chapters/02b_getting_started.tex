@@ -26,7 +26,7 @@ Make variable & Enables \\
 \code{USE_FFTW_THREADS=true} & threaded FFTs (the FFTW threads library; separate from OpenMP loops) \\
 \code{USE_GSL=true} & GSL splines, ODEs and quadrature (the cosmology code needs it) \\
 \code{USE_LUA=true} & Lua parameter files (\file{SimulationCode}, \file{SnapshotAnalyzer}) \\
-\code{USE_CGAL=true} & CGAL's Delaunay tessellation and the DTFE (ZOBOV and the ORIGAMI halos use \fml{}'s own without it; the DTFE is being ported) \\
+\code{USE_CGAL=true} & CGAL's Delaunay tessellation as an option (the DTFE, ZOBOV and the ORIGAMI halos use \fml{}'s own by default) \\
 \code{USE_HDF5=true} & GADGET HDF5 snapshots and HDF5 catalogues \\
 \code{USE_PYTHON=true} & Python embedding for plotting and the SWIG wrappers \\
 \code{USE_MEMORYLOG=true}, \code{USE_DEBUG=true}, \code{USE_SANITIZER=true} & memory logging, debug checks, address sanitizer \\

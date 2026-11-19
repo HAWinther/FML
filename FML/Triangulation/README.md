@@ -10,7 +10,7 @@ Periodic Delaunay/Voronoi tessellations of particles in the unit box and what is
 | `DTFE.h` | The DTFE density, fields and velocity derivatives on a grid, on either tessellation (`DTFETessellation`) |
 
 The users (DTFE, ZOBOV in VoidFinders, ORIGAMIHalos in CosmicWeb, Analysis and SnapshotAnalyzer) choose the
-tessellation with an option; CGAL's is the default in `USE_CGAL=true` builds, FML's own otherwise. The two give the
+tessellation with an option; FML's own is the default, CGAL's needs `USE_CGAL=true`. The two give the
 same results (the native tessellation rounds the positions to 2^-48 of the box, so values agree to about 1e-8 or
 better); see `tests/test_watershed_native.cpp`, `tests/test_origami_halos.cpp`, `tests/test_dtfe_native.cpp` and
 `Experimental/Delaunay/tests/compare_library.cpp`.

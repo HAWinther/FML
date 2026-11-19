@@ -4,8 +4,8 @@
 The Delaunay tessellation of the particles gives density and velocity fields without a grid (DTFE) and the Voronoi densities of
 watershed void finders. \fml{} has its own MPI-parallel Delaunay triangulation and periodic Voronoi tessellation in 2D and 3D, with
 exact predicates and results that do not depend on the number of tasks, which can follow moving points (the building block of a
-future moving-mesh hydro solver); the older tessellation uses CGAL. ZOBOV and the ORIGAMI halos run on either; the DTFE is
-being ported to the native tessellation, after which CGAL will be optional everywhere. \fml{} has four void finders sharing one
+future moving-mesh hydro solver); the older tessellation uses CGAL. ZOBOV, the ORIGAMI halos and the DTFE run on either, the
+native one by default; CGAL is optional. \fml{} has four void finders sharing one
 catalogue format: spherical, voxel watershed (Revolver-like) and ZOBOV, with optional zone merging.
 
 \begin{modulebox}{Experimental/Delaunay, Triangulation, VoidFinders}
@@ -13,14 +13,14 @@ catalogue format: spherical, voxel watershed (Revolver-like) and ZOBOV, with opt
 \file{Experimental/Delaunay/Predicates.h}, \file{Delaunay.h} (\cls{Delaunay}), \file{PeriodicVoronoi.h} (\cls{PeriodicVoronoi}).
 \nsp{FML::TRIANGULATION}: \file{Triangulation/VoronoiTessellation.h} (\cls{PeriodicVoronoiTessellation}, native),
 \file{Triangulation/Watershed.h} (\code{WatershedOnGraph}), \file{Triangulation/PeriodicDelaunay.h} (\cls{MPIPeriodicDelaunay},
-CGAL), \file{Triangulation/DTFE.h} (\cls{DTFE}, CGAL), \file{Triangulation/WatershedBinning.h}. \file{VoidFinders/Void.h}
+CGAL), \file{Triangulation/DTFE.h} (\cls{DTFE}, either), \file{Triangulation/WatershedBinning.h}. \file{VoidFinders/Void.h}
 (\cls{Void}), \file{SphericalVoidFinder.h}, \file{VoxelVoidFinder.h} (also \code{VoxelWatershed}), \file{ZobovVoidFinder.h},
 \file{ZoneMerging.h}.\par
 Documentation: \file{Experimental/Delaunay/README.md}, \file{VoidFinders/README.md}. Tests: \file{Experimental/Delaunay/tests}
 (\file{test_delaunay.cpp}, \file{test_delaunay_mpi.cpp}, \file{compare_cgal.cpp}, \file{compare_library.cpp}),
-\file{tests/test_watershed_native.cpp}, \file{tests/test_origami_halos.cpp}, \file{VoidFinders/tests} (\file{test_spherical.cpp}),
+\file{tests/test_watershed_native.cpp}, \file{tests/test_origami_halos.cpp}, \file{tests/test_dtfe_native.cpp}, \file{VoidFinders/tests} (\file{test_spherical.cpp}),
 \file{tests/test_delaunay_domain.cpp}, \file{tests/test_dtfe_pencil.cpp}, \file{tests/test_voids_pencil.cpp}. CGAL \cite{CGAL}
-(\code{USE_CGAL}) is needed only for \cls{MPIPeriodicDelaunay} and the DTFE.
+(\code{USE_CGAL}) is needed only for \cls{MPIPeriodicDelaunay} and the options that use it.
 \end{modulebox}
 
 \section{FML's own Delaunay triangulation}\label{sec:voids-native}
@@ -88,23 +88,27 @@ without CGAL, as do the Analysis library (\code{zobov_tessellation}) and Snapsho
 triangulations of random, clustered, lattice and duplicated points are valid and Delaunay (brute force: no vertex inside any
 circumsphere); periodic volumes sum to the box to $10^{-15}$, cells close to $10^{-13}$, divergence-theorem volumes agree to
 $10^{-12}$, lattices give cubes, results are translation and thread invariant; \code{move}, \code{retriangulate} and
-\code{update} equal fresh triangulations. \file{test_delaunay_mpi} (54 checks on 1--4 tasks): slab, pencil, Peano--Hilbert, random
+\code{update} equal fresh triangulations. \file{test_delaunay_mpi} (69 checks on 1--4 tasks): slab, pencil, Peano--Hilbert, random
 and last-task distributions give cells and faces bitwise identical to all points on task 0, also after updates with points
 crossing task and box boundaries. \file{compare_cgal}: the Delaunay edges (with periodic offsets) are identical to CGAL~5.6's
 periodic triangulations for $10^5$ and $10^6$ random and clustered points in 2D and 3D, and the triangulation is 1.5--4 times
 faster (3D, $10^6$ points: 7.3\,s against 18.0\,s on one core). \file{tests/test_watershed_native} and
 \file{tests/test_origami_halos}: native Voronoi volumes, basins, links, ZOBOV catalogues and ORIGAMI halos are independent of how
 the particles are spread over the tasks and identical to CGAL's in 2D and 3D. \file{compare_library}: volumes, neighbour graph
-and DTFE vertex densities against \cls{MPIPeriodicDelaunay}.
+and DTFE vertex densities against \cls{MPIPeriodicDelaunay}. \file{tests/test_dtfe_native}: native DTFE grids independent of the particle distribution (slabs, round robin, pencils) and equal
+to CGAL's to $5\times10^{-12}$. On a $128^3$ COLA snapshot (200\,Mpc$/h$, $z=0$) the native tessellation gives the same ZOBOV voids
+(8129), ORIGAMI halos (5148, every particle in the same halo) and DTFE grids (to $10^{-10}$) as CGAL on 1, 2 and 4 tasks, 1.2--3 times
+faster, with a peak memory of 0.88 against 1.10\,GB per task on 4 tasks (2.66 against 2.06\,GB on one task).
 \end{validation}
 
-\begin{planned}[Planned: CGAL optional]
-The DTFE is being ported to the native tessellation; then CGAL will be optional everywhere (only \cls{MPIPeriodicDelaunay}
-for comparisons). Next for the moving mesh: recomputing only the geometry around moved points, and load balancing.
+\begin{planned}[Planned]
+Next for the moving mesh: recomputing only the geometry around moved points, and load balancing.
 \end{planned}
 
 \section{Periodic Delaunay tessellation with CGAL and the DTFE}\label{sec:voids-dtfe}
 
+The DTFE (\cls{DTFE}, \code{DTFETessellation}) uses \fml{}'s own tessellation by default: the particles can be on any task, and the
+triangulation is made exact over the grid cells each task fills; \code{DTFETessellation::CGAL} uses \cls{MPIPeriodicDelaunay} instead.
 \cls{MPIPeriodicDelaunay} builds the 3D Delaunay tessellation of particles spread over the tasks with CGAL: each task triangulates its
 particles plus a buffer from the neighbours (slabs or pencils, \cref{sec:par-communication}), and cells whose tetrahedra might be affected by the
 buffer edge are flagged as unreliable. Voronoi volumes are the volumes of the contiguous Voronoi cells.
@@ -142,8 +146,8 @@ find overdense ``clusters'' by running on $1/\rho$.
 \item \emph{Voxel} (Revolver \cite{Nadathur2019}): a watershed of a smoothed CIC density grid; \code{VoxelWatershed} works on any density grid, e.g.\
       the DTFE's.
 \item \emph{ZOBOV} \cite{Neyrinck2008}: the watershed of the Voronoi densities of the particles; zones are the basins of local minima.
-      \code{ZobovOptions::tessellation} selects CGAL's (\code{CGAL}, the default in CGAL builds) or the native tessellation
-      (\code{Native}, the default otherwise); both give the same catalogue.
+      \code{ZobovOptions::tessellation} selects the native tessellation (\code{Native}, the default) or CGAL's
+      (\code{CGAL}); both give the same catalogue.
 \item \emph{Zone merging}: \code{None} (every zone is a void, as Revolver), \code{Threshold} (merge through links below $0.2\bar\rho$, as VIDE
       \cite{Sutter2015}) or \code{Full} (the ZOBOV hierarchy with parents).
 \end{itemize}

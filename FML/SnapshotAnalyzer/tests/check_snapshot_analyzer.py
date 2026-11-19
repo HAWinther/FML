@@ -14,7 +14,8 @@ a spherical hole of radius 15 Mpc/h (a void). Checks:
     scipy) the same halos as the independent implementation in FriendsOfFriends/tests/make_rfof_reference.py;
   - baryonification: the hosts are blobs, the corrected snapshot has the same particles (IDs, velocities, masses)
     and only moved positions near the hosts;
-  - the largest void (voxel, spherical and ZOBOV finders) is the hole;
+  - the largest void (voxel, spherical and ZOBOV finders) is the hole; with CGAL, ZOBOV and the DTFE on CGAL's
+    tessellation equal the native (default) ones;
   - with an HDF5 build (and h5py): the same snapshot in HDF5 with per-particle masses gives the same results;
   - errors stop every task with a clear message (no hang): old parameter names, a missing snapshot.
 Requires numpy (and h5py for the HDF5 check).
@@ -427,6 +428,18 @@ def main():
               f'{f}: the largest void is the hole (offset {d:.2f}, R = {v[4]:.2f} Mpc/h)')
     text = (ref / 'dtfe_spectra_z0.000.txt').read_text()
     check('nan' not in text.lower(), 'DTFE spectra are finite')
+
+    # CGAL builds: ZOBOV and the DTFE on CGAL's tessellation give the same results as on the native one (the default)
+    if have_cgal:
+        n = max(tasks)
+        code, out = r.run('cgal', {**base, 'zobov_tessellation': 'cgal', 'dtfe_tessellation': 'cgal',
+                                   'output_folder': 'cgal'}, n)
+        if check(code == 0, f'CGAL tessellation runs ({code})'):
+            ref_n = results.get(f'np{n}_files_per_task', ref)
+            check(same_voids(table(ref_n / 'voids_zobov_z0.000.txt'), table(workdir / 'cgal' / 'voids_zobov_z0.000.txt')),
+                  'ZOBOV: the same voids on the CGAL and the native tessellation')
+            check(same(table(ref_n / 'dtfe_spectra_z0.000.txt'), table(workdir / 'cgal' / 'dtfe_spectra_z0.000.txt'), 1e-6),
+                  'DTFE: the same spectra on the CGAL and the native tessellation')
 
     # HDF5 input with per-particle masses: the same results as the binary snapshot
     if have_hdf5:

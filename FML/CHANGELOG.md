@@ -5,6 +5,39 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Native Delaunay triangulation; DTFE, ZOBOV, watershed and ORIGAMI halos without CGAL (native is the default)
+- `Experimental/Delaunay` (`FML::DELAUNAY`, header only): Shewchuk's adaptive exact predicates, Bowyer-Watson insertion
+  in Hilbert order with symbolic perturbation (as CGAL), 2D and 3D (`Delaunay<D>`), and `PeriodicVoronoi<D>`: the
+  periodic Voronoi tessellation of points on any MPI tasks in any distribution, with certified ghosts (box then
+  circumsphere searches; a search returns only the 8 points nearest the centre, so a clump in an empty box does not
+  bring in every point) and deterministic geometry, bitwise identical for any number of tasks. Cells (volume,
+  centroid), faces (area, centroid, normal, periodic shift, tasks) or, with `Options::compute_faces = false`, cells and
+  per-cell neighbours only (`cell_neighbors`, much less memory). `update()` follows moving points (vertices moved in
+  place or removed and inserted again, or retriangulated; bitwise equal to a new build), `cover(lo, hi)` makes the
+  triangulation exact over a box for point location (`Delaunay::locate`). Edges identical to CGAL's periodic
+  triangulations; 1.5-4x faster. Tests: `test_delaunay` (69 checks), `test_delaunay_mpi` (69 checks on 1-4 tasks),
+  `compare_cgal`, `compare_library`.
+- `Triangulation/VoronoiTessellation.h`: `PeriodicVoronoiTessellation<NDIM>`, the native tessellation for the library
+  (Voronoi volumes, neighbours, values of the neighbours on other tasks, 48-bit positions, zero-area faces kept).
+- `Triangulation/Watershed.h`: the watershed (`WatershedOnGraph`) on the neighbour graph of either tessellation, moved
+  out of `PeriodicDelaunay.h` with the shared types; `WatershedGeneral` for both, `WatershedDensityNative`.
+  `PeriodicDelaunay.h`: `CGALTessellationGraph<T, VD>` adapter. CGAL results unchanged (last bit of the basin
+  circumcentres).
+- The tessellation is an option, FML's own by default (CGAL's needs `USE_CGAL=true`):
+  `ZobovOptions::tessellation` (`ZobovTessellation`), `OrigamiHaloOptions::tessellation` (`OrigamiTessellation`),
+  `DTFE(DTFETessellation)` / `DTFE(domain, DTFETessellation)`; Analysis and SnapshotAnalyzer `zobov_tessellation`,
+  `dtfe_tessellation` (`"native"` or `"cgal"`). With the native tessellation the particles can be on any task and
+  there is no buffer or guard points to choose; the DTFE makes the triangulation exact over the grid cells each task
+  fills. ZOBOV, the DTFE and SnapshotAnalyzer's `zobov_voids` and `dtfe` no longer need CGAL; the CGAL paths give
+  the same results as before.
+- Validation: on a 128^3 COLA snapshot (200 Mpc/h, z = 0) the native tessellation gives the same ZOBOV voids (8129),
+  ORIGAMI halos (5148, every particle in the same halo) and DTFE grids (to 1e-10) as CGAL on 1, 2 and 4 tasks,
+  1.2-3x faster; peak memory 0.88 against 1.10 GB per task on 4 tasks (2.66 against 2.06 GB on one task).
+  `tests/test_watershed_native` (2D/3D), `tests/test_origami_halos`, `tests/test_dtfe_native`: independent of how
+  the particles are spread over the tasks and identical to CGAL. SnapshotAnalyzer's check runs ZOBOV and the DTFE
+  always, and with CGAL compares the two tessellations.
+- `ORIGAMIHalos` accepts particles with a non-constexpr `get_ndim`. `Triangulation/README.md`.
+
 ### CosmologyFitting: DESI DR1 full shape, Planck PR4 CamSpec, Planck low-ell, ACT DR6 lensing, DES-Dovekie, Fading Dark Sector
 - `planck_lowl_TT` (Commander) and `planck_lowl_EE` (SimAll), Planck 2018's low-ell likelihoods, and
   `planck_camspec_npipe_TTTEEE` (also `_TT`, `_TE`, `_EE`, `_TTTE`), the high-ell CamSpec PR4 (NPIPE) likelihood

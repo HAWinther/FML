@@ -55,8 +55,8 @@ positions (the velocities converted as for the multipoles) and the multipoles up
 \file{SnapshotAnalyzer} reads GADGET binary or HDF5 snapshots (\cref{sec:io-snapshots}): each task reads every $N_{\rm tasks}$-th file and the particles are sent to
 their owners, optionally selecting particle types. The cosmology is $\Lambda$CDM from the header (plus radiation) or a table of $H/H_0$ (e.g.\ the one written by
 \file{SimulationCode}). It runs any of the analyses of \cref{tab:analyses} from a Lua parameter file with \file{SimulationCode}'s parameter names; unknown names give a
-warning and names of earlier versions an error with the replacement. The DTFE needs CGAL; ZOBOV runs on \fml{}'s own tessellation
-(\param{zobov_tessellation} \code{= "native"}, or \code{"cgal"} in a CGAL build, where it is the default). HDF5 snapshots need \code{USE_HDF5}.
+warning and names of earlier versions an error with the replacement. ZOBOV and the DTFE run on \fml{}'s own tessellation
+(\param{zobov_tessellation}, \param{dtfe_tessellation} \code{= "native"}, or \code{"cgal"} in a CGAL build). HDF5 snapshots need \code{USE_HDF5}.
 
 \begin{paramfile}[A SnapshotAnalyzer parameter file]
 snapshot_input  = "./output/gadget_z0.000"

@@ -144,11 +144,7 @@ namespace FML {
 
             template <class F>
             void parameters(F && f) {
-#ifdef USE_CGAL
-                f("tessellation", tessellation, std::string("cgal"), "cgal or native (FML's own, no buffer to choose)");
-#else
                 f("tessellation", tessellation, std::string("native"), "native (FML's own) or cgal (USE_CGAL builds)");
-#endif
                 f("buffer_fraction",
                   buffer_fraction,
                   0.5,

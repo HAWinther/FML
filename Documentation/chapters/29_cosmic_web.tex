@@ -59,9 +59,9 @@ rows are moved to the tasks as needed.
 \code{ORIGAMIHalos} groups the halo particles on the Delaunay tessellation of all particles (\cref{sec:voids-native}): Voronoi densities of all
 particles, cores of Delaunay-connected halo particles above a density threshold, and the other halo particles attached in rounds to the halo of
 their densest neighbour already in a halo (independent of order and number of tasks); groups without a core can be kept; no unbinding is done.
-The tessellation is CGAL's \cls{MPIPeriodicDelaunay} (\code{OrigamiHaloOptions::tessellation = CGAL}, the default in CGAL builds;
-\code{buffer_fraction}, \code{random_fraction}) or \fml{}'s own \cls{PeriodicVoronoiTessellation} (\code{Native}, the default otherwise,
-\cref{sec:voids-native}), which needs no buffer and works for particles on any task; both give the same halos
+The tessellation is \fml{}'s own \cls{PeriodicVoronoiTessellation} (\code{OrigamiHaloOptions::tessellation = Native}, the default,
+\cref{sec:voids-native}), which needs no buffer and works for particles on any task, or CGAL's \cls{MPIPeriodicDelaunay} (\code{CGAL};
+\code{buffer_fraction}, \code{random_fraction}); both give the same halos
 (\file{tests/test_origami_halos.cpp}).
 
 \section{Minkowski functionals}\label{sec:web-minkowski}

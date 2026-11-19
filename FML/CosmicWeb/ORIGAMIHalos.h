@@ -44,12 +44,8 @@ namespace FML {
 
         /// Options for ORIGAMIHalos (defaults as in Falck et al. 2012)
         struct OrigamiHaloOptions {
-            /// The tessellation (CGAL by default if we have it)
-#ifdef USE_CGAL
-            OrigamiTessellation tessellation{OrigamiTessellation::CGAL};
-#else
+            /// The tessellation: FML's own (the default) or CGAL's (needs USE_CGAL)
             OrigamiTessellation tessellation{OrigamiTessellation::Native};
-#endif
             /// Core particles are halo particles with Voronoi density above this (in units of the mean)
             double core_density_threshold{200.0};
             /// Halos with fewer particles are not kept

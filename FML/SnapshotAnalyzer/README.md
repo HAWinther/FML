@@ -13,8 +13,8 @@ make
 ```
 
 Lua and FFTW are required. MPI and OpenMP follow the normal `Makefile.config`
-options. ZOBOV and DTFE use FML's own tessellation, or CGAL's in a `make USE_CGAL=true` build (where it is the default;
-`zobov_tessellation`, `dtfe_tessellation`). Gadget HDF5 snapshots
+options. ZOBOV and DTFE use FML's own tessellation, or CGAL's in a `make USE_CGAL=true` build (`zobov_tessellation`,
+`dtfe_tessellation` = "cgal"). Gadget HDF5 snapshots
 need `make USE_HDF5=true`.
 
 ## Capabilities
@@ -244,14 +244,14 @@ spherical_void_max_radius_mean_separation = 8.0
 spherical_void_min_radius_mean_separation = 2.0
 spherical_void_recentering_steps = 0
 spherical_void_max_overlap = 0.0
-zobov_tessellation = "native" -- or "cgal" (USE_CGAL=true builds, where it is the default)
+zobov_tessellation = "native" -- or "cgal" (USE_CGAL=true builds)
 zobov_buffer_fraction = 0.5 -- cgal only
 zobov_random_fraction = 0.3 -- cgal only
 zobov_min_density_cut = 1.0
 zobov_min_particles = 5
 
 dtfe = false
-dtfe_tessellation = "native" -- or "cgal" (USE_CGAL=true builds, where it is the default)
+dtfe_tessellation = "native" -- or "cgal" (USE_CGAL=true builds)
 dtfe_nmesh = 128 -- must be divisible by MPI task count
 dtfe_buffer_fraction = 0.5 -- cgal only: increase if cells come out as NaN (large voids, many tasks)
 dtfe_random_fraction = 0.3 -- cgal only

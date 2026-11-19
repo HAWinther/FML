@@ -26,7 +26,7 @@ namespace FML {
         /// Delaunay Tessellation Field Estimator (DTFE), see Schaap & van de Weygaert (2000),
         /// https://arxiv.org/abs/astro-ph/0011007, and Cautun & van de Weygaert (2011),
         /// https://arxiv.org/abs/1105.0370. The tessellation is CGAL's (MPIPeriodicDelaunay, USE_CGAL) or FML's own
-        /// (PeriodicVoronoiTessellation, DTFETessellation::Native; the default without CGAL).
+        /// (PeriodicVoronoiTessellation, DTFETessellation::Native, the default).
         ///
         /// We make a periodic Delaunay tessellation of the particles (in 3D). The density at a particle is
         /// \f$ \rho_i = (D+1) m_i / W_i \f$ where \f$ W_i \f$ is the volume of all the tetrahedra that have the
@@ -77,11 +77,8 @@ namespace FML {
             CGAL,  ///< CGAL's MPIPeriodicDelaunay (needs USE_CGAL)
             Native ///< FML's own PeriodicVoronoiTessellation (Triangulation/VoronoiTessellation.h)
         };
-#ifdef USE_CGAL
-        constexpr DTFETessellation DTFETessellationDefault = DTFETessellation::CGAL;
-#else
+        /// The default tessellation: FML's own
         constexpr DTFETessellation DTFETessellationDefault = DTFETessellation::Native;
-#endif
 
         /// The data we store at the vertices of the tessellation
         struct DTFEVertexData {

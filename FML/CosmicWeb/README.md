@@ -47,9 +47,9 @@ Reusing a result with a different mode releases the previous label allocation.
 ## ORIGAMI halos
 
 `ORIGAMIHalos` groups the ORIGAMI halo particles into halos on the Delaunay tessellation of all the particles. The
-tessellation is CGAL's `MPIPeriodicDelaunay` (`USE_CGAL=true`, the default there; `buffer_fraction`,
-`random_fraction`) or FML's own `PeriodicVoronoiTessellation` (`OrigamiHaloOptions::tessellation =
-OrigamiTessellation::Native`, the default without CGAL), which needs no buffer and works for particles on any task.
+tessellation is FML's own `PeriodicVoronoiTessellation` (the default), which needs no buffer and works for particles on
+any task, or CGAL's `MPIPeriodicDelaunay` (`OrigamiHaloOptions::tessellation = OrigamiTessellation::CGAL`, needs
+`USE_CGAL=true`; `buffer_fraction`, `random_fraction`).
 Both give the same halos (`tests/test_origami_halos.cpp`).
 
 ## Method references

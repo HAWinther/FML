@@ -1,7 +1,7 @@
 # End-to-end checks of snapshot_analyzer on a synthetic Gadget snapshot (check_snapshot_analyzer.py, needs numpy;
 # h5py for the HDF5 input check). make run builds ../snapshot_analyzer (with the USE_* options given here; -B since
-# make does not track them) and runs the checks with each task count in NP_LIST. With USE_CGAL=true ZOBOV and DTFE run on CGAL's
-# tessellation (the default there), with USE_HDF5=true HDF5 input
+# make does not track them) and runs the checks with each task count in NP_LIST. With USE_CGAL=true ZOBOV and DTFE are also run on
+# CGAL's tessellation and compared with the native one, with USE_HDF5=true HDF5 input
 USE_MPI ?= true
 MPIRUN ?= mpirun
 NP_LIST ?= 1 2 4

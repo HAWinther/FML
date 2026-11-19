@@ -23,12 +23,8 @@ namespace FML {
 
         /// Options for ZobovVoidFinder (defaults as in Revolver)
         struct ZobovOptions {
-            /// The tessellation (CGAL by default if we have it)
-#ifdef USE_CGAL
-            ZobovTessellation tessellation{ZobovTessellation::CGAL};
-#else
+            /// The tessellation: FML's own (the default) or CGAL's (needs USE_CGAL)
             ZobovTessellation tessellation{ZobovTessellation::Native};
-#endif
             /// CGAL: how large part of the neighbor domains we include in the tessellation (MPI)
             double buffer_fraction{0.5};
             /// CGAL: how many guard points we add (fraction of the particles) to speed up the tessellation (MPI)

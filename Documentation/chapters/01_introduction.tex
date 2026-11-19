@@ -77,8 +77,8 @@ mostly a matter of writing the method itself.
 (splines, ODEs) are used by most of the library; MPI, OpenMP, Lua, HDF5, CGAL and Python are optional and only needed
 by the modules that use them. There are no large dependencies: the multigrid solvers, halo and void finders, KD-tree,
 FFTLog, samplers, the Einstein--Boltzmann solver and so on are part of the library. This now includes the Delaunay
-triangulation (\cref{sec:voids-native}): ZOBOV and the ORIGAMI halos no longer need CGAL, and once the DTFE is ported
-CGAL will only be needed for comparisons.
+triangulation (\cref{sec:voids-native}): ZOBOV, the ORIGAMI halos and the DTFE use it by default, and CGAL is only an
+option (for comparisons).
 
 \paragraph*{Any cosmological model, and one implementation of each physical quantity.} The library is not written for
 $\Lambda$CDM alone. The expansion history, the quasi-static limits of modified-gravity theories, the growth factors,
