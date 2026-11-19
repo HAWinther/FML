@@ -10,6 +10,7 @@
 #include <FML/Experimental/Delaunay/PeriodicVoronoi.h>
 #include <FML/tests/TestHelpers.h>
 
+#include <numeric>
 #include <random>
 
 using FML::TESTS::check;
@@ -379,6 +380,151 @@ namespace {
               std::to_string(D) + "D Delaunay returns the existing vertex for a duplicate point");
     }
 
+    // Moving vertices: the triangulation after moves (in place, or removal and insertion) and after
+    // retriangulate() equals a fresh triangulation of the moved points (same simplices, by keys)
+    template <int D>
+    std::vector<std::array<uint64_t, D + 1>> simplex_keys(const Delaunay<D> & dt) {
+        std::vector<std::array<uint64_t, D + 1>> out;
+        for (const auto & S : dt.get_simplices()) {
+            if (!S.alive())
+                continue;
+            std::array<uint64_t, D + 1> k;
+            for (int i = 0; i <= D; i++)
+                k[size_t(i)] = dt.key(S.v[size_t(i)]);
+            std::sort(k.begin(), k.end());
+            out.push_back(k);
+        }
+        std::sort(out.begin(), out.end());
+        return out;
+    }
+
+    template <int D>
+    void test_moves(const std::string & name, std::vector<std::array<double, D>> p, double step) {
+        std::array<double, D> lo, hi;
+        lo.fill(-1.0);
+        hi.fill(2.0);
+        std::vector<uint64_t> keys(p.size());
+        std::iota(keys.begin(), keys.end(), uint64_t(0));
+        Delaunay<D> dt(lo, hi), dt2(lo, hi);
+        const auto ids = dt.insert(p, &keys);
+        dt2.insert(p, &keys);
+        std::mt19937_64 rng(13);
+        std::normal_distribution<double> G(0.0, step);
+        for (int pass = 0; pass < 2; pass++) {
+            for (auto & x : p)
+                for (auto & c : x)
+                    c = std::min(1.5, std::max(-0.5, c + G(rng)));
+            for (size_t i = 0; i < p.size(); i++) {
+                dt.move(ids[i], p[i]);
+                dt2.set_position(ids[i], p[i]);
+            }
+        }
+        dt2.retriangulate();
+        Delaunay<D> fresh(lo, hi);
+        fresh.insert(p, &keys);
+        const auto ref = simplex_keys<D>(fresh);
+        const bool ok = dt.check(true).empty() && dt2.check(true).empty() && simplex_keys<D>(dt) == ref &&
+                        simplex_keys<D>(dt2) == ref;
+        check(ok,
+              std::to_string(D) + "D Delaunay, " + name + ", moves of " + num(step, 2) +
+                  ": move() and retriangulate() = a fresh triangulation (" +
+                  std::to_string(dt.statistics().nmoved_in_place) + " in place, " +
+                  std::to_string(dt.statistics().nmoved_reinserted) + " removed and inserted)");
+    }
+
+    // PeriodicVoronoi::update = build with the new positions, bitwise, for each update method
+    template <int D>
+    bool identical(const PeriodicVoronoi<D> & a, const PeriodicVoronoi<D> & b) {
+        if (a.ncells() != b.ncells() || a.faces().size() != b.faces().size())
+            return false;
+        for (size_t i = 0; i < a.ncells(); i++)
+            if (a.cells()[i].volume != b.cells()[i].volume || a.cells()[i].centroid != b.cells()[i].centroid ||
+                a.cells()[i].id != b.cells()[i].id)
+                return false;
+        for (size_t f = 0; f < a.faces().size(); f++) {
+            const auto & x = a.faces()[f];
+            const auto & y = b.faces()[f];
+            if (x.i != y.i || x.j != y.j || x.shift != y.shift || x.area != y.area || x.centroid != y.centroid ||
+                x.normal != y.normal || x.distance != y.distance || x.local_i != y.local_i || x.local_j != y.local_j)
+                return false;
+        }
+        for (size_t i = 0; i < a.ncells(); i++) {
+            const auto ra = a.cell_faces(i), rb = b.cell_faces(i);
+            if (!std::equal(ra.first, ra.second, rb.first, rb.second))
+                return false;
+        }
+        return true;
+    }
+
+    template <int D>
+    void test_update() {
+        using PV = PeriodicVoronoi<D>;
+        using UM = typename PV::Options::UpdateMethod;
+        const double L = 10.0;
+        const size_t N = 4000;
+        const double h = L * std::pow(double(N), -1.0 / D);
+        struct Case {
+            std::string name;
+            double step, drift, fraction;
+        };
+        for (const Case & c : {Case{"small moves", 0.01, 0.0, 1.0},
+                               Case{"large moves crossing the box", 0.3, 0.6, 1.0},
+                               Case{"5% of the points moving", 0.5, 0.0, 0.05}}) {
+            for (UM method : {UM::Automatic, UM::Incremental, UM::Retriangulate}) {
+                auto p = random_points<D>(N, L, 41);
+                typename PV::Options opt;
+                opt.update_method = method;
+                PV v(p, L, opt);
+                std::mt19937_64 rng(3);
+                std::normal_distribution<double> G(0.0, c.step * h);
+                bool ok = true;
+                for (int step = 0; step < 4; step++) {
+                    for (size_t i = 0; i < N; i++) {
+                        if (double(i % 100) >= 100 * c.fraction)
+                            continue;
+                        for (int d = 0; d < D; d++) {
+                            p[i][d] += G(rng) + c.drift * h;
+                            p[i][d] -= L * std::floor(p[i][d] / L);
+                        }
+                    }
+                    v.update(p);
+                    PV fresh(p, L, opt);
+                    ok = ok && identical<D>(v, fresh);
+                }
+                const auto & st = v.statistics();
+                const std::string m = method == UM::Automatic   ? "automatic" :
+                                      method == UM::Incremental ? "incremental" :
+                                                                  "retriangulate";
+                check(ok,
+                      std::to_string(D) + "D update(), " + c.name + ", " + m + ": 4 updates bitwise = build (" +
+                          std::to_string(st.nmoved_in_place) + " in place, " + std::to_string(st.nreinserted) +
+                          " reinserted, " + std::to_string(st.nretriangulated) + " retriangulations)");
+            }
+        }
+        // Lattice start (all cospherical) moving by a little
+        {
+            const int n = D == 3 ? 10 : 40;
+            auto p = lattice<D>(n, L, 0.25);
+            PV v(p, L);
+            std::mt19937_64 rng(5);
+            std::normal_distribution<double> G(0.0, 0.01 * L / n);
+            for (auto & x : p)
+                for (auto & c : x)
+                    c += G(rng);
+            v.update(p);
+            PV fresh(p, L);
+            check(identical<D>(v, fresh), std::to_string(D) + "D update() from a lattice: bitwise = build");
+        }
+        // Wrong number of points
+        {
+            auto p = random_points<D>(100, L, 2);
+            PV v(p, L);
+            p.pop_back();
+            check(FML::TESTS::throws([&] { v.update(p); }),
+                  std::to_string(D) + "D update() rejects a changed point set");
+        }
+    }
+
     template <int D>
     void test_dimension() {
         test_predicates_integer<D>();
@@ -395,6 +541,10 @@ namespace {
         test_translation<D>();
         test_threads<D>();
         test_invalid<D>();
+        test_moves<D>("random points", random_points<D>(3000, 1.0, 17), 0.002);
+        test_moves<D>("random points", random_points<D>(3000, 1.0, 18), 0.05);
+        test_moves<D>("lattice", lattice<D>(D == 3 ? 10 : 40, 1.0, 0.37), 0.001);
+        test_update<D>();
     }
 
 } // namespace

@@ -65,6 +65,8 @@ namespace FML {
                 size_t nwalk_steps{0};
                 size_t ncavity_simplices{0};
                 size_t nperturbed{0};
+                size_t nmoved_in_place{0};   // moves that kept the simplices
+                size_t nmoved_reinserted{0}; // moves by removal and insertion
             };
 
             Delaunay() = default;
@@ -72,7 +74,14 @@ namespace FML {
             /// Create the super simplex enclosing the box [lo, hi] (with a wide margin). Clears the triangulation.
             Delaunay(const Point & lo, const Point & hi) { init(lo, hi); }
 
-            void init(const Point & lo, const Point & hi) {
+            /// super_key_top: the super vertices get the keys super_key_top - (D+1) ... super_key_top - 1 (the
+            /// default is the top of the uint64 range); point keys must differ from them. super_scale: the size of the
+            /// super simplex in units of the box (default 30)
+            void init(const Point & lo,
+                      const Point & hi,
+                      uint64_t super_key_top = std::numeric_limits<uint64_t>::max(),
+                      double super_scale = 30.0) {
+
                 vertices.clear();
                 keys.clear();
                 simplices.clear();
@@ -92,14 +101,14 @@ namespace FML {
                 box_hi = hi;
                 // The corner simplex {x_d >= a, sum_d (x_d - a) <= S} contains the cube [a, a + S/D]^D. Take a wide
                 // margin so the super vertices are far from the points (exact predicates make this safe)
-                const double a = *std::min_element(lo.begin(), lo.end()) - 10.0 * size;
-                const double S = D * 30.0 * size;
+                const double a = *std::min_element(lo.begin(), lo.end()) - (super_scale / 3.0) * size;
+                const double S = D * super_scale * size;
                 for (int k = 0; k < NV; k++) {
                     Point p;
                     p.fill(a);
                     if (k > 0)
                         p[k - 1] = a + S;
-                    add_vertex(p, std::numeric_limits<uint64_t>::max() - uint64_t(NV - k));
+                    add_vertex(p, super_key_top - uint64_t(NV - k));
                 }
                 Simplex s;
                 for (int k = 0; k < NV; k++) {
@@ -177,6 +186,106 @@ namespace FML {
                 }
                 std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) { return hkeys[a] < hkeys[b]; });
                 return order;
+            }
+
+            /// Move vertex v (not a super vertex) to p, inside the bounding box. The result is the Delaunay
+            /// triangulation of the moved points (the same as triangulating them from scratch): v is moved in place if
+            /// its simplices stay positively oriented and Delaunay, otherwise it is removed and inserted again at p
+            /// (keeping its index and key). Returns true if it was moved in place. p must not coincide with another
+            /// vertex (std::invalid_argument; the triangulation is then left without v).
+            bool move(int v, const Point & p) {
+                if (move_in_place(v, p))
+                    return true;
+                incident_simplices(v, work_star, work_visited, ++work_stamp);
+                remove_vertex(v, work_star);
+                vertices[v] = p;
+                const int s0 = locate(p.data(), last_simplex);
+                for (int k = 0; k < NV; k++)
+                    if (vertices[simplices[s0].v[k]] == p)
+                        throw std::invalid_argument("[Delaunay::move] The point coincides with another vertex");
+                insert_vertex(v, s0);
+                stats.nmoved_reinserted++;
+                return false;
+            }
+
+            /// Move vertex v to p if its simplices stay positively oriented and Delaunay (then the triangulation is
+            /// that of the moved points); otherwise leave everything unchanged. Returns whether it was moved.
+            bool move_in_place(int v, const Point & p) {
+                if (v < NV || v >= int(vertices.size()))
+                    throw std::invalid_argument("[Delaunay::move] Not a movable vertex");
+                for (int d = 0; d < D; d++)
+                    if (!(p[d] >= box_lo[d] && p[d] <= box_hi[d]))
+                        throw std::invalid_argument("[Delaunay::move] Point outside the bounding box (or not finite)");
+                if (vertices[v] == p) {
+                    stats.nmoved_in_place++;
+                    return true;
+                }
+                incident_simplices(v, work_star, work_visited, ++work_stamp);
+                const Point old = vertices[v];
+                vertices[v] = p;
+                if (star_is_delaunay(v, work_star)) {
+                    stats.nmoved_in_place++;
+                    return true;
+                }
+                vertices[v] = old;
+                return false;
+            }
+
+            /// Set the position of a vertex without changing the simplices: the triangulation is invalid until
+            /// retriangulate() is called
+            void set_position(int v, const Point & p) {
+                if (v < NV || v >= int(vertices.size()))
+                    throw std::invalid_argument("[Delaunay::set_position] Not a movable vertex");
+                for (int d = 0; d < D; d++)
+                    if (!(p[d] >= box_lo[d] && p[d] <= box_hi[d]))
+                        throw std::invalid_argument("[Delaunay] Point outside the bounding box (or not finite)");
+                vertices[v] = p;
+            }
+
+            /// Triangulate the current vertex positions from scratch (in Peano-Hilbert order), keeping the vertex
+            /// indices and keys. Throws std::invalid_argument if two vertices coincide.
+            void retriangulate() {
+                simplices.clear();
+                births.clear();
+                next_birth = 0;
+                free_list.clear();
+                mark.clear();
+                stamp = 0;
+                Simplex s0;
+                for (int k = 0; k < NV; k++) {
+                    s0.v[k] = k;
+                    s0.n[k] = -1;
+                }
+                simplices.push_back(s0);
+                mark.push_back(0);
+                births.push_back(next_birth++);
+                if (orient_of(s0.v) < 0)
+                    std::swap(simplices[0].v[0], simplices[0].v[1]);
+                vertex_simplex.assign(vertices.size(), -1);
+                for (int k = 0; k < NV; k++)
+                    vertex_simplex[size_t(k)] = 0;
+                last_simplex = 0;
+                std::vector<Point> pts(vertices.begin() + NV, vertices.end());
+                for (size_t i : hilbert_order(pts)) {
+                    const int v = int(i) + NV;
+                    const int s = locate(vertices[v].data(), last_simplex);
+                    for (int k = 0; k < NV; k++)
+                        if (vertices[simplices[s].v[k]] == vertices[v])
+                            throw std::invalid_argument("[Delaunay::retriangulate] Two vertices coincide");
+                    insert_vertex(v, s);
+                }
+            }
+
+            /// The simplices whose circumspheres contain the point p with key `key` (with the perturbation): the
+            /// simplices that inserting it would replace. Adds p as an unconnected vertex (for retriangulating holes)
+            std::vector<int> conflict_region(const Point & p, uint64_t key) {
+                const int s0 = locate(p.data(), last_simplex);
+                for (int k = 0; k < NV; k++)
+                    if (vertices[simplices[s0].v[k]] == p)
+                        throw std::invalid_argument("[Delaunay::conflict_region] The point is a vertex");
+                const int q = add_vertex(p, key);
+                find_cavity(q, s0);
+                return cavity;
             }
 
             // Accessors
@@ -341,6 +450,199 @@ namespace FML {
             };
             std::vector<Ridge> ridges{};
             std::vector<int> table{};
+            std::vector<int> work_star{};
+            std::vector<unsigned> work_visited{};
+            unsigned work_stamp{0};
+
+            /// After moving v: are its simplices positively oriented and every facet of them locally Delaunay? (A
+            /// valid triangulation that is locally Delaunay everywhere is the Delaunay triangulation; the facets of
+            /// the other simplices did not change.)
+            bool star_is_delaunay(int v, const std::vector<int> & star) const {
+                for (int s : star)
+                    if (orient_of(simplices[s].v) <= 0)
+                        return false;
+                for (int s : star) {
+                    const Simplex & S = simplices[s];
+                    for (int k = 0; k < NV; k++) {
+                        const int t = S.n[k];
+                        if (t < 0)
+                            continue;
+                        // A facet containing v is shared with another simplex of the star: check it once
+                        if (S.v[k] != v && t < s)
+                            continue;
+                        const Simplex & T = simplices[t];
+                        if (insphere_perturbed(s, T.v[index_of_neighbour(T, s)]) > 0)
+                            return false;
+                    }
+                }
+                return true;
+            }
+
+            /// Remove vertex v (whose simplices are `star`): the hole is filled with the simplices of the Delaunay
+            /// triangulation of its link vertices that conflict with v (Devillers & Teillaud 2011), which with the
+            /// same keys and coordinates is the Delaunay triangulation without v. The link is triangulated inside a
+            /// super simplex 1e4 times its size (fast); if that is not enough (the result is checked: positively
+            /// oriented and locally Delaunay across every facet of the filled hole) again with 1e45 times (exact for
+            /// any input whose degree-5 determinants do not overflow, but slower).
+            void remove_vertex(int v, const std::vector<int> & star) {
+                std::vector<int> link;
+                std::vector<HoleFacet> hole;
+                for (int s : star) {
+                    const Simplex & S = simplices[s];
+                    HoleFacet h;
+                    int n = 0;
+                    int kv = -1;
+                    for (int k = 0; k < NV; k++) {
+                        const int w = S.v[k];
+                        if (w == v) {
+                            kv = k;
+                            continue;
+                        }
+                        h.key[size_t(n++)] = w;
+                        if (std::find(link.begin(), link.end(), w) == link.end())
+                            link.push_back(w);
+                    }
+                    std::sort(h.key.begin(), h.key.end());
+                    h.outside = S.n[kv];
+                    h.outside_idx = h.outside >= 0 ? index_of_neighbour(simplices[h.outside], s) : -1;
+                    h.matched = false;
+                    hole.push_back(h);
+                }
+                for (int s : star) {
+                    simplices[s].v[0] = -1;
+                    free_list.push_back(s);
+                }
+                std::vector<int> created;
+                if (fill_hole(v, link, hole, 1e4, created))
+                    return;
+                // Undo and retry with a huge super simplex
+                for (int c : created) {
+                    simplices[c].v[0] = -1;
+                    free_list.push_back(c);
+                }
+                for (auto & h : hole) {
+                    h.matched = false;
+                    if (h.outside >= 0)
+                        simplices[h.outside].n[h.outside_idx] = -1;
+                }
+                if (!fill_hole(v, link, hole, 1e45, created))
+                    throw std::runtime_error("[Delaunay::move] Could not retriangulate the hole of a removed vertex");
+            }
+
+            struct HoleFacet {
+                std::array<int, D> key;
+                int outside;
+                int outside_idx;
+                bool matched;
+            };
+
+            /// Fill the hole of removed vertex v from the triangulation of its link (super simplex `scale` times the
+            /// link); false if the result is not valid and Delaunay (the hole is then filled but must be undone)
+            bool fill_hole(int v,
+                           const std::vector<int> & link,
+                           std::vector<HoleFacet> & hole,
+                           double scale,
+                           std::vector<int> & created) {
+                created.clear();
+                Point lo = vertices[v], hi = vertices[v];
+                for (int w : link)
+                    for (int d = 0; d < D; d++) {
+                        lo[d] = std::min(lo[d], vertices[w][d]);
+                        hi[d] = std::max(hi[d], vertices[w][d]);
+                    }
+                double size = 0.0;
+                for (int d = 0; d < D; d++)
+                    size = std::max(size, hi[d] - lo[d]);
+                for (int d = 0; d < D; d++) {
+                    lo[d] -= 0.1 * size;
+                    hi[d] += 0.1 * size;
+                }
+                // Its super vertices get keys below those of this triangulation's super vertices
+                Delaunay<D> small;
+                small.init(lo, hi, keys[0] - uint64_t(NV), scale);
+                std::vector<int> to_big(size_t(NV), -1);
+                for (int w : link) {
+                    const int sid = small.insert(vertices[w], keys[w]);
+                    if (sid != int(to_big.size()))
+                        throw std::runtime_error("[Delaunay::move] Internal error: duplicate link vertex");
+                    to_big.push_back(w);
+                }
+                const std::vector<int> cav = small.conflict_region(vertices[v], keys[v]);
+                for (int c : cav)
+                    for (int k = 0; k < NV; k++)
+                        if (small.simplices[size_t(c)].v[k] < NV)
+                            return false; // the super simplex is too close
+                std::vector<int> new_id(small.simplices.size(), -1);
+                for (int c : cav) {
+                    new_id[size_t(c)] = new_simplex();
+                    created.push_back(new_id[size_t(c)]);
+                }
+                bool ok = true;
+                for (int c : cav) {
+                    const Simplex & C = small.simplices[size_t(c)];
+                    const int nid = new_id[size_t(c)];
+                    Simplex & S = simplices[nid];
+                    for (int k = 0; k < NV; k++)
+                        S.v[k] = to_big[size_t(C.v[k])];
+                    for (int k = 0; k < NV; k++) {
+                        const int nb = C.n[k];
+                        if (nb >= 0 && new_id[size_t(nb)] >= 0) {
+                            S.n[k] = new_id[size_t(nb)];
+                            continue;
+                        }
+                        std::array<int, D> key;
+                        int n = 0;
+                        for (int i = 0; i < NV; i++)
+                            if (i != k)
+                                key[size_t(n++)] = S.v[i];
+                        std::sort(key.begin(), key.end());
+                        bool found = false;
+                        for (auto & h : hole) {
+                            if (h.matched || h.key != key)
+                                continue;
+                            h.matched = true;
+                            found = true;
+                            S.n[k] = h.outside;
+                            if (h.outside >= 0)
+                                simplices[h.outside].n[h.outside_idx] = nid;
+                            break;
+                        }
+                        if (!found) {
+                            S.n[k] = -1;
+                            ok = false;
+                        }
+                    }
+                }
+                for (const auto & h : hole)
+                    ok = ok && h.matched;
+                // Check the new simplices: positive orientation and locally Delaunay across all their facets
+                for (int nid : created) {
+                    if (!ok)
+                        break;
+                    const Simplex & S = simplices[nid];
+                    if (orient_of(S.v) <= 0) {
+                        ok = false;
+                        break;
+                    }
+                    for (int k = 0; k < NV && ok; k++) {
+                        const int t = S.n[k];
+                        if (t < 0)
+                            continue;
+                        const Simplex & T = simplices[t];
+                        const int j = index_of_neighbour(T, nid);
+                        ok = j >= 0 && insphere_perturbed(nid, T.v[j]) < 0;
+                    }
+                }
+                if (!ok)
+                    return false;
+                for (int nid : created) {
+                    for (int k = 0; k < NV; k++)
+                        vertex_simplex[simplices[nid].v[k]] = nid;
+                    last_simplex = nid;
+                }
+                vertex_simplex[v] = -1;
+                return true;
+            }
 
             int add_vertex(const Point & x, uint64_t key) {
                 vertices.push_back(x);
@@ -449,7 +751,9 @@ namespace FML {
                 return int(simplices.size()) - 1;
             }
 
-            void insert_vertex(int q, int s0) {
+            /// The simplices whose circumspheres contain vertex q (with the perturbation), starting from s0 which
+            /// contains it, in `cavity`, and the facets of their boundary in `boundary`
+            void find_cavity(int q, int s0) {
                 if (++stamp == std::numeric_limits<int>::max()) {
                     std::fill(mark.begin(), mark.end(), 0);
                     stamp = 1;
@@ -483,6 +787,10 @@ namespace FML {
                         boundary.push_back(f);
                     }
                 }
+            }
+
+            void insert_vertex(int q, int s0) {
+                find_cavity(q, s0);
                 stats.ncavity_simplices += cavity.size();
                 for (int s : cavity) {
                     simplices[s].v[0] = -1;

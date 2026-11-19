@@ -48,10 +48,32 @@ zero area (from degenerate input, e.g. the diagonal neighbours on a lattice) are
 `drop_zero_area_faces = false` to keep every Delaunay edge). `statistics()` gives the number of ghosts, rounds and
 searches and timings.
 
+### Moving points
+
+```cpp
+voronoi.update(new_points); // collective; the same points (same tasks, order and ids) at new positions
+```
+
+gives exactly (bitwise) what a new `PeriodicVoronoi` of the new positions would give, reusing what it can: the ghosts
+are kept and moved with their points (their new positions are fetched from their tasks), the triangulation follows
+the points, and the simplices are certified again (fetching new ghosts where needed). Points may cross the box
+edges and the bounding boxes of other tasks (they stay on their task). `Options::update_method`: `Automatic` (the
+default) tries a sample of the moved vertices in place and chooses, from estimated costs, between moving every
+vertex (in place where its simplices stay valid and Delaunay, otherwise removed and inserted again) and
+triangulating from scratch (keeping the ghosts); `Incremental` and `Retriangulate` force one of them (same result).
+When the ghosts have grown to `max_ghost_growth` (3) times their number after the last build, `update` calls
+`build` instead. `statistics()` counts in-place moves, reinsertions, retriangulations and rebuilds.
+
+When most points move (by more than ~1% of the interparticle spacing in 3D) the triangulation changes around
+most of them and an update costs about as much as a new build; it pays off when few points move (e.g. with local
+time steps) or by very little. The geometry (cells and faces) is currently always recomputed in full.
+
 `Delaunay<D>` can also be used directly for points in a bounding box: `Delaunay<3> dt(lo, hi); dt.insert(points);`
 then `get_simplices()` (vertices `v[0..D]`, positively oriented, and neighbours `n[k]` across the facet opposite
 `v[k]`), `incident_simplices(v, ...)`, `circumsphere(s, ...)` and `check()`. The first D+1 vertices are the corners
-of an enclosing super simplex.
+of an enclosing super simplex. `move(v, p)` moves a vertex (the result is the Delaunay triangulation of the moved
+points), `move_in_place(v, p)` only if its simplices survive, and `set_position(v, p)` + `retriangulate()` rebuild
+the simplices for new positions keeping vertex indices and keys.
 
 ## Algorithms
 
@@ -86,11 +108,22 @@ of an enclosing super simplex.
   face order. So the cells and faces depend only on the configuration: identical on any number of tasks and on both
   sides of a face. Faces are the polygons of the circumcentres around each Delaunay edge (2D: segments); cell
   volumes and centroids are sums over the cones from the point to its faces.
+- **Moving vertices.** A vertex is moved in place if all its simplices stay positively oriented and every facet of
+  them stays locally Delaunay (checked with the perturbed predicate; a valid, everywhere locally Delaunay
+  triangulation is the Delaunay triangulation). Otherwise it is removed and inserted again at its new position.
+  Removal fills the hole with the simplices of the Delaunay triangulation of the vertex's neighbours (its link) that
+  conflict with the vertex (Devillers & Teillaud 2011), with the same keys so the perturbation is consistent. That
+  triangulation is made inside a super simplex 1e4 times the link, and checked (orientation and local Delaunay
+  property of the filled hole); if the super simplex was too close it is redone with one 1e45 times the link, so far
+  away that no circumsphere of the link reaches it (exact predicates; determinants stay below 1e300). In
+  `PeriodicVoronoi` the internal positions are the box positions plus a wrap count per axis (kept in [-1, 1]), so a
+  point crossing the box edge moves a little instead of jumping; outputs use the box positions, and since the
+  perturbation order is translation invariant the result is that of a new build.
 
 ## Validation
 
-`make -C Experimental/Delaunay/tests run` runs `test_delaunay` (41 checks, about 15 s; also clean under
-AddressSanitizer/UBSan) and `test_delaunay_mpi` on 1, 2, 3 and 4 tasks (30 checks each):
+`make -C Experimental/Delaunay/tests run` runs `test_delaunay` (69 checks, about 25 s; also clean under
+AddressSanitizer/UBSan) and `test_delaunay_mpi` on 1, 2, 3 and 4 tasks (54 checks each):
 
 - Predicates equal exact 128-bit integer determinants for 2x200000 random small-integer cases (thousands of exactly
   degenerate and cospherical ones), and the filter agrees with the exact evaluation on 100000 nearly degenerate
@@ -106,6 +139,12 @@ AddressSanitizer/UBSan) and `test_delaunay_mpi` on 1, 2, 3 and 4 tasks (30 check
   x-y pencils, Peano-Hilbert ranges, at random and all on the last task give cells and faces bitwise identical to
   the run with all points on task 0, every face present on the task(s) of its two points (on both if they differ)
   and identical there, on 1, 2, 3 and 4 tasks.
+- Moving: `move()` (random points with small and large moves, a lattice start) and `retriangulate()` give the same
+  simplices as a fresh triangulation of the moved points, valid and Delaunay; `update()` with each method, for small
+  moves, large moves crossing the box edges and 5% of the points moving, and from a lattice, is bitwise identical to
+  a new build after every one of 4 updates; with MPI (slab, Peano-Hilbert and random distributions; points crossing
+  task and box boundaries; automatic and incremental) 3 updates are bitwise identical to builds on task 0, on 1-4
+  tasks.
 
 `make -C Experimental/Delaunay/tests compare_cgal CGAL_INCLUDE=...` compares with CGAL 5.6's periodic triangulations: the Delaunay
 edges (with periodic offsets) are identical for random and clustered sets of 1e5 points and random sets of 1e6
@@ -123,11 +162,24 @@ MPI (3D, 4e5 random points in x slabs, 2 cores): 5.7 s on one task, 3.2 s on two
 tasks large surfaces (random assignment of points to tasks) need many more ghosts and searches. Exactly degenerate
 input is slower (many exact evaluations and larger cavities): a periodic 3D lattice takes 25-30 us per point.
 
+Updates (3D, 2e5 random points, one core; triangulation / geometry):
+
+| Points moved | update | new build |
+|---|---|---|
+| all, by 0.3 spacings | 1.72 / 1.61 s | 1.50 / 1.52 s |
+| all, by 0.01 spacings | 1.38 / 1.35 s | 1.74 / 1.58 s |
+| 10%, by 0.3 spacings | 1.42 / 1.43 s | 1.72 / 1.60 s |
+| 1%, by 0.3 spacings | 0.39 / 1.40 s | 1.71 / 1.55 s |
+
+A removal and insertion costs about 6 fresh insertions in 3D (~35 us), an in-place check about 0.6.
+
 ## Limitations and next steps
 
-- The triangulation itself is serial within a task (MPI across tasks; OpenMP only in the geometry). Points cannot
-  be moved or removed (the triangulation is rebuilt). No load balancing: each task triangulates the points it is
-  given.
+- The triangulation itself is serial within a task (MPI across tasks; OpenMP only in the geometry). No load
+  balancing: each task triangulates the points it is given, and `update` keeps the points on their tasks (call
+  `build` after redistributing them).
+- `update` recomputes all cells and faces; recomputing only those around moved points would make partial updates
+  much cheaper. Ghosts that are no longer needed are kept until the next build.
 - Circumspheres are searched with a relative margin of 1e-6: a sliver with a circumcentre wrong by more than that
   (condition number above ~1e10) could in principle be certified incorrectly.
 - Coordinates are rounded to 2^-40 of the box; positions closer than that are duplicates and rejected.

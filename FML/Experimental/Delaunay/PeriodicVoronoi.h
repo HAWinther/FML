@@ -15,6 +15,7 @@
 #include <numeric>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -81,6 +82,15 @@ namespace FML {
                 /// Bound on each MPI message
                 size_t max_message_bytes = 8 * 1024 * 1024;
                 int max_rounds = 100;
+                /// update(): how the triangulation follows the points. Automatic: a sample of the moved vertices is
+                /// tried in place and a cost estimate chooses between moving every vertex (in place where its
+                /// simplices survive, else removed and inserted again) and triangulating from scratch (keeping the
+                /// ghosts). Incremental / Retriangulate force one of them (the result is the same).
+                enum class UpdateMethod { Automatic, Incremental, Retriangulate };
+                UpdateMethod update_method = UpdateMethod::Automatic;
+                /// update(): start again with build() when the ghosts have grown to this many times their number
+                /// after the last build
+                double max_ghost_growth = 3.0;
                 bool verbose = false;
             };
 
@@ -116,6 +126,12 @@ namespace FML {
                 double initial_buffer{0.0}; // in units of the box
                 double time_triangulation{0.0};
                 double time_geometry{0.0};
+                // Updates (cumulative since the last build)
+                int nupdates{0};
+                size_t nmoved_in_place{0};
+                size_t nreinserted{0};
+                int nretriangulated{0};
+                int nrebuilds{0}; // update() that called build() (too many ghosts)
             };
 
             PeriodicVoronoi() = default;
@@ -147,6 +163,41 @@ namespace FML {
                 stats.time_geometry = std::chrono::duration<double>(t2 - t1).count();
             }
 
+            /// Collective. Move the points: points[i] is the new position of the i-th point given to build() (the same
+            /// points on the same tasks in the same order). The result is identical (bitwise) to build() with the
+            /// new positions, but cheaper: the ghosts are kept and moved with their points, vertices are moved in
+            /// place where their simplices survive, the others removed and inserted again or (if more than
+            /// incremental_fraction of them) the triangulation is rebuilt, then the simplices are certified again
+            /// (new ghosts fetched where needed). Points may cross the box edges.
+            void update(const std::vector<Point> & points) {
+                int bad = points.size() != u.size() ? 1 : 0;
+                FML::MaxOverTasks(&bad);
+                if (bad)
+                    throw std::invalid_argument("[PeriodicVoronoi::update] Not the same number of points as in build");
+                int rebuild =
+                    double(stats.nghosts) > opt.max_ghost_growth * double(std::max<size_t>(ghosts_after_build, 1)) ? 1 :
+                                                                                                                     0;
+                FML::MaxOverTasks(&rebuild);
+                if (rebuild) {
+                    const Statistics old = stats;
+                    const std::vector<size_t> ids = gid_local;
+                    build(points, L, opt, &ids);
+                    stats.nupdates = old.nupdates + 1;
+                    stats.nrebuilds = old.nrebuilds + 1;
+                    return;
+                }
+                const auto t0 = std::chrono::steady_clock::now();
+                move_vertices(points);
+                exchange_boxes();
+                certify(false);
+                const auto t1 = std::chrono::steady_clock::now();
+                compute_geometry();
+                const auto t2 = std::chrono::steady_clock::now();
+                stats.time_triangulation = std::chrono::duration<double>(t1 - t0).count();
+                stats.time_geometry = std::chrono::duration<double>(t2 - t1).count();
+                stats.nupdates++;
+            }
+
             size_t ncells() const { return cells_.size(); }
             const std::vector<Cell> & cells() const { return cells_; }
             const std::vector<Face> & faces() const { return faces_; }
@@ -160,8 +211,8 @@ namespace FML {
             /// The (quantized) position of local point c used for the tessellation, in the user's units
             Point position(size_t c) const {
                 Point x = dt.vertex(vertex_of_local[c]);
-                for (auto & v : x)
-                    v *= L;
+                for (int d = 0; d < D; d++)
+                    x[d] = (x[d] - double(wrap[c][d])) * L;
                 return x;
             }
 
@@ -174,7 +225,8 @@ namespace FML {
                 size_t gid;
                 size_t index; // index on the task holding the point
                 int task;
-                Shift shift;
+                Shift shift; // image of the point's internal position
+                Shift wrap;  // the point's internal position minus its position in the box
             };
 
             struct BBox {
@@ -197,6 +249,7 @@ namespace FML {
                 size_t index;
                 int task;
                 Shift shift;
+                Shift wrap;
                 double pos[D];
             };
 
@@ -218,7 +271,14 @@ namespace FML {
             Options opt{};
             double L{1.0};
             Delaunay<D> dt{};
-            std::vector<Point> u{}; // local quantized positions in [0,1)
+            std::vector<Point> u{};    // internal positions of the local points: quantized box position + wrap
+            std::vector<Shift> wrap{}; // per local point, in [-1, 1] per axis (0 after build)
+            BBox mine{};
+            std::vector<BBox> boxes{};
+            std::unordered_set<uint64_t> present{};           // keys of the vertices
+            std::vector<std::unordered_set<uint64_t>> sent{}; // keys sent to each task
+            double b0{0.0};
+            size_t ghosts_after_build{0};
             std::vector<size_t> gid_local{};
             std::vector<int> vertex_of_local{};
             std::vector<VertexInfo> info{}; // per vertex (index - NV)
@@ -431,12 +491,12 @@ namespace FML {
                 }
             }
 
-            void triangulate(const std::vector<Point> & points, const std::vector<size_t> * ids) {
-                const size_t N = points.size();
+            /// Quantized positions in the unit box
+            void quantize(const std::vector<Point> & points, std::vector<Point> & out) const {
                 const double q = std::ldexp(1.0, opt.quantization_bits);
                 int bad = 0;
-                u.assign(N, Point{});
-                for (size_t i = 0; i < N; i++)
+                out.assign(points.size(), Point{});
+                for (size_t i = 0; i < points.size(); i++)
                     for (int d = 0; d < D; d++) {
                         if (!std::isfinite(points[i][d])) {
                             bad = 1;
@@ -447,13 +507,39 @@ namespace FML {
                         x = std::round(x * q) / q;
                         if (x >= 1.0)
                             x -= 1.0;
-                        u[i][d] = x;
+                        out[i][d] = x;
                     }
-                if (ids && ids->size() != N)
-                    bad = 1;
                 FML::MaxOverTasks(&bad);
                 if (bad)
-                    throw std::invalid_argument("[PeriodicVoronoi] Points not finite, or ids of the wrong size");
+                    throw std::invalid_argument("[PeriodicVoronoi] Points not finite");
+            }
+
+            /// The bounding boxes of the local points of all the tasks
+            void exchange_boxes() {
+                BBox b{};
+                b.nonempty = !u.empty();
+                for (int d = 0; d < D; d++) {
+                    b.lo[d] = u.empty() ? 0.0 : u[0][d];
+                    b.hi[d] = b.lo[d];
+                }
+                for (const auto & x : u)
+                    for (int d = 0; d < D; d++) {
+                        b.lo[d] = std::min(b.lo[d], x[d]);
+                        b.hi[d] = std::max(b.hi[d], x[d]);
+                    }
+                mine = b;
+                boxes = FML::GatherFromTasks(&b);
+                build_grid();
+            }
+
+            void triangulate(const std::vector<Point> & points, const std::vector<size_t> * ids) {
+                const size_t N = points.size();
+                int bad = (ids && ids->size() != N) ? 1 : 0;
+                FML::MaxOverTasks(&bad);
+                if (bad)
+                    throw std::invalid_argument("[PeriodicVoronoi] ids of the wrong size");
+                quantize(points, u);
+                wrap.assign(N, Shift{});
 
                 // Global ids
                 size_t n_local = N;
@@ -471,31 +557,18 @@ namespace FML {
                     gid_local[i] = ids ? (*ids)[i] : offset + i;
                 stats.npoints = N;
                 stats.npoints_total = ntotal;
+                exchange_boxes();
 
-                // Bounding boxes of all the tasks
-                BBox mine{};
-                mine.nonempty = N > 0;
-                for (int d = 0; d < D; d++) {
-                    mine.lo[d] = N ? 1.0 : 0.0;
-                    mine.hi[d] = 0.0;
-                }
-                for (const auto & x : u)
-                    for (int d = 0; d < D; d++) {
-                        mine.lo[d] = std::min(mine.lo[d], x[d]);
-                        mine.hi[d] = std::max(mine.hi[d], x[d]);
-                    }
-                const auto boxes = FML::GatherFromTasks(&mine);
-                build_grid();
-
-                // The local points
+                // The local points (vertices NV .. NV+N-1)
                 Point lo, hi;
-                lo.fill(-MAXSHIFT - 0.5);
-                hi.fill(1.0 + MAXSHIFT + 0.5);
+                lo.fill(-2.0 * MAXSHIFT - 0.5);
+                hi.fill(1.0 + 2.0 * MAXSHIFT + 0.5);
                 dt.init(lo, hi);
                 info.clear();
                 vertex_of_local.assign(N, -1);
-                std::unordered_set<uint64_t> present;
+                present.clear();
                 present.reserve(2 * N);
+                sent.assign(size_t(FML::NTasks), std::unordered_set<uint64_t>{});
                 int duplicates = 0;
                 for (size_t i : Delaunay<D>::hilbert_order(u)) {
                     const size_t ndup = dt.statistics().nduplicates;
@@ -506,18 +579,23 @@ namespace FML {
                         continue;
                     }
                     vertex_of_local[i] = v;
-                    info.push_back({gid_local[i], i, FML::ThisTask, Shift{}});
+                    info.push_back({gid_local[i], i, FML::ThisTask, Shift{}, Shift{}});
                 }
                 FML::MaxOverTasks(&duplicates);
                 if (duplicates)
                     throw std::invalid_argument("[PeriodicVoronoi] Duplicate points (after quantization) or ids");
-
-                // Certification rounds
-                const double b0 = std::min(double(MAXSHIFT), opt.initial_buffer * std::pow(double(ntotal), -1.0 / D));
+                b0 = std::min(double(MAXSHIFT), opt.initial_buffer * std::pow(double(ntotal), -1.0 / D));
                 stats.initial_buffer = b0;
+                certify(true);
+                ghosts_after_build = stats.nghosts;
+            }
+
+            /// Ghost searches until every simplex with a local vertex is certified (first: start with the buffer)
+            void certify(bool first) {
+                const size_t N = u.size();
                 double bsuper = 0.0;
                 std::vector<uint64_t> certified; // birth + 1 of the certified simplex in a slot
-                std::vector<std::unordered_set<uint64_t>> sent(size_t(FML::NTasks));
+                int duplicates = 0;
                 for (int round = 0;; round++) {
                     if (round >= opt.max_rounds)
                         throw std::runtime_error("[PeriodicVoronoi] Too many rounds of ghost searches");
@@ -535,7 +613,7 @@ namespace FML {
                         }
                         add_queries(boxes, false, a, b, 0.0, queries, nq);
                     };
-                    if (round == 0) {
+                    if (round == 0 && first) {
                         box_queries(b0);
                     } else {
                         // Every live simplex with a local vertex (the local points are vertices NV .. NV+N-1)
@@ -582,7 +660,7 @@ namespace FML {
                     stats.nqueries += nq;
                     if (opt.verbose && FML::ThisTask == 0)
                         std::cout << "[PeriodicVoronoi] round " << round << ": " << nq_all << " searches\n";
-                    if (nq_all == 0 && round > 0)
+                    if (nq_all == 0 && (round > 0 || !first))
                         break;
 
                     // Searches to the tasks, replies back
@@ -602,6 +680,7 @@ namespace FML {
                             rep.index = i;
                             rep.task = FML::ThisTask;
                             rep.shift = qr.shift;
+                            rep.wrap = wrap[i];
                             for (int d = 0; d < D; d++)
                                 rep.pos[d] = y[d];
                             replies[size_t(qr.requester)].push_back(rep);
@@ -633,7 +712,7 @@ namespace FML {
                             duplicates = 1;
                             continue;
                         }
-                        info.push_back({r.gid, r.index, r.task, r.shift});
+                        info.push_back({r.gid, r.index, r.task, r.shift, r.wrap});
                     }
                     stats.nghosts += pos.size();
                     FML::MaxOverTasks(&duplicates);
@@ -648,6 +727,138 @@ namespace FML {
                     }
                     stats.nrounds = round + 1;
                 }
+                (void)N;
+            }
+
+            /// Move the vertices to the new positions: the local points continuously (internal positions are the
+            /// box positions plus a wrap count, kept in [-1, 1] per axis, so a point crossing the box edge moves a
+            /// little instead of jumping), the ghosts to the new positions of their points (pulled from their tasks)
+            void move_vertices(const std::vector<Point> & points) {
+                const size_t N = u.size();
+                std::vector<Point> wrapped;
+                quantize(points, wrapped);
+                for (size_t i = 0; i < N; i++)
+                    for (int d = 0; d < D; d++) {
+                        const double old_box = u[i][d] - double(wrap[i][d]);
+                        const double step = wrapped[i][d] - old_box;
+                        int w = wrap[i][d] + (step > 0.5 ? -1 : (step < -0.5 ? 1 : 0));
+                        if (w > 1 || w < -1)
+                            w = 0;
+                        wrap[i][d] = w;
+                        u[i][d] = wrapped[i][d] + double(w);
+                    }
+
+                // New positions (and wraps) of the ghosts from their tasks
+                struct Request {
+                    int requester;
+                    size_t index;
+                };
+                struct Answer {
+                    int task;
+                    size_t index;
+                    double pos[D];
+                    Shift wrap;
+                };
+                std::vector<std::vector<Request>> requests(size_t(FML::NTasks));
+                std::vector<std::unordered_set<size_t>> asked(size_t(FML::NTasks));
+                for (const auto & I : info)
+                    if (I.task != FML::ThisTask && asked[size_t(I.task)].insert(I.index).second)
+                        requests[size_t(I.task)].push_back({FML::ThisTask, I.index});
+                std::vector<Request> todo;
+                FML::COMMUNICATION::exchange_records_chunked(
+                    requests,
+                    [&](const Request * r, size_t n) { todo.insert(todo.end(), r, r + n); },
+                    opt.max_message_bytes);
+                std::vector<std::vector<Answer>> answers(size_t(FML::NTasks));
+                for (const auto & r : todo) {
+                    Answer a;
+                    a.task = FML::ThisTask;
+                    a.index = r.index;
+                    for (int d = 0; d < D; d++)
+                        a.pos[d] = u[r.index][d];
+                    a.wrap = wrap[r.index];
+                    answers[size_t(r.requester)].push_back(a);
+                }
+                std::unordered_map<uint64_t, std::pair<Point, Shift>> remote;
+                FML::COMMUNICATION::exchange_records_chunked(
+                    answers,
+                    [&](const Answer * a, size_t n) {
+                        for (size_t k = 0; k < n; k++) {
+                            Point x;
+                            for (int d = 0; d < D; d++)
+                                x[d] = a[k].pos[d];
+                            remote[(uint64_t(a[k].task) << 40) | uint64_t(a[k].index)] = {x, a[k].wrap};
+                        }
+                    },
+                    opt.max_message_bytes);
+
+                // The new position of every vertex
+                std::vector<Point> target(info.size());
+                for (size_t k = 0; k < info.size(); k++) {
+                    auto & I = info[k];
+                    Point base;
+                    if (I.task == FML::ThisTask) {
+                        base = u[I.index];
+                        I.wrap = wrap[I.index];
+                    } else {
+                        const auto & rw = remote.at((uint64_t(I.task) << 40) | uint64_t(I.index));
+                        base = rw.first;
+                        I.wrap = rw.second;
+                    }
+                    for (int d = 0; d < D; d++)
+                        target[k][d] = base[d] + double(I.shift[d]);
+                }
+
+                // Move in place where the simplices survive and remove and insert the others, or triangulate from
+                // scratch. Estimated costs (measured, per vertex, in units of a fresh insertion): an in-place check
+                // ~0.6 (3D) / 0.4 (2D), a removal and insertion ~6 (3D) / 6 (2D)
+                std::vector<int> moved;
+                for (size_t k = 0; k < info.size(); k++)
+                    if (dt.vertex(NV + int(k)) != target[k])
+                        moved.push_back(NV + int(k));
+                using UM = typename Options::UpdateMethod;
+                bool incremental = opt.update_method == UM::Incremental;
+                std::vector<int> failed;
+                std::vector<char> tried(moved.size(), 0);
+                if (opt.update_method == UM::Automatic && !moved.empty()) {
+                    const size_t nsample = std::min<size_t>(moved.size(), 256);
+                    size_t nfail = 0;
+                    for (size_t m = 0; m < nsample; m++) {
+                        const size_t k = m * moved.size() / nsample;
+                        tried[k] = 1;
+                        if (!dt.move_in_place(moved[k], target[size_t(moved[k] - NV)])) {
+                            failed.push_back(moved[k]);
+                            nfail++;
+                        }
+                    }
+                    const double check = D == 3 ? 0.6 : 0.4, reinsert = 6.0;
+                    const double fail_fraction = double(nfail) / double(nsample);
+                    incremental = double(moved.size()) * (check + fail_fraction * reinsert) < double(info.size());
+                }
+                if (incremental) {
+                    for (size_t k = 0; k < moved.size(); k++)
+                        if (!tried[k] && !dt.move_in_place(moved[k], target[size_t(moved[k] - NV)]))
+                            failed.push_back(moved[k]);
+                }
+                int error = 0;
+                try {
+                    if (incremental) {
+                        for (int v : failed)
+                            dt.move(v, target[size_t(v - NV)]);
+                        stats.nreinserted += failed.size();
+                        stats.nmoved_in_place += moved.size() - failed.size();
+                    } else {
+                        for (int v : moved)
+                            dt.set_position(v, target[size_t(v - NV)]);
+                        dt.retriangulate();
+                        stats.nretriangulated++;
+                    }
+                } catch (const std::invalid_argument &) {
+                    error = 1;
+                }
+                FML::MaxOverTasks(&error);
+                if (error)
+                    throw std::invalid_argument("[PeriodicVoronoi::update] Duplicate points (after quantization)");
             }
 
             //======================================================================
@@ -767,7 +978,7 @@ namespace FML {
                                 F.f.i = Bi.gid;
                                 F.f.j = Bj.gid;
                                 for (int d = 0; d < D; d++)
-                                    F.f.shift[d] = Bj.shift[d] - Bi.shift[d];
+                                    F.f.shift[d] = (Bj.shift[d] + Bj.wrap[d]) - (Bi.shift[d] + Bi.wrap[d]);
                                 F.f.task_i = Bi.task;
                                 F.f.task_j = Bj.task;
                                 F.f.index_i = Bi.index;
@@ -777,7 +988,7 @@ namespace FML {
                                 // Centroid in i's box coordinates (the base vertex minus its image shift)
                                 const Point & pb = dt.vertex(base);
                                 for (int d = 0; d < D; d++)
-                                    F.f.centroid[d] = (pb[d] - double(Bi.shift[d])) + F.centroid_rel[d];
+                                    F.f.centroid[d] = (pb[d] - double(Bi.shift[d] + Bi.wrap[d])) + F.centroid_rel[d];
                             }
                         }
                     }
@@ -858,7 +1069,7 @@ namespace FML {
                     cells_[c].id = gid_local[c];
                     cells_[c].volume = vol;
                     for (int d = 0; d < D; d++)
-                        cells_[c].centroid[d] = u[c][d] + (vol > 0.0 ? cen[d] / vol : 0.0);
+                        cells_[c].centroid[d] = (u[c][d] - double(wrap[c][d])) + (vol > 0.0 ? cen[d] / vol : 0.0);
                 }
 
                 // To the user's units

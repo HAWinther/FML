@@ -167,38 +167,101 @@ namespace {
     }
 
     template <int D>
+    using FaceKey = std::tuple<size_t, size_t, std::array<int, D>>;
+    template <int D>
+    FaceKey<D> key_of(const FaceRecord<D> & f) {
+        std::array<int, D> s;
+        for (int d = 0; d < D; d++)
+            s[d] = f.shift[d];
+        return FaceKey<D>{f.i, f.j, s};
+    }
+
+    /// The reference: all the points on task 0 (collective; the maps are filled on every task)
+    template <int D>
+    void reference(const std::vector<std::array<double, D>> & p,
+                   double L,
+                   std::map<size_t, CellRecord<D>> & ref_cells,
+                   std::map<FaceKey<D>, FaceRecord<D>> & ref_faces) {
+        std::vector<std::array<double, D>> local;
+        std::vector<size_t> ids;
+        if (FML::ThisTask == 0) {
+            local = p;
+            ids.resize(p.size());
+            std::iota(ids.begin(), ids.end(), size_t(0));
+        }
+        PeriodicVoronoi<D> v(local, L, {}, &ids);
+        std::vector<CellRecord<D>> c;
+        std::vector<FaceRecord<D>> f;
+        collect<D>(v, c, f);
+        ref_cells.clear();
+        ref_faces.clear();
+        for (const auto & r : c)
+            ref_cells[r.id] = r;
+        for (const auto & r : f)
+            ref_faces[key_of<D>(r)] = r;
+    }
+
+    /// Gather every task's cells and faces on task 0 and compare with the reference (collective; true on all
+    /// tasks if identical)
+    template <int D>
+    bool compare(const PeriodicVoronoi<D> & v,
+                 size_t npoints,
+                 const std::vector<int> & owner,
+                 const std::map<size_t, CellRecord<D>> & ref_cells,
+                 const std::map<FaceKey<D>, FaceRecord<D>> & ref_faces,
+                 size_t & nfaces,
+                 size_t & nshared) {
+        std::vector<CellRecord<D>> c;
+        std::vector<FaceRecord<D>> f;
+        collect<D>(v, c, f);
+        const auto all_cells = gather_on_root(c);
+        const auto all_faces = gather_on_root(f);
+        int ok = 1;
+        size_t ncells = 0;
+        nfaces = nshared = 0;
+        if (FML::ThisTask == 0) {
+            // Cells: each once, identical
+            std::vector<char> seen(npoints, 0);
+            for (const auto & r : all_cells) {
+                const auto it = ref_cells.find(r.id);
+                bool same = it != ref_cells.end() && r.id < seen.size() && !seen[r.id] && r.volume == it->second.volume;
+                for (int d = 0; d < D && same; d++)
+                    same = r.centroid[d] == it->second.centroid[d];
+                ok = ok && same;
+                if (r.id < seen.size())
+                    seen[r.id] = 1;
+                ncells++;
+            }
+            ok = ok && ncells == npoints;
+            // Faces: identical, held by the task(s) of their points, once per such task
+            std::map<FaceKey<D>, std::vector<int>> holders;
+            for (const auto & r : all_faces) {
+                const auto it = ref_faces.find(key_of<D>(r));
+                ok = ok && it != ref_faces.end() && same_geometry<D>(r, it->second) &&
+                     (r.holder == owner[r.i] || r.holder == owner[r.j]) && r.task_i == owner[r.i] &&
+                     r.task_j == owner[r.j];
+                holders[key_of<D>(r)].push_back(r.holder);
+            }
+            for (const auto & kv : ref_faces) {
+                const auto it = holders.find(kv.first);
+                const int ti = owner[std::get<0>(kv.first)], tj = owner[std::get<1>(kv.first)];
+                const size_t expected = ti == tj ? 1 : 2;
+                ok = ok && it != holders.end() && it->second.size() == expected;
+                nfaces++;
+                nshared += ti != tj;
+            }
+        }
+        FML::MaxOverTasks(&ok);
+        return ok;
+    }
+
+    template <int D>
     void test_distributions(const std::string & type, size_t n) {
         const double L = 50.0;
         const auto p = make_points<D>(type, n, L, 3);
-        using Key = std::tuple<size_t, size_t, std::array<int, D>>;
-        auto key_of = [](const FaceRecord<D> & f) {
-            std::array<int, D> s;
-            for (int d = 0; d < D; d++)
-                s[d] = f.shift[d];
-            return Key{f.i, f.j, s};
-        };
-
-        // The reference: all the points on task 0
         std::map<size_t, CellRecord<D>> ref_cells;
-        std::map<Key, FaceRecord<D>> ref_faces;
-        {
-            std::vector<std::array<double, D>> local;
-            std::vector<size_t> ids;
-            if (FML::ThisTask == 0) {
-                local = p;
-                ids.resize(p.size());
-                std::iota(ids.begin(), ids.end(), size_t(0));
-            }
-            PeriodicVoronoi<D> v(local, L, {}, &ids);
-            std::vector<CellRecord<D>> c;
-            std::vector<FaceRecord<D>> f;
-            collect<D>(v, c, f);
-            for (const auto & r : c)
-                ref_cells[r.id] = r;
-            for (const auto & r : f)
-                ref_faces[key_of(r)] = r;
-        }
-
+        std::map<FaceKey<D>, FaceRecord<D>> ref_faces;
+        reference<D>(p, L, ref_cells, ref_faces);
         for (std::string how : {"slab", "pencil", "hilbert", "random", "last"}) {
             const auto owner = distribute<D>(how, p, L);
             std::vector<std::array<double, D>> local;
@@ -209,46 +272,8 @@ namespace {
                     ids.push_back(i);
                 }
             PeriodicVoronoi<D> v(local, L, {}, &ids);
-            std::vector<CellRecord<D>> c;
-            std::vector<FaceRecord<D>> f;
-            collect<D>(v, c, f);
-            const auto all_cells = gather_on_root(c);
-            const auto all_faces = gather_on_root(f);
-            int ok = 1;
-            size_t ncells = 0, nfaces = 0, nshared = 0;
-            if (FML::ThisTask == 0) {
-                // Cells: each once, identical
-                std::vector<char> seen(p.size(), 0);
-                for (const auto & r : all_cells) {
-                    const auto it = ref_cells.find(r.id);
-                    bool same = it != ref_cells.end() && !seen[r.id] && r.volume == it->second.volume;
-                    for (int d = 0; d < D && same; d++)
-                        same = r.centroid[d] == it->second.centroid[d];
-                    ok = ok && same;
-                    if (r.id < seen.size())
-                        seen[r.id] = 1;
-                    ncells++;
-                }
-                ok = ok && ncells == p.size();
-                // Faces: identical, held by the task(s) of their points, once per such task
-                std::map<Key, std::vector<int>> holders;
-                for (const auto & r : all_faces) {
-                    const auto it = ref_faces.find(key_of(r));
-                    ok = ok && it != ref_faces.end() && same_geometry<D>(r, it->second) &&
-                         (r.holder == owner[r.i] || r.holder == owner[r.j]) && r.task_i == owner[r.i] &&
-                         r.task_j == owner[r.j];
-                    holders[key_of(r)].push_back(r.holder);
-                }
-                for (const auto & kv : ref_faces) {
-                    const auto it = holders.find(kv.first);
-                    const int ti = owner[std::get<0>(kv.first)], tj = owner[std::get<1>(kv.first)];
-                    const size_t expected = ti == tj ? 1 : 2;
-                    ok = ok && it != holders.end() && it->second.size() == expected;
-                    nfaces++;
-                    nshared += ti != tj;
-                }
-            }
-            FML::MaxOverTasks(&ok);
+            size_t nfaces, nshared;
+            const bool ok = compare<D>(v, p.size(), owner, ref_cells, ref_faces, nfaces, nshared);
             size_t ghosts = v.statistics().nghosts, nq = v.statistics().nqueries;
             FML::SumOverTasks(&ghosts);
             FML::SumOverTasks(&nq);
@@ -258,6 +283,64 @@ namespace {
                       std::to_string(nfaces) + " faces, " + std::to_string(nshared) + " shared between tasks; " +
                       std::to_string(v.statistics().nrounds) + " rounds, " + std::to_string(ghosts) + " ghosts, " +
                       std::to_string(nq) + " searches)");
+        }
+    }
+
+    /// update(): the points move (and cross task and box boundaries but stay on their tasks); after each update the
+    /// cells and faces are bitwise identical to a build of the new positions with all points on task 0
+    template <int D>
+    void test_update(const std::string & type, size_t n) {
+        using PV = PeriodicVoronoi<D>;
+        using UM = typename PV::Options::UpdateMethod;
+        const double L = 50.0;
+        const auto p0 = make_points<D>(type, n, L, 3);
+        const double h = L * std::pow(double(p0.size()), -1.0 / D);
+        for (std::string how : {"slab", "hilbert", "random"}) {
+            for (UM method : {UM::Automatic, UM::Incremental}) {
+                auto p = p0;
+                const auto owner = distribute<D>(how, p, L);
+                std::vector<size_t> ids;
+                for (size_t i = 0; i < p.size(); i++)
+                    if (owner[i] == FML::ThisTask)
+                        ids.push_back(i);
+                auto local_points = [&]() {
+                    std::vector<std::array<double, D>> local;
+                    for (size_t i : ids)
+                        local.push_back(p[i]);
+                    return local;
+                };
+                typename PV::Options opt;
+                opt.update_method = method;
+                PV v(local_points(), L, opt, &ids);
+                std::mt19937_64 rng(99);
+                std::normal_distribution<double> G(0.0, 0.3 * h);
+                bool ok = true;
+                size_t nfaces = 0, nshared = 0;
+                for (int step = 0; step < 3; step++) {
+                    for (auto & x : p)
+                        for (int d = 0; d < D; d++) {
+                            x[d] += G(rng) + (step == 1 ? 0.0 : 0.7 * h);
+                            x[d] -= L * std::floor(x[d] / L);
+                        }
+                    v.update(local_points());
+                    std::map<size_t, CellRecord<D>> ref_cells;
+                    std::map<FaceKey<D>, FaceRecord<D>> ref_faces;
+                    reference<D>(p, L, ref_cells, ref_faces);
+                    ok = compare<D>(v, p.size(), owner, ref_cells, ref_faces, nfaces, nshared) && ok;
+                }
+                size_t inplace = v.statistics().nmoved_in_place, reins = v.statistics().nreinserted;
+                int retri = v.statistics().nretriangulated;
+                FML::SumOverTasks(&inplace);
+                FML::SumOverTasks(&reins);
+                FML::SumOverTasks(&retri);
+                check(ok,
+                      std::to_string(D) + "D " + type + " (N = " + std::to_string(p.size()) + "), " + how + " on " +
+                          std::to_string(FML::NTasks) + " tasks, " +
+                          (method == UM::Automatic ? "automatic" : "incremental") +
+                          ": 3 updates bitwise identical to builds on task 0 (" + std::to_string(inplace) +
+                          " in place, " + std::to_string(reins) + " reinserted, " + std::to_string(retri) +
+                          " retriangulations)");
+            }
         }
     }
 
@@ -271,5 +354,9 @@ int main(int argc, char ** argv) {
     test_distributions<3>("random", 20000);
     test_distributions<3>("clustered", 20000);
     test_distributions<3>("lattice", 4096);
+    test_update<2>("random", 6000);
+    test_update<2>("lattice", 4900);
+    test_update<3>("random", 6000);
+    test_update<3>("clustered", 6000);
     return FML::TESTS::summary("Delaunay MPI");
 }
