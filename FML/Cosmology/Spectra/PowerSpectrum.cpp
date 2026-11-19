@@ -4,6 +4,7 @@
 #include <FML/AxionHMcode/AxionHMcode.h>
 #include <FML/Cosmology/Background/FieldEquation_BransDicke.h>
 #include <FML/Emulator/EuclidEmulator2.h>
+#include <FML/Emulator/EMantis/EMantis.h>
 #include <FML/Spline/Spline.h>
 #include <FML/HaloModel/HMcode2016.h>
 #include <FML/HaloModel/HMcode2020.h>
@@ -43,6 +44,15 @@ namespace FML::COSMOLOGY {
         std::unique_ptr<Perturbations> pert;
         std::unique_ptr<PowerSpectrum> ps;
         double phi_ini = 1.0, h_ratio = 1.0, sigma8 = 0.0; // h_GR / h_BD = sqrt(phi_ini)
+    };
+
+    // EMantis: the GR universe with the same parameters (its linear and nonlinear P(k)) and ln B of e-MANTIS
+    struct EMantisBoostState {
+        std::unique_ptr<BackgroundCosmology> cosmo;
+        std::unique_ptr<RecombinationHistory> rec;
+        std::unique_ptr<Perturbations> pert;
+        std::unique_ptr<PowerSpectrum> ps;
+        std::unique_ptr<NonlinearRatioTable> boost; // null for fR0 = 0
     };
 
     using namespace Constants;
@@ -726,6 +736,8 @@ namespace FML::COSMOLOGY {
             solve_ee2();
         } else if (options.nonlinear == N::JBDBoost) {
             solve_jbd_boost();
+        } else if (options.nonlinear == N::EMantis) {
+            solve_emantis();
         }
         matter_solved = true;
     }
@@ -743,9 +755,26 @@ namespace FML::COSMOLOGY {
                             axionhm      ? axionhm->ratio(x, k) :
                             ee2          ? ee2->ratio(x, k) :
                             jbd          ? jbd->ps->nonlinear_ratio(x, k * jbd->h_ratio) :
+                            emantis      ? emantis->ps->get_matter_power_spectrum_nonlinear(x, k) /
+                                          get_matter_power_spectrum_extrapolated(x, k) * emantis_boost(x, k) :
                                            1.0;
         return react && x >= react->x_min() ? base * (*react)(std::min(x, react->x_max()),
                                                                     k * Mpc / cosmo.get_params().h) : base;
+    }
+
+    // The e-MANTIS boost B = P_fR / P_GR. Above its z_max = 3 it follows linear theory from there:
+    // B(x) = B(x_min) L(x) / L(x_min) with L = P_fR,lin / P_GR,lin (continuous, and -> 1 at early times)
+    double PowerSpectrum::emantis_boost(double x, double k) const {
+        if (!emantis || !emantis->boost)
+            return 1.0;
+        const auto & t = *emantis->boost;
+        if (x >= t.x_min)
+            return t.ratio(x, k);
+        auto L = [&](double xx) {
+            return get_matter_power_spectrum_extrapolated(xx, k) /
+                   emantis->ps->get_matter_power_spectrum_extrapolated(xx, k);
+        };
+        return t.ratio(t.x_min, k) * L(x) / L(t.x_min);
     }
 
     const char * PowerSpectrum::nonlinear_name() const {
@@ -759,6 +788,7 @@ namespace FML::COSMOLOGY {
             case N::AxionHMcode: return options.axionhmcode_basic ? "AxionHMcode (basic)" : "AxionHMcode (Dome 2024)";
             case N::EE2: return "EuclidEmulator2";
             case N::JBDBoost: return jbd_name.c_str();
+            case N::EMantis: return emantis_name.c_str();
             default: return "linear";
         }
     }
@@ -1092,6 +1122,104 @@ namespace FML::COSMOLOGY {
             std::cout << "[PowerSpectrum] jbd_boost: GR universe with h = " << g.h << " (phi_ini = " << s->phi_ini
                       << "), A_s = " << g.A_s << " (sigma_8 = " << s->sigma8 << ")\n";
         jbd = std::move(s);
+    }
+
+    // e-MANTIS (Saez-Casares et al., arXiv:2303.08899): P_fR(k) = P_GR(k) B(k), with P_GR the nonlinear P(k) of the
+    // GR universe with the same parameters (initial conditions) and B = P_fR / P_GR from the emulator
+    void PowerSpectrum::solve_emantis() {
+        using N = PowerSpectrumOptions::Nonlinear;
+        namespace EM = FML::EMULATOR::EMANTIS;
+        const auto & p = cosmo.get_params();
+        const std::string msg = "PowerSpectrum: nonlinear = emantis ";
+        if (p.model != "fr")
+            throw std::invalid_argument(msg + "needs model = fr (Hu-Sawicky f(R) with fR_n = 1)");
+        if (p.model_param("fR_n") != 1.0)
+            throw std::invalid_argument(msg + "needs fR_n = 1 (the e-MANTIS f(R) emulator is for n = 1)");
+        if (p.OmegaK != 0.0 || comps.size() != 1)
+            throw std::invalid_argument(msg + "needs a flat universe and one perturbation component");
+        const N gr = options.emantis_gr;
+        if (gr != N::EE2 && gr != N::HMcode2020 && gr != N::HMcode2016 && gr != N::Halofit && gr != N::HalofitBird)
+            throw std::invalid_argument(msg + "emantis_gr must be ee2, hmcode2020, hmcode2016, halofit or "
+                                              "halofit_bird");
+        if (options.emantis_n_z < 4)
+            throw std::invalid_argument(msg + "needs emantis_n_z >= 4");
+        const double fR0 = std::abs(p.model_param("fR0"));
+        double logfR0 = fR0 > 0.0 ? -std::log10(fR0) : 0.0;
+        if (fR0 > 0.0 && (logfR0 < 4.0 - 1e-10 || logfR0 > 7.0 + 1e-10)) {
+            std::ostringstream o;
+            o << msg << "needs 1e-7 <= |fR0| <= 1e-4 (the e-MANTIS range), got " << fR0;
+            throw std::invalid_argument(o.str());
+        }
+        logfR0 = std::clamp(logfR0, 4.0, 7.0);
+        auto s = std::make_unique<EMantisBoostState>();
+
+        // The GR universe: the same parameters with model = lcdm (f(R) has the LCDM background)
+        CosmologyParameters g = p;
+        g.model = "lcdm";
+        g.model_params.clear();
+        s->cosmo = std::make_unique<BackgroundCosmology>(g);
+        s->cosmo->solve();
+        s->rec = std::make_unique<RecombinationHistory>(*s->cosmo, rec.get_options());
+        s->rec->solve();
+        s->pert = std::make_unique<Perturbations>(*s->cosmo, *s->rec, pert.get_options());
+        s->pert->solve();
+        PowerSpectrumOptions nl = options;
+        nl.nonlinear = gr;
+        nl.lensing = false;
+        s->ps = std::make_unique<PowerSpectrum>(*s->cosmo, *s->rec, *s->pert, nl);
+        try {
+            s->ps->solve_matter();
+        } catch (const std::exception & e) {
+            throw std::runtime_error(msg + "(the GR universe): " + e.what());
+        }
+
+        // The boost on (x, ln k): the bins of the emulator, and below its first bin its extrapolation down to
+        // 1e-3 h/Mpc (B -> 1). Linear in a between its nodes, so the table is dense in x
+        if (fR0 > 0.0) {
+            // Loaded once per process (const after construction)
+            static const EM::NonLinearMGBoostEmulator emu("fR");
+            EM::Parameters q;
+            q.Omega_b = cosmo.rhoB(0.0);
+            q.Omega_m = cosmo.rhoB(0.0) + cosmo.rhoCDM(0.0) + cosmo.rhoNcdm(0.0);
+            q.h = p.h;
+            q.n_s = p.n_s;
+            q.A_s = primordial_power_spectrum(0.05 / Mpc); // e-MANTIS: A_s at the pivot 0.05/Mpc
+            q.logfR0 = logfR0;
+            const auto & kb = emu.kbins();
+            std::vector<double> kgrid;
+            for (int i = 0; i < 30; i++)
+                kgrid.push_back(1e-3 * std::pow(kb.front() / 1e-3, i / 30.0));
+            kgrid.insert(kgrid.end(), kb.begin(), kb.end());
+            std::vector<double> lk;
+            for (double k : kgrid)
+                lk.push_back(std::log(k));
+            auto t = std::make_unique<NonlinearRatioTable>();
+            t->h = p.h;
+            t->x_min = std::log(emu.range("aexp").first);
+            t->lnk_min = lk.front();
+            t->lnk_max = lk.back();
+            const auto xs = Utils::linspace(t->x_min, 0.0, options.emantis_n_z);
+            std::vector<std::vector<double>> logB;
+            try {
+                for (double x : xs) {
+                    const double a = std::clamp(std::exp(x), emu.range("aexp").first, 1.0);
+                    auto B = emu.boost(q, a, kgrid, true, options.emantis_extrapolate_cosmo);
+                    for (double & b : B)
+                        b = std::log(b);
+                    logB.push_back(std::move(B));
+                }
+            } catch (const EM::EmulationRangeError & e) {
+                throw std::invalid_argument(msg + "(emantis_extrapolate_cosmo = true clamps the parameters to the "
+                                                  "range): " + e.what());
+            }
+            t->log_ratio.create(xs, lk, logB, "e-MANTIS ln(P_fR/P_GR)");
+            s->boost = std::move(t);
+        }
+        emantis_name = std::string("e-MANTIS f(R) x GR ") + s->ps->nonlinear_name();
+        if (Utils::verbose)
+            std::cout << "[PowerSpectrum] emantis: |fR0| = " << fR0 << ", GR nonlinear method "
+                      << s->ps->nonlinear_name() << "\n";
+        emantis = std::move(s);
     }
 
     void PowerSpectrum::solve_axionhmcode() {

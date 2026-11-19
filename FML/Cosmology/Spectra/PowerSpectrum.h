@@ -37,8 +37,8 @@
 //   C_ell^phiphi   = 4 pi int dk/k P_R(k) phi_ell(k)^2
 // (Phi_ell^nu and sin_K in a curved universe), followed by the lensed spectra from Lensing::lens.
 //
-// Nonlinear (Halofit, HalofitBird, HMcode2016, HMcode2020, AxionHMcode, EE2, JBDBoost): P_NL = P_L * ratio(x, k); the
-// Weyl potential in the Limber part of C_ell^phiphi is scaled by sqrt(P_NL/P_L) (as CLASS), so the lensed
+// Nonlinear (Halofit, HalofitBird, HMcode2016, HMcode2020, AxionHMcode, EE2, JBDBoost, EMantis): P_NL = P_L *
+// ratio(x, k); the Weyl potential in the Limber part of C_ell^phiphi is scaled by sqrt(P_NL/P_L) (as CLASS), so the lensed
 // spectra include nonlinear lensing.
 //
 // Matter power spectrum of the comoving-gauge density contrast of CDM + baryons (+ massive neutrinos, + an ultralight
@@ -109,7 +109,9 @@ namespace FML::COSMOLOGY {
         int lensing_limber_ell = 30;
         // Nonlinear matter power for the lensing potential and P_NL(k) (Halofit.h, FML/HaloModel/HMcode2016.h, HMcode2020.h,
         // FML/AxionHMcode/AxionHMcode.h for the mixed axion dark matter of model axion)
-        enum class Nonlinear { None, Halofit, HalofitBird, HMcode2016, HMcode2020, ReACT, AxionHMcode, EE2, JBDBoost };
+        enum class Nonlinear {
+            None, Halofit, HalofitBird, HMcode2016, HMcode2020, ReACT, AxionHMcode, EE2, JBDBoost, EMantis
+        };
         Nonlinear nonlinear = Nonlinear::None;
         // HMcode-2016 baryonic feedback (CAMB HMCode_A_baryon, HMCode_eta_baryon; also for jbd_boost_gr = hmcode2016):
         // concentration amplitude A and bloating eta = eta0 - 0.3 sigma_8(z). Defaults: dark matter only. With
@@ -127,6 +129,16 @@ namespace FML::COSMOLOGY {
         // (EE2 as the paper, HMcode2020, HMcode2016, Halofit or HalofitBird). 1% for omega >= 100, z <= 3, k <= 1 h/Mpc
         // (2% to 5 h/Mpc) against N-body simulations.
         Nonlinear jbd_boost_gr = Nonlinear::EE2;
+        // EMantis (model fr, fR_n = 1; the e-MANTIS emulator, Saez-Casares et al., arXiv:2303.08899,
+        // FML/Emulator/EMantis): P_fR = P_GR B, with P_GR the nonlinear P(k) of the GR (lcdm) universe with the same
+        // parameters (the same initial conditions) from the method emantis_gr (EE2, HMcode2020, HMcode2016, Halofit or
+        // HalofitBird) and B = P_fR / P_GR of e-MANTIS: 1e-7 <= |fR0| <= 1e-4, Omega_b, Omega_m, h, n_s, A_s (sigma8 of
+        // LCDM) in its ranges (out of range: an error, or clamped to the range with emantis_extrapolate_cosmo), z <= 3
+        // (above: B(z = 3) times the growth of P_fR,lin / P_GR,lin since z = 3), k <= 9.7 h/Mpc (held above). B is
+        // tabulated at emantis_n_z scale factors in [0.25, 1]
+        Nonlinear emantis_gr = Nonlinear::EE2;
+        int emantis_n_z = 60;
+        bool emantis_extrapolate_cosmo = false;
         // AxionHMcode (Vogt et al. 2022; Dome et al. 2024 with axionhmcode_basic = false): P_NL/P_L tabulated at
         // axionhmcode_n_z redshifts in [0, axionhmcode_z_max] (uniform in ln a) and 1e-3 to 100 h/Mpc. Its Dome
         // calibration covers z = 1 - 8, axion fractions of the matter 0.01 - 0.3 and m = 10^-24.5 eV: elsewhere it is an
@@ -331,12 +343,15 @@ namespace FML::COSMOLOGY {
         std::unique_ptr<HALOMODEL::ReactionTable> react;
         std::unique_ptr<struct NonlinearRatioTable> axionhm, ee2;
         std::unique_ptr<struct JBDBoostState> jbd;
+        std::unique_ptr<struct EMantisBoostState> emantis;
         void solve_react();
         void solve_axionhmcode();
         void solve_ee2();
         void solve_jbd_boost();
-        std::string jbd_name;
+        void solve_emantis();
+        std::string jbd_name, emantis_name;
         double nonlinear_ratio(double x, double k) const;
+        double emantis_boost(double x, double k) const;
         const char * nonlinear_name() const;
         // tensor D_ell [muK^2] at (non-integer) ell: 0 = TT, 1 = EE, 2 = BB, 3 = TE; linear between integers
         double tensor_dell(int which, double ell) const;

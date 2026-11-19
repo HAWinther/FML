@@ -12,6 +12,7 @@ The Einstein--Boltzmann solver accepts:
 | `react` | The ReACT halo-model reaction (computed natively) times HMcode-2020 of the matched GR pseudo cosmology |
 | `ee2` | EuclidEmulator2 boost (flat `lcdm`, `w0wa`, within its parameter ranges) |
 | `jbd_boost` | `model = jbd`: Sletmoen & Winther (2024), the Brans–Dicke boost from the mapped GR universe with `jbd_boost_gr` (`ee2` by default) |
+| `emantis` | `model = fr` (`fR_n = 1`): the e-MANTIS f(R) boost (Sáez-Casares et al. 2023) times the nonlinear P(k) of the GR universe with the same parameters from `emantis_gr` (`ee2` by default) |
 | `axionhmcode` | Mixed cold/ultralight-axion halo model ([AxionHMcode](../../AxionHMcode/README.md), Vogt et al. 2022, Dome et al. 2024) for `model = axion` |
 
 For example, from `FML/Cosmology/EinsteinBoltzmannSolver`:

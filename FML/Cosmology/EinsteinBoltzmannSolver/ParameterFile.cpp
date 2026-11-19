@@ -98,7 +98,8 @@ namespace FML::COSMOLOGY {
                                                        {"halofit_bird", N::HalofitBird}, {"hmcode2016", N::HMcode2016},
                                                        {"hmcode2020", N::HMcode2020},
                                                        {"react", N::ReACT}, {"axionhmcode", N::AxionHMcode},
-                                                       {"ee2", N::EE2}, {"jbd_boost", N::JBDBoost}};
+                                                       {"ee2", N::EE2}, {"jbd_boost", N::JBDBoost},
+                                                       {"emantis", N::EMantis}};
             return m;
         }
         const std::map<std::string, Perturbations::SourceTerm> & source_terms() {
@@ -564,7 +565,8 @@ namespace FML::COSMOLOGY {
                  "nonlinear",
                  "nonlinear matter power for lensing and P(k): none, halofit, halofit_bird, hmcode2016, hmcode2020, react, "
                  "axionhmcode (mixed axion dark matter, model axion), ee2 (EuclidEmulator2), jbd_boost (model jbd: "
-                 "Sletmoen & Winther 2024, the BD boost from GR with jbd_boost_gr)",
+                 "Sletmoen & Winther 2024, the BD boost from GR with jbd_boost_gr), emantis (model fr, fR_n = 1: the "
+                 "e-MANTIS f(R) boost times GR from emantis_gr)",
                  [](S & s, const std::string & v) { s.ps.nonlinear = enum_value(nonlinear_methods(), v); },
                  [](const S & s) { return enum_name(nonlinear_methods(), s.ps.nonlinear); }},
                 D("PowerSpectrum", "hmcode2016_A", "HMcode-2016 baryonic feedback: halo concentration amplitude (3.13: dark matter only; CAMB HMCode_A_baryon)", REF(double, ps.hmcode2016_A)),
@@ -581,6 +583,17 @@ namespace FML::COSMOLOGY {
                  "hmcode2016, halofit, halofit_bird",
                  [](S & s, const std::string & v) { s.ps.jbd_boost_gr = enum_value(nonlinear_methods(), v); },
                  [](const S & s) { return enum_name(nonlinear_methods(), s.ps.jbd_boost_gr); }},
+                {"PowerSpectrum",
+                 "emantis_gr",
+                 "emantis: the GR nonlinear method of the GR universe with the same parameters: ee2, hmcode2020, "
+                 "hmcode2016, halofit, halofit_bird",
+                 [](S & s, const std::string & v) { s.ps.emantis_gr = enum_value(nonlinear_methods(), v); },
+                 [](const S & s) { return enum_name(nonlinear_methods(), s.ps.emantis_gr); }},
+                I("PowerSpectrum", "emantis_n_z", "emantis: scale factors of the table of the e-MANTIS boost in [0.25, 1] (uniform in ln a; above z = 3 it follows the linear P_fR/P_GR from there)", REF(int, ps.emantis_n_z)),
+                B("PowerSpectrum",
+                  "emantis_extrapolate_cosmo",
+                  "emantis: clamp Omega_b, Omega_m, h, n_s and sigma8 to the e-MANTIS range (false: an error outside)",
+                  REF(bool, ps.emantis_extrapolate_cosmo)),
                 I("PowerSpectrum", "ee2_n_z", "EuclidEmulator2: redshifts of its table in [0, 10] (uniform in ln a)", REF(int, ps.ee2_n_z)),
                 B("PowerSpectrum",
                   "axionhmcode_basic",

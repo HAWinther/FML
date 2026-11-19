@@ -5,6 +5,29 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Emulator/EMantis: the e-MANTIS emulators in C++
+- `Emulator/EMantis/EMantis.h` (header only, `FML::EMULATOR::EMANTIS`): a port of the prediction part of e-MANTIS
+  1.4.0 (I. Saez-Casares et al., GPL-3.0-or-later; arXiv:2303.08899, arXiv:2410.05226): `NonLinearMGBoostEmulator`
+  (nonlinear P_f(R)/P_LCDM, Hu-Sawicki n = 1), `NonLinearBoostEmulator` (wCDM P_nl/P_lin), `HMFEmulator` (dn/dlnM for
+  fR and wCDM, 200c/500c/1000c/FoF b = 0.2, with and without the resolution correction, with its std),
+  `Sigma8Emulator` (A_s -> sigma8) and the generic `GPEmulator` (Matern/RBF Gaussian processes with PCA, binned or
+  B-spline outputs, linear interpolation between scale factor nodes). Same range checks, extrapolation options and
+  clamping as the Python package.
+- `export_emantis.py` writes the trained emulators to `data/*.txt` (15 MB, plain text, GP weights precomputed);
+  `tests/test_emantis.cpp` checks every emulator file against the Python package (`make_emantis_reference.py`):
+  agreement ~1e-10 (~1e-8 when A_s is converted to sigma8, the floating point reproducibility of the GP sums).
+- SimulationCode: the nonlinear prediction in the P(k) outputs for f(R) (n = 1) uses the e-MANTIS boost instead of
+  the fitting function of Winther et al. 2019: it depends on the cosmology (sigma8_lcdm from A_s with e-MANTIS'
+  sigma8 emulator; parameters outside the range clamped and reported), no prediction for |fR0| outside 1e-7 - 1e-4 or
+  at z > 3 (the P(k) files then repeat linear theory instead of the EuclidEmulator2 boost alone), constant above
+  k = 9.7 h/Mpc.
+- Einstein-Boltzmann solver: `nonlinear = emantis` for `model = fr` (fR_n = 1): P_fR = P_GR B with P_GR the nonlinear
+  P(k) of the GR universe with the same parameters (`emantis_gr`: ee2 by default, hmcode2020, hmcode2016, halofit,
+  halofit_bird) and B the e-MANTIS boost, tabulated at `emantis_n_z` scale factors; out-of-range parameters are an
+  error unless `emantis_extrapolate_cosmo = true` (clamped); above z = 3 B follows the linear P_fR/P_GR from z = 3.
+  `tests/test_emantis_boost.cpp`. `params/default.ini` regenerated (`./cmb --write-defaults`; it was missing some
+  recent parameters and models).
+
 ### Native Delaunay triangulation; DTFE, ZOBOV, watershed and ORIGAMI halos without CGAL (native is the default)
 - `Triangulation/Predicates.h`, `Delaunay.h`, `PeriodicVoronoi.h` (`FML::DELAUNAY`, header only; developed in
   `Experimental/Delaunay`, moved to `Triangulation`, documentation in `Triangulation/DELAUNAY.md`, tests in

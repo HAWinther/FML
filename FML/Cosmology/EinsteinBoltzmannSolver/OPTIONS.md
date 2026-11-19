@@ -57,6 +57,18 @@ from `jbd_boost_gr` (`ee2` as the paper, or `hmcode2020`, `hmcode2016`, `halofit
 A_s,GR to 2e-4 and the boost to 2e-4 at z = 0–3 for 0.009 ≤ k ≤ 9 h/Mpc (`tests/test_brans_dicke`; FML's emulator
 agrees with `ee2.exe` to 1e-5). For ω → ∞ it is `ee2` for ΛCDM.
 
+`nonlinear = emantis` (with `model = fr`, `fR_n = 1`) uses the e-MANTIS emulator (Sáez-Casares et al. 2023,
+arXiv:2303.08899; `FML/Emulator/EMantis`): P_fR(k) = P_GR(k) · B(k), with P_GR the nonlinear P(k) of the GR (ΛCDM)
+universe with the same parameters, i.e. the same initial conditions (`emantis_gr`: `ee2` by default, or `hmcode2020`,
+`hmcode2016`, `halofit`, `halofit_bird`; a second perturbation solve), and B = P_fR/P_GR from the emulator for
+Ω_b, Ω_m (with the massive neutrinos), h, n_s, A_s (at the pivot 0.05/Mpc; e-MANTIS converts it to σ₈ of ΛCDM) and
+log10|fR0|. Its range: 1e-7 ≤ |fR0| ≤ 1e-4 (an error outside; fR0 = 0 gives GR), Ω_b ∈ [0.037, 0.062], Ω_m ∈
+[0.155, 0.465], h ∈ [0.55, 0.85], n_s ∈ [0.72, 1.2], σ₈ ∈ [0.6083, 1.014] (an error outside, or clamped to the range with
+`emantis_extrapolate_cosmo = true`), z ≤ 3 and k ≤ 9.7 h/Mpc (held above; below 0.029 h/Mpc its extrapolation, → 1).
+Above z = 3 B follows linear theory from z = 3: B(z) = B(3) L(z)/L(3) with L = P_fR,lin/P_GR,lin (continuous, → 1 at
+early times). B is tabulated at `emantis_n_z` scale factors in [0.25, 1] (to ~3e-4 of the emulator,
+`tests/test_emantis_boost`).
+
 `nonlinear = axionhmcode` (with `model = axion`) uses the mixed cold/ultralight-axion halo model of
 [AxionHMcode](../../AxionHMcode/README.md) (Vogt et al. 2022; the Dome et al. 2024 calibration, or the basic model with
 `axionhmcode_basic = true`) on the solver's P_cb and P_axion, extrapolated to 1e-5 – 1e3 h/Mpc (P_cb with the
