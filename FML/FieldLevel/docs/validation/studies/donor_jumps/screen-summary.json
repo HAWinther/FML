@@ -1,0 +1,21 @@
+{
+  "scope": "Exploratory fixed-donor joint white-field/scalar proposal screen on already inspected dataset 203; no new chains",
+  "complete": true,
+  "screen_passed": true,
+  "proposals": 768,
+  "mean_acceptance_probability": 0.026136418680114636,
+  "cross_ensemble_large_jump_mean_acceptance_probability": 0.03702119077643536,
+  "physical_jump_expected_acceptance_rate": 0.026136418680114636,
+  "support_rejection_fraction": 0.6041666666666666,
+  "actual_value_calls": 304,
+  "original_inputs_unchanged": true,
+  "chain_mixing_claim": false,
+  "calibration_claim": false,
+  "limits": [
+    "Same saved states form donor pool and local starting points; in-sample feasibility, not independent validation",
+    "Cross-ensemble donor labels are not proven mode identities",
+    "Expected acceptance and physical jumps are not chain ESS or calibration",
+    "No tuning or donor-pool adaptation within this candidate",
+    "Full posterior MH includes bounds; no clipping or resampling until a supported point"
+  ]
+}

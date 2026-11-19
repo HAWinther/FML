@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "scope": "Dataset-203 post-hoc deterministic mixing diagnosis; no new posterior sampling",
+  "mock_id": 203,
+  "source_ensemble": 1,
+  "destination_ensembles": [0, 2, 3],
+  "endpoint_draws": [1024, 2047],
+  "points_per_path": 101,
+  "paths": ["linear white", "linear amplitude-weighted white", "spherical white direction"],
+  "profiling": "Exact bounded-bias convex profiling of all four coefficients at fixed field and amplitude; not marginalization",
+  "transport": "All 2048 cold records and all four exchange passes; reconstruct pre-pass energy differences and compare native attempt/accept counters",
+  "limits": [
+    "Ensemble 1 selected after observing zero qualified round trips; exploratory diagnosis",
+    "Point-potential barriers on selected paths are not free-energy barriers or universal obstructions",
+    "Profiled bias optima are not marginalized posteriors",
+    "No original records, chains, truths, priors, budgets or gates changed"
+  ]
+}

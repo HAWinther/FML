@@ -1,0 +1,250 @@
+{
+  "scope": "Beyond2pt real-space Box 1 observed-data preparation; fixed-IC fit awaits matching initial conditions and reference spectrum",
+  "observations_prepared": true,
+  "fixed_ic_fit_ready": false,
+  "posterior_computed": false,
+  "input_sha256": "06736f7bba3970aac283bf007ee700ba9d6211bfceaafd0d26b9a8e0fdc47105",
+  "catalog_sha256": "3d7212d6993cdf72331e1bb7ce733205029322faa6c0e3c5dcd610d9a3591d96",
+  "catalog_rows": 3591859,
+  "number_density": 0.000448982375,
+  "poisson_power": 2227.2589207983942,
+  "mode_variance": 2.784073650997993e-07,
+  "schema": {
+    "group": "galaxies",
+    "shape": [
+      3591859
+    ],
+    "dtype": [
+      [
+        "x",
+        "<f4"
+      ],
+      [
+        "y",
+        "<f4"
+      ],
+      [
+        "z",
+        "<f4"
+      ]
+    ],
+    "root_attributes": {}
+  },
+  "coordinate_min": [
+    0.0016103617381304502,
+    0.00022000000171829015,
+    0.0009899999713525176
+  ],
+  "coordinate_max": [
+    1999.997802734375,
+    1999.9996337890625,
+    1999.999755859375
+  ],
+  "rows_outside_primary_box": 0,
+  "projection_slab_rows": 182026,
+  "cutoffs": [
+    {
+      "kmax": 0.08,
+      "largest_integer_component": 25,
+      "stored_half_complex_modes": 67625,
+      "real_mode_degrees": 132650,
+      "noise_normalized_mesh_distance_squared": 5.3599206577088605e-12
+    },
+    {
+      "kmax": 0.1,
+      "largest_integer_component": 31,
+      "stored_half_complex_modes": 127007,
+      "real_mode_degrees": 250046,
+      "noise_normalized_mesh_distance_squared": 1.1904932475442368e-11
+    },
+    {
+      "kmax": 0.12,
+      "largest_integer_component": 38,
+      "stored_half_complex_modes": 231230,
+      "real_mode_degrees": 456532,
+      "noise_normalized_mesh_distance_squared": 2.562443832577018e-11
+    }
+  ],
+  "native_metadata": [
+    {
+      "rows": 3591859,
+      "boxsize": 2000,
+      "mesh": 96,
+      "fine_mesh": 192,
+      "kernel_width": 9,
+      "epsilon": 1e-08,
+      "ranks": 1,
+      "cutoff": 0.12,
+      "geometry": "cube",
+      "effective_count": 3591858.9999999995,
+      "poisson_power": 2227.2589207983947,
+      "mode_variance": 2.784073650997993e-07
+    },
+    {
+      "rows": 3591859,
+      "boxsize": 2000,
+      "mesh": 128,
+      "fine_mesh": 256,
+      "kernel_width": 9,
+      "epsilon": 1e-08,
+      "ranks": 1,
+      "cutoff": 0.12,
+      "geometry": "cube",
+      "effective_count": 3591858.9999999995,
+      "poisson_power": 2227.2589207983947,
+      "mode_variance": 2.784073650997993e-07
+    }
+  ],
+  "extraction_seconds": [
+    19.275241762166843,
+    20.909291016869247
+  ],
+  "direct_full_catalog_modes": [
+    {
+      "n": [
+        1,
+        0,
+        0
+      ],
+      "direct": [
+        -0.0005445996589285689,
+        -0.0006154141928800256
+      ],
+      "absolute_errors": [
+        9.91290430850787e-13,
+        4.565152758323883e-13
+      ],
+      "max_error_in_noise_sd": 1.8787134900040425e-09
+    },
+    {
+      "n": [
+        0,
+        0,
+        1
+      ],
+      "direct": [
+        0.0017096868256644478,
+        0.0001680568637434827
+      ],
+      "absolute_errors": [
+        2.3186126433200653e-12,
+        1.3144615656413954e-12
+      ],
+      "max_error_in_noise_sd": 4.394281146606793e-09
+    },
+    {
+      "n": [
+        3,
+        -2,
+        1
+      ],
+      "direct": [
+        -0.0002513152476969648,
+        -0.0019438829065044384
+      ],
+      "absolute_errors": [
+        1.588866918539483e-12,
+        1.6274839521727855e-12
+      ],
+      "max_error_in_noise_sd": 3.0844402009287073e-09
+    },
+    {
+      "n": [
+        31,
+        0,
+        0
+      ],
+      "direct": [
+        -0.00039322432200739423,
+        0.001820024853208546
+      ],
+      "absolute_errors": [
+        5.5338731790360605e-12,
+        3.0384086000917276e-12
+      ],
+      "max_error_in_noise_sd": 1.0487907347701954e-08
+    },
+    {
+      "n": [
+        31,
+        31,
+        31
+      ],
+      "direct": [
+        0.00025876184707535505,
+        -0.00021541636972675836
+      ],
+      "absolute_errors": [
+        3.5432654683333834e-12,
+        3.2503520017561268e-12
+      ],
+      "max_error_in_noise_sd": 6.715267722608961e-09
+    },
+    {
+      "n": [
+        -38,
+        38,
+        0
+      ],
+      "direct": [
+        -0.00013010500465725447,
+        -7.332051943276432e-05
+      ],
+      "absolute_errors": [
+        4.838463145521357e-12,
+        1.4782997816339588e-12
+      ],
+      "max_error_in_noise_sd": 9.169952316171044e-09
+    },
+    {
+      "n": [
+        38,
+        -37,
+        38
+      ],
+      "direct": [
+        -0.0005569364388319635,
+        -0.0008992640653080248
+      ],
+      "absolute_errors": [
+        3.5806705202618923e-12,
+        1.3935599324054485e-12
+      ],
+      "max_error_in_noise_sd": 6.786158526620937e-09
+    },
+    {
+      "n": [
+        -1,
+        -1,
+        1
+      ],
+      "direct": [
+        -0.0017928926278578177,
+        -0.001055992105384978
+      ],
+      "absolute_errors": [
+        2.857261676935527e-12,
+        9.252430013935561e-13
+      ],
+      "max_error_in_noise_sd": 5.415139589638949e-09
+    }
+  ],
+  "direct_check_passed": true,
+  "mesh_check_passed": true,
+  "max_mesh_difference_in_noise_sd": 3.2742654122530006e-08,
+  "noise_normalized_mesh_distance_squared": 2.562443832577018e-11,
+  "missing_fit_inputs": [
+    "Box-1 matching normalized initial field with Fourier sign, layout, origin and normalization metadata",
+    "Verified non-amplitude cosmology and catalog-to-simulation identity",
+    "Reference linear matter spectrum with species, epoch, growth and sigma8 normalization",
+    "Resolved intermediate matter/operator filters and derivative-bias prior conventions"
+  ],
+  "sampler_campaigns_started": 0,
+  "limits": [
+    "These are observed-data and ingestion checks; no model, sigma8 likelihood or posterior is fitted",
+    "Observed-data mesh distance is not a bound on parameter bias or forward-model error",
+    "Cubic likelihood cuts retain corner modes above the radial cutoff; the radial power plot uses complete shells only",
+    "Power is descriptive, with no likelihood or cosmological interpretation",
+    "Public catalog identity does not supply its exact matching phases or verified spectrum"
+  ]
+}

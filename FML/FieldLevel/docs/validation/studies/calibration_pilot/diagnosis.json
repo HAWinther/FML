@@ -1,0 +1,146 @@
+[
+  {
+    "id": 201,
+    "passed": true,
+    "failed_coordinates": 0,
+    "max_rhat": 1.0033795464212112,
+    "min_bulk_ess": 1042.9305494708929,
+    "total_divergences": 0,
+    "cold_divergences": 0,
+    "minimum_edge_rate": 0.10711669921875,
+    "limiting_edge": 6,
+    "prior_edge_rate": 0.45745849609375,
+    "roundtrips": [
+      8,
+      6,
+      7,
+      4
+    ]
+  },
+  {
+    "id": 202,
+    "passed": true,
+    "failed_coordinates": 0,
+    "max_rhat": 1.008774570326,
+    "min_bulk_ess": 704.5526287739956,
+    "total_divergences": 0,
+    "cold_divergences": 0,
+    "minimum_edge_rate": 0.1212158203125,
+    "limiting_edge": 3,
+    "prior_edge_rate": 0.5404052734375,
+    "roundtrips": [
+      29,
+      14,
+      15,
+      24
+    ]
+  },
+  {
+    "id": 203,
+    "passed": false,
+    "failed_coordinates": 11,
+    "max_rhat": 1.2646893119790625,
+    "min_bulk_ess": 11.775423277741323,
+    "total_divergences": 0,
+    "cold_divergences": 0,
+    "minimum_edge_rate": 0.0513916015625,
+    "limiting_edge": 1,
+    "prior_edge_rate": 0.54595947265625,
+    "roundtrips": [
+      6,
+      0,
+      6,
+      5
+    ]
+  },
+  {
+    "id": 204,
+    "passed": false,
+    "failed_coordinates": 12,
+    "max_rhat": 1.083826945493794,
+    "min_bulk_ess": 43.33122808950629,
+    "total_divergences": 5735,
+    "cold_divergences": 2278,
+    "minimum_edge_rate": 0.09375,
+    "limiting_edge": 0,
+    "prior_edge_rate": 0.343017578125,
+    "roundtrips": [
+      0,
+      5,
+      7,
+      3
+    ]
+  },
+  {
+    "id": 205,
+    "passed": false,
+    "failed_coordinates": 8,
+    "max_rhat": 1.0274291134017166,
+    "min_bulk_ess": 205.64566083468264,
+    "total_divergences": 0,
+    "cold_divergences": 0,
+    "minimum_edge_rate": 0.15399169921875,
+    "limiting_edge": 0,
+    "prior_edge_rate": 0.55609130859375,
+    "roundtrips": [
+      53,
+      40,
+      61,
+      57
+    ]
+  },
+  {
+    "id": 206,
+    "passed": false,
+    "failed_coordinates": 1,
+    "max_rhat": 1.012655046283469,
+    "min_bulk_ess": 419.308264033144,
+    "total_divergences": 0,
+    "cold_divergences": 0,
+    "minimum_edge_rate": 0.04736328125,
+    "limiting_edge": 3,
+    "prior_edge_rate": 0.53497314453125,
+    "roundtrips": [
+      3,
+      1,
+      2,
+      3
+    ]
+  },
+  {
+    "id": 207,
+    "passed": false,
+    "failed_coordinates": 0,
+    "max_rhat": 1.0040298780823447,
+    "min_bulk_ess": 723.5152612325246,
+    "total_divergences": 135,
+    "cold_divergences": 81,
+    "minimum_edge_rate": 0.135986328125,
+    "limiting_edge": 0,
+    "prior_edge_rate": 0.4599609375,
+    "roundtrips": [
+      8,
+      10,
+      15,
+      13
+    ]
+  },
+  {
+    "id": 208,
+    "passed": false,
+    "failed_coordinates": 1,
+    "max_rhat": 1.0092723371775363,
+    "min_bulk_ess": 388.85077134130836,
+    "total_divergences": 0,
+    "cold_divergences": 0,
+    "minimum_edge_rate": 0.142822265625,
+    "limiting_edge": 0,
+    "prior_edge_rate": 0.54290771484375,
+    "roundtrips": [
+      28,
+      11,
+      25,
+      28
+    ]
+  }
+]

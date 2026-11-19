@@ -1,0 +1,77 @@
+{
+  "protocol": {
+    "version": 1,
+    "scope": "Dataset-203 exact-support amplitude/field interweaving; fresh four-chain 256/512 candidate versus unchanged cached refined-ladder baseline",
+    "dataset": 203,
+    "ensembles": 4,
+    "warmup": 256,
+    "samples": 512,
+    "workers": 4,
+    "wall_limit_seconds": 7200,
+    "batch_reservation_seconds": 1200,
+    "posterior_gates": {
+      "max_rhat": 1.01,
+      "min_bulk_ess": 400,
+      "min_tail_ess": 400
+    },
+    "interval_probabilities": [
+      0.5,
+      0.9,
+      0.95
+    ],
+    "endpoint_index": 511,
+    "analysis_seed": 942301,
+    "baseline": "Immutable completed refined-ladder/original-field-metric cohort; no GN metric adopted",
+    "candidate": "Only amplitude/field rescaling changes: exact spherical initial support, global real rank 18, null component fixed, full posterior MH and signed rank Jacobian. Original field mass retained.",
+    "cost": "Compare actual primary-chain field-gradient counts including warmup; no matched wall-time efficiency ratio because baseline and candidate use different concurrency",
+    "limits": [
+      "Selected dataset and reused cached baseline; exploratory algorithm comparison, not independent calibration",
+      "Full 64-coordinate white prior retained; transformation rank is 18, not latent dimension",
+      "Exact model initial filter determines support, not observed modes or fitted numerical Jacobian rank",
+      "All original twelve coordinate and transport/divergence gates retained",
+      "No extension until pass, replacement, pooling, or posterior target changes",
+      "Slab/pencil kernel controls are distinct from serial full-chain orchestration"
+    ]
+  },
+  "binary_sha256": "64e0f3b780c62998ecbe8ea970d1ed6d5456cbb405c6f3b8308395c09f29a8d8",
+  "diagnostics_sha256": "bb859cbbdc3f6bbef4de2a0dae7acfcf7714626b5973bfedd5dc67f0a78aded3",
+  "sources": {
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/support_interweave/Makefile": "7c5d98089a820f21cdc2946e50592f57c77429d386efb4e2fbf456ab559e0e3b",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/support_interweave/Native.h": "753eb449408ad2c2bb257de89bd432a5ca73c1879af2fff47dbd5b1dc609befa",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/support_interweave/Support.h": "fa20fe18973e46b1f12eafe49ba037a858875feb4aa77995ae8b5131e892c7c7",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/support_interweave/Test.cpp": "7d988b45e4b5061284b6419f133f8700784fde4b235d969d7401d375eb3b0b16",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/support_interweave/make_driver.py": "de0ed559e8f652166d61dbb3ae33f8b666316fa64217523855e61c822cb82590",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/support_interweave/plan.json": "239cbcdc312e57ef77f8c53f73d22751f2e055775d1c055f4a10b904f1a653af",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/support_interweave/preflight.py": "7aedd75af0d5920aa8bf7bf79103007f0511b16407b7ed15c094dda678ae2d1c",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/support_interweave/run.py": "4ea918c645cd8d020d99821cb3bc7d7dfb4c5fe05af09cb02f89d511d02fb837",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/support_interweave/study.json": "083e454cb4fd7b07f587e7813d629c152d869022d8f049ee22cdfae117ba969a",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/support_interweave/study.py": "c73f224170e43b01bf2b55b894b5817a2b2a3fb4fdf7242a71c188d604d3aa8b",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/interweave/Rescaling.h": "e6840ff44fdcdb7317593daee7ed15f1c985620825a0797e7aa323113e33b7cc",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/integrator_comparison/FieldHMC.h": "2a46ea7460e92ff511744e75c638e5de858432a34b763e8103a5b1af7e95e2fb",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/Main.cpp": "8bb62f56572c8deff37d379ae0f3eab72f7e51cb67f21acf0bbc417f7890f5eb",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/Exchange.h": "881601655daefc32c533b1524dfffd9f329049aa7d7928cd2c8bf622a745b2b3",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/MockSettings.h": "7d46f0e2624926f17f76175774edb97bd186af04f4d6da7b3185e3fd2eb5d24b",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/PriorPredictive.h": "888604f21cafb412d939ba8f95eb7b712aeab156692579d25bec2c905913eb0b",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/analyze.py": "113bcbafaa3754374eb2ab67548906d9d53fa034f26533300ebc9b2df7df4ef1",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/check_prior.py": "6d37859b23c77eaa29b046b823d3beb15c1f850b15d27a57d9346e4375b0cd30",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/plan.json": "6de0c06e5a05246ffa04c700b7a5f5615a1bf19787c37879c957318998a5a731",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/sbc_ranks.py": "62025923f73fb1c1864d036d7c3b919354651e38753f94b8487c2594ae6c78e1",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/calibration/analyze.py": "c0688fdd5b262f449e9be72f99973d6116c97f715e71c394353fe82b578a8025",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/calibration/study.py": "c3e3e58cf4baff059b513ee46118c654171fb5cac94f399f14b86699bfcd79f2",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/calibration/common.py": "1ea7afcf6a5e9715997cabbd4869842178ba5e65f45f7e94a422c5fcab4ba135"
+  },
+  "original_directory": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-ladder-comparison/campaign/refined/mock203",
+  "plan_sha256": "239cbcdc312e57ef77f8c53f73d22751f2e055775d1c055f4a10b904f1a653af",
+  "full_manifest": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-support-interweave/campaign/FROZEN.json",
+  "full_manifest_sha256": "ca484b343a8ed10fd375f2c53441ee0c47516b307e035047421723193b7a86e8",
+  "original_files_hashed": 2077,
+  "native_hooks_sha256": "33af537fd89b61d70cb6c27cd367ffed66a1c8ef936a482fb9a8971d977274d5",
+  "kernel_backend_controls_sha256": "b547ded7891711d2807edbf97b3df4a9b61a65056e1fdd66a7480096b0555e2c",
+  "runner_controls_sha256": "f1473a5899f829650633d370f25a32963d763599964177c2090d4aeeb8da5e2f",
+  "exploratory_physical_diagnostics": {
+    "path": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-support-interweave/campaign/physical-diagnostics.json",
+    "sha256": "66d6dd712c98161fe428b7b31df42fdbd73e839f33d3b0796df62cf199d00a71",
+    "declared_after_original_outcomes": true,
+    "original_gates_unchanged": true
+  }
+}

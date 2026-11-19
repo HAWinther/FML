@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "scope": "Dataset-203 exact-support amplitude/field interweaving; fresh four-chain 256/512 candidate versus unchanged cached refined-ladder baseline",
+  "dataset": 203,
+  "ensembles": 4,
+  "warmup": 256,
+  "samples": 512,
+  "workers": 4,
+  "wall_limit_seconds": 7200,
+  "batch_reservation_seconds": 1200,
+  "posterior_gates": {
+    "max_rhat": 1.01,
+    "min_bulk_ess": 400,
+    "min_tail_ess": 400
+  },
+  "interval_probabilities": [
+    0.5,
+    0.9,
+    0.95
+  ],
+  "endpoint_index": 511,
+  "analysis_seed": 942301,
+  "baseline": "Immutable completed refined-ladder/original-field-metric cohort; no GN metric adopted",
+  "candidate": "Only amplitude/field rescaling changes: exact spherical initial support, global real rank 18, null component fixed, full posterior MH and signed rank Jacobian. Original field mass retained.",
+  "cost": "Compare actual primary-chain field-gradient counts including warmup; no matched wall-time efficiency ratio because baseline and candidate use different concurrency",
+  "limits": [
+    "Selected dataset and reused cached baseline; exploratory algorithm comparison, not independent calibration",
+    "Full 64-coordinate white prior retained; transformation rank is 18, not latent dimension",
+    "Exact model initial filter determines support, not observed modes or fitted numerical Jacobian rank",
+    "All original twelve coordinate and transport/divergence gates retained",
+    "No extension until pass, replacement, pooling, or posterior target changes",
+    "Slab/pencil kernel controls are distinct from serial full-chain orchestration"
+  ]
+}

@@ -1,0 +1,749 @@
+{
+  "scope": "Bounded exploratory conditional-HMC stability diagnostic after the failed prior-predictive pilot; not new posterior chains",
+  "complete": true,
+  "all_controls_passed": true,
+  "states": 96,
+  "conditional_trajectories": 3840,
+  "native_exact_matches": 480,
+  "max_best_scaled_gradient_error": 6.252325209665196e-07,
+  "datasets": [
+    {
+      "id": 201,
+      "checks_passed": true,
+      "cases": [
+        {
+          "name": "baseline",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.907173984625568,
+          "median_acceptance": 0.9741298745225462,
+          "mean_paired_acceptance_change": 0.0,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.4939928528922497,
+            0.026211394741455507,
+            0.4944463998303892
+          ],
+          "mean_jump_rms": 0.8952091341854085,
+          "mean_squared_jump_per_gradient": 0.09497741386934205,
+          "gradient_evaluations": 864
+        },
+        {
+          "name": "half_step",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9772058388558363,
+          "median_acceptance": 0.9959199756634259,
+          "mean_paired_acceptance_change": 0.07003185423026816,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.13370420958005447,
+            0.004088370834812949,
+            0.1105815273078683
+          ],
+          "mean_jump_rms": 0.923286725094404,
+          "mean_squared_jump_per_gradient": 0.05176610685199568,
+          "gradient_evaluations": 1632
+        },
+        {
+          "name": "quarter_step",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9943400222203026,
+          "median_acceptance": 0.9990685878199472,
+          "mean_paired_acceptance_change": 0.08716603759473464,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.033358174701778154,
+            0.0009318465683030297,
+            0.02675270347194658
+          ],
+          "mean_jump_rms": 0.9400098152382794,
+          "mean_squared_jump_per_gradient": 0.027071249020754303,
+          "gradient_evaluations": 3168
+        },
+        {
+          "name": "conditional_metric",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9781849995462313,
+          "median_acceptance": 0.9930435709694976,
+          "mean_paired_acceptance_change": 0.0710110149206632,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.04453215370623553,
+            0.006981540158939481,
+            0.08034990494169403
+          ],
+          "mean_jump_rms": 0.9158927024304889,
+          "mean_squared_jump_per_gradient": 0.09614489924327285,
+          "gradient_evaluations": 864
+        },
+        {
+          "name": "conditional_half",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9945237964876971,
+          "median_acceptance": 0.9983742913967767,
+          "mean_paired_acceptance_change": 0.08734981186212899,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.011241577550311632,
+            0.0016270842732666324,
+            0.019881091448104016
+          ],
+          "mean_jump_rms": 0.9385414467024634,
+          "mean_squared_jump_per_gradient": 0.05239156049098587,
+          "gradient_evaluations": 1632
+        }
+      ]
+    },
+    {
+      "id": 202,
+      "checks_passed": true,
+      "cases": [
+        {
+          "name": "baseline",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9823643056723009,
+          "median_acceptance": 0.9991889199812267,
+          "mean_paired_acceptance_change": 0.0,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.07087316692197021,
+            0.0006987839381018546,
+            0.0577976239043112
+          ],
+          "mean_jump_rms": 0.9012406754238249,
+          "mean_squared_jump_per_gradient": 0.0974958733086596,
+          "gradient_evaluations": 864
+        },
+        {
+          "name": "half_step",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9956320589886634,
+          "median_acceptance": 0.9999336556331866,
+          "mean_paired_acceptance_change": 0.013267753316362435,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.01786591320132036,
+            -0.0002282904871346858,
+            0.014205198610653724
+          ],
+          "mean_jump_rms": 0.9534046692918589,
+          "mean_squared_jump_per_gradient": 0.05470678184085933,
+          "gradient_evaluations": 1632
+        },
+        {
+          "name": "quarter_step",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9989106915373314,
+          "median_acceptance": 0.9999918729270101,
+          "mean_paired_acceptance_change": 0.016546385865030402,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.004475597613761373,
+            -7.9660922857272e-05,
+            0.0035361797229018777
+          ],
+          "mean_jump_rms": 0.9624981418899461,
+          "mean_squared_jump_per_gradient": 0.028420475881245095,
+          "gradient_evaluations": 3168
+        },
+        {
+          "name": "conditional_metric",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.985585275574636,
+          "median_acceptance": 1.0,
+          "mean_paired_acceptance_change": 0.003220969902335119,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.06232130561528937,
+            -0.007002836370137544,
+            0.061395058263513214
+          ],
+          "mean_jump_rms": 0.9098986313072004,
+          "mean_squared_jump_per_gradient": 0.09827995086769593,
+          "gradient_evaluations": 864
+        },
+        {
+          "name": "conditional_half",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9964104231973456,
+          "median_acceptance": 1.0,
+          "mean_paired_acceptance_change": 0.014046117525044663,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.015674086737736737,
+            -0.0019293222707137403,
+            0.015145374487186558
+          ],
+          "mean_jump_rms": 0.9518540831833701,
+          "mean_squared_jump_per_gradient": 0.054534049763753686,
+          "gradient_evaluations": 1632
+        }
+      ]
+    },
+    {
+      "id": 203,
+      "checks_passed": true,
+      "cases": [
+        {
+          "name": "baseline",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9856220925102468,
+          "median_acceptance": 1.0,
+          "mean_paired_acceptance_change": 0.0,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.08700796497738317,
+            -0.008883235919579846,
+            0.06379392114764038
+          ],
+          "mean_jump_rms": 0.9376326697911704,
+          "mean_squared_jump_per_gradient": 0.10207739164939725,
+          "gradient_evaluations": 864
+        },
+        {
+          "name": "half_step",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9965003589014945,
+          "median_acceptance": 1.0,
+          "mean_paired_acceptance_change": 0.010878266391247676,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.021864044495595536,
+            -0.0021439014167015102,
+            0.01566596109349483
+          ],
+          "mean_jump_rms": 0.9548059216469488,
+          "mean_squared_jump_per_gradient": 0.05484964112550175,
+          "gradient_evaluations": 1632
+        },
+        {
+          "name": "quarter_step",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9991310657013165,
+          "median_acceptance": 1.0,
+          "mean_paired_acceptance_change": 0.013508973191069584,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.005473003124530251,
+            -0.0005315304696473788,
+            0.0038989267278974893
+          ],
+          "mean_jump_rms": 0.954318051286999,
+          "mean_squared_jump_per_gradient": 0.028227027686773515,
+          "gradient_evaluations": 3168
+        },
+        {
+          "name": "conditional_metric",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.6583755280893943,
+          "median_acceptance": 0.8776875860106419,
+          "mean_paired_acceptance_change": -0.3272465644208526,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -1.0357239486557512,
+            0.13046674021695281,
+            37.55693742447356
+          ],
+          "mean_jump_rms": 0.643168273288886,
+          "mean_squared_jump_per_gradient": 0.07204950923648497,
+          "gradient_evaluations": 864
+        },
+        {
+          "name": "conditional_half",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.968776587808963,
+          "median_acceptance": 1.0,
+          "mean_paired_acceptance_change": -0.016845504701283875,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.43928988889317466,
+            -0.008051140533869017,
+            0.18076355844784064
+          ],
+          "mean_jump_rms": 0.9648243234166589,
+          "mean_squared_jump_per_gradient": 0.057093529606642324,
+          "gradient_evaluations": 1632
+        }
+      ]
+    },
+    {
+      "id": 204,
+      "checks_passed": true,
+      "cases": [
+        {
+          "name": "baseline",
+          "trajectories": 96,
+          "divergences": 15,
+          "mean_acceptance": 0.5720375604520104,
+          "median_acceptance": 0.8142065465441444,
+          "mean_paired_acceptance_change": 0.0,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.7899993252693429,
+            0.20556549303892346,
+            39605.74226919257
+          ],
+          "mean_jump_rms": 0.5766530286591095,
+          "mean_squared_jump_per_gradient": 0.06069939286261298,
+          "gradient_evaluations": 864
+        },
+        {
+          "name": "half_step",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9655404091539839,
+          "median_acceptance": 1.0,
+          "mean_paired_acceptance_change": 0.3935028487019734,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.45455944890735545,
+            -0.01962982033089844,
+            0.14486208702101777
+          ],
+          "mean_jump_rms": 0.9306363601896398,
+          "mean_squared_jump_per_gradient": 0.05313971328321392,
+          "gradient_evaluations": 1632
+        },
+        {
+          "name": "quarter_step",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9928750705635846,
+          "median_acceptance": 1.0,
+          "mean_paired_acceptance_change": 0.4208375101115743,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.13118388567959283,
+            -0.007945159589853645,
+            0.036209969873007175
+          ],
+          "mean_jump_rms": 0.960722156244187,
+          "mean_squared_jump_per_gradient": 0.028259476442466642,
+          "gradient_evaluations": 3168
+        },
+        {
+          "name": "conditional_metric",
+          "trajectories": 96,
+          "divergences": 36,
+          "mean_acceptance": 0.42178933965681215,
+          "median_acceptance": 0.0011858100732066832,
+          "mean_paired_acceptance_change": -0.15024822079519837,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.6708324652361188,
+            19.230319437143297,
+            165463.07301048102
+          ],
+          "mean_jump_rms": 0.3931793115261247,
+          "mean_squared_jump_per_gradient": 0.04269290281545977,
+          "gradient_evaluations": 864
+        },
+        {
+          "name": "conditional_half",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9180013517445712,
+          "median_acceptance": 0.9868710385201569,
+          "mean_paired_acceptance_change": 0.3459637912925608,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.43167334688517656,
+            0.013216072945095192,
+            0.45331982635826495
+          ],
+          "mean_jump_rms": 0.9054208529330582,
+          "mean_squared_jump_per_gradient": 0.05197236933988615,
+          "gradient_evaluations": 1632
+        }
+      ]
+    },
+    {
+      "id": 205,
+      "checks_passed": true,
+      "cases": [
+        {
+          "name": "baseline",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9828935904302499,
+          "median_acceptance": 0.9948756956750688,
+          "mean_paired_acceptance_change": 0.0,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.05928355698140031,
+            0.005137619846534491,
+            0.05584424730108761
+          ],
+          "mean_jump_rms": 0.9207135738812635,
+          "mean_squared_jump_per_gradient": 0.10046957197047515,
+          "gradient_evaluations": 864
+        },
+        {
+          "name": "half_step",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9957408413588297,
+          "median_acceptance": 0.9988281725336519,
+          "mean_paired_acceptance_change": 0.012847250928579626,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.014943295389157285,
+            0.0011725216942792827,
+            0.013807998462205262
+          ],
+          "mean_jump_rms": 0.9608028753011215,
+          "mean_squared_jump_per_gradient": 0.055469252391257926,
+          "gradient_evaluations": 1632
+        },
+        {
+          "name": "quarter_step",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9989363204906181,
+          "median_acceptance": 0.9997138503696573,
+          "mean_paired_acceptance_change": 0.016042730060368257,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.0037434416373347545,
+            0.0002861909981923816,
+            0.003442511986361474
+          ],
+          "mean_jump_rms": 0.9696224655039748,
+          "mean_squared_jump_per_gradient": 0.028798034015215468,
+          "gradient_evaluations": 3168
+        },
+        {
+          "name": "conditional_metric",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9597141420779071,
+          "median_acceptance": 0.9866233865901586,
+          "mean_paired_acceptance_change": -0.02317944835234283,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.0817734005341082,
+            0.01346738693815297,
+            0.18356542784048013
+          ],
+          "mean_jump_rms": 0.9917403853725717,
+          "mean_squared_jump_per_gradient": 0.11519007423198575,
+          "gradient_evaluations": 864
+        },
+        {
+          "name": "conditional_half",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9901452653429225,
+          "median_acceptance": 0.9971786534024638,
+          "mean_paired_acceptance_change": 0.007251674912672722,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.020778192436062604,
+            0.0028255043410609915,
+            0.04323994652611329
+          ],
+          "mean_jump_rms": 0.9996688986851886,
+          "mean_squared_jump_per_gradient": 0.061293018965425,
+          "gradient_evaluations": 1632
+        }
+      ]
+    },
+    {
+      "id": 206,
+      "checks_passed": true,
+      "cases": [
+        {
+          "name": "baseline",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9498377641802849,
+          "median_acceptance": 0.9832917223092077,
+          "mean_paired_acceptance_change": 0.0,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.07617663111283957,
+            0.016849493345443278,
+            0.27712828142448576
+          ],
+          "mean_jump_rms": 0.9100015416282408,
+          "mean_squared_jump_per_gradient": 0.09697220057496508,
+          "gradient_evaluations": 864
+        },
+        {
+          "name": "half_step",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9870036909032521,
+          "median_acceptance": 0.9964486772791228,
+          "mean_paired_acceptance_change": 0.03716592672296735,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.019162270025392836,
+            0.0035576788121289837,
+            0.07096978221446015
+          ],
+          "mean_jump_rms": 0.936073921033597,
+          "mean_squared_jump_per_gradient": 0.05261420023702341,
+          "gradient_evaluations": 1632
+        },
+        {
+          "name": "quarter_step",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9967302792711151,
+          "median_acceptance": 0.9992194143540913,
+          "mean_paired_acceptance_change": 0.046892515090830304,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.004797916810955094,
+            0.0007809026214147252,
+            0.01738768398335111
+          ],
+          "mean_jump_rms": 0.9458051773766405,
+          "mean_squared_jump_per_gradient": 0.027379815215516478,
+          "gradient_evaluations": 3168
+        },
+        {
+          "name": "conditional_metric",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.8913719454900093,
+          "median_acceptance": 0.9742315157599775,
+          "mean_paired_acceptance_change": -0.05846581869027554,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.383437225284073,
+            0.026108259541922862,
+            0.8992316396596589
+          ],
+          "mean_jump_rms": 0.835405496420079,
+          "mean_squared_jump_per_gradient": 0.08948582335303673,
+          "gradient_evaluations": 864
+        },
+        {
+          "name": "conditional_half",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.981610583454401,
+          "median_acceptance": 1.0,
+          "mean_paired_acceptance_change": 0.03177281927411615,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.11789574433865635,
+            -0.0008917692253973541,
+            0.10548160294844156
+          ],
+          "mean_jump_rms": 0.9367484422770712,
+          "mean_squared_jump_per_gradient": 0.053230330595284155,
+          "gradient_evaluations": 1632
+        }
+      ]
+    },
+    {
+      "id": 207,
+      "checks_passed": true,
+      "cases": [
+        {
+          "name": "baseline",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.7672062381261074,
+          "median_acceptance": 0.8857068227270617,
+          "mean_paired_acceptance_change": 0.0,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.3426963119528308,
+            0.12137225777487437,
+            2.297150986008087
+          ],
+          "mean_jump_rms": 0.7860566480647181,
+          "mean_squared_jump_per_gradient": 0.08553041103026207,
+          "gradient_evaluations": 864
+        },
+        {
+          "name": "half_step",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9642665096709081,
+          "median_acceptance": 0.99214395058273,
+          "mean_paired_acceptance_change": 0.19706027154480069,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.21278371388595474,
+            0.007887072549493723,
+            0.20579459937812494
+          ],
+          "mean_jump_rms": 0.9195894485400409,
+          "mean_squared_jump_per_gradient": 0.05257967705442011,
+          "gradient_evaluations": 1632
+        },
+        {
+          "name": "quarter_step",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9908389929442486,
+          "median_acceptance": 0.9985892022115535,
+          "mean_paired_acceptance_change": 0.22363275481814107,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.05851208040704048,
+            0.0014117957460175745,
+            0.04916468713796629
+          ],
+          "mean_jump_rms": 0.960017235318834,
+          "mean_squared_jump_per_gradient": 0.028288990673356794,
+          "gradient_evaluations": 3168
+        },
+        {
+          "name": "conditional_metric",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9744530584759925,
+          "median_acceptance": 1.0,
+          "mean_paired_acceptance_change": 0.20724682034988504,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.28566213823339837,
+            -0.014126576749765363,
+            0.12178451161848258
+          ],
+          "mean_jump_rms": 0.9503178132134465,
+          "mean_squared_jump_per_gradient": 0.10274400398744829,
+          "gradient_evaluations": 864
+        },
+        {
+          "name": "conditional_half",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.993817579896493,
+          "median_acceptance": 1.0,
+          "mean_paired_acceptance_change": 0.22661134177038555,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.07427650327426072,
+            -0.0038028264961589286,
+            0.028826515346564996
+          ],
+          "mean_jump_rms": 0.958069438938498,
+          "mean_squared_jump_per_gradient": 0.05470237398895764,
+          "gradient_evaluations": 1632
+        }
+      ]
+    },
+    {
+      "id": 208,
+      "checks_passed": true,
+      "cases": [
+        {
+          "name": "baseline",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9820361120171812,
+          "median_acceptance": 1.0,
+          "mean_paired_acceptance_change": 0.0,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.09158000625604057,
+            -0.00504843847767944,
+            0.0898215094098731
+          ],
+          "mean_jump_rms": 0.9947074339403134,
+          "mean_squared_jump_per_gradient": 0.11090967756302772,
+          "gradient_evaluations": 864
+        },
+        {
+          "name": "half_step",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9956537975906737,
+          "median_acceptance": 1.0,
+          "mean_paired_acceptance_change": 0.013617685573492563,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.022961497780097595,
+            -0.0017568854689820057,
+            0.02192330289627087
+          ],
+          "mean_jump_rms": 0.9926760786382051,
+          "mean_squared_jump_per_gradient": 0.05847731741673426,
+          "gradient_evaluations": 1632
+        },
+        {
+          "name": "quarter_step",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9989224203906882,
+          "median_acceptance": 1.0,
+          "mean_paired_acceptance_change": 0.016886308373507086,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.005743911845045524,
+            -0.0004465068437422559,
+            0.005448422793544516
+          ],
+          "mean_jump_rms": 0.9921701593735218,
+          "mean_squared_jump_per_gradient": 0.03009398071180375,
+          "gradient_evaluations": 3168
+        },
+        {
+          "name": "conditional_metric",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9809283197258573,
+          "median_acceptance": 1.0,
+          "mean_paired_acceptance_change": -0.0011077922913239197,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.10797538574030252,
+            -0.007796851480504685,
+            0.09817479160505815
+          ],
+          "mean_jump_rms": 0.9844925211215355,
+          "mean_squared_jump_per_gradient": 0.1097501199115076,
+          "gradient_evaluations": 864
+        },
+        {
+          "name": "conditional_half",
+          "trajectories": 96,
+          "divergences": 0,
+          "mean_acceptance": 0.9953674482805148,
+          "median_acceptance": 1.0,
+          "mean_paired_acceptance_change": 0.013331336263333821,
+          "nonfinite_energy_errors": 0,
+          "finite_energy_error_q05_q50_q95": [
+            -0.0274760942188097,
+            -0.0024565607580555593,
+            0.023321256384621236
+          ],
+          "mean_jump_rms": 0.9946574759312469,
+          "mean_squared_jump_per_gradient": 0.05870308245328698,
+          "gradient_evaluations": 1632
+        }
+      ]
+    }
+  ],
+  "source_pilot_unchanged": true,
+  "posterior_mixing_claim": false,
+  "limits": [
+    "Same frozen data, priors and field states; scalar parameters held fixed during each conditional trajectory",
+    "Current-scalar metric stays fixed throughout each trajectory; no field-dependent mass or Riemannian approximation",
+    "All cases have integration time 1.2 but different gradient costs; report accepted jump squared per gradient evaluation",
+    "Inputs are correlated stored states from an already examined pilot, including failed chains; no mixing/coverage claim",
+    "Only cold-state neighborhoods sampled, not a reconstruction of every historical divergent trajectory",
+    "No production defaults changed, chains extended, source states modified or failed inputs replaced"
+  ]
+}

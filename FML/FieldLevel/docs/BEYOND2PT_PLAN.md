@@ -1,6 +1,95 @@
-# First scientific FieldLevel project: LEFTfield-style galaxy inference
+# beyond2pt: periodic galaxy inference
 
-Started 17 November 2026. The reusable Eulerian operators are now composed with unbiased LPT matter, an explicit fixed-noise likelihood and fixed/free-field prior policies. The separate joint-proposal synthetic fixed-IC pilot passes its declared scalar mixing and bounded numerical-refinement gates; the original failed pilot remains preserved. Catalog ingestion and the real-data amplitude result remain open. No galaxy-catalog posterior has been computed. See [current implementation](EULERIAN_BIAS.md) and [data audit](leftfield/catalog-manifest.json).
+Started 17 November 2026. The reusable Eulerian operators are now composed with unbiased LPT matter, an explicit fixed-noise likelihood and fixed/free-field prior policies. The separate joint-proposal synthetic fixed-IC pilot passes its declared scalar mixing and bounded numerical-refinement gates; the original failed pilot remains preserved. Application to the actual catalog and the real-data amplitude result remain open. No galaxy-catalog posterior has been computed. See [current implementation](EULERIAN_BIAS.md) and [data audit](beyond2pt/catalog-manifest.json).
+
+## Current overall status (19 November 2026)
+
+Priority changed on 19 November 2026: freeze further sampler campaigns and
+finish the concrete fixed-IC application. Existing experimental kernels and every
+failed study remain; no production-default or converged-posterior claim is added.
+
+Latest delivered application step: [real Box-1 observed data](beyond2pt/BOX1_RESULTS.md).
+The pinned public catalog contains 3,591,859 galaxies. Its cubic density modes are
+prepared for kmax=0.08/0.10/0.12 h/Mpc using two observation meshes; full-catalog
+direct sums and mesh comparisons pass. The descriptive galaxy map and power
+spectrum are saved. No new sampler chains were run.
+
+The actual fixed-IC likelihood/posterior is blocked by matching Box-1 phases and
+a verified reference spectrum/non-amplitude cosmology. This external dependency
+was already recorded in the original audit; the current public repository tree
+still does not supply those files. Do not substitute a random realization or a
+field reconstructed from the catalog. The [application entry point](../example/beyond2pt/README.md)
+emits an explicit missing-input contract.
+
+The most recent [donor experiment](validation/studies/donor_jumps/RESULTS.md)
+improves physical-field ESS provisionally, but all eighteen coordinate checks
+and transport still fail. Marginalized-IC inference remains a focused algorithm
+redesign task after the fixed-IC dependency is resolved, not another incremental
+sampler campaign.
+
+This status concerns backlog #52 and its first periodic-galaxy sigma8 application;
+it does not mark the rest of the FML backlog complete. The current scientific priority and external-data dependency are recorded above.
+
+The goal remains sigma8 inference from a periodic galaxy catalog, first conditional
+on known ICs, then marginalized over ICs and galaxy bias. No actual-catalog posterior
+or reproduction of the published challenge result has yet been computed.
+
+Implemented foundation:
+
+- General forward/likelihood/prior/posterior composition, MAP/HMC, normalized Gaussian
+  targets and Cartesian Gaussian/Poisson survey observations.
+- Differentiable linear, ZA/2LPT and separate PM evolution; FFTWGrid slabs and
+  PencilGrid pencils, distributed adjoints and same-layout inference checkpoints.
+- For the galaxy application: Eulerian density/quadratic/tidal/Laplacian bias,
+  amplitude-only spectrum and explicit fixed noise, compact latent/padded product
+  meshes, NUFFT catalog observations/deposition/position adjoints, cached bias
+  conditionals, field metrics, blocked scalar updates and interweaving.
+- Serial likelihood-tempering validation, complete-ensemble replay, prior-refresh
+  transport accounting, independent truth/noise/initial seed domains, fixed budgets,
+  measured gradients and retained failure reports. This serial orchestration is
+  distinct from the distributed model/MPI inference support.
+
+Validation achieved:
+
+- Small synthetic fixed-IC amplitude/bias inference passes mixing and bounded
+  numerical-refinement tests.
+- A selected longer four-chain free-IC study and two fresh fixed-truth mocks pass
+  their original computational gates; numerical and prior-sensitivity screens are
+  recorded. These are conditional same-model successes, not broad calibration.
+- The stronger eight prior-predictive-dataset stress pilot completed all 32 chains
+  but only 2/8 datasets pass all twelve-coordinate/transport/divergence requirements.
+  The prior draws expose difficult targets hidden by earlier examples. No failed
+  cases have been discarded or extended until pass.
+- Dataset 204's paired 256/512 comparison eliminates 1417 observed divergences with
+  half steps, but still fails eleven coordinate gates and transport. Sigma8 alone
+  passes; joint field mixing remains inadequate. Dataset 203 has no divergences
+  but weak cold-end transport and weak/varying curvature. The present ladder study
+  tests one specific remedy, not the entire sampler problem.
+
+Remaining major gates, in order:
+
+1. Obtain the exact Box-1 initial field and verified reference spectrum/background
+   assignment; document Fourier normalization, species/epoch/growth, intermediate
+   filters and derivative-bias conventions. Observed catalog modes are now ready.
+2. Compute the fixed-IC amplitude likelihood and bias-marginalized posterior on
+   that catalog. Produce prediction/residual plots and separate forward-model
+   resolution and EFT-cutoff comparisons. No published-result claim before input
+   conventions match.
+3. Redesign joint field/bias exploration around one stated structural hypothesis,
+   one bounded budget and a decision criterion. Further incremental sampler pilots
+   are frozen; existing failed outcomes and optional kernels remain unchanged.
+4. Revalidate a chosen joint sampler on all declared prior-predictive mocks and
+   an independent set; distinguish mixing, coverage and physical model validity.
+5. Establish larger-field work/memory costs and MPI replica orchestration, then
+   marginalized-IC catalog inference. Only after one-box success proceed to the
+   ten-box comparison and extended bias/noise models.
+
+There is substantial engineering already available, but the scientific deliverable
+is several validation/scaling/application stages away. A defensible production
+runtime estimate needs larger-target block timings and measured mixing. It would
+be misleading to quote a completion percentage or treat the next toy pilot as the
+final real-catalog run. The separate deferred N32 PM study is not a prerequisite
+for this perturbative LPT galaxy project.
 
 ## Scientific objective
 
@@ -160,11 +249,11 @@ The immediate order is **contract/data audit -> differentiable Eulerian model ->
 3. Available cluster/node memory and intended production wall-time budget, to be set after profiling.
 4. Whether the first publication-level target is challenge compatibility, a more flexible amplitude analysis, or a later full-cosmology extension. Recommendation: deliver compatibility first, but assess precision with the robustness configuration.
 
-The first operator component is now implemented (status below). No galaxy-catalog sampling, catalog download or external message has been made. The preceding folder cleanup was committed separately.
+The initial implementation record below is historical. The current application status and catalog download are recorded above. No galaxy-catalog posterior has been computed. The preceding folder cleanup was committed separately.
 
 ## Initial implementation status (17 November 2026)
 
-- Done: periodic catalog Git-tree audit pinned in `leftfield/catalog-manifest.json`; no full catalog downloaded.
+- Done: periodic catalog Git-tree audit pinned in `beyond2pt/catalog-manifest.json`; no full catalog downloaded.
 - Done: grid-generic Eulerian density, centered density squared, centered tidal squared and physical Laplacian, with reverse derivatives in `EulerianBias.h`.
 - Done: explicit spherical/cubic matter-band geometry and conservative product-resolution guard. These bands do not yet replace framework mode enumeration.
 - Done: analytic field and per-column derivative tests, serial and slab/pencil 1/2/4-rank validation.
@@ -251,3 +340,71 @@ and crash/time-budget checks. Both short datasets retain all twelve failed mixin
 gates and provisional ranks. The full eight-dataset four-chain 256/2048 pilot is
 frozen with a cumulative 16-hour sampling cap, but is **not started**. Next: run
 that exact pilot; no nonlinear calibration or production MPI claim yet.
+
+### Completed calibration pilot and stability diagnosis (19 November 2026)
+
+[Eight-dataset pilot](validation/studies/calibration_pilot/RESULTS.md): all fixed
+budgets complete; **2/8** pass all twelve-coordinate/transport/divergence gates.
+All failures and provisional ranks remain. [Local stability probes](validation/studies/stability_probe/RESULTS.md)
+pass derivative/native controls on 96 states. Half step at matched integration
+time removes observed local divergences; the current-scalar linear metric alone
+worsens dataset 204. Production defaults remain unchanged. Next: separately frozen
+half-step chain comparison and further nonlinear-metric/transport diagnosis.
+
+### Paired integrator comparison and mixing audit (19 November 2026)
+
+[The fixed dataset-204 comparison](validation/studies/integrator_comparison/RESULTS.md)
+completes two four-chain 256/512 cohorts with actual field-gradient counters and
+unchanged target, mass and integration time. Half step removes observed divergences;
+all coordinate/cost/transport results and failed gates are retained. Baseline records
+exactly replay the original prefix. [Dataset 203's audit](validation/studies/mixing_audit/RESULTS.md)
+finds weak cold-end exchange, incomplete refreshed-state returns, selected path
+barriers and weak/varying curvature, without evidence for local full-period resonance
+at inspected states. Next: separately freeze a bounded cold-end ladder refinement;
+no full calibration, real-catalog or production MPI replica claim.
+
+### Cold-end ladder comparison (19 November 2026)
+
+[The separately frozen dataset-203 comparison](validation/studies/ladder_comparison/RESULTS.md)
+completes both four-chain 256/512 budgets, with eleven versus thirteen replicas
+and stable half-step HMC on both. Failed coordinate gates: 12/12 baseline,
+12/12 refined; transport gates fail for both.
+All measured work, target identities, replays, failed outcomes and provisional
+summaries are retained. This is targeted diagnosis, not nonlinear calibration
+or real-catalog validation; production defaults remain unchanged.
+
+### Frozen nonlinear field metric (19 November 2026)
+
+[The rank-eighteen Gauss-Newton local probe](validation/studies/gauss_newton_probe/RESULTS.md)
+passes independent operator/adjoint/harmonic controls and its fixed 192-trajectory
+screen, with zero divergences and geometric-mean projection jump/call gain 1.23.
+[The separate fresh four-chain 256/512 test](validation/studies/metric_comparison/RESULTS.md)
+compares against the unchanged cached refined-ladder baseline. Candidate failed
+coordinates: 12/12; transport gate: FAIL;
+measured divergences: 0. All failures and cost-normalized
+outcomes remain. Local jumps are not chain ESS; broader calibration, distributed
+metric construction, larger fields and real-catalog application remain open.
+
+### Exact initial-support interweaving (19 November 2026)
+
+[The exact-support coupled move](validation/studies/support_interweave/RESULTS.md)
+passes independent analytic-marginal/negative-control, global-rank, prediction/prior,
+projector and slab/pencil controls (121 serial; 225 at each 1/2/4 MPI ranks), plus
+native identity/restart and real runner controls. The fresh four-chain 256/512
+candidate keeps the full 64-coordinate prior and original field metric; only the
+rescaling support and matching global-rank Jacobian change. Candidate coordinate
+failures: 12/12; transport PASS;
+measured divergences 0. Full baseline/target/cost identities
+and every failed outcome remain. Wider calibration, larger-field validation and
+real-catalog inference remain open.
+
+### Frozen-donor joint field/scalar jumps (19 November 2026)
+
+[The fixed-pool joint kernel](validation/studies/donor_jumps/RESULTS.md)
+passes 30 independent native controls, frozen model feasibility, native identity/restart
+and real four-chain runner checks. Fresh fixed 256/512 comparison retains the exact-support
+rescaling, original field metric and target. Candidate failures: 12/12
+original coordinates and 6/6 additional predeclared physical
+initial-mode checks; transport False; divergences 0.
+Extra donor value evaluations are explicitly counted. All failures and source records remain.
+No independent calibration or production-catalog claim follows from this selected-data study.

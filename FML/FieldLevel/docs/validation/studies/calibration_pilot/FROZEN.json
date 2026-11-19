@@ -1,0 +1,33 @@
+{
+  "study_sha256": "1a3ad5cdde59a56f0211af2859f284376e9f431d634a786663219e8d82aa8222",
+  "binary_sha256": "642ddbc6b82a3b82f1a174bf307a43afb1d82498a472e7ca92adda89c7f5feb8",
+  "diagnostics_sha256": "bb859cbbdc3f6bbef4de2a0dae7acfcf7714626b5973bfedd5dc67f0a78aded3",
+  "sources": {
+    "calibration/study.py": "c3e3e58cf4baff059b513ee46118c654171fb5cac94f399f14b86699bfcd79f2",
+    "calibration/analyze.py": "c0688fdd5b262f449e9be72f99973d6116c97f715e71c394353fe82b578a8025",
+    "calibration/common.py": "1ea7afcf6a5e9715997cabbd4869842178ba5e65f45f7e94a422c5fcab4ba135",
+    "calibration/Diagnostics.cpp": "27422d67b318f992f9d8109fce3a98b00a2b7df99910074a7b666e8a3684972c",
+    "tempering/run.py": "5e3c3e1cec8d03a86dd6304360e5ca2188534fcbb3ebfcd0a4aaa4be434b7d93",
+    "tempering/analyze.py": "113bcbafaa3754374eb2ab67548906d9d53fa034f26533300ebc9b2df7df4ef1",
+    "tempering/check_prior.py": "6d37859b23c77eaa29b046b823d3beb15c1f850b15d27a57d9346e4375b0cd30",
+    "tempering/sbc_ranks.py": "62025923f73fb1c1864d036d7c3b919354651e38753f94b8487c2594ae6c78e1",
+    "tempering/plan_mock1.json": "cf0e1f74605fc1536cb758d5a02830fbc6ac32971c9a46f9cd3f0c0fea0bb432",
+    "tempering/plan.json": "6de0c06e5a05246ffa04c700b7a5f5615a1bf19787c37879c957318998a5a731"
+  },
+  "plans": {
+    "mock201.json": "52d366416cabc071cef3e77b08417c82ca91b0bc7b0a30751f79092584bc6b4a",
+    "mock202.json": "96b80f2c924754c2f95662d05ab2b180a59981ebfc7da931f774fb6c14f047db",
+    "mock203.json": "54b265c89be3e39080be0a5137c77f360ac4536154983d3cae4118d4e1a53a29",
+    "mock204.json": "df5ca655c51b70d28359b7afe23fd846af64792d1bfd025e7b0057bc907ecf8c",
+    "mock205.json": "9d44c5a1a4648bf00c307c64b0977b62e0a841f1580ac2456732d6ea0dfc9b81",
+    "mock206.json": "e4e4eba2eb6a035391ef6e6cb1c35bdcf365ff49b4ecc704b490afeb835ac398",
+    "mock207.json": "e81fad3540338f4cc20837a74ee8b6ddf295769b5c993b8bde4de8b9f6aa2bdc",
+    "mock208.json": "948510d27f8f4313f7cf8fdf20072ed6fc24f7d7e7f16bb276987742e3e4d3ae"
+  },
+  "key_audit": {
+    "sampler_exchange_keys": 2433024,
+    "generation_keys": 56,
+    "sha256": "3b6e0f0565cf4e33e15089538f6d85f4ac56f0d8f23d5c6199a04cbf5125e1c5",
+    "cross_domain_disjoint": true
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "preflight": {
+    "passed": true,
+    "refined_native_restart_checkpoint_summary_draws_exact": true,
+    "all_32_refined_draws_exact": true,
+    "baseline_refined_target_exact": true,
+    "changed_ladder_or_count_reject_without_writes": true,
+    "both_ladder_gradient_counters_and_warmup_separation_exact": true
+  },
+  "runner-controls": {
+    "passed": true,
+    "exclusive_study_writer_rejects": true,
+    "one_round_pause_all_eight_chains_at_16": true,
+    "missing_ledger_rejects_without_native_or_ledger_writes": true,
+    "budget_receipt_restored_exact": true
+  },
+  "actual_control_sources": {
+    "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-ladder-comparison/preflight.py": "fab0239dc3d30ea53a1cf8dca8ae6949146d09143f011c449c013ba7c1ad6cff",
+    "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-ladder-comparison/runner_controls.py": "ac11f89a2338b3537a8e9fe9612b7c7cbb8a8e8e97dbe387165df8f014fcb8f0"
+  },
+  "target_controls": {
+    "passed": true,
+    "all_eight_targets_byte_identical_to_original_203": true,
+    "original_target_sha256": "3cd5edd25f40e5fcc5f3f91be2d0217a4e5dafaeb4a734720f9765b1fd2b6e8a"
+  }
+}

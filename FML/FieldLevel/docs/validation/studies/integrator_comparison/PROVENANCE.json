@@ -1,0 +1,35 @@
+{
+  "binary_sha256": "4e5029832829f54308aee67d42a723d693232ab0ec051c62720b584f116e9ff7",
+  "diagnostics_sha256": "bb859cbbdc3f6bbef4de2a0dae7acfcf7714626b5973bfedd5dc67f0a78aded3",
+  "sources": {
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/integrator_comparison/compare.py": "801f8dd52038089ac652f641fc089abad29fa821d16a44b0dfcaa88802a4756c",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/integrator_comparison/run.py": "56e5a348e4cd621e0306596f42c5f358923d9b715c8347ab2fa61d79d9b7b564",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/integrator_comparison/FieldHMC.h": "2a46ea7460e92ff511744e75c638e5de858432a34b763e8103a5b1af7e95e2fb",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/Main.cpp": "8bb62f56572c8deff37d379ae0f3eab72f7e51cb67f21acf0bbc417f7890f5eb",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/analyze.py": "113bcbafaa3754374eb2ab67548906d9d53fa034f26533300ebc9b2df7df4ef1",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/check_prior.py": "6d37859b23c77eaa29b046b823d3beb15c1f850b15d27a57d9346e4375b0cd30",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/plan.json": "6de0c06e5a05246ffa04c700b7a5f5615a1bf19787c37879c957318998a5a731",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/calibration/analyze.py": "c0688fdd5b262f449e9be72f99973d6116c97f715e71c394353fe82b578a8025",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/calibration/study.py": "c3e3e58cf4baff059b513ee46118c654171fb5cac94f399f14b86699bfcd79f2",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/calibration/common.py": "1ea7afcf6a5e9715997cabbd4869842178ba5e65f45f7e94a422c5fcab4ba135",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/sbc_ranks.py": "62025923f73fb1c1864d036d7c3b919354651e38753f94b8487c2594ae6c78e1"
+  },
+  "original_directory": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-calibration/pilot/mock204",
+  "plans": {
+    "baseline": "c8e787c58f6ef0927e90794e9765e660d518480a3dbeb8e5278c3630836fefd8",
+    "half": "5f68817c2dfff67f576183951a77b6713c8be2c49eff970da8281fd2ebf0aeca"
+  },
+  "warmup": 256,
+  "samples": 512,
+  "wall_limit": 14400,
+  "batch_reservation": 2400,
+  "scope": "Targeted paired 256/512 integrator comparison on an already inspected failed dataset; not independent calibration",
+  "full_manifest": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-integrator-comparison/campaign/FROZEN.json",
+  "full_manifest_sha256": "fa47c32065fc91743893e33c66d110d70af9b98c1a15805914be80a74c9bb700",
+  "original_input_files_hashed": 2055,
+  "validation_controls": {
+    "preflight.json": "65bae65bf32817af160194d3538f5261a9b6315b4b856a096c08b7be8ff4a49a",
+    "warmup-checks.json": "1c11ce08c92408c9a84c264724db83cde424780fe5425261ec3aee5bb7ad3e9a",
+    "unit.log": "13e0bbc409574c228f39ec0132e4cf3a8bcec70b835209b4972021d67eb44bb6"
+  }
+}

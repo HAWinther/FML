@@ -58,7 +58,7 @@ There is no automatic chain extension, thinning or failed-case removal.
 
 The reusable sampler/cache and its Jacobian are documented in
 [the fixed-IC guide](../../../docs/FIXED_IC.md). The full staged analysis remains
-in [the project plan](../../../docs/LEFTFIELD_PLAN.md).
+in [the project plan](../../../docs/BEYOND2PT_PLAN.md).
 
 ## Separate joint-proposal campaign
 

@@ -1,0 +1,107 @@
+{
+  "kernel_backend": {
+    "passed": true,
+    "results": [
+      {
+        "name": "serial",
+        "returncode": 0,
+        "actual_ranks": [
+          0
+        ],
+        "log": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-support-interweave/serial.log",
+        "executable": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-support-interweave/build/serial/FML/FieldLevel/validation/galaxy/support_interweave/support_test",
+        "executable_sha256": "be59ecb7be9b9a0e7c4e3b37d1236099b4c59a4968fee157b672e4db53249275",
+        "log_sha256": "809bfe0fe7c7610c2c741616ebd07e5b2c2b99c1e0c18df94055637815a2ea00"
+      },
+      {
+        "name": "mpi1",
+        "command": [
+          "/opt/local/bin/mpirun-openmpi-clang17",
+          "--map-by",
+          "slot",
+          "--bind-to",
+          "none",
+          "--oversubscribe",
+          "-np",
+          "1",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-support-interweave/build/mpi/FML/FieldLevel/validation/galaxy/support_interweave/support_test_mpi"
+        ],
+        "returncode": 0,
+        "actual_ranks": [
+          0
+        ],
+        "executable": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-support-interweave/build/mpi/FML/FieldLevel/validation/galaxy/support_interweave/support_test_mpi",
+        "executable_sha256": "b4788c9339173a725737c07d51ff767e5b168aa2614640caf9a6779c0f001e4d",
+        "log": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-support-interweave/mpi1.log",
+        "log_sha256": "d80bca48a2b2a98e3c477b517b2663f1e91e8b71c6614fe1386e56a65d755c9c"
+      },
+      {
+        "name": "mpi2",
+        "command": [
+          "/opt/local/bin/mpirun-openmpi-clang17",
+          "--map-by",
+          "slot",
+          "--bind-to",
+          "none",
+          "--oversubscribe",
+          "-np",
+          "2",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-support-interweave/build/mpi/FML/FieldLevel/validation/galaxy/support_interweave/support_test_mpi"
+        ],
+        "returncode": 0,
+        "actual_ranks": [
+          0,
+          1
+        ],
+        "executable": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-support-interweave/build/mpi/FML/FieldLevel/validation/galaxy/support_interweave/support_test_mpi",
+        "executable_sha256": "b4788c9339173a725737c07d51ff767e5b168aa2614640caf9a6779c0f001e4d",
+        "log": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-support-interweave/mpi2.log",
+        "log_sha256": "7e488c6b5cc5fce3f380b00a8774fb31b2cb4d1c0c0a5de748e1d59767b20516"
+      },
+      {
+        "name": "mpi4",
+        "command": [
+          "/opt/local/bin/mpirun-openmpi-clang17",
+          "--map-by",
+          "slot",
+          "--bind-to",
+          "none",
+          "--oversubscribe",
+          "-np",
+          "4",
+          "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-support-interweave/build/mpi/FML/FieldLevel/validation/galaxy/support_interweave/support_test_mpi"
+        ],
+        "returncode": 0,
+        "actual_ranks": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "executable": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-support-interweave/build/mpi/FML/FieldLevel/validation/galaxy/support_interweave/support_test_mpi",
+        "executable_sha256": "b4788c9339173a725737c07d51ff767e5b168aa2614640caf9a6779c0f001e4d",
+        "log": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-support-interweave/mpi4.log",
+        "log_sha256": "4813034b81ea2f1d31b4eb30bc67865bf2f0086ace91346dcdd78af231d11d17"
+      }
+    ]
+  },
+  "native": {
+    "passed": true,
+    "legacy_32_draws_summary_target_exact": true,
+    "active_32_draws_checkpoint_summary_target_restart_exact": true,
+    "changed_policy_rejects_without_writes": true,
+    "missing_or_malformed_policy_rejects_without_writes": true,
+    "actual_warmup_sampling_gradient_counts_exact": true,
+    "candidate_target_original_exact": true,
+    "old_checkpoint_identity_intentionally_distinct": true
+  },
+  "runner": {
+    "passed": true,
+    "exclusive_writer_rejects": true,
+    "bounded_pause_all_four_at_16": true,
+    "missing_ledger_rejects_without_native_or_ledger_writes": true,
+    "budget_restored": true,
+    "all_four_targets_original_exact": true
+  },
+  "launcher_note": "Initial MPI launch used mismatched Hydra; matching Open MPI required slot mapping in this environment. Final 1/2/4-rank communicator sizes were verified, with slabs and pencils exercised."
+}

@@ -1,0 +1,68 @@
+{
+  "protocol": {
+    "version": 1,
+    "scope": "Dataset-203 fixed four-chain 256/512 frozen nonlinear metric candidate; cached completed refined-ladder baseline; not independent calibration",
+    "dataset": 203,
+    "ensembles": 4,
+    "warmup": 256,
+    "samples": 512,
+    "workers": 4,
+    "wall_limit_seconds": 7200,
+    "batch_reservation_seconds": 1200,
+    "posterior_gates": {
+      "max_rhat": 1.01,
+      "min_bulk_ess": 400,
+      "min_tail_ess": 400
+    },
+    "interval_probabilities": [
+      0.5,
+      0.9,
+      0.95
+    ],
+    "endpoint_index": 511,
+    "analysis_seed": 942301,
+    "baseline": "Reuse completed 13-replica half-step ladder run; freeze its full record/checkpoint inventory and existing diagnostics, never rewrite it",
+    "candidate": "Only field kinetic metric changes: M_beta=I+beta K fixed per ensemble before launch; complete native checkpoint identity includes metric bytes",
+    "cost": "Compare actual primary-chain field-gradient counts including warmup; no matched wall-time efficiency ratio because baseline and candidate use different concurrency",
+    "limits": [
+      "Previously inspected dataset and reused reference states; exploratory algorithm development, not independent calibration",
+      "Equal four-chain cold-draw budgets and target, not independent replicate experiments",
+      "All twelve original coordinate gates and transport/divergence gates retained",
+      "Local jump-screen success is not a full-chain mixing result",
+      "No extension-until-pass, chain replacement, pooling or posterior target changes",
+      "Serial rank-bounded validation metric and replica runner; no production distributed builder claim"
+    ]
+  },
+  "binary_sha256": "eff6c0591eb765c9ff0084543d3ae61cb5fad1e5f6250db9e88970f2d0b1e648",
+  "diagnostics_sha256": "bb859cbbdc3f6bbef4de2a0dae7acfcf7714626b5973bfedd5dc67f0a78aded3",
+  "sources": {
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/metric_comparison/Makefile": "3bca5e8eadf1257c8811e01f0bba8ecc8ae8dd25dac579986fe71aa2291459e3",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/metric_comparison/Native.h": "bfb59679c48fe62347652bf71057a93ed74cda39ff8c7b436d4c96e882a8d9c2",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/metric_comparison/make_driver.py": "33b48663dc0d3d9d823ab1d8215faadb7926a8c3e28ed6dbd08737b1bf821200",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/metric_comparison/plan.json": "9096668c96146ba92ec458ded0a15401dad85b07cd5205422813482c6ddae3a7",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/metric_comparison/preflight.py": "f4346621e6883da7e80c68d2320c797cc12b8f2f6ba831f976664c8ef67082b6",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/metric_comparison/run.py": "0d84e4a5ed221130d692ffe2988a00662838b814b61f91a1f6ab97b060b87a29",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/metric_comparison/study.json": "53511e87e486d93fd96b761dfc3128e9925617aaa75afedfc7dfb5a5c3998763",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/metric_comparison/study.py": "af8fabf8ca5520b924cc8e2e757e62b89ee10b2055be1d39559c414a8d1382e2",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/gauss_newton/Metric.h": "dc6b73fe19cea15d03da2f9f3601e72fe85633cae16a56da76d7a69a59078c9c",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/integrator_comparison/FieldHMC.h": "2a46ea7460e92ff511744e75c638e5de858432a34b763e8103a5b1af7e95e2fb",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/Main.cpp": "8bb62f56572c8deff37d379ae0f3eab72f7e51cb67f21acf0bbc417f7890f5eb",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/Exchange.h": "881601655daefc32c533b1524dfffd9f329049aa7d7928cd2c8bf622a745b2b3",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/MockSettings.h": "7d46f0e2624926f17f76175774edb97bd186af04f4d6da7b3185e3fd2eb5d24b",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/PriorPredictive.h": "888604f21cafb412d939ba8f95eb7b712aeab156692579d25bec2c905913eb0b",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/analyze.py": "113bcbafaa3754374eb2ab67548906d9d53fa034f26533300ebc9b2df7df4ef1",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/check_prior.py": "6d37859b23c77eaa29b046b823d3beb15c1f850b15d27a57d9346e4375b0cd30",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/plan.json": "6de0c06e5a05246ffa04c700b7a5f5615a1bf19787c37879c957318998a5a731",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/sbc_ranks.py": "62025923f73fb1c1864d036d7c3b919354651e38753f94b8487c2594ae6c78e1",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/calibration/analyze.py": "c0688fdd5b262f449e9be72f99973d6116c97f715e71c394353fe82b578a8025",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/calibration/study.py": "c3e3e58cf4baff059b513ee46118c654171fb5cac94f399f14b86699bfcd79f2",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/calibration/common.py": "1ea7afcf6a5e9715997cabbd4869842178ba5e65f45f7e94a422c5fcab4ba135"
+  },
+  "original_directory": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-ladder-comparison/campaign/refined/mock203",
+  "plan_sha256": "9096668c96146ba92ec458ded0a15401dad85b07cd5205422813482c6ddae3a7",
+  "full_manifest": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-metric-comparison/campaign/FROZEN.json",
+  "full_manifest_sha256": "c2fdb2047c3bc298ad020d3e5612bb1af2d937534e4df151bb62d1e8aae8a50b",
+  "original_input_files_hashed": 2077,
+  "native_hook_diff_sha256": "96a7c828df39854eab0a8d4ccd9cac1559bbbab6949c2b9e3f3bf34ff59914ac",
+  "runner_controls_sha256": "f1473a5899f829650633d370f25a32963d763599964177c2090d4aeeb8da5e2f"
+}

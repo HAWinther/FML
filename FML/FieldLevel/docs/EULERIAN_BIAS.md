@@ -1,7 +1,7 @@
 # Eulerian bias operators
 
 `EulerianBias.h` provides `FML::FIELDLEVEL::EULERIAN::QuadraticBias<Grid>` for the
-periodic galaxy [sigma8 project](LEFTFIELD_PLAN.md). It accepts an **evolved
+periodic galaxy [sigma8 project](BEYOND2PT_PLAN.md). It accepts an **evolved
 Eulerian matter overdensity**, not initial density or advected tracer weights.
 It works with FFTWGrid slabs and PencilGrid pencils, storing only local cells.
 The reusable operator component is now composed with LPT matter and a fixed-noise
@@ -68,7 +68,7 @@ make -C FML/FieldLevel/tests eulerian-bias USE_MPI=true USE_OMP=true NP_LIST='1 
 
 The analysis follows the second-order Eulerian operator basis of
 [2405.02252v2, Sec. V.3](https://arxiv.org/html/2405.02252v2#S5.SS3).
-The [project plan](LEFTFIELD_PLAN.md) distinguishes verified conventions from
+The [project plan](BEYOND2PT_PLAN.md) distinguishes verified conventions from
 unresolved catalog and reproduction inputs. At fixed normalized ICs, the
 amplitude map is delta_L(alpha)=alpha delta_L,fid and
 P_L(alpha)=alpha^2 P_L,fid; alpha=sigma8/sigma8_fid. The scalar prior is uniform

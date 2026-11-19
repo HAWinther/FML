@@ -1,0 +1,207 @@
+{
+  "scope": "Bounded local feasibility test of a frozen low-rank conditional-field Gauss-Newton metric on previously inspected dataset 203; not a chain or calibration test",
+  "complete": true,
+  "operator_controls_passed": true,
+  "local_screen_passed": true,
+  "outcomes": {
+    "baseline": {
+      "trajectories": 96,
+      "gradient_calls": 1632,
+      "divergences": 0,
+      "mean_acceptance": 0.9972972922303326,
+      "minimum_frame_mean_acceptance": 0.9938720096630327,
+      "frame_acceptance": [
+        {
+          "ensemble": 0,
+          "draw": 0,
+          "mean": 0.9996754068697746
+        },
+        {
+          "ensemble": 0,
+          "draw": 1024,
+          "mean": 0.9954753456273874
+        },
+        {
+          "ensemble": 0,
+          "draw": 2047,
+          "mean": 0.9945799168163635
+        },
+        {
+          "ensemble": 1,
+          "draw": 0,
+          "mean": 1.0
+        },
+        {
+          "ensemble": 1,
+          "draw": 1024,
+          "mean": 0.9996221669049064
+        },
+        {
+          "ensemble": 1,
+          "draw": 2047,
+          "mean": 1.0
+        },
+        {
+          "ensemble": 2,
+          "draw": 0,
+          "mean": 0.9969064045324789
+        },
+        {
+          "ensemble": 2,
+          "draw": 1024,
+          "mean": 0.9940170478095863
+        },
+        {
+          "ensemble": 2,
+          "draw": 2047,
+          "mean": 0.9993339608719916
+        },
+        {
+          "ensemble": 3,
+          "draw": 0,
+          "mean": 0.9968144685660477
+        },
+        {
+          "ensemble": 3,
+          "draw": 1024,
+          "mean": 0.9938720096630327
+        },
+        {
+          "ensemble": 3,
+          "draw": 2047,
+          "mean": 0.9972707791024231
+        }
+      ],
+      "projection_mean_squared_jump": {
+        "cos100": 0.03171710032038992,
+        "sin100": 0.03762513674009472,
+        "cos110": 0.046459421098169675,
+        "sin110": 0.04245338552525541,
+        "cos001": 0.05084912927302498,
+        "sin001": 0.03964200698796378
+      },
+      "projection_squared_jump_per_gradient": {
+        "cos100": 0.0018657117835523484,
+        "sin100": 0.0022132433376526304,
+        "cos110": 0.0027329071234217456,
+        "sin110": 0.0024972579720738478,
+        "cos001": 0.0029911252513544102,
+        "sin001": 0.0023318827639978693
+      }
+    },
+    "gauss_newton": {
+      "trajectories": 96,
+      "gradient_calls": 1632,
+      "divergences": 0,
+      "mean_acceptance": 0.9965517393165295,
+      "minimum_frame_mean_acceptance": 0.9894998565035421,
+      "frame_acceptance": [
+        {
+          "ensemble": 0,
+          "draw": 0,
+          "mean": 1.0
+        },
+        {
+          "ensemble": 0,
+          "draw": 1024,
+          "mean": 0.9954890062783104
+        },
+        {
+          "ensemble": 0,
+          "draw": 2047,
+          "mean": 0.9926814523245162
+        },
+        {
+          "ensemble": 1,
+          "draw": 0,
+          "mean": 1.0
+        },
+        {
+          "ensemble": 1,
+          "draw": 1024,
+          "mean": 0.999251487100196
+        },
+        {
+          "ensemble": 1,
+          "draw": 2047,
+          "mean": 0.9996182127912556
+        },
+        {
+          "ensemble": 2,
+          "draw": 0,
+          "mean": 0.9945366332570382
+        },
+        {
+          "ensemble": 2,
+          "draw": 1024,
+          "mean": 0.9938170671341253
+        },
+        {
+          "ensemble": 2,
+          "draw": 2047,
+          "mean": 0.9994113370987959
+        },
+        {
+          "ensemble": 3,
+          "draw": 0,
+          "mean": 0.9894998565035421
+        },
+        {
+          "ensemble": 3,
+          "draw": 1024,
+          "mean": 0.9984506776981049
+        },
+        {
+          "ensemble": 3,
+          "draw": 2047,
+          "mean": 0.9958651416124689
+        }
+      ],
+      "projection_mean_squared_jump": {
+        "cos100": 0.03572409764373717,
+        "sin100": 0.041760073852602005,
+        "cos110": 0.10101599539535522,
+        "sin110": 0.06803085791197418,
+        "cos001": 0.046986265788386716,
+        "sin001": 0.03404867584655868
+      },
+      "projection_squared_jump_per_gradient": {
+        "cos100": 0.0021014175084551278,
+        "sin100": 0.0024564749325060005,
+        "cos110": 0.005942117376197366,
+        "sin110": 0.004001815171292599,
+        "cos001": 0.00276389798755216,
+        "sin001": 0.002002863285091687
+      }
+    }
+  },
+  "projection_jump_per_gradient_ratios": {
+    "cos100": 1.1263355503142032,
+    "sin100": 1.109898261395578,
+    "cos110": 2.174284418695326,
+    "sin110": 1.6024836905292934,
+    "cos001": 0.9240328489422636,
+    "sin001": 0.8589039363445105
+  },
+  "geometric_mean_ratio": 1.229651818488988,
+  "metric_ranks": [
+    18,
+    18,
+    18,
+    18
+  ],
+  "maximum_directional_jacobian_error": 8.118390634070314e-06,
+  "maximum_gradient_reconstruction_error": 4.884981308350689e-15,
+  "full_chain_mixing_claim": false,
+  "calibration_claim": false,
+  "original_inputs_unchanged": true,
+  "limits": [
+    "Same data and saved states used to build and probe a fixed candidate; exploratory in-sample feasibility only",
+    "Full Gaussian-prior dimension preserved; low-rank metric changes kinetic energy only",
+    "Six active-field projection jump metrics, not full-white motion or ESS",
+    "Conditional-field preconditioning does not include joint scalar cross blocks",
+    "No state-dependent metric, adaptation, changed posterior, prior, filter or temperature target",
+    "Rank-bounded operator storage is O(rank*dimension); exact small-reference construction is not a production sketch or distributed builder",
+    "No full-chain mixing or nonlinear calibration claim; a separate frozen chain test is required if this screen passes"
+  ]
+}

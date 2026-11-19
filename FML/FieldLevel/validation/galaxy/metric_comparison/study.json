@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "scope": "Dataset-203 fixed four-chain 256/512 frozen nonlinear metric candidate; cached completed refined-ladder baseline; not independent calibration",
+  "dataset": 203,
+  "ensembles": 4,
+  "warmup": 256,
+  "samples": 512,
+  "workers": 4,
+  "wall_limit_seconds": 7200,
+  "batch_reservation_seconds": 1200,
+  "posterior_gates": {
+    "max_rhat": 1.01,
+    "min_bulk_ess": 400,
+    "min_tail_ess": 400
+  },
+  "interval_probabilities": [
+    0.5,
+    0.9,
+    0.95
+  ],
+  "endpoint_index": 511,
+  "analysis_seed": 942301,
+  "baseline": "Reuse completed 13-replica half-step ladder run; freeze its full record/checkpoint inventory and existing diagnostics, never rewrite it",
+  "candidate": "Only field kinetic metric changes: M_beta=I+beta K fixed per ensemble before launch; complete native checkpoint identity includes metric bytes",
+  "cost": "Compare actual primary-chain field-gradient counts including warmup; no matched wall-time efficiency ratio because baseline and candidate use different concurrency",
+  "limits": [
+    "Previously inspected dataset and reused reference states; exploratory algorithm development, not independent calibration",
+    "Equal four-chain cold-draw budgets and target, not independent replicate experiments",
+    "All twelve original coordinate gates and transport/divergence gates retained",
+    "Local jump-screen success is not a full-chain mixing result",
+    "No extension-until-pass, chain replacement, pooling or posterior target changes",
+    "Serial rank-bounded validation metric and replica runner; no production distributed builder claim"
+  ]
+}

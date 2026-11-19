@@ -1,0 +1,152 @@
+{
+  "full_manifest": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-gauss-newton/campaign/FROZEN.json",
+  "full_manifest_sha256": "000c077162b11de4264ab0e0e783e01892bb2583b0a00a8efa4c8ff7d0bc3f17",
+  "sources": {
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/gauss_newton/run.py": "56bc7af0b77c8059c172f674fa3befda202264c09469d1f970a291c354737f79",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/gauss_newton/plan.json": "34b36f518d09cf44465db58d873ca184c6ea0b0bc06511908f220432092c77f8",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/gauss_newton/Metric.h": "dc6b73fe19cea15d03da2f9f3601e72fe85633cae16a56da76d7a69a59078c9c",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/gauss_newton/Makefile": "084396c566811be9b25ca155235ae7db3dd924fbbca37435e542db4222377808",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/gauss_newton/Probe.cpp": "5243f26a2b920dcb4fbaac6d3c612327d50b00a4caa2bcf0c6ab7a75ea90825d",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/gauss_newton/Test.cpp": "1432bd578498427325b229f75347cde5a6c991d1d1092d5fa283a4a3430be35d",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/gauss_newton/Fixture.h": "90f12a1c2743e0d1ab59f5b3648454e53b1dbf6e22ce6237e377792bb7595c7a",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/gauss_newton/Build.cpp": "52a6ea0195022957feee064dccad0dff3dc9fe14335f07f41ce2d57c849600d9"
+  },
+  "executables": {
+    "builder": {
+      "path": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-gauss-newton/build/FML/FieldLevel/validation/galaxy/gauss_newton/gn_build",
+      "sha256": "76ddb2a0e6bada85e047cd0de1b4b4d6be557c0deea37f67c84e6f9931f28088"
+    },
+    "probe": {
+      "path": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-gauss-newton/build/FML/FieldLevel/validation/galaxy/gauss_newton/gn_probe",
+      "sha256": "2ee1a9ddd69665106dfe49f58af8ab65068a6a78ad348c0a0c3527aab7fed34f"
+    },
+    "unit": {
+      "path": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-gauss-newton/build/FML/FieldLevel/validation/galaxy/gauss_newton/gn_test",
+      "sha256": "4a8817f8cf08babdef3088269929603372412eb4d6d8e4020adef424728f1879"
+    }
+  },
+  "fixture_sha256": "472ac6b86a78da9b3f4f0ca00e88695da37c450e011de8fca492f7bbc117f59f",
+  "plan_sha256": "34b36f518d09cf44465db58d873ca184c6ea0b0bc06511908f220432092c77f8",
+  "original_files_hashed": 25,
+  "metrics": {
+    "scope": "Per ensemble: equal average of J^T W J / variance over the three fixed source states; unit white-prior precision added. Scalars and references remain fixed. M_beta=I+beta K.",
+    "metrics": [
+      {
+        "ensemble": 0,
+        "rank": 18,
+        "excess_eigenvalues": [
+          64.66885948293343,
+          46.36481346840224,
+          41.23854591156724,
+          36.64951835401952,
+          29.82550780352952,
+          21.704590322448286,
+          17.648133567634034,
+          14.382207960546781,
+          12.84366961146266,
+          10.222524582482182,
+          9.410359089938904,
+          6.877960793574451,
+          6.374083262389928,
+          5.115293938767521,
+          4.830609766470578,
+          3.840649323414053,
+          3.0552320255529644,
+          1.5152106873904938
+        ],
+        "orthonormality_error": 2.55351295663786e-15,
+        "relative_reconstruction_error": 2.1978398769696463e-15,
+        "file": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-gauss-newton/campaign/metrics/ensemble0.txt",
+        "sha256": "9a03a899fa55f4c4bd58e68ec8c7e8f31bf5d4e1dac4d65786b900d5b407a2b9"
+      },
+      {
+        "ensemble": 1,
+        "rank": 18,
+        "excess_eigenvalues": [
+          116.80521522672856,
+          92.74700845987171,
+          68.21717801442321,
+          62.43290543497777,
+          38.42242310257241,
+          33.60510960374354,
+          28.909996824444022,
+          27.019711406017354,
+          22.70236969102961,
+          20.078570390272827,
+          17.96239910609342,
+          14.43291029272729,
+          11.012612665453497,
+          9.763809275953182,
+          9.321114390112959,
+          7.51814080062332,
+          6.735172736751952,
+          5.916374077760262
+        ],
+        "orthonormality_error": 1.3322676295501878e-15,
+        "relative_reconstruction_error": 2.026296628423403e-15,
+        "file": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-gauss-newton/campaign/metrics/ensemble1.txt",
+        "sha256": "1ecb0fb8713c0b7ed62a37ba4edf6597cdc1a6287ff0f14b0b038eae66f44507"
+      },
+      {
+        "ensemble": 2,
+        "rank": 18,
+        "excess_eigenvalues": [
+          136.95942283436867,
+          112.39298362193875,
+          98.23167404340444,
+          89.42744807368307,
+          82.36926973127383,
+          78.77439573018326,
+          57.77664806076172,
+          52.75703012288487,
+          49.3509579832923,
+          43.89381525702859,
+          39.42551591541182,
+          36.451451967083656,
+          27.208328131410457,
+          22.09874594629129,
+          17.0930791939515,
+          15.262645429089199,
+          11.354769330637248,
+          9.071734809563482
+        ],
+        "orthonormality_error": 2.220446049250313e-15,
+        "relative_reconstruction_error": 3.0368827331961004e-15,
+        "file": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-gauss-newton/campaign/metrics/ensemble2.txt",
+        "sha256": "ca59d00fca3962c9e0dad42133b1a3a18964b9095077dbb45b1664234298679d"
+      },
+      {
+        "ensemble": 3,
+        "rank": 18,
+        "excess_eigenvalues": [
+          116.71809163504751,
+          112.33890427291824,
+          80.61609869570992,
+          69.25561519035568,
+          58.92802632515077,
+          57.08653095883589,
+          38.470099364625625,
+          34.70001145896086,
+          30.885034285922224,
+          29.969353613915633,
+          27.682763921796422,
+          26.07643848877635,
+          21.075882915162307,
+          19.66096271013142,
+          18.023019215810535,
+          15.949328124646216,
+          12.499044926281643,
+          11.407762269517306
+        ],
+        "orthonormality_error": 2.6645352591003757e-15,
+        "relative_reconstruction_error": 3.7100701379143195e-15,
+        "file": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-gauss-newton/campaign/metrics/ensemble3.txt",
+        "sha256": "a6461e5a9d06f7a88c955215ad97343139f074f7f20bc4ade8c757da5ebf916f"
+      }
+    ],
+    "builder_seconds": 5.0764219970442355,
+    "jacobian_rows_sha256": "fda1b636d96e6172de3bc0f41bdd3e5a65735a535e98d63a6cf96d4ea5f92e14",
+    "checks_sha256": "8022dbd7d15c754357dba206c7b450dc2e4621b11d8923d3b6b71227a8293502"
+  },
+  "trajectories_sha256": "557cc460bda95270ebd594f7291505da36ff077836c395128914ee5ad137e194"
+}

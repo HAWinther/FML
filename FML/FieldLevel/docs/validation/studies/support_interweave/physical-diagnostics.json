@@ -1,0 +1,203 @@
+{
+  "scope": "Post-hoc exploratory field diagnostics on completed fixed chains; no new draws or altered gates",
+  "outcomes": {
+    "baseline": [
+      {
+        "coordinate": "white_cos100",
+        "status": "ok",
+        "rhat": 1.2339095771420698,
+        "bulk_ess": 25.248350130904647,
+        "tail_ess": 64.27858593795034
+      },
+      {
+        "coordinate": "white_sin100",
+        "status": "ok",
+        "rhat": 1.118527513754428,
+        "bulk_ess": 49.39757779948327,
+        "tail_ess": 203.57410503820526
+      },
+      {
+        "coordinate": "white_cos110",
+        "status": "ok",
+        "rhat": 1.0902567424156735,
+        "bulk_ess": 63.86039257408994,
+        "tail_ess": 196.260136932967
+      },
+      {
+        "coordinate": "white_sin110",
+        "status": "ok",
+        "rhat": 1.080874379014225,
+        "bulk_ess": 39.64455707485249,
+        "tail_ess": 418.82908518791135
+      },
+      {
+        "coordinate": "white_cos001",
+        "status": "ok",
+        "rhat": 1.1598915576787565,
+        "bulk_ess": 24.720747586839213,
+        "tail_ess": 91.75339205121085
+      },
+      {
+        "coordinate": "white_sin001",
+        "status": "ok",
+        "rhat": 1.1655850698638945,
+        "bulk_ess": 62.113532643882436,
+        "tail_ess": 93.82010778469345
+      },
+      {
+        "coordinate": "alpha_white_cos100",
+        "status": "ok",
+        "rhat": 1.2324351116190346,
+        "bulk_ess": 27.520853190341846,
+        "tail_ess": 96.1299974505393
+      },
+      {
+        "coordinate": "alpha_white_sin100",
+        "status": "ok",
+        "rhat": 1.0973530570574097,
+        "bulk_ess": 43.0398485973302,
+        "tail_ess": 131.35404534991972
+      },
+      {
+        "coordinate": "alpha_white_cos110",
+        "status": "ok",
+        "rhat": 1.1014409636706217,
+        "bulk_ess": 53.57561302190816,
+        "tail_ess": 140.28669390747854
+      },
+      {
+        "coordinate": "alpha_white_sin110",
+        "status": "ok",
+        "rhat": 1.0605177514965576,
+        "bulk_ess": 65.97308229739005,
+        "tail_ess": 340.5530290714729
+      },
+      {
+        "coordinate": "alpha_white_cos001",
+        "status": "ok",
+        "rhat": 1.1515764174007588,
+        "bulk_ess": 27.075919258487577,
+        "tail_ess": 268.9745422928341
+      },
+      {
+        "coordinate": "alpha_white_sin001",
+        "status": "ok",
+        "rhat": 1.1363709824813886,
+        "bulk_ess": 41.842425204456404,
+        "tail_ess": 127.20376693050076
+      }
+    ],
+    "candidate": [
+      {
+        "coordinate": "white_cos100",
+        "status": "ok",
+        "rhat": 1.2079189370942338,
+        "bulk_ess": 14.727656294420287,
+        "tail_ess": 137.58824184371025
+      },
+      {
+        "coordinate": "white_sin100",
+        "status": "ok",
+        "rhat": 1.2443714269601118,
+        "bulk_ess": 12.348290070857816,
+        "tail_ess": 40.26380552375556
+      },
+      {
+        "coordinate": "white_cos110",
+        "status": "ok",
+        "rhat": 1.2652469619104418,
+        "bulk_ess": 11.769171832796202,
+        "tail_ess": 192.9284805817238
+      },
+      {
+        "coordinate": "white_sin110",
+        "status": "ok",
+        "rhat": 1.1279139488391094,
+        "bulk_ess": 22.56898687659406,
+        "tail_ess": 128.04795915352597
+      },
+      {
+        "coordinate": "white_cos001",
+        "status": "ok",
+        "rhat": 1.197171895464426,
+        "bulk_ess": 15.441833090815877,
+        "tail_ess": 190.9983549831866
+      },
+      {
+        "coordinate": "white_sin001",
+        "status": "ok",
+        "rhat": 1.266636633933481,
+        "bulk_ess": 11.47767132370891,
+        "tail_ess": 124.72085469690977
+      },
+      {
+        "coordinate": "alpha_white_cos100",
+        "status": "ok",
+        "rhat": 1.2185318786767445,
+        "bulk_ess": 14.060206475498575,
+        "tail_ess": 115.58479068035253
+      },
+      {
+        "coordinate": "alpha_white_sin100",
+        "status": "ok",
+        "rhat": 1.2328534595154759,
+        "bulk_ess": 13.089236089006208,
+        "tail_ess": 116.94066186028928
+      },
+      {
+        "coordinate": "alpha_white_cos110",
+        "status": "ok",
+        "rhat": 1.2629988219630204,
+        "bulk_ess": 11.921367023087942,
+        "tail_ess": 227.8996215337364
+      },
+      {
+        "coordinate": "alpha_white_sin110",
+        "status": "ok",
+        "rhat": 1.1292214638359954,
+        "bulk_ess": 23.296014201580014,
+        "tail_ess": 318.1100156020098
+      },
+      {
+        "coordinate": "alpha_white_cos001",
+        "status": "ok",
+        "rhat": 1.2040104262673061,
+        "bulk_ess": 14.736891941019644,
+        "tail_ess": 116.50156993208292
+      },
+      {
+        "coordinate": "alpha_white_sin001",
+        "status": "ok",
+        "rhat": 1.2802930718578618,
+        "bulk_ess": 11.319017084070481,
+        "tail_ess": 74.52278588018285
+      }
+    ]
+  },
+  "definition": "alpha times the six in-band white Fourier projections; proportional to physical initial modes at fixed reference spectrum",
+  "all_original_gates_unchanged": true,
+  "scientific_original_verdict": {
+    "baseline": false,
+    "candidate": false
+  },
+  "calibration_claim": false,
+  "source_sha256": "e203f5947c4a8df0d5d2876e88dee6c0835277b66081bdd280209b055c04f1cd",
+  "input_sha256": {
+    "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-support-interweave/campaign/comparison-summary.json": "f793d68211f3641d4559a0327b4c77fe1a935c3cee2cf05bae7c1b2fc1583450",
+    "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-ladder-comparison/campaign/refined/mock203/calibration.chain0.csv": "37a0282aa2ec42e9f69d7d5a4c4a5a378e2e8f3060c1e2fa44613cf119b24972",
+    "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-ladder-comparison/campaign/refined/mock203/calibration.chain1.csv": "7b936ee3aac4191e51f2b24c65681a9d9aa8ba3b788d50a688782fc661ec35c1",
+    "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-ladder-comparison/campaign/refined/mock203/calibration.chain2.csv": "1ed60cd14b85d8d1ee7e55a112b775fbbc90cebd083f74d77aa589c64c279704",
+    "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-ladder-comparison/campaign/refined/mock203/calibration.chain3.csv": "2c1e4e157ef5a43af6d0b6d0c48dc3af135397108070da912bbe47857540543e",
+    "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-support-interweave/campaign/candidate/mock203/calibration.chain0.csv": "501d89ed3fec2bb81d1591f27d7a99cad680be00f08886783fce285d51bee82c",
+    "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-support-interweave/campaign/candidate/mock203/calibration.chain1.csv": "cc53f9c5ccfaeca8bd1f9f8558bcb5242505dd295cbd8a314c7a404de18a40a4",
+    "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-support-interweave/campaign/candidate/mock203/calibration.chain2.csv": "2f007e33c20585cc93e92a9844ddbce95215ef15b2e3853da8fc683c5225f493",
+    "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-support-interweave/campaign/candidate/mock203/calibration.chain3.csv": "39b42ae9f912bb3ec70385d1d60223c1133cccb82c7ee179a18b575df1c2f7fb"
+  },
+  "diagnostics_sha256": "bb859cbbdc3f6bbef4de2a0dae7acfcf7714626b5973bfedd5dc67f0a78aded3",
+  "limits": [
+    "Requested after seeing the frozen outcomes, so exploratory rather than predeclared gates",
+    "The support-aware rescaling preserves alpha times each in-band white projection; these expose physical changes from the other kernels",
+    "Six physical modes are still not the complete field",
+    "Same fixed budgets and cached baseline; no extending, pooling or passing-subset claims"
+  ]
+}

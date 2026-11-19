@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "scope": "Bounded local feasibility test of a frozen low-rank conditional-field Gauss-Newton metric on previously inspected dataset 203; not a chain or calibration test",
+  "dataset": 203,
+  "dimension": 64,
+  "reference_draws": [0, 1024, 2047],
+  "ensembles": 4,
+  "metric": "Per ensemble: equal average of J^T W J / variance over the three fixed source states; unit white-prior precision added. Scalars and references remain fixed. M_beta=I+beta K.",
+  "rank_cap": 32,
+  "relative_eigenvalue_threshold": 1e-10,
+  "paired_momentum_trials_per_frame": 8,
+  "seed_base": "0x6100000000000000 + ensemble*1048576 + draw*16 + trial",
+  "cases": ["baseline", "gauss_newton"],
+  "step_size": 0.075,
+  "n_leapfrog": 16,
+  "integration_time": 1.2,
+  "operator_gates": {
+    "max_directional_jacobian_relative_error": 1e-5,
+    "max_gradient_reconstruction_relative_error": 1e-9,
+    "max_metric_orthonormality_error": 1e-9,
+    "max_retained_rank": 32
+  },
+  "local_screen": {
+    "candidate_divergences": 0,
+    "minimum_mean_acceptance": 0.8,
+    "minimum_frame_mean_acceptance": 0.5,
+    "minimum_geometric_mean_projection_jump_per_gradient_ratio": 1.0,
+    "minimum_individual_projection_jump_per_gradient_ratio": 0.5
+  },
+  "limits": [
+    "Same data and saved states used to build and probe a fixed candidate; exploratory in-sample feasibility only",
+    "Full Gaussian-prior dimension preserved; low-rank metric changes kinetic energy only",
+    "Six active-field projection jump metrics, not full-white motion or ESS",
+    "Conditional-field preconditioning does not include joint scalar cross blocks",
+    "No state-dependent metric, adaptation, changed posterior, prior, filter or temperature target",
+    "Rank-bounded operator storage is O(rank*dimension); exact small-reference construction is not a production sketch or distributed builder",
+    "No full-chain mixing or nonlinear calibration claim; a separate frozen chain test is required if this screen passes"
+  ]
+}

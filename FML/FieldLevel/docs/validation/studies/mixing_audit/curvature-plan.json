@@ -1,0 +1,15 @@
+{
+  "scope": "Post-hoc local curvature/resonance diagnostic; dense only for this 64-dimensional validation fixture",
+  "dimension": 64,
+  "frames": 12,
+  "finite_difference_steps": [
+    0.0001,
+    1e-05
+  ],
+  "maximum_relative_antisymmetry": 0.003,
+  "maximum_relative_step_difference": 0.005,
+  "near_full_period_radians": 0.1,
+  "source_sha256": "472ac6b86a78da9b3f4f0ca00e88695da37c450e011de8fca492f7bbc117f59f",
+  "binary_sha256": "2cf3039420e417add384d1c4e774cec1637821cd4e3c77ee29ec7f82df4c4d37",
+  "implementation_sha256": "59e9d692bf2084a9340ccdee58e805fbc0fa39d6e8f85612db6901f6201beb2c"
+}

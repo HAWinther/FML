@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "disabled_32_draws_summary_target_exact": true,
+  "donor_32_draws_full_checkpoint_summary_target_restart_exact": true,
+  "changed_or_disabled_pool_rejects_without_writes": true,
+  "missing_or_truncated_pool_rejects_without_writes": true,
+  "gradient_warmup_and_donor_value_counters_valid": true,
+  "target_unchanged": true,
+  "new_checkpoint_schema_intentionally_distinct": true
+}

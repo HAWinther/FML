@@ -8,7 +8,7 @@ validation is bounded; consult the current limitations before interpreting resul
 ## Guides
 
 - [Framework API and conventions](docs/FRAMEWORK.md)
-- [Periodic galaxy / sigma8 project](docs/LEFTFIELD_PLAN.md), [Eulerian bias operators](docs/EULERIAN_BIAS.md),
+- [beyond2pt galaxy / sigma8 project](docs/BEYOND2PT_PLAN.md), [Eulerian bias operators](docs/EULERIAN_BIAS.md),
   [composed LPT model](docs/EULERIAN_LPT.md), and [fixed-IC sampling](docs/FIXED_IC.md)
 - [Periodic catalog / NUFFT observations](docs/PERIODIC_CATALOG.md)
 - [MAP optimization](docs/MAP.md)
@@ -46,3 +46,7 @@ meshes, with a bounded HMC example and indexed draw output.
 
 [Bounded numerical/resource screen](docs/NUMERICAL_SCREEN.md) records mesh/tolerance
 errors and measured small-fixture costs, including the FL-7 diagnosis and its [validated correction](docs/EULERIAN_METRIC.md).
+
+[Real Box-1 catalog application](example/beyond2pt/README.md) prepares verified
+observations and descriptive plots, with an explicit matching-IC/spectrum
+input dependency before the fixed-IC fit.

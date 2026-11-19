@@ -212,8 +212,8 @@ endpoint_gradient_check(const Target & target, const Field & white, const std::v
 int main(int argc, char ** argv) {
     FML::FMLSetup::init(&argc, &argv);
     try {
-        if (argc != 3 || FML::NTasks != 1)
-            throw std::invalid_argument("geometry_probe POINTS.csv RESULTS.csv, serial only");
+        if ((argc != 3 && argc != 4) || FML::NTasks != 1)
+            throw std::invalid_argument("geometry_probe POINTS.csv RESULTS.csv [DATA.txt], serial only");
         verify_profiler();
         FF::EulerianLPTConfiguration c;
         c.mesh = 4;
@@ -231,7 +231,23 @@ int main(int argc, char ** argv) {
                                               prior);
         auto work = model.workspace();
         const auto initial = model.initial_parameters();
-        const auto data = model.mock(model.white_noise(4101), initial, 1000, 4102, work);
+        auto data = model.mock(model.white_noise(4101), initial, 1000, 4102, work);
+        if (argc == 4) {
+            std::ifstream observed(argv[3]);
+            std::string marker, extra;
+            size_t count;
+            if (!(observed >> marker >> count) || marker != "FML_GEOMETRY_DATA_1" || count != model.modes().size())
+                throw std::invalid_argument("Invalid geometry data layout");
+            data.resize(count);
+            for (auto & z : data) {
+                double re, im;
+                if (!(observed >> re >> im) || !std::isfinite(re) || !std::isfinite(im))
+                    throw std::invalid_argument("Invalid observed mode");
+                z = {re, im};
+            }
+            if (observed >> extra)
+                throw std::invalid_argument("Extra geometry data");
+        }
         const auto target = FF::fixed_noise_posterior(model, data, 1000.);
         const auto weights = target.likelihood().weights();
         const double variance = 1000. / model.volume();

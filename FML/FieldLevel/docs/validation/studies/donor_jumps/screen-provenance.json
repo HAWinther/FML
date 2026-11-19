@@ -1,0 +1,35 @@
+{
+  "full_manifest": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-donor-jumps/screen/FROZEN.json",
+  "full_manifest_sha256": "1dc6069d3187c889fe088882c69c1c4b9d1f48968f53dd2656fcfae598a54227",
+  "sources": {
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/donor_jumps/screen.py": "f960b6e156df7a45d0c6c3653ceb94fa8b92e61008d1b891471a8009f0e5106b",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/donor_jumps/Native.h": "670167bf6720352f72542e13aaacbe319b1003e5e09659a7a3b0e120c534fb9c",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/donor_jumps/screen_plan.json": "8c6d88baa1f9e6d3a9acb0462a06928672c693e9fd21c8987f123e69d7fb42bf",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/donor_jumps/Makefile": "7fe1642d156d5e00a938ea1d22696a06546ffb96a86c867474eb8b79fda31370",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/donor_jumps/Probe.cpp": "f06e579758b26a3583141eb45c6f8b15812fccc8dfc9dad364baff5c826ec19a",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/donor_jumps/Test.cpp": "d973071853712b741f617d356e8a09ce81fffd8035328269c567853e6a59bb7f",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/donor_jumps/Donors.h": "475ab5b93552d5bae5b5d3903f4ddba357bd15a0a59ab2364c9018ad4dbd4ca4",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/donor_jumps/make_driver.py": "a372fc34963677f731f2af21a935b3ef12f796f293f8116fd85f485f643ce749",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/support_interweave/Support.h": "fa20fe18973e46b1f12eafe49ba037a858875feb4aa77995ae8b5131e892c7c7",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/support_interweave/Native.h": "753eb449408ad2c2bb257de89bd432a5ca73c1879af2fff47dbd5b1dc609befa",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/support_interweave/make_driver.py": "de0ed559e8f652166d61dbb3ae33f8b666316fa64217523855e61c822cb82590",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/gauss_newton/Fixture.h": "90f12a1c2743e0d1ab59f5b3648454e53b1dbf6e22ce6237e377792bb7595c7a",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/Main.cpp": "8bb62f56572c8deff37d379ae0f3eab72f7e51cb67f21acf0bbc417f7890f5eb"
+  },
+  "executables": {
+    "exe": {
+      "path": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-donor-jumps/build/FML/FieldLevel/validation/galaxy/donor_jumps/donor_probe",
+      "sha256": "f4aee00fd2c3619a41664834b4d5c4a74651b7b4a26f5c181748c90e4b44c871"
+    },
+    "unit_exe": {
+      "path": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-donor-jumps/build/FML/FieldLevel/validation/galaxy/donor_jumps/donor_test",
+      "sha256": "7359406cf4bd274c49f3ef97eb766a79b4005fd0cbabaae88849a6790a9b2852"
+    }
+  },
+  "original_files_hashed": 20,
+  "input_sha256": {
+    "donor-pool.txt": "957f9f04dcc51aee3d31e477d2624723a908d071e12b355e47311b3ec714243c",
+    "screen-input.txt": "2361cf85c31a0d3a674a215321be3dc691228f08be20ba4a5f37ef626be6aa1d",
+    "plan.json": "8c6d88baa1f9e6d3a9acb0462a06928672c693e9fd21c8987f123e69d7fb42bf"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "scope": "Exploratory fixed-donor joint white-field/scalar proposal screen on already inspected dataset 203; no new chains",
+  "source": "Completed exact-support candidate, four chains, fixed donor draws 0/255/511 from each",
+  "pool_size": 12,
+  "dimension": 64,
+  "parameters": 5,
+  "projection": "Exact model initial support, global real rank 18; no fitted numerical rank",
+  "proposal": "Uniform ordered distinct pair, equal probability gamma=1 or 0.35, stored-white/scalar translation; prior-null component unchanged",
+  "seed": "944001 + frame*128 + trial",
+  "trials_per_frame": 64,
+  "expected_proposals": 768,
+  "gates": {
+    "mean_acceptance_probability_min": 0.005,
+    "cross_ensemble_large_jump_mean_acceptance_probability_min": 0.001,
+    "mean_acceptance_probability_for_physical_jump_gt_threshold_min": 0.003
+  },
+  "physical_jump_threshold": 0.0001,
+  "limits": [
+    "Same saved states form donor pool and local starting points; in-sample feasibility, not independent validation",
+    "Cross-ensemble donor labels are not proven mode identities",
+    "Expected acceptance and physical jumps are not chain ESS or calibration",
+    "No tuning or donor-pool adaptation within this candidate",
+    "Full posterior MH includes bounds; no clipping or resampling until a supported point"
+  ]
+}

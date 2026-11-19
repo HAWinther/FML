@@ -1,0 +1,80 @@
+{
+  "protocol": {
+    "version": 1,
+    "scope": "Post-hoc dataset-203 bounded cold-end ladder comparison; four 256/512 chains, stable half-step integrator; not calibration",
+    "dataset": 203,
+    "cohorts": [
+      "baseline",
+      "refined"
+    ],
+    "warmup": 256,
+    "samples": 512,
+    "ensembles": 4,
+    "wall_limit_seconds": 14400,
+    "batch_reservation_seconds": 2400,
+    "max_workers_per_cohort": 4,
+    "matching": "Equal cold-draw budgets; work-normalized efficiency reported, not equal work",
+    "field_step": 0.075,
+    "field_leapfrog": 16,
+    "integration_time": 1.2,
+    "added_betas": [
+      0.7071067811865476,
+      0.3535533905932738
+    ],
+    "exchange_passes": 4,
+    "posterior_gates": {
+      "max_rhat": 1.01,
+      "min_bulk_ess": 400,
+      "min_tail_ess": 400
+    },
+    "interval_probabilities": [
+      0.5,
+      0.9,
+      0.95
+    ],
+    "endpoint_index": 511,
+    "analysis_seed": 941103,
+    "limits": [
+      "Selected previously failed dataset, not independent calibration",
+      "Replica-index seed reuse does not mean matched random streams at common beta after insertion",
+      "Adding replicas increases field and exchange work; every cost reported",
+      "No gate-based extension, chain replacement, pooling or tuning",
+      "Zero divergences or higher exchange alone does not establish convergence",
+      "Serial replica orchestration; no production MPI ensemble claim"
+    ]
+  },
+  "binary_sha256": "4e5029832829f54308aee67d42a723d693232ab0ec051c62720b584f116e9ff7",
+  "diagnostics_sha256": "bb859cbbdc3f6bbef4de2a0dae7acfcf7714626b5973bfedd5dc67f0a78aded3",
+  "sources": {
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/ladder_comparison/study.py": "eef201610c26822187e1a323c532200fd76ad0ce9c810bc3003b04f1192ea33b",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/ladder_comparison/study.json": "40a093d67739f546eb7e7435b42f9d00081a254e9fba0f2ed27665ec91d8131c",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/ladder_comparison/preflight.py": "2b46841051a5dfefba7c317405177125811693aea78794861e319622060efb06",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/ladder_comparison/plan_baseline.json": "804f6951c3f7303c54e5920eb360c5176454f8383d6fb769149c820247598cd4",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/ladder_comparison/plan_refined.json": "16e3040bd99f3042cd4bd43f952ed07be0efba357363b1443098ca785e461318",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/integrator_comparison/run.py": "56e5a348e4cd621e0306596f42c5f358923d9b715c8347ab2fa61d79d9b7b564",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/integrator_comparison/FieldHMC.h": "2a46ea7460e92ff511744e75c638e5de858432a34b763e8103a5b1af7e95e2fb",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/Main.cpp": "8bb62f56572c8deff37d379ae0f3eab72f7e51cb67f21acf0bbc417f7890f5eb",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/Exchange.h": "881601655daefc32c533b1524dfffd9f329049aa7d7928cd2c8bf622a745b2b3",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/MockSettings.h": "7d46f0e2624926f17f76175774edb97bd186af04f4d6da7b3185e3fd2eb5d24b",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/PriorPredictive.h": "888604f21cafb412d939ba8f95eb7b712aeab156692579d25bec2c905913eb0b",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/analyze.py": "113bcbafaa3754374eb2ab67548906d9d53fa034f26533300ebc9b2df7df4ef1",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/check_prior.py": "6d37859b23c77eaa29b046b823d3beb15c1f850b15d27a57d9346e4375b0cd30",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/plan.json": "6de0c06e5a05246ffa04c700b7a5f5615a1bf19787c37879c957318998a5a731",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/sbc_ranks.py": "62025923f73fb1c1864d036d7c3b919354651e38753f94b8487c2594ae6c78e1",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/calibration/analyze.py": "c0688fdd5b262f449e9be72f99973d6116c97f715e71c394353fe82b578a8025",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/calibration/study.py": "c3e3e58cf4baff059b513ee46118c654171fb5cac94f399f14b86699bfcd79f2",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/calibration/common.py": "1ea7afcf6a5e9715997cabbd4869842178ba5e65f45f7e94a422c5fcab4ba135"
+  },
+  "original_directory": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-calibration/pilot/mock203",
+  "plans": {
+    "baseline": "804f6951c3f7303c54e5920eb360c5176454f8383d6fb769149c820247598cd4",
+    "refined": "16e3040bd99f3042cd4bd43f952ed07be0efba357363b1443098ca785e461318"
+  },
+  "full_manifest": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-ladder-comparison/campaign/FROZEN.json",
+  "full_manifest_sha256": "2d9134a740007da72bea58345dd2a62a705779196ba753941edb5b4c7c6e77c4",
+  "original_files_hashed": 8206,
+  "controls": {
+    "preflight.json": "facf26406e8bb56152ecbdf0af46c62cf4870682c4b0c99036c80bda2b8b595a",
+    "runner-controls.json": "6496f6fea8cf6f164d7354ad1627040d90e20634ca3fedd7854887f5584cb577"
+  }
+}

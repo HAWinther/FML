@@ -232,3 +232,80 @@ and crash/time-budget checks. Both short datasets retain all twelve failed mixin
 gates and provisional ranks. The full eight-dataset four-chain 256/2048 pilot is
 frozen with a cumulative 16-hour sampling cap, but is **not started**. Next: run
 that exact pilot; no nonlinear calibration or production MPI claim yet.
+
+### Completed calibration pilot and stability diagnosis (19 November 2026)
+
+[Eight-dataset pilot](validation/studies/calibration_pilot/RESULTS.md): all fixed
+budgets complete; **2/8** pass all twelve-coordinate/transport/divergence gates.
+All failures and provisional ranks remain. [Local stability probes](validation/studies/stability_probe/RESULTS.md)
+pass derivative/native controls on 96 states. Half step at matched integration
+time removes observed local divergences; the current-scalar linear metric alone
+worsens dataset 204. Production defaults remain unchanged. Next: separately frozen
+half-step chain comparison and further nonlinear-metric/transport diagnosis.
+
+### Paired integrator comparison and mixing audit (19 November 2026)
+
+[The fixed dataset-204 comparison](validation/studies/integrator_comparison/RESULTS.md)
+completes two four-chain 256/512 cohorts with actual field-gradient counters and
+unchanged target, mass and integration time. Half step removes observed divergences;
+all coordinate/cost/transport results and failed gates are retained. Baseline records
+exactly replay the original prefix. [Dataset 203's audit](validation/studies/mixing_audit/RESULTS.md)
+finds weak cold-end exchange, incomplete refreshed-state returns, selected path
+barriers and weak/varying curvature, without evidence for local full-period resonance
+at inspected states. Next: separately freeze a bounded cold-end ladder refinement;
+no full calibration, real-catalog or production MPI replica claim.
+
+### Cold-end ladder comparison (19 November 2026)
+
+[The separately frozen dataset-203 comparison](validation/studies/ladder_comparison/RESULTS.md)
+completes both four-chain 256/512 budgets, with eleven versus thirteen replicas
+and stable half-step HMC on both. Failed coordinate gates: 12/12 baseline,
+12/12 refined; transport gates fail for both.
+All measured work, target identities, replays, failed outcomes and provisional
+summaries are retained. This is targeted diagnosis, not nonlinear calibration
+or real-catalog validation; production defaults remain unchanged.
+
+### Frozen nonlinear field metric (19 November 2026)
+
+[The rank-eighteen Gauss-Newton local probe](validation/studies/gauss_newton_probe/RESULTS.md)
+passes independent operator/adjoint/harmonic controls and its fixed 192-trajectory
+screen, with zero divergences and geometric-mean projection jump/call gain 1.23.
+[The separate fresh four-chain 256/512 test](validation/studies/metric_comparison/RESULTS.md)
+compares against the unchanged cached refined-ladder baseline. Candidate failed
+coordinates: 12/12; transport gate: FAIL;
+measured divergences: 0. All failures and cost-normalized
+outcomes remain. Local jumps are not chain ESS; broader calibration, distributed
+metric construction, larger fields and real-catalog application remain open.
+
+### Exact initial-support interweaving (19 November 2026)
+
+[The exact-support coupled move](validation/studies/support_interweave/RESULTS.md)
+passes independent analytic-marginal/negative-control, global-rank, prediction/prior,
+projector and slab/pencil controls (121 serial; 225 at each 1/2/4 MPI ranks), plus
+native identity/restart and real runner controls. The fresh four-chain 256/512
+candidate keeps the full 64-coordinate prior and original field metric; only the
+rescaling support and matching global-rank Jacobian change. Candidate coordinate
+failures: 12/12; transport PASS;
+measured divergences 0. Full baseline/target/cost identities
+and every failed outcome remain. Wider calibration, larger-field validation and
+real-catalog inference remain open.
+
+### Frozen-donor joint field/scalar jumps (19 November 2026)
+
+[The fixed-pool joint kernel](validation/studies/donor_jumps/RESULTS.md)
+passes 30 independent native controls, frozen model feasibility, native identity/restart
+and real four-chain runner checks. Fresh fixed 256/512 comparison retains the exact-support
+rescaling, original field metric and target. Candidate failures: 12/12
+original coordinates and 6/6 additional predeclared physical
+initial-mode checks; transport False; divergences 0.
+Extra donor value evaluations are explicitly counted. All failures and source records remain.
+No independent calibration or production-catalog claim follows from this selected-data study.
+
+### Real-catalog application step (19 November 2026)
+
+Further incremental sampler campaigns are frozen. The public Beyond2pt Box-1
+catalog is now downloaded, file/schema verified and transformed at 96/128 meshes.
+Full-catalog direct sums and the same-band observation-mesh comparison pass.
+[Box-1 results](beyond2pt/BOX1_RESULTS.md) retain counts, raw-file identity and
+all observation checks. Matching phases and a verified reference spectrum remain
+external dependencies; no real-catalog posterior or new sampler pilot was run.

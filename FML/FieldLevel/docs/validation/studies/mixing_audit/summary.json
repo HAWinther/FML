@@ -1,0 +1,915 @@
+{
+  "scope": "Dataset-203 post-hoc deterministic mixing diagnosis; no new posterior sampling",
+  "geometry": [
+    {
+      "draw": 1024,
+      "path": "white-to0",
+      "direct_barrier_above_higher_endpoint": 41.54365760657673,
+      "profiled_barrier_above_higher_endpoint": 37.130436957337324,
+      "profiled_endpoint_gap": -4.261971161178437,
+      "max_kkt": 2.220927109377864e-16,
+      "max_profile_full_error": 3.269074088675068e-15
+    },
+    {
+      "draw": 1024,
+      "path": "physical-to0",
+      "direct_barrier_above_higher_endpoint": 41.39354390002205,
+      "profiled_barrier_above_higher_endpoint": 37.1476570597968,
+      "profiled_endpoint_gap": -4.261971161178437,
+      "max_kkt": 1.7629262075544138e-16,
+      "max_profile_full_error": 3.599545021299725e-15
+    },
+    {
+      "draw": 1024,
+      "path": "arc-to0",
+      "direct_barrier_above_higher_endpoint": 79.63537822938756,
+      "profiled_barrier_above_higher_endpoint": 59.31614463660631,
+      "profiled_endpoint_gap": -4.261971161178437,
+      "max_kkt": 1.4091892099229556e-16,
+      "max_profile_full_error": 3.058664432842306e-14
+    },
+    {
+      "draw": 1024,
+      "path": "white-to2",
+      "direct_barrier_above_higher_endpoint": 42.0863945830647,
+      "profiled_barrier_above_higher_endpoint": 43.59153448368458,
+      "profiled_endpoint_gap": -5.517546636901741,
+      "max_kkt": 2.3333893046737273e-16,
+      "max_profile_full_error": 1.843854480500434e-14
+    },
+    {
+      "draw": 1024,
+      "path": "physical-to2",
+      "direct_barrier_above_higher_endpoint": 42.09036016409998,
+      "profiled_barrier_above_higher_endpoint": 43.57944728800801,
+      "profiled_endpoint_gap": -5.517546636901741,
+      "max_kkt": 1.5818655292279653e-16,
+      "max_profile_full_error": 1.7081707436401368e-14
+    },
+    {
+      "draw": 1024,
+      "path": "arc-to2",
+      "direct_barrier_above_higher_endpoint": 61.298326719149415,
+      "profiled_barrier_above_higher_endpoint": 61.624077745400086,
+      "profiled_endpoint_gap": -5.517546636901741,
+      "max_kkt": 1.928786994619868e-16,
+      "max_profile_full_error": 2.300937218535637e-14
+    },
+    {
+      "draw": 1024,
+      "path": "white-to3",
+      "direct_barrier_above_higher_endpoint": 43.56561749293566,
+      "profiled_barrier_above_higher_endpoint": 38.74995364454753,
+      "profiled_endpoint_gap": -2.238661250103405,
+      "max_kkt": 2.5166537006169016e-16,
+      "max_profile_full_error": 5.756062416485056e-15
+    },
+    {
+      "draw": 1024,
+      "path": "physical-to3",
+      "direct_barrier_above_higher_endpoint": 43.14686507618909,
+      "profiled_barrier_above_higher_endpoint": 38.729128692594045,
+      "profiled_endpoint_gap": -2.238661250103405,
+      "max_kkt": 2.0534848802287449e-16,
+      "max_profile_full_error": 4.434163399567798e-15
+    },
+    {
+      "draw": 1024,
+      "path": "arc-to3",
+      "direct_barrier_above_higher_endpoint": 59.14226316069373,
+      "profiled_barrier_above_higher_endpoint": 54.847615129423104,
+      "profiled_endpoint_gap": -2.238661250103405,
+      "max_kkt": 2.0898614887174226e-16,
+      "max_profile_full_error": 1.942890293094024e-14
+    },
+    {
+      "draw": 2047,
+      "path": "white-to0",
+      "direct_barrier_above_higher_endpoint": 47.245321909221026,
+      "profiled_barrier_above_higher_endpoint": 44.37646434752707,
+      "profiled_endpoint_gap": 5.178384791842134,
+      "max_kkt": 3.879859798875176e-16,
+      "max_profile_full_error": 2.020605904817785e-14
+    },
+    {
+      "draw": 2047,
+      "path": "physical-to0",
+      "direct_barrier_above_higher_endpoint": 46.762076828055264,
+      "profiled_barrier_above_higher_endpoint": 44.42054308756847,
+      "profiled_endpoint_gap": 5.178384791842134,
+      "max_kkt": 3.2198632062031294e-16,
+      "max_profile_full_error": 3.26405569239796e-14
+    },
+    {
+      "draw": 2047,
+      "path": "arc-to0",
+      "direct_barrier_above_higher_endpoint": 78.03896048382327,
+      "profiled_barrier_above_higher_endpoint": 66.01504416408963,
+      "profiled_endpoint_gap": 5.178384791842134,
+      "max_kkt": 1.9998054837942364e-16,
+      "max_profile_full_error": 2.731148640577885e-14
+    },
+    {
+      "draw": 2047,
+      "path": "white-to2",
+      "direct_barrier_above_higher_endpoint": 2.53286332621542,
+      "profiled_barrier_above_higher_endpoint": 0.0,
+      "profiled_endpoint_gap": -0.4071359697519199,
+      "max_kkt": 2.4382951277073543e-16,
+      "max_profile_full_error": 1.4937917663224431e-15
+    },
+    {
+      "draw": 2047,
+      "path": "physical-to2",
+      "direct_barrier_above_higher_endpoint": 1.915722608879932,
+      "profiled_barrier_above_higher_endpoint": 0.0,
+      "profiled_endpoint_gap": -0.4071359697519199,
+      "max_kkt": 2.113939905914107e-16,
+      "max_profile_full_error": 1.190591552858999e-15
+    },
+    {
+      "draw": 2047,
+      "path": "arc-to2",
+      "direct_barrier_above_higher_endpoint": 83.8907835383499,
+      "profiled_barrier_above_higher_endpoint": 16.025822337313038,
+      "profiled_endpoint_gap": -0.4071359697519199,
+      "max_kkt": 2.6266831014186307e-16,
+      "max_profile_full_error": 2.1065849543557605e-15
+    },
+    {
+      "draw": 2047,
+      "path": "white-to3",
+      "direct_barrier_above_higher_endpoint": 0.0,
+      "profiled_barrier_above_higher_endpoint": 0.0,
+      "profiled_endpoint_gap": -6.4476453917246275,
+      "max_kkt": 2.1399063224785968e-16,
+      "max_profile_full_error": 1.8792784391836906e-15
+    },
+    {
+      "draw": 2047,
+      "path": "physical-to3",
+      "direct_barrier_above_higher_endpoint": 0.0,
+      "profiled_barrier_above_higher_endpoint": 0.0,
+      "profiled_endpoint_gap": -6.4476453917246275,
+      "max_kkt": 1.8754412439399516e-16,
+      "max_profile_full_error": 1.3692666195826181e-15
+    },
+    {
+      "draw": 2047,
+      "path": "arc-to3",
+      "direct_barrier_above_higher_endpoint": 32.82310210137736,
+      "profiled_barrier_above_higher_endpoint": 2.026065459025972,
+      "profiled_endpoint_gap": -6.4476453917246275,
+      "max_kkt": 2.1971001203272702e-16,
+      "max_profile_full_error": 1.5860598300294882e-15
+    }
+  ],
+  "rescaling_controls": [
+    {
+      "draw": 1024,
+      "max_profile_quadratic_variation": 2.842170943040401e-14
+    },
+    {
+      "draw": 2047,
+      "max_profile_quadratic_variation": 2.842170943040401e-14
+    }
+  ],
+  "transport": [
+    {
+      "ensemble": 0,
+      "roundtrips": 6,
+      "edges": [
+        {
+          "edge": 0,
+          "betas": [
+            1.0,
+            0.5
+          ],
+          "attempts": 4096,
+          "accepted": 329,
+          "acceptance": 0.080322265625,
+          "conditional_mean_acceptance_probability": 0.08254509500455906,
+          "log_acceptance_q05_q50_q95": [
+            -14.014607785661777,
+            -6.429525482850578,
+            -0.41128387638327113
+          ]
+        },
+        {
+          "edge": 1,
+          "betas": [
+            0.5,
+            0.25
+          ],
+          "attempts": 4096,
+          "accepted": 154,
+          "acceptance": 0.03759765625,
+          "conditional_mean_acceptance_probability": 0.03961484741621585,
+          "log_acceptance_q05_q50_q95": [
+            -13.967984594991929,
+            -8.145422662177534,
+            -1.7118249103390797
+          ]
+        },
+        {
+          "edge": 2,
+          "betas": [
+            0.25,
+            0.125
+          ],
+          "attempts": 4096,
+          "accepted": 1053,
+          "acceptance": 0.257080078125,
+          "conditional_mean_acceptance_probability": 0.26549240712957795,
+          "log_acceptance_q05_q50_q95": [
+            -6.163948623128748,
+            -2.411866998070697,
+            1.0701730932027838
+          ]
+        },
+        {
+          "edge": 3,
+          "betas": [
+            0.125,
+            0.0625
+          ],
+          "attempts": 4096,
+          "accepted": 2326,
+          "acceptance": 0.56787109375,
+          "conditional_mean_acceptance_probability": 0.5762271891616428,
+          "log_acceptance_q05_q50_q95": [
+            -3.0117205126068223,
+            -0.5970463461796829,
+            1.1712536410835555
+          ]
+        },
+        {
+          "edge": 4,
+          "betas": [
+            0.0625,
+            0.03125
+          ],
+          "attempts": 4096,
+          "accepted": 2730,
+          "acceptance": 0.66650390625,
+          "conditional_mean_acceptance_probability": 0.6677377341424737,
+          "log_acceptance_q05_q50_q95": [
+            -2.33417153665126,
+            -0.31632208265521844,
+            0.956012867894076
+          ]
+        },
+        {
+          "edge": 5,
+          "betas": [
+            0.03125,
+            0.015625
+          ],
+          "attempts": 4096,
+          "accepted": 2841,
+          "acceptance": 0.693603515625,
+          "conditional_mean_acceptance_probability": 0.7006329436490741,
+          "log_acceptance_q05_q50_q95": [
+            -2.268803999236175,
+            -0.2267677890140729,
+            0.8791555130261012
+          ]
+        },
+        {
+          "edge": 6,
+          "betas": [
+            0.015625,
+            0.0078125
+          ],
+          "attempts": 4096,
+          "accepted": 3024,
+          "acceptance": 0.73828125,
+          "conditional_mean_acceptance_probability": 0.7307223464833303,
+          "log_acceptance_q05_q50_q95": [
+            -1.9759318791410816,
+            -0.16514185935780734,
+            0.8279048471418765
+          ]
+        },
+        {
+          "edge": 7,
+          "betas": [
+            0.0078125,
+            0.00390625
+          ],
+          "attempts": 4096,
+          "accepted": 3066,
+          "acceptance": 0.74853515625,
+          "conditional_mean_acceptance_probability": 0.7503308849014337,
+          "log_acceptance_q05_q50_q95": [
+            -1.7410174722101137,
+            -0.1372145161998957,
+            0.8172087448267351
+          ]
+        },
+        {
+          "edge": 8,
+          "betas": [
+            0.00390625,
+            0.001953125
+          ],
+          "attempts": 4096,
+          "accepted": 3243,
+          "acceptance": 0.791748046875,
+          "conditional_mean_acceptance_probability": 0.7846977701136535,
+          "log_acceptance_q05_q50_q95": [
+            -1.4475522923430308,
+            -0.10462597797008019,
+            0.7197358339876216
+          ]
+        },
+        {
+          "edge": 9,
+          "betas": [
+            0.001953125,
+            0.0
+          ],
+          "attempts": 4096,
+          "accepted": 2190,
+          "acceptance": 0.53466796875,
+          "conditional_mean_acceptance_probability": 0.5350273816878379,
+          "log_acceptance_q05_q50_q95": [
+            -6.91427850043627,
+            -0.6173840165740595,
+            0.9520522231110314
+          ]
+        }
+      ],
+      "projection_means": [
+        -0.33046690301063786,
+        -0.34635389187382837,
+        0.3799402494435042,
+        -0.19986303700574015,
+        0.44459029975281783,
+        0.39821699594158666
+      ],
+      "projection_sds": [
+        0.7425469224275218,
+        1.2551314208620734,
+        1.3551340603572488,
+        1.1753521786088315,
+        0.7006615648994599,
+        1.2368554384582688
+      ]
+    },
+    {
+      "ensemble": 1,
+      "roundtrips": 0,
+      "edges": [
+        {
+          "edge": 0,
+          "betas": [
+            1.0,
+            0.5
+          ],
+          "attempts": 4096,
+          "accepted": 292,
+          "acceptance": 0.0712890625,
+          "conditional_mean_acceptance_probability": 0.07384831765502653,
+          "log_acceptance_q05_q50_q95": [
+            -14.1120082910486,
+            -6.815906337221113,
+            -0.46368066175483813
+          ]
+        },
+        {
+          "edge": 1,
+          "betas": [
+            0.5,
+            0.25
+          ],
+          "attempts": 4096,
+          "accepted": 186,
+          "acceptance": 0.04541015625,
+          "conditional_mean_acceptance_probability": 0.04523733241962735,
+          "log_acceptance_q05_q50_q95": [
+            -14.397288653890275,
+            -8.287966125359306,
+            -1.425146290244745
+          ]
+        },
+        {
+          "edge": 2,
+          "betas": [
+            0.25,
+            0.125
+          ],
+          "attempts": 4096,
+          "accepted": 1193,
+          "acceptance": 0.291259765625,
+          "conditional_mean_acceptance_probability": 0.29014625053807813,
+          "log_acceptance_q05_q50_q95": [
+            -5.916443680730394,
+            -2.275243334725829,
+            1.218420125106029
+          ]
+        },
+        {
+          "edge": 3,
+          "betas": [
+            0.125,
+            0.0625
+          ],
+          "attempts": 4096,
+          "accepted": 2397,
+          "acceptance": 0.585205078125,
+          "conditional_mean_acceptance_probability": 0.5782133701164034,
+          "log_acceptance_q05_q50_q95": [
+            -2.8926254123767308,
+            -0.605237783779041,
+            1.1307956553309464
+          ]
+        },
+        {
+          "edge": 4,
+          "betas": [
+            0.0625,
+            0.03125
+          ],
+          "attempts": 4096,
+          "accepted": 2752,
+          "acceptance": 0.671875,
+          "conditional_mean_acceptance_probability": 0.6662622197914501,
+          "log_acceptance_q05_q50_q95": [
+            -2.4722532236210526,
+            -0.3088826882467528,
+            0.9675885289641927
+          ]
+        },
+        {
+          "edge": 5,
+          "betas": [
+            0.03125,
+            0.015625
+          ],
+          "attempts": 4096,
+          "accepted": 2896,
+          "acceptance": 0.70703125,
+          "conditional_mean_acceptance_probability": 0.7035127729375774,
+          "log_acceptance_q05_q50_q95": [
+            -2.1155774869807233,
+            -0.2326462308091798,
+            0.8755670191125654
+          ]
+        },
+        {
+          "edge": 6,
+          "betas": [
+            0.015625,
+            0.0078125
+          ],
+          "attempts": 4096,
+          "accepted": 2967,
+          "acceptance": 0.724365234375,
+          "conditional_mean_acceptance_probability": 0.7315705524982163,
+          "log_acceptance_q05_q50_q95": [
+            -1.8663938749129987,
+            -0.17776156519406533,
+            0.800769305806971
+          ]
+        },
+        {
+          "edge": 7,
+          "betas": [
+            0.0078125,
+            0.00390625
+          ],
+          "attempts": 4096,
+          "accepted": 3069,
+          "acceptance": 0.749267578125,
+          "conditional_mean_acceptance_probability": 0.7524952252445103,
+          "log_acceptance_q05_q50_q95": [
+            -1.7081537510378602,
+            -0.13454046590969185,
+            0.7849091331598727
+          ]
+        },
+        {
+          "edge": 8,
+          "betas": [
+            0.00390625,
+            0.001953125
+          ],
+          "attempts": 4096,
+          "accepted": 3244,
+          "acceptance": 0.7919921875,
+          "conditional_mean_acceptance_probability": 0.7908688550123333,
+          "log_acceptance_q05_q50_q95": [
+            -1.4045539809128902,
+            -0.09173989514814498,
+            0.7199583699047117
+          ]
+        },
+        {
+          "edge": 9,
+          "betas": [
+            0.001953125,
+            0.0
+          ],
+          "attempts": 4096,
+          "accepted": 2226,
+          "acceptance": 0.54345703125,
+          "conditional_mean_acceptance_probability": 0.5444656116843958,
+          "log_acceptance_q05_q50_q95": [
+            -6.561366696968648,
+            -0.5932245236340163,
+            0.9326265706710888
+          ]
+        }
+      ],
+      "projection_means": [
+        -0.07121814382693999,
+        1.1350379500728842,
+        -1.2423111282651649,
+        0.9354347875215107,
+        -0.10408630849846272,
+        -0.9936604437102937
+      ],
+      "projection_sds": [
+        0.9390671020202151,
+        0.4665956117063671,
+        0.7773536514045619,
+        0.52580755223871,
+        0.848151877753995,
+        0.5075641082748367
+      ]
+    },
+    {
+      "ensemble": 2,
+      "roundtrips": 6,
+      "edges": [
+        {
+          "edge": 0,
+          "betas": [
+            1.0,
+            0.5
+          ],
+          "attempts": 4096,
+          "accepted": 214,
+          "acceptance": 0.05224609375,
+          "conditional_mean_acceptance_probability": 0.05227311914846226,
+          "log_acceptance_q05_q50_q95": [
+            -15.317124645651855,
+            -7.5890272035364905,
+            -1.1597155180006085
+          ]
+        },
+        {
+          "edge": 1,
+          "betas": [
+            0.5,
+            0.25
+          ],
+          "attempts": 4096,
+          "accepted": 259,
+          "acceptance": 0.063232421875,
+          "conditional_mean_acceptance_probability": 0.06199906064028081,
+          "log_acceptance_q05_q50_q95": [
+            -13.795495528795108,
+            -7.516927857592036,
+            -0.8479358108596946
+          ]
+        },
+        {
+          "edge": 2,
+          "betas": [
+            0.25,
+            0.125
+          ],
+          "attempts": 4096,
+          "accepted": 1101,
+          "acceptance": 0.268798828125,
+          "conditional_mean_acceptance_probability": 0.27126367241087684,
+          "log_acceptance_q05_q50_q95": [
+            -6.266013459799445,
+            -2.398192083363236,
+            1.1044971721097416
+          ]
+        },
+        {
+          "edge": 3,
+          "betas": [
+            0.125,
+            0.0625
+          ],
+          "attempts": 4096,
+          "accepted": 2407,
+          "acceptance": 0.587646484375,
+          "conditional_mean_acceptance_probability": 0.5834782087564079,
+          "log_acceptance_q05_q50_q95": [
+            -2.968385791103403,
+            -0.5502360098731467,
+            1.1198480592953817
+          ]
+        },
+        {
+          "edge": 4,
+          "betas": [
+            0.0625,
+            0.03125
+          ],
+          "attempts": 4096,
+          "accepted": 2800,
+          "acceptance": 0.68359375,
+          "conditional_mean_acceptance_probability": 0.6726972987591388,
+          "log_acceptance_q05_q50_q95": [
+            -2.298124270461723,
+            -0.30373170217058765,
+            0.9677673772966591
+          ]
+        },
+        {
+          "edge": 5,
+          "betas": [
+            0.03125,
+            0.015625
+          ],
+          "attempts": 4096,
+          "accepted": 2868,
+          "acceptance": 0.7001953125,
+          "conditional_mean_acceptance_probability": 0.6976457784695989,
+          "log_acceptance_q05_q50_q95": [
+            -2.250691365000945,
+            -0.23169784047307873,
+            0.911121952162667
+          ]
+        },
+        {
+          "edge": 6,
+          "betas": [
+            0.015625,
+            0.0078125
+          ],
+          "attempts": 4096,
+          "accepted": 2969,
+          "acceptance": 0.724853515625,
+          "conditional_mean_acceptance_probability": 0.7256401644119508,
+          "log_acceptance_q05_q50_q95": [
+            -1.9679398424190815,
+            -0.1869124872945453,
+            0.8320510054106042
+          ]
+        },
+        {
+          "edge": 7,
+          "betas": [
+            0.0078125,
+            0.00390625
+          ],
+          "attempts": 4096,
+          "accepted": 3059,
+          "acceptance": 0.746826171875,
+          "conditional_mean_acceptance_probability": 0.7516554901476523,
+          "log_acceptance_q05_q50_q95": [
+            -1.743780938836881,
+            -0.1390559398453479,
+            0.7830580663180926
+          ]
+        },
+        {
+          "edge": 8,
+          "betas": [
+            0.00390625,
+            0.001953125
+          ],
+          "attempts": 4096,
+          "accepted": 3247,
+          "acceptance": 0.792724609375,
+          "conditional_mean_acceptance_probability": 0.7886118254891176,
+          "log_acceptance_q05_q50_q95": [
+            -1.4587554636629203,
+            -0.08628574271486475,
+            0.7087735627802036
+          ]
+        },
+        {
+          "edge": 9,
+          "betas": [
+            0.001953125,
+            0.0
+          ],
+          "attempts": 4096,
+          "accepted": 2218,
+          "acceptance": 0.54150390625,
+          "conditional_mean_acceptance_probability": 0.5477234933291515,
+          "log_acceptance_q05_q50_q95": [
+            -6.912950568643545,
+            -0.5735493246796131,
+            0.8928207529080869
+          ]
+        }
+      ],
+      "projection_means": [
+        0.13063260626676199,
+        0.6398395141763962,
+        -0.7189895780616014,
+        0.45528027061860993,
+        -0.28413841411327273,
+        -0.6843013347157573
+      ],
+      "projection_sds": [
+        0.5393959714543133,
+        1.164538001489834,
+        1.2682554216341,
+        0.9375180133326558,
+        0.645860152232522,
+        1.1978350345519666
+      ]
+    },
+    {
+      "ensemble": 3,
+      "roundtrips": 5,
+      "edges": [
+        {
+          "edge": 0,
+          "betas": [
+            1.0,
+            0.5
+          ],
+          "attempts": 4096,
+          "accepted": 241,
+          "acceptance": 0.058837890625,
+          "conditional_mean_acceptance_probability": 0.05988366490951049,
+          "log_acceptance_q05_q50_q95": [
+            -15.484097983266528,
+            -7.294677766060435,
+            -0.8932821463956835
+          ]
+        },
+        {
+          "edge": 1,
+          "betas": [
+            0.5,
+            0.25
+          ],
+          "attempts": 4096,
+          "accepted": 243,
+          "acceptance": 0.059326171875,
+          "conditional_mean_acceptance_probability": 0.05693865680698665,
+          "log_acceptance_q05_q50_q95": [
+            -13.386591345259465,
+            -7.487267204271292,
+            -0.9317626695160763
+          ]
+        },
+        {
+          "edge": 2,
+          "betas": [
+            0.25,
+            0.125
+          ],
+          "attempts": 4096,
+          "accepted": 1079,
+          "acceptance": 0.263427734375,
+          "conditional_mean_acceptance_probability": 0.27261348614274444,
+          "log_acceptance_q05_q50_q95": [
+            -6.079087473320884,
+            -2.3596359785843752,
+            1.1251987191418733
+          ]
+        },
+        {
+          "edge": 3,
+          "betas": [
+            0.125,
+            0.0625
+          ],
+          "attempts": 4096,
+          "accepted": 2380,
+          "acceptance": 0.5810546875,
+          "conditional_mean_acceptance_probability": 0.5757785946324722,
+          "log_acceptance_q05_q50_q95": [
+            -2.999240533510491,
+            -0.5820283946672258,
+            1.0875973232707103
+          ]
+        },
+        {
+          "edge": 4,
+          "betas": [
+            0.0625,
+            0.03125
+          ],
+          "attempts": 4096,
+          "accepted": 2725,
+          "acceptance": 0.665283203125,
+          "conditional_mean_acceptance_probability": 0.6665465677675981,
+          "log_acceptance_q05_q50_q95": [
+            -2.4781128209088137,
+            -0.31530957354112443,
+            1.0008654714045895
+          ]
+        },
+        {
+          "edge": 5,
+          "betas": [
+            0.03125,
+            0.015625
+          ],
+          "attempts": 4096,
+          "accepted": 2880,
+          "acceptance": 0.703125,
+          "conditional_mean_acceptance_probability": 0.6973176375819325,
+          "log_acceptance_q05_q50_q95": [
+            -2.192395446850019,
+            -0.24158122136519078,
+            0.8941903790220284
+          ]
+        },
+        {
+          "edge": 6,
+          "betas": [
+            0.015625,
+            0.0078125
+          ],
+          "attempts": 4096,
+          "accepted": 2958,
+          "acceptance": 0.72216796875,
+          "conditional_mean_acceptance_probability": 0.7234273753423367,
+          "log_acceptance_q05_q50_q95": [
+            -1.9913296678238455,
+            -0.18543388695569796,
+            0.8732585195465009
+          ]
+        },
+        {
+          "edge": 7,
+          "betas": [
+            0.0078125,
+            0.00390625
+          ],
+          "attempts": 4096,
+          "accepted": 3054,
+          "acceptance": 0.74560546875,
+          "conditional_mean_acceptance_probability": 0.7501949693078735,
+          "log_acceptance_q05_q50_q95": [
+            -1.8209549945051742,
+            -0.1365198891358177,
+            0.8107379222331081
+          ]
+        },
+        {
+          "edge": 8,
+          "betas": [
+            0.00390625,
+            0.001953125
+          ],
+          "attempts": 4096,
+          "accepted": 3231,
+          "acceptance": 0.788818359375,
+          "conditional_mean_acceptance_probability": 0.7810110572939978,
+          "log_acceptance_q05_q50_q95": [
+            -1.4704094498686733,
+            -0.10517800525463086,
+            0.707407407763865
+          ]
+        },
+        {
+          "edge": 9,
+          "betas": [
+            0.001953125,
+            0.0
+          ],
+          "attempts": 4096,
+          "accepted": 2311,
+          "acceptance": 0.564208984375,
+          "conditional_mean_acceptance_probability": 0.5569444409450987,
+          "log_acceptance_q05_q50_q95": [
+            -6.270492441680201,
+            -0.5401354236948754,
+            0.9578231083957577
+          ]
+        }
+      ],
+      "projection_means": [
+        0.09320571784274997,
+        0.50693191681128,
+        -0.5577156360463464,
+        0.15526438370573126,
+        0.11469614380179378,
+        -0.18207752453935813
+      ],
+      "projection_sds": [
+        0.7660512544403136,
+        1.1418961669406498,
+        1.2527657804964474,
+        1.0403509422350448,
+        0.8070973660722841,
+        1.1250525770648234
+      ]
+    }
+  ],
+  "all_original_records_unchanged": true,
+  "profile_is_not_marginalization": true,
+  "limits": [
+    "Ensemble 1 selected after observing zero qualified round trips; exploratory diagnosis",
+    "Point-potential barriers on selected paths are not free-energy barriers or universal obstructions",
+    "Profiled bias optima are not marginalized posteriors",
+    "No original records, chains, truths, priors, budgets or gates changed"
+  ]
+}

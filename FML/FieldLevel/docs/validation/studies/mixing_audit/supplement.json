@@ -1,0 +1,846 @@
+{
+  "scope": "Post-hoc deterministic supplement; no new sampling or altered verdicts",
+  "temperature_profiles": [
+    {
+      "draw": 1024,
+      "path": "white-to0",
+      "temperatures": [
+        {
+          "beta": 1,
+          "barrier_above_higher_endpoint": 37.13043695733728
+        },
+        {
+          "beta": 0.5,
+          "barrier_above_higher_endpoint": 7.141084045893493
+        },
+        {
+          "beta": 0.25,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.125,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.0625,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0,
+          "barrier_above_higher_endpoint": 0.0
+        }
+      ]
+    },
+    {
+      "draw": 1024,
+      "path": "physical-to0",
+      "temperatures": [
+        {
+          "beta": 1,
+          "barrier_above_higher_endpoint": 37.14765705979674
+        },
+        {
+          "beta": 0.5,
+          "barrier_above_higher_endpoint": 7.1458866879797185
+        },
+        {
+          "beta": 0.25,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.125,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.0625,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0,
+          "barrier_above_higher_endpoint": 0.0
+        }
+      ]
+    },
+    {
+      "draw": 1024,
+      "path": "arc-to0",
+      "temperatures": [
+        {
+          "beta": 1,
+          "barrier_above_higher_endpoint": 59.31614463660625
+        },
+        {
+          "beta": 0.5,
+          "barrier_above_higher_endpoint": 29.35442794539523
+        },
+        {
+          "beta": 0.25,
+          "barrier_above_higher_endpoint": 14.37571780829699
+        },
+        {
+          "beta": 0.125,
+          "barrier_above_higher_endpoint": 6.891963004078157
+        },
+        {
+          "beta": 0.0625,
+          "barrier_above_higher_endpoint": 3.156569858952871
+        },
+        {
+          "beta": 0,
+          "barrier_above_higher_endpoint": 0.0
+        }
+      ]
+    },
+    {
+      "draw": 1024,
+      "path": "white-to2",
+      "temperatures": [
+        {
+          "beta": 1,
+          "barrier_above_higher_endpoint": 43.591534483684526
+        },
+        {
+          "beta": 0.5,
+          "barrier_above_higher_endpoint": 10.939131017099797
+        },
+        {
+          "beta": 0.25,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.125,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.0625,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0,
+          "barrier_above_higher_endpoint": 0.0
+        }
+      ]
+    },
+    {
+      "draw": 1024,
+      "path": "physical-to2",
+      "temperatures": [
+        {
+          "beta": 1,
+          "barrier_above_higher_endpoint": 43.579447288007984
+        },
+        {
+          "beta": 0.5,
+          "barrier_above_higher_endpoint": 10.932923072832125
+        },
+        {
+          "beta": 0.25,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.125,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.0625,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0,
+          "barrier_above_higher_endpoint": 0.0
+        }
+      ]
+    },
+    {
+      "draw": 1024,
+      "path": "arc-to2",
+      "temperatures": [
+        {
+          "beta": 1,
+          "barrier_above_higher_endpoint": 61.62407774540003
+        },
+        {
+          "beta": 0.5,
+          "barrier_above_higher_endpoint": 29.33592127863129
+        },
+        {
+          "beta": 0.25,
+          "barrier_above_higher_endpoint": 13.290999735140232
+        },
+        {
+          "beta": 0.125,
+          "barrier_above_higher_endpoint": 5.3179657695544265
+        },
+        {
+          "beta": 0.0625,
+          "barrier_above_higher_endpoint": 1.3739151141054222
+        },
+        {
+          "beta": 0,
+          "barrier_above_higher_endpoint": 0.0
+        }
+      ]
+    },
+    {
+      "draw": 1024,
+      "path": "white-to3",
+      "temperatures": [
+        {
+          "beta": 1,
+          "barrier_above_higher_endpoint": 38.7499536445475
+        },
+        {
+          "beta": 0.5,
+          "barrier_above_higher_endpoint": 9.547805560454321
+        },
+        {
+          "beta": 0.25,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.125,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.0625,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0,
+          "barrier_above_higher_endpoint": 0.0
+        }
+      ]
+    },
+    {
+      "draw": 1024,
+      "path": "physical-to3",
+      "temperatures": [
+        {
+          "beta": 1,
+          "barrier_above_higher_endpoint": 38.729128692594
+        },
+        {
+          "beta": 0.5,
+          "barrier_above_higher_endpoint": 9.53933344590574
+        },
+        {
+          "beta": 0.25,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.125,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.0625,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0,
+          "barrier_above_higher_endpoint": 0.0
+        }
+      ]
+    },
+    {
+      "draw": 1024,
+      "path": "arc-to3",
+      "temperatures": [
+        {
+          "beta": 1,
+          "barrier_above_higher_endpoint": 54.84761512942306
+        },
+        {
+          "beta": 0.5,
+          "barrier_above_higher_endpoint": 25.824288210582893
+        },
+        {
+          "beta": 0.25,
+          "barrier_above_higher_endpoint": 11.325315883751514
+        },
+        {
+          "beta": 0.125,
+          "barrier_above_higher_endpoint": 4.0758297203358325
+        },
+        {
+          "beta": 0.0625,
+          "barrier_above_higher_endpoint": 0.47489015488068986
+        },
+        {
+          "beta": 0,
+          "barrier_above_higher_endpoint": 0.0
+        }
+      ]
+    },
+    {
+      "draw": 2047,
+      "path": "white-to0",
+      "temperatures": [
+        {
+          "beta": 1,
+          "barrier_above_higher_endpoint": 44.37646434752705
+        },
+        {
+          "beta": 0.5,
+          "barrier_above_higher_endpoint": 11.292744097031417
+        },
+        {
+          "beta": 0.25,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.125,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.0625,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0,
+          "barrier_above_higher_endpoint": 0.0
+        }
+      ]
+    },
+    {
+      "draw": 2047,
+      "path": "physical-to0",
+      "temperatures": [
+        {
+          "beta": 1,
+          "barrier_above_higher_endpoint": 44.42054308756845
+        },
+        {
+          "beta": 0.5,
+          "barrier_above_higher_endpoint": 11.301452897638889
+        },
+        {
+          "beta": 0.25,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.125,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.0625,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0,
+          "barrier_above_higher_endpoint": 0.0
+        }
+      ]
+    },
+    {
+      "draw": 2047,
+      "path": "arc-to0",
+      "temperatures": [
+        {
+          "beta": 1,
+          "barrier_above_higher_endpoint": 66.01504416408959
+        },
+        {
+          "beta": 0.5,
+          "barrier_above_higher_endpoint": 32.86028212658753
+        },
+        {
+          "beta": 0.25,
+          "barrier_above_higher_endpoint": 16.28290110783651
+        },
+        {
+          "beta": 0.125,
+          "barrier_above_higher_endpoint": 7.994210598460995
+        },
+        {
+          "beta": 0.0625,
+          "barrier_above_higher_endpoint": 3.8498653437732386
+        },
+        {
+          "beta": 0,
+          "barrier_above_higher_endpoint": 0.0
+        }
+      ]
+    },
+    {
+      "draw": 2047,
+      "path": "white-to2",
+      "temperatures": [
+        {
+          "beta": 1,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.5,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.25,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.125,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.0625,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0,
+          "barrier_above_higher_endpoint": 0.0
+        }
+      ]
+    },
+    {
+      "draw": 2047,
+      "path": "physical-to2",
+      "temperatures": [
+        {
+          "beta": 1,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.5,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.25,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.125,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.0625,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0,
+          "barrier_above_higher_endpoint": 0.0
+        }
+      ]
+    },
+    {
+      "draw": 2047,
+      "path": "arc-to2",
+      "temperatures": [
+        {
+          "beta": 1,
+          "barrier_above_higher_endpoint": 16.025822337313052
+        },
+        {
+          "beta": 0.5,
+          "barrier_above_higher_endpoint": 6.883425616970541
+        },
+        {
+          "beta": 0.25,
+          "barrier_above_higher_endpoint": 2.4118148811408133
+        },
+        {
+          "beta": 0.125,
+          "barrier_above_higher_endpoint": 0.36123475637337776
+        },
+        {
+          "beta": 0.0625,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0,
+          "barrier_above_higher_endpoint": 0.0
+        }
+      ]
+    },
+    {
+      "draw": 2047,
+      "path": "white-to3",
+      "temperatures": [
+        {
+          "beta": 1,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.5,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.25,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.125,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.0625,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0,
+          "barrier_above_higher_endpoint": 0.0
+        }
+      ]
+    },
+    {
+      "draw": 2047,
+      "path": "physical-to3",
+      "temperatures": [
+        {
+          "beta": 1,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.5,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.25,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.125,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.0625,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0,
+          "barrier_above_higher_endpoint": 0.0
+        }
+      ]
+    },
+    {
+      "draw": 2047,
+      "path": "arc-to3",
+      "temperatures": [
+        {
+          "beta": 1,
+          "barrier_above_higher_endpoint": 2.026065459025965
+        },
+        {
+          "beta": 0.5,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.25,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.125,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0.0625,
+          "barrier_above_higher_endpoint": 0.0
+        },
+        {
+          "beta": 0,
+          "barrier_above_higher_endpoint": 0.0
+        }
+      ]
+    }
+  ],
+  "walker_legs": [
+    {
+      "ensemble": 0,
+      "labels_seen_cold": 6,
+      "cold_to_actual_prior_refresh_legs": 10,
+      "completed_prior_refresh_to_cold_legs": 6,
+      "unfinished_qualified_legs": 4,
+      "arrival_events": [
+        {
+          "draw": 190,
+          "label": 5
+        },
+        {
+          "draw": 404,
+          "label": 7
+        },
+        {
+          "draw": 754,
+          "label": 8
+        },
+        {
+          "draw": 815,
+          "label": 0
+        },
+        {
+          "draw": 1169,
+          "label": 5
+        },
+        {
+          "draw": 1374,
+          "label": 4
+        },
+        {
+          "draw": 1602,
+          "label": 0
+        },
+        {
+          "draw": 1637,
+          "label": 4
+        },
+        {
+          "draw": 1930,
+          "label": 4
+        },
+        {
+          "draw": 2034,
+          "label": 5
+        }
+      ],
+      "trip_events": [
+        {
+          "draw": 823,
+          "pass_index": 1,
+          "label": 5
+        },
+        {
+          "draw": 1162,
+          "pass_index": 0,
+          "label": 8
+        },
+        {
+          "draw": 1338,
+          "pass_index": 0,
+          "label": 0
+        },
+        {
+          "draw": 1601,
+          "pass_index": 1,
+          "label": 4
+        },
+        {
+          "draw": 1646,
+          "pass_index": 0,
+          "label": 5
+        },
+        {
+          "draw": 1897,
+          "pass_index": 1,
+          "label": 4
+        }
+      ]
+    },
+    {
+      "ensemble": 1,
+      "labels_seen_cold": 6,
+      "cold_to_actual_prior_refresh_legs": 4,
+      "completed_prior_refresh_to_cold_legs": 0,
+      "unfinished_qualified_legs": 4,
+      "arrival_events": [
+        {
+          "draw": 187,
+          "label": 4
+        },
+        {
+          "draw": 894,
+          "label": 0
+        },
+        {
+          "draw": 950,
+          "label": 2
+        },
+        {
+          "draw": 1857,
+          "label": 10
+        }
+      ],
+      "trip_events": []
+    },
+    {
+      "ensemble": 2,
+      "labels_seen_cold": 10,
+      "cold_to_actual_prior_refresh_legs": 14,
+      "completed_prior_refresh_to_cold_legs": 6,
+      "unfinished_qualified_legs": 8,
+      "arrival_events": [
+        {
+          "draw": 92,
+          "label": 10
+        },
+        {
+          "draw": 374,
+          "label": 1
+        },
+        {
+          "draw": 674,
+          "label": 4
+        },
+        {
+          "draw": 691,
+          "label": 8
+        },
+        {
+          "draw": 877,
+          "label": 7
+        },
+        {
+          "draw": 1065,
+          "label": 9
+        },
+        {
+          "draw": 1116,
+          "label": 10
+        },
+        {
+          "draw": 1278,
+          "label": 6
+        },
+        {
+          "draw": 1435,
+          "label": 9
+        },
+        {
+          "draw": 1494,
+          "label": 4
+        },
+        {
+          "draw": 1619,
+          "label": 2
+        },
+        {
+          "draw": 1802,
+          "label": 3
+        },
+        {
+          "draw": 1848,
+          "label": 5
+        },
+        {
+          "draw": 1945,
+          "label": 4
+        }
+      ],
+      "trip_events": [
+        {
+          "draw": 1041,
+          "pass_index": 3,
+          "label": 10
+        },
+        {
+          "draw": 1312,
+          "pass_index": 0,
+          "label": 9
+        },
+        {
+          "draw": 1425,
+          "pass_index": 1,
+          "label": 4
+        },
+        {
+          "draw": 1781,
+          "pass_index": 1,
+          "label": 4
+        },
+        {
+          "draw": 1810,
+          "pass_index": 2,
+          "label": 10
+        },
+        {
+          "draw": 1961,
+          "pass_index": 1,
+          "label": 1
+        }
+      ]
+    },
+    {
+      "ensemble": 3,
+      "labels_seen_cold": 9,
+      "cold_to_actual_prior_refresh_legs": 12,
+      "completed_prior_refresh_to_cold_legs": 5,
+      "unfinished_qualified_legs": 7,
+      "arrival_events": [
+        {
+          "draw": 229,
+          "label": 7
+        },
+        {
+          "draw": 518,
+          "label": 1
+        },
+        {
+          "draw": 563,
+          "label": 9
+        },
+        {
+          "draw": 620,
+          "label": 5
+        },
+        {
+          "draw": 1035,
+          "label": 3
+        },
+        {
+          "draw": 1055,
+          "label": 2
+        },
+        {
+          "draw": 1246,
+          "label": 10
+        },
+        {
+          "draw": 1380,
+          "label": 5
+        },
+        {
+          "draw": 1421,
+          "label": 4
+        },
+        {
+          "draw": 1629,
+          "label": 7
+        },
+        {
+          "draw": 1853,
+          "label": 8
+        },
+        {
+          "draw": 1964,
+          "label": 2
+        }
+      ],
+      "trip_events": [
+        {
+          "draw": 1199,
+          "pass_index": 3,
+          "label": 5
+        },
+        {
+          "draw": 1338,
+          "pass_index": 0,
+          "label": 7
+        },
+        {
+          "draw": 1752,
+          "pass_index": 2,
+          "label": 9
+        },
+        {
+          "draw": 1770,
+          "pass_index": 0,
+          "label": 2
+        },
+        {
+          "draw": 1937,
+          "pass_index": 1,
+          "label": 5
+        }
+      ]
+    }
+  ],
+  "profile_formula": "U_beta=white_prior + beta*Q_profile; bounded-uniform bias optimum is unchanged by positive beta scaling",
+  "limitations": [
+    "Only inspected paths; no global or free-energy barrier claim",
+    "Walker labels measure refreshed-state transport, not persistence of the same physical configuration",
+    "No new temperature ladder has been run"
+  ],
+  "result_sources": {
+    "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-mixing-audit/results1024.csv": "b65a902ebf15bbb0f566dc1a90bbf468e93efee9fd0edea68cadd3a5fa1f9810",
+    "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-mixing-audit/results2047.csv": "7c97876305a3ac96ad9049419e279f476c804578bbdea2b8d2f4f4511aaaa3b7"
+  },
+  "implementation_sha256": "eb5283158203df9c16fe30c0f37facbf381ded155d46f783105a63113cf85cc2"
+}

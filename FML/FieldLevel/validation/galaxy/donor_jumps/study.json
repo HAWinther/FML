@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "scope": "Dataset-203 immutable-donor joint field/scalar jumps; fresh fixed four-chain 256/512 candidate versus cached exact-support baseline",
+  "dataset": 203,
+  "ensembles": 4,
+  "warmup": 256,
+  "samples": 512,
+  "workers": 4,
+  "wall_limit_seconds": 7200,
+  "batch_reservation_seconds": 1200,
+  "posterior_gates": {
+    "max_rhat": 1.01,
+    "min_bulk_ess": 400,
+    "min_tail_ess": 400
+  },
+  "interval_probabilities": [
+    0.5,
+    0.9,
+    0.95
+  ],
+  "endpoint_index": 511,
+  "analysis_seed": 942301,
+  "baseline": "Immutable completed exact-support cohort on dataset 203",
+  "candidate": "Same exact-support rescaling and original field metric; one fixed-pool symmetric donor translation per positive replica per sweep",
+  "cost": "Field HMC gradients remain comparable but donor target-value evaluations are additional and explicitly counted; report both and do not certify unmatched wall speedup",
+  "limits": [
+    "Previously inspected target and fixed donor pool learned from cached failed chains; exploratory development, not independent calibration",
+    "Frozen source states and donor pair/scale probabilities never adapt to candidate chains",
+    "Donor pool contains stored-white and physical scalar coordinates; translations have Jacobian one",
+    "Prior-null field complement remains unchanged by donor differences",
+    "One attempt per sweep; out-of-bounds scalar proposals reject without clipping or resampling",
+    "All original twelve coordinate and transport/divergence gates retained, no extension until pass",
+    "Additional target-value work is not represented by the field-gradient counter alone",
+    "Serial bounded donor loader/driver; model-support projector retains its independent slab/pencil controls"
+  ],
+  "physical_field_monitors": {
+    "names": [
+      "alpha_white_cos100",
+      "alpha_white_sin100",
+      "alpha_white_cos110",
+      "alpha_white_sin110",
+      "alpha_white_cos001",
+      "alpha_white_sin001"
+    ],
+    "max_rhat": 1.01,
+    "min_bulk_ess": 400,
+    "min_tail_ess": 400,
+    "role": "Predeclared additional six physical-initial-mode gates for this experiment; original twelve remain separate and unchanged"
+  }
+}

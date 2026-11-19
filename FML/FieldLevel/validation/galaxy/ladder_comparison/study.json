@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "scope": "Post-hoc dataset-203 bounded cold-end ladder comparison; four 256/512 chains, stable half-step integrator; not calibration",
+  "dataset": 203,
+  "cohorts": [
+    "baseline",
+    "refined"
+  ],
+  "warmup": 256,
+  "samples": 512,
+  "ensembles": 4,
+  "wall_limit_seconds": 14400,
+  "batch_reservation_seconds": 2400,
+  "max_workers_per_cohort": 4,
+  "matching": "Equal cold-draw budgets; work-normalized efficiency reported, not equal work",
+  "field_step": 0.075,
+  "field_leapfrog": 16,
+  "integration_time": 1.2,
+  "added_betas": [
+    0.7071067811865476,
+    0.3535533905932738
+  ],
+  "exchange_passes": 4,
+  "posterior_gates": {
+    "max_rhat": 1.01,
+    "min_bulk_ess": 400,
+    "min_tail_ess": 400
+  },
+  "interval_probabilities": [
+    0.5,
+    0.9,
+    0.95
+  ],
+  "endpoint_index": 511,
+  "analysis_seed": 941103,
+  "limits": [
+    "Selected previously failed dataset, not independent calibration",
+    "Replica-index seed reuse does not mean matched random streams at common beta after insertion",
+    "Adding replicas increases field and exchange work; every cost reported",
+    "No gate-based extension, chain replacement, pooling or tuning",
+    "Zero divergences or higher exchange alone does not establish convergence",
+    "Serial replica orchestration; no production MPI ensemble claim"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "native": {
+    "passed": true,
+    "legacy_32_draws_summary_target_exact": true,
+    "new_metric_32_draws_checkpoint_summary_target_restart_exact": true,
+    "changed_metric_contents_or_kind_reject_without_writes": true,
+    "truncated_or_missing_metric_reject_without_writes": true,
+    "actual_gradient_and_warmup_counters_exact": true,
+    "candidate_target_matches_baseline": true,
+    "legacy_checkpoint_identity_intentionally_distinct": true
+  },
+  "runner": {
+    "passed": true,
+    "exclusive_writer_rejects": true,
+    "bounded_pause_all_four_at_16": true,
+    "missing_ledger_rejects_without_native_or_ledger_writes": true,
+    "budget_restored": true,
+    "all_four_targets_original_exact": true
+  },
+  "implementation_note": "Initial native control exposed use of the checkpoint-container reader for a raw metric file. Replaced with bounded raw input before freezing or starting candidate chains; failed preflight artifacts retained under controls/."
+}

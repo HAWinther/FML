@@ -1,13 +1,17 @@
 {
-  "audited": "2026-11-17",
+  "audited": "2026-11-19",
   "repository": "https://github.com/ANSalcedo/Beyond2ptMock",
-  "git_tree_sha": "5898e9513427a66af8589182efe847e4069e9519",
-  "verification": "Git tree metadata and pinned README/reader inspected; catalogs not downloaded. Git blob IDs are not raw-file SHA256 checksums.",
+  "git_tree_sha": "58778633f7821566472483f377e7d0d2ad7df952",
+  "verification": "Box 1 downloaded and verified by bytes, raw SHA256 and Git blob SHA1. HDF5 schema verified on that file. Other catalogs retain repository metadata only.",
   "catalogs": [
     {
       "path": "LCDM_real_space/mock_lcdm_real-space_01.h5",
       "bytes": 43104356,
-      "git_blob_sha1": "64d45073e3989de955adcd2bf8a96c5f4f6c99b2"
+      "git_blob_sha1": "64d45073e3989de955adcd2bf8a96c5f4f6c99b2",
+      "sha256": "3d7212d6993cdf72331e1bb7ce733205029322faa6c0e3c5dcd610d9a3591d96",
+      "downloaded": true,
+      "schema_verified": true,
+      "rows": 3591859
     },
     {
       "path": "LCDM_real_space/mock_lcdm_real-space_02.h5",
@@ -70,7 +74,10 @@
       "galaxies/y",
       "galaxies/z"
     ],
-    "schema_verified_on_file": false
+    "schema_verified_on_file": true,
+    "schema_verified_catalogs": [
+      "LCDM_real_space/mock_lcdm_real-space_01.h5"
+    ]
   },
   "unresolved": [
     "Exact box-1 normalized initial field",
@@ -79,5 +86,7 @@
     "Exact intermediate matter/operator filter prescription",
     "Published derivative-bias prior units/normalization"
   ],
-  "notes": "The repository includes summit_cosmologies.txt, but no verified assignment of a row to these catalogs. No inference from that table has been made."
+  "notes": "The repository includes summit_cosmologies.txt, but no verified assignment of a row to these catalogs. No inference from that table has been made.",
+  "git_commit_sha": "5898e9513427a66af8589182efe847e4069e9519",
+  "observed_data_status": "Box-1 cubic Fourier modes prepared through 0.12 h/Mpc at 96/128 meshes; fixed-IC fit awaits matching phases and verified cosmology/spectrum"
 }

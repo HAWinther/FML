@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "scope": "Bounded exploratory conditional-HMC stability diagnostic after the failed prior-predictive pilot; not new posterior chains",
+  "mocks": [
+    201,
+    202,
+    203,
+    204,
+    205,
+    206,
+    207,
+    208
+  ],
+  "ensembles": 4,
+  "draws": [
+    0,
+    1024,
+    2047
+  ],
+  "momentum_trials": 8,
+  "cases": [
+    {
+      "name": "baseline",
+      "current": 0,
+      "step": 0.15,
+      "leaps": 8
+    },
+    {
+      "name": "half_step",
+      "current": 0,
+      "step": 0.075,
+      "leaps": 16
+    },
+    {
+      "name": "quarter_step",
+      "current": 0,
+      "step": 0.0375,
+      "leaps": 32
+    },
+    {
+      "name": "conditional_metric",
+      "current": 1,
+      "step": 0.15,
+      "leaps": 8
+    },
+    {
+      "name": "conditional_half",
+      "current": 1,
+      "step": 0.075,
+      "leaps": 16
+    }
+  ],
+  "trajectory_length": 1.2,
+  "gradient_step_sweep": [
+    0.001,
+    0.0001,
+    1e-05
+  ],
+  "gradient_scaled_tolerance": 3e-05,
+  "forward_tolerance": 1e-10,
+  "quadratic_tolerance": 1e-11,
+  "workers": 4,
+  "timeout_per_dataset": 900,
+  "seed": "0x5600000000000000 | mock_id<<32 | ensemble<<30 | draw<<8 | trial; shared standardized momenta across cases",
+  "source_checks": "Native predictions/quadratics reproduce each saved state; eight derivative directions per state; trial 0 of every case/state matches the ordinary sampler exactly",
+  "limits": [
+    "Same frozen data, priors and field states; scalar parameters held fixed during each conditional trajectory",
+    "Current-scalar metric stays fixed throughout each trajectory; no field-dependent mass or Riemannian approximation",
+    "All cases have integration time 1.2 but different gradient costs; report accepted jump squared per gradient evaluation",
+    "Inputs are correlated stored states from an already examined pilot, including failed chains; no mixing/coverage claim",
+    "Only cold-state neighborhoods sampled, not a reconstruction of every historical divergent trajectory",
+    "No production defaults changed, chains extended, source states modified or failed inputs replaced"
+  ]
+}

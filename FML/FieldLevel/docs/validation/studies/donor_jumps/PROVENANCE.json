@@ -1,0 +1,100 @@
+{
+  "protocol": {
+    "version": 1,
+    "scope": "Dataset-203 immutable-donor joint field/scalar jumps; fresh fixed four-chain 256/512 candidate versus cached exact-support baseline",
+    "dataset": 203,
+    "ensembles": 4,
+    "warmup": 256,
+    "samples": 512,
+    "workers": 4,
+    "wall_limit_seconds": 7200,
+    "batch_reservation_seconds": 1200,
+    "posterior_gates": {
+      "max_rhat": 1.01,
+      "min_bulk_ess": 400,
+      "min_tail_ess": 400
+    },
+    "interval_probabilities": [
+      0.5,
+      0.9,
+      0.95
+    ],
+    "endpoint_index": 511,
+    "analysis_seed": 942301,
+    "baseline": "Immutable completed exact-support cohort on dataset 203",
+    "candidate": "Same exact-support rescaling and original field metric; one fixed-pool symmetric donor translation per positive replica per sweep",
+    "cost": "Field HMC gradients remain comparable but donor target-value evaluations are additional and explicitly counted; report both and do not certify unmatched wall speedup",
+    "limits": [
+      "Previously inspected target and fixed donor pool learned from cached failed chains; exploratory development, not independent calibration",
+      "Frozen source states and donor pair/scale probabilities never adapt to candidate chains",
+      "Donor pool contains stored-white and physical scalar coordinates; translations have Jacobian one",
+      "Prior-null field complement remains unchanged by donor differences",
+      "One attempt per sweep; out-of-bounds scalar proposals reject without clipping or resampling",
+      "All original twelve coordinate and transport/divergence gates retained, no extension until pass",
+      "Additional target-value work is not represented by the field-gradient counter alone",
+      "Serial bounded donor loader/driver; model-support projector retains its independent slab/pencil controls"
+    ],
+    "physical_field_monitors": {
+      "names": [
+        "alpha_white_cos100",
+        "alpha_white_sin100",
+        "alpha_white_cos110",
+        "alpha_white_sin110",
+        "alpha_white_cos001",
+        "alpha_white_sin001"
+      ],
+      "max_rhat": 1.01,
+      "min_bulk_ess": 400,
+      "min_tail_ess": 400,
+      "role": "Predeclared additional six physical-initial-mode gates for this experiment; original twelve remain separate and unchanged"
+    }
+  },
+  "binary_sha256": "35942104c68d69e31c59fc443e9edb8924f44357eadfb507b252d881072a84b2",
+  "diagnostics_sha256": "bb859cbbdc3f6bbef4de2a0dae7acfcf7714626b5973bfedd5dc67f0a78aded3",
+  "sources": {
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/donor_jumps/Donors.h": "475ab5b93552d5bae5b5d3903f4ddba357bd15a0a59ab2364c9018ad4dbd4ca4",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/donor_jumps/Makefile": "7fe1642d156d5e00a938ea1d22696a06546ffb96a86c867474eb8b79fda31370",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/donor_jumps/Native.h": "670167bf6720352f72542e13aaacbe319b1003e5e09659a7a3b0e120c534fb9c",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/donor_jumps/Probe.cpp": "f06e579758b26a3583141eb45c6f8b15812fccc8dfc9dad364baff5c826ec19a",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/donor_jumps/Test.cpp": "d973071853712b741f617d356e8a09ce81fffd8035328269c567853e6a59bb7f",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/donor_jumps/make_driver.py": "a372fc34963677f731f2af21a935b3ef12f796f293f8116fd85f485f643ce749",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/donor_jumps/physical.py": "75b706aa9a427f6c2a2539a597fb8f7b042148c1cd8c5b3304b47d4d2562137c",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/donor_jumps/plan.json": "53fa4bce12451b65fea942d8e9ab9862f1e2aa4e2bfc753e45721aaa97968d87",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/donor_jumps/preflight.py": "c7925659dbaa0c5dcfa39b6bd156fdf054443962ade45828276bf35d8502a060",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/donor_jumps/run.py": "6d97594ccba91dc277a2a94146af7bc4a3cb681c43f20f977d425568149d641e",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/donor_jumps/screen.py": "f960b6e156df7a45d0c6c3653ceb94fa8b92e61008d1b891471a8009f0e5106b",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/donor_jumps/screen_plan.json": "8c6d88baa1f9e6d3a9acb0462a06928672c693e9fd21c8987f123e69d7fb42bf",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/donor_jumps/study.json": "d3ef0fe65c6549e142acc7bd35fb14a0c3501824a2be5bc7a9ee93438e84013e",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/donor_jumps/study.py": "003542085a5ad3d1e179ab376662b9a35604008ab2c72e046ad09278aaad6db5",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/support_interweave/Support.h": "fa20fe18973e46b1f12eafe49ba037a858875feb4aa77995ae8b5131e892c7c7",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/support_interweave/Native.h": "753eb449408ad2c2bb257de89bd432a5ca73c1879af2fff47dbd5b1dc609befa",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/support_interweave/make_driver.py": "de0ed559e8f652166d61dbb3ae33f8b666316fa64217523855e61c822cb82590",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/interweave/Rescaling.h": "e6840ff44fdcdb7317593daee7ed15f1c985620825a0797e7aa323113e33b7cc",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/integrator_comparison/FieldHMC.h": "2a46ea7460e92ff511744e75c638e5de858432a34b763e8103a5b1af7e95e2fb",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/Main.cpp": "8bb62f56572c8deff37d379ae0f3eab72f7e51cb67f21acf0bbc417f7890f5eb",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/Exchange.h": "881601655daefc32c533b1524dfffd9f329049aa7d7928cd2c8bf622a745b2b3",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/MockSettings.h": "7d46f0e2624926f17f76175774edb97bd186af04f4d6da7b3185e3fd2eb5d24b",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/PriorPredictive.h": "888604f21cafb412d939ba8f95eb7b712aeab156692579d25bec2c905913eb0b",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/analyze.py": "113bcbafaa3754374eb2ab67548906d9d53fa034f26533300ebc9b2df7df4ef1",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/check_prior.py": "6d37859b23c77eaa29b046b823d3beb15c1f850b15d27a57d9346e4375b0cd30",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/plan.json": "6de0c06e5a05246ffa04c700b7a5f5615a1bf19787c37879c957318998a5a731",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/tempering/sbc_ranks.py": "62025923f73fb1c1864d036d7c3b919354651e38753f94b8487c2594ae6c78e1",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/calibration/analyze.py": "c0688fdd5b262f449e9be72f99973d6116c97f715e71c394353fe82b578a8025",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/calibration/study.py": "c3e3e58cf4baff059b513ee46118c654171fb5cac94f399f14b86699bfcd79f2",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/calibration/common.py": "1ea7afcf6a5e9715997cabbd4869842178ba5e65f45f7e94a422c5fcab4ba135"
+  },
+  "original_directory": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-support-interweave/campaign/candidate/mock203",
+  "plan_sha256": "53fa4bce12451b65fea942d8e9ab9862f1e2aa4e2bfc753e45721aaa97968d87",
+  "full_manifest": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-donor-jumps/campaign/FROZEN.json",
+  "full_manifest_sha256": "5301ce5ef4dca95c68d931140e27df50ab572bc670d59a6f37383eb06f55220e",
+  "original_files_hashed": 2074,
+  "native_hooks_sha256": "0691a77771f9cf4c8df6da61d438902cba4941f7f9f2d807c24b113483dd8487",
+  "runner_controls": {
+    "passed": true,
+    "exclusive_writer_rejects": true,
+    "bounded_pause_all_four_at_16": true,
+    "missing_ledger_rejects_without_native_or_ledger_writes": true,
+    "budget_restored": true,
+    "all_four_targets_original_exact": true
+  }
+}

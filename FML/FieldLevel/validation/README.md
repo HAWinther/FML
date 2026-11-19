@@ -66,3 +66,15 @@ all gates and failures; the original joint campaign stays separate.
 [Prior-predictive truth controls](galaxy/tempering/PRIOR_PREDICTIVE.md) add independent prior truths and an auditable target, with exact legacy/restart checks and analytic SBC controls. A full nonlinear calibration campaign remains unstarted.
 
 [Calibration study runner](galaxy/calibration/README.md) adds frozen independent mocks, cumulative sampling-time accounting and twelve-coordinate diagnostics including likelihood Q. Controls pass; the eight-dataset nonlinear pilot is frozen but unstarted.
+
+[Conditional HMC stability probes](galaxy/stability/README.md) compare smaller steps and current-scalar linear masses on saved states from the completed calibration pilot. Local numerical controls pass; no full-chain mixing improvement is inferred.
+
+The [paired actual-chain integrator comparison](galaxy/integrator_comparison/README.md) and [dataset-203 mixing audit](galaxy/mixing_audit/README.md) record numerical stability, actual cost and transport/curvature diagnosis separately.
+
+The [bounded cold-end ladder comparison](galaxy/ladder_comparison/README.md) reuses the stable counted field kernel and reports all twelve diagnostics, transport and actual cost for eleven versus thirteen replicas.
+
+The [frozen nonlinear metric probe](galaxy/gauss_newton/README.md) and [actual-chain comparison](galaxy/metric_comparison/README.md) separate low-rank operator/local-jump validation from joint sampling and retain all failed outcomes.
+
+[Exact initial-support interweaving](galaxy/support_interweave/README.md) tests the model-defined global-rank move, distributed kernel ownership and a separately frozen serial actual-chain comparison.
+
+[Frozen-donor jumps](galaxy/donor_jumps/README.md): joint field/scalar translation, immutable pool, native controls and a fixed serial four-chain comparison.

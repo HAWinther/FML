@@ -1,6 +1,7 @@
 #include "Exchange.h"
 #include "MockSettings.h"
 #include "PriorPredictive.h"
+#include <FML/FieldLevel/validation/galaxy/integrator_comparison/FieldHMC.h>
 #include <FML/FieldLevel/EulerianCheckpoint.h>
 #include <FML/FieldLevel/FixedIC.h>
 #include <FML/FieldLevel/validation/galaxy/interweave/Rescaling.h>
@@ -16,6 +17,7 @@ const std::vector<double> legacy_betas = {1, .5, .25, .125, .0625, 0};
 std::vector<double> betas = legacy_betas;
 unsigned exchange_passes = 1;
 MOCK::Seeds mock;
+FIELD_HMC::Settings field_settings;
 struct PassTrace {
     unsigned parity;
     std::vector<EXCHANGE::Attempt> events;
@@ -33,6 +35,7 @@ static uint64_t sweep_seed(int ensemble, size_t replica, int sweep, unsigned dom
            (uint64_t(sweep) << 4) | domain;
 }
 struct Stats {
+    uint64_t field_evaluations_total = 0, field_evaluations_sampling = 0;
     double accept_sum = 0;
     uint64_t divergences = 0, scalar_accepted = 0, scalar_attempts = 0, support_rejections = 0, rescale_accepted = 0,
              rescale_attempts = 0, cache_builds = 0, prior_refreshes = 0;
@@ -58,7 +61,7 @@ static std::vector<uint64_t> counters(const Stats & s) {
 }
 static void save(const FS::path & root, const std::string & identity, const Ensemble & s) {
     CP::Codec::Encoder e;
-    e.text("FML serial replica ensemble 1");
+    e.text(field_settings.enabled ? "FML serial replica ensemble 2" : "FML serial replica ensemble 1");
     e.text(identity);
     e.integer(s.next);
     e.integer(betas.size());
@@ -71,6 +74,10 @@ static void save(const FS::path & root, const std::string & identity, const Ense
         e.real(s.stats[j].accept_sum);
         for (auto v : counters(s.stats[j]))
             e.integer(v);
+        if (field_settings.enabled) {
+            e.integer(s.stats[j].field_evaluations_total);
+            e.integer(s.stats[j].field_evaluations_sampling);
+        }
         e.integer(s.phase[j]);
         e.integer(s.trips[j]);
     }
@@ -90,7 +97,8 @@ static Ensemble load(const FS::path & root, const std::string & identity, const 
         throw std::runtime_error("Replica checkpoint size overflow");
     const auto bytes = CP::Codec::read_file((root / "CURRENT").string(), 4096 + k * per);
     CP::Codec::Decoder d{bytes};
-    if (d.text(64) != "FML serial replica ensemble 1" || d.text() != identity)
+    if (d.text(64) != (field_settings.enabled ? "FML serial replica ensemble 2" : "FML serial replica ensemble 1") ||
+        d.text() != identity)
         throw std::runtime_error("Replica target/plan/ensemble changed");
     Ensemble s;
     s.next = int(d.size(Total));
@@ -113,6 +121,10 @@ static Ensemble load(const FS::path & root, const std::string & identity, const 
         v.rescale_attempts = d.integer();
         v.cache_builds = d.integer();
         v.prior_refreshes = d.integer();
+        if (field_settings.enabled) {
+            v.field_evaluations_total = d.integer();
+            v.field_evaluations_sampling = d.integer();
+        }
         s.phase[j] = unsigned(d.size(2));
         s.trips[j] = d.size(draws * exchange_passes);
         bool valid = model.in_support(x.parameters) && std::isfinite(x.quadratic) && x.quadratic >= 0 &&
@@ -128,6 +140,15 @@ static Ensemble load(const FS::path & root, const std::string & identity, const 
             valid &= v.accept_sum == 0 && v.divergences == 0 && v.scalar_attempts == 0 && v.scalar_accepted == 0 &&
                      v.support_rejections == 0 && v.rescale_attempts == 0 && v.rescale_accepted == 0 &&
                      v.cache_builds == 0 && v.prior_refreshes == uint64_t(s.next);
+        if (field_settings.enabled) {
+            if (j + 1 < betas.size())
+                valid &= v.field_evaluations_total >= 2 * uint64_t(s.next) &&
+                         v.field_evaluations_total <= (field_settings.leaps + 1) * uint64_t(s.next) &&
+                         v.field_evaluations_sampling >= 2 * draws &&
+                         v.field_evaluations_sampling <= (field_settings.leaps + 1) * draws;
+            else
+                valid &= v.field_evaluations_total == 0 && v.field_evaluations_sampling == 0;
+        }
         if (!valid)
             throw std::runtime_error("Invalid replica checkpoint state/counters");
     }
@@ -190,13 +211,21 @@ static void positive_update(const Model & model,
     FML::MCMC::HMCOptions o;
     o.warmup = 0;
     o.samples = 1;
-    o.n_leapfrog = 8;
-    o.step_size = .15;
+    o.n_leapfrog = field_settings.leaps;
+    o.step_size = field_settings.step;
     o.jitter = false;
     o.adapt_mass = false;
     o.adapt_step_size = false;
     o.seed = seed;
-    const auto field = FF::DETAIL::sample_run(target, s.white, s.parameters, o, false, {}, frozen);
+    FML::MCMC::HMCResult field;
+    if (field_settings.enabled) {
+        auto counted = FIELD_HMC::counted(target, s.white, s.parameters, frozen, o);
+        field = std::move(counted.first);
+        stats.field_evaluations_total += counted.second;
+        if (measured)
+            stats.field_evaluations_sampling += counted.second;
+    } else
+        field = FF::DETAIL::sample_run(target, s.white, s.parameters, o, false, {}, frozen);
     s.white = field.last;
     std::array<FF::Parameter, 4> priors;
     std::copy(model.parameters().begin() + 1, model.parameters().end(), priors.begin());
@@ -357,7 +386,11 @@ static void summary(const FS::path & root, const Ensemble & s) {
             << ",\"divergences\":" << v.divergences << ",\"scalar_accepted\":" << v.scalar_accepted
             << ",\"scalar_attempts\":" << v.scalar_attempts << ",\"support_rejections\":" << v.support_rejections
             << ",\"rescale_accepted\":" << v.rescale_accepted << ",\"rescale_attempts\":" << v.rescale_attempts
-            << ",\"cache_builds\":" << v.cache_builds << ",\"prior_refreshes\":" << v.prior_refreshes << '}';
+            << ",\"cache_builds\":" << v.cache_builds << ",\"prior_refreshes\":" << v.prior_refreshes;
+        if (field_settings.enabled)
+            out << ",\"field_gradient_evaluations_total\":" << v.field_evaluations_total
+                << ",\"field_gradient_evaluations_sampling\":" << v.field_evaluations_sampling;
+        out << '}';
     }
     out << "],\"swap_attempts\":[";
     for (size_t j = 0; j + 1 < betas.size(); ++j) {
@@ -389,6 +422,9 @@ static void summary(const FS::path & root, const Ensemble & s) {
     if (SeedLayout == 3)
         out << ",\"mock\":{\"id\":" << mock.id << ",\"truth_seed\":" << mock.truth << ",\"noise_seed\":" << mock.noise
             << ",\"initial_seed_base\":" << mock.initial << '}';
+    if (field_settings.enabled)
+        out << ",\"field_integrator\":{\"step_size\":" << field_settings.step
+            << ",\"n_leapfrog\":" << field_settings.leaps << "}";
     if (mock.prior_predictive)
         out << ",\"truth_mode\":\"prior_predictive_v1\",\"scalar_truth_seed\":" << mock.scalar_truth;
     out << "}\n";
@@ -531,7 +567,7 @@ int main(int argc, char ** argv) {
             if (SeedLayout == 3)
                 mock.read(input, unsigned(Ensembles));
             if (input >> extra)
-                throw std::invalid_argument("Extra settings fields");
+                field_settings.read(input, extra);
             Total = Warmup + Samples;
         }
         if (ensemble >= Ensembles || (SeedLayout == 1 && (Warmup != 64 || Samples != 256 || Ensembles != 2)))
@@ -616,6 +652,13 @@ int main(int argc, char ** argv) {
                     config.real(p.upper);
                 }
                 problem += ":prior_predictive=" + std::to_string(CP::Codec::checksum(config.bytes));
+            }
+            if (field_settings.enabled) {
+                CP::Codec::Encoder config;
+                config.text("FML counted conditional field integrator 1");
+                config.real(field_settings.step);
+                config.integer(field_settings.leaps);
+                problem += ":field_integrator=" + std::to_string(CP::Codec::checksum(config.bytes));
             }
             return CP::identity(base, problem);
         };

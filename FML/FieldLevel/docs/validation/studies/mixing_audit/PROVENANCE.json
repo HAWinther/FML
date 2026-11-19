@@ -1,0 +1,24 @@
+{
+  "full_manifest_sha256": "3a0f3cd42fea891c3d7f0e0d82259f4702ccf54f0b8be05ae74886b327a5781d",
+  "full_manifest": "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-mixing-audit/FROZEN.json",
+  "plan_sha256": "68f409918977b6b1c043c6a60a30c59fb381bb71e57a85940284f4718af356dc",
+  "binary_sha256": "f8b215deff56ffbff58c364fb4a0ecdb67f87502ae44736a48fcf236ac69fd99",
+  "implementation": {
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/mixing_audit/prepare.py": "894205ef638ac98d8d96d21ca4f7a0b92e4835fb0c7aa257d5ef97fa81a06a8e",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/mixing_audit/analyze.py": "f21591cefde35f875deafc1bde9fc6b8d8ae7bbb934947c68e2e8470cb51b1c6",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/geometry/Probe.cpp": "1538846756e4b49eae5039355853595c708f36b523ef9631fdc632426acf4b6b"
+  },
+  "source_files_hashed": 8202,
+  "scope": "Compact provenance; full per-record hash inventory remains external",
+  "supplemental_artifacts": {
+    "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-mixing-audit/supplement.json": "d43c44ea69522bc321ab34ae8a30471a2b86d758824b93f540ea91cdf9b11cf1",
+    "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-mixing-audit/curvature-plan.json": "480a8c58177a947e6f10ca469ef0a8a68fc7381d95e7fa009c4d3a654e981cf7",
+    "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-mixing-audit/curvature-summary.json": "21ee0fc650309a02e54cf750eff668a62d969f476e50077262cd5680aa6fbcb5",
+    "/Users/hansw/Documents/Codex/2026-10-28/i-w/outputs/fieldlevel-mixing-audit/curvature.csv": "d16527347fc05ec3cb1741e7f64b9ca2487734fae39c2d9ce1fdb16f43bf6f7b"
+  },
+  "supplemental_implementation": {
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/mixing_audit/supplement.py": "eb5283158203df9c16fe30c0f37facbf381ded155d46f783105a63113cf85cc2",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/mixing_audit/Curvature.cpp": "59e9d692bf2084a9340ccdee58e805fbc0fa39d6e8f85612db6901f6201beb2c",
+    "/Users/hansw/Claude/FML/FML/FieldLevel/validation/galaxy/mixing_audit/curvature.py": "bd7db3e4683d40fcbf47cbe0b28fcfffe7831765585117ac32a4e3e7220e4302"
+  }
+}

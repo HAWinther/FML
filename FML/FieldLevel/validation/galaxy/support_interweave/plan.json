@@ -1,0 +1,121 @@
+{
+  "version": 5,
+  "scope": "Dataset-203 exact-support amplitude/field interweaving; fresh four-chain 256/512 candidate versus unchanged cached refined-ladder baseline",
+  "mesh": 4,
+  "product_mesh": 8,
+  "density_mesh": 16,
+  "boxsize": 100,
+  "spectrum": "20000 exp(-5k)",
+  "noise_power": 1000,
+  "nufft_epsilon": 1e-08,
+  "initial_band": "sphere <1.7 kf",
+  "matter_band": "cube <1.8 kf",
+  "likelihood_band": "cube <1.6 kf",
+  "truth_parameters": null,
+  "truth_seed": 31201,
+  "noise_seed": 31202,
+  "initial_seed_base": 31203,
+  "initial_parameters": [
+    [
+      0.8,
+      1.2,
+      -0.3,
+      0.2,
+      -20
+    ],
+    [
+      1.2,
+      2,
+      0.8,
+      -0.6,
+      30
+    ],
+    [
+      0.9,
+      2.4,
+      -0.8,
+      0.6,
+      50
+    ],
+    [
+      1.1,
+      0.8,
+      1,
+      -1,
+      -40
+    ]
+  ],
+  "ensembles": 4,
+  "betas": [
+    1,
+    0.7071067811865476,
+    0.5,
+    0.3535533905932738,
+    0.25,
+    0.125,
+    0.0625,
+    0.03125,
+    0.015625,
+    0.0078125,
+    0.00390625,
+    0.001953125,
+    0
+  ],
+  "warmup": 256,
+  "samples": 512,
+  "chunk_sweeps": 16,
+  "checkpoint_every": 16,
+  "field": {
+    "n_leapfrog": 16,
+    "step_size": 0.075,
+    "jitter": false,
+    "adapt": false,
+    "metric": "Frozen initial physical scalars per ensemble; posterior noise scaled by 1/beta"
+  },
+  "scalars": {
+    "transitions": 4,
+    "bias_sweeps": 8,
+    "amplitude_step": 0.07,
+    "noise": "1000/beta"
+  },
+  "rescaling": {
+    "attempts": 4,
+    "amplitude_step": 0.1,
+    "dimension": 18,
+    "target": "Full positive-beta posterior plus exact global initial-support Jacobian; all 64 white prior coordinates retained"
+  },
+  "prior_replica": "Fresh independent standard-Gaussian white and bounded-uniform physical scalars each sweep; base likelihood evaluated for swaps",
+  "local_seeds": "Layout 3: 0x5300000000000000 | mock_id<<32 | ensemble<<30 | replica<<24 | outer_index<<4 | purpose",
+  "swap_seed": "Layout 3, replica=63 purpose=3",
+  "swaps": "Four alternating disjoint neighbor passes per outer sweep, parity=(outer_index+pass_index)%2; same complete-state exchange rule",
+  "gates": {
+    "min_accepted_per_edge_per_ensemble": 1,
+    "min_pooled_edge_acceptance": 0.05,
+    "min_cold_prior_cold_roundtrips_per_ensemble": 1,
+    "positive_beta_sampling_divergences": 0
+  },
+  "roundtrip": "Measured walker visits cold, actually refreshes at beta=0, then returns cold; observe after every pass, count no unrefreshed prior bounce",
+  "replay": "Ensemble 0: copy after warmup+32; resume 16 sweeps; compare complete checkpoint, summary and retained draws 32..47; exclude replay",
+  "stopping": "Stop each cohort at four chains of 256 warmup and 512 retained draws, even on failure; no extension, dropping, replacement or retuning",
+  "limits": [
+    "Only beta=1 records are cold posterior draws",
+    "Labels measure walker transport, not unchanged physical configurations",
+    "Path-barrier reduction does not certify energy overlap",
+    "Serial validation format, not production MPI ensemble checkpointing",
+    "Five scalar and six field projection diagnostics; not all field coordinates",
+    "Synthetic same-model target; no coverage or real-catalog claim",
+    "Fixed four-chain budget: report failure without extending or retuning"
+  ],
+  "exchange_passes": 4,
+  "comparison": "Same target, initial fields, seeds, original field metric, refined ladder and half-step HMC; only amplitude/field rescaling support and its matching Jacobian change. Cached baseline is read-only; raw wall timing is unmatched.",
+  "seed_layout": 3,
+  "posterior_gates": {
+    "max_rhat": 1.01,
+    "min_bulk_ess": 400,
+    "min_tail_ess": 400
+  },
+  "mock_id": 203,
+  "truth_mode": "prior_predictive_v1",
+  "scalar_truth_seed": 31207,
+  "rescaling_policy_sha256": "9ae77a7b2c28822c91a697158f329f8b047df4dfcb3893513ea37ba9492ca2cf"
+}
