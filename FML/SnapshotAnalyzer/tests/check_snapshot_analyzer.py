@@ -432,8 +432,10 @@ def main():
     # CGAL builds: ZOBOV and the DTFE on CGAL's tessellation give the same results as on the native one (the default)
     if have_cgal:
         n = max(tasks)
+        # (CGAL's tessellation with MPI needs a wide enough buffer: with the default 0.5 on 4 tasks 190 cells are
+        # unreliable and ZOBOV finds 2109 voids instead of 2107; the native tessellation needs no buffer)
         code, out = r.run('cgal', {**base, 'zobov_tessellation': 'cgal', 'dtfe_tessellation': 'cgal',
-                                   'output_folder': 'cgal'}, n)
+                                   'zobov_buffer_fraction': 1.0, 'output_folder': 'cgal'}, n)
         if check(code == 0, f'CGAL tessellation runs ({code})'):
             ref_n = results.get(f'np{n}_files_per_task', ref)
             check(same_voids(table(ref_n / 'voids_zobov_z0.000.txt'), table(workdir / 'cgal' / 'voids_zobov_z0.000.txt')),

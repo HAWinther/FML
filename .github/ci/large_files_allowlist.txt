@@ -7,6 +7,7 @@ FML/Cosmology/EinsteinBoltzmannSolver/report/data/recombination_noreion.txt
 FML/Cosmology/EinsteinBoltzmannSolver/report/data/recombination_saha.txt
 FML/Cosmology/EinsteinBoltzmannSolver/report/paper.pdf
 FML/CosmologyFitting/external/planck2018_lite/c_matrix_plik_v22.dat
+FML/Emulator/EMantis/data/pk_nl_boost_wCDM.txt
 FML/Emulator/EuclidEmulator2.dat
 FML/FriendsOfFriends/tests/data/rfof_particles.txt
 FML/SimulationCode/input/transfer_tables/coupled_quintessence.txt
