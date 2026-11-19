@@ -148,7 +148,7 @@ namespace FML {
                     for (auto & x : x_array)
                         x = std::log(x);
                     FML::SOLVERS::ODESOLVER::ODEFunction deriv = [&](double x, const double * y, double * dydx) {
-                        const double E1 = model.logEprimeofx(x), Om = model.OmegaMofx(x), mu = model.muofx(x);
+                        const double E1 = model.logEprimeofx(x) + model.friction(x), Om = model.OmegaMofx(x), mu = model.muofx(x);
                         // Environment (unscreened, mu)
                         if (y[4] > dinf) {
                             dydx[4] = dydx[5] = 0.0;

@@ -36,7 +36,9 @@ namespace FML::COSMOLOGY {
         if (options.react_n_z < 4 || options.react_n_k < 32 || options.react_mass_loop < 10 ||
             options.react_mass_loop > 1000 || !(options.react_z_max > 0 && options.react_z_max <= 10))
             throw std::invalid_argument("ReACT: require n_z >= 4, n_k >= 32, 10 <= mass_loop <= 1000, 0 < z_max <= 10");
-        if (cosmo.perturbation_model()->name() != cosmo.model_name())
+        const bool coupled_cdm = cosmo.model_name() == "coupled_quintessence" || cosmo.model_name() == "fading_dark_sector";
+        if (cosmo.perturbation_model()->name() != cosmo.model_name() &&
+            !(coupled_cdm && cosmo.perturbation_model()->name() == "coupled_quintessence"))
             throw std::invalid_argument("ReACT requires the standard perturbation model matching its cosmological parameters");
 
         const double Ob = cosmo.rhoB(0), Onu = cosmo.rhoNcdm(0);
@@ -79,8 +81,64 @@ namespace FML::COSMOLOGY {
                 const double m = Om * std::exp(-3 * x);
                 return 0.5 * (-3 * m + de(x) * (-3 * (1 + w0 + wa) + 3 * wa * std::exp(x))) / (m + de(x));
             };
+        } else if (coupled_cdm) {
+            // Coupled quintessence / the Fading Dark Sector: the CDM particles have the mass m ~ exp(-beta phi) and
+            // feel the unscreened fifth force G (1 + 2 beta^2) from the CDM (the field is light: m_phi ~ H). The CDM
+            // and baryons as one fluid (momentum weighted, as SimulationCode's GravityModel_CoupledQuintessence):
+            // G_eff/G = 1 + 2 beta^2 f_c^2 and the friction f_c (-beta dphi/dx) = f_c (3 + dln rho_c/dx), f_c =
+            // rho_c / rho_cb, with the clustering density Omega_cb(x) of the target (rho_c ~ a^-3 e^{-beta phi}). The
+            // background without radiation (the massive neutrinos as matter), as the LCDM background of the halos.
+            // beta = 0: the field is uncoupled quintessence (only the expansion differs; mg = false)
+            const double beta = model == "fading_dark_sector" ? p.model_param("fds_cprime") : p.model_param("cq_beta");
+            const double Onu0 = Onu;
+            const auto & bg = cosmo;
+            auto E2 = [&bg, Onu0](double x) {
+                return bg.rhoCDM(x) + bg.rhoB(x) + Onu0 * std::exp(-3 * x) + bg.rhoDE(x);
+            };
+            auto dE2 = [&bg, Onu0](double x) {
+                return bg.drhoCDMdx(x) + bg.drhoBdx(x) - 3 * Onu0 * std::exp(-3 * x) + bg.drhoDEdx(x);
+            };
+            // Tabulated on a grid in x (the collapses start at a = 1e-5)
+            const auto xs = Utils::linspace(std::log(1e-6), 0.0, 3000);
+            std::vector<double> lE, dlE, Ocbx, mux, frx;
+            for (double x : xs) {
+                const double e2 = E2(x), rc = bg.rhoCDM(x), rb = bg.rhoB(x), fc = rc / (rc + rb);
+                lE.push_back(0.5 * std::log(e2));
+                dlE.push_back(0.5 * dE2(x) / e2);
+                Ocbx.push_back((rc + rb) / e2);
+                mux.push_back(1.0 + 2.0 * beta * beta * fc * fc);
+                frx.push_back(fc * (3.0 + bg.drhoCDMdx(x) / rc));
+            }
+            const Spline1D lE_s(xs, lE, "ln E"), dlE_s(xs, dlE, "dlnE/dx"), Ocb_s(xs, Ocbx, "Omega_cb"),
+                mu_s(xs, mux, "mu"), fr_s(xs, frx, "friction");
+            const double x0 = xs.front();
+            auto at = [x0](const Spline1D & s, double x) { return s(std::max(x, x0)); };
+            // Before the grid: matter domination, E ~ a^{-3/2}
+            hc.Eofx = [=](double x) { return std::exp(at(lE_s, x) - 1.5 * std::min(x - x0, 0.0)); };
+            hc.logEprimeofx = [=](double x) { return at(dlE_s, x); };
+            hc.OmegaCBofx = [=](double x) { return at(Ocb_s, x); };
+            hc.muofx = [=](double x) { return at(mu_s, x); };
+            hc.frictionofx = [=](double x) { return at(fr_s, x); };
+            // sigma(M) of the real halos from the target P_cb and delta_c extrapolated with the growth of this model
+            // (scale independent; it matches the solver's P_cb growth to ~1e-3 for z < 20), so no LCDM reference run.
+            // The concentrations scale with g = D_LCDM/D_model (normalised early): the halos of a model with more
+            // late growth formed later (lower c, as in coupled-DE N-body simulations)
+            hc.target_linear = true;
+            if (beta != 0) {
+                mg = true;
+                const auto F = SC::fifth_force_unscreened(hc.muofx);
+                fifth_force = [F](double) { return F; };
+                kernels = PT::mg_lcdm(Om, Ocb);
+                kernels.E = [=](double a) { return hc.Eofx(std::log(a)); };
+                kernels.dlogE_dloga = [=](double a) { return hc.logEprimeofx(std::log(a)); };
+                kernels.Omega_source_of_a = [=](double a) { return hc.OmegaCBofx(std::log(a)); };
+                kernels.mu = [=](double a, double) { return hc.muofx(std::log(a)); };
+                kernels.friction = [=](double a) { return hc.frictionofx(std::log(a)); };
+            }
         } else if (model != "lcdm") {
-            throw std::invalid_argument("ReACT solver integration supports lcdm, fr, LCDM-background nDGP and w0wa");
+            throw std::invalid_argument(
+                "ReACT solver integration supports lcdm, fr, LCDM-background nDGP, w0wa, coupled_quintessence and "
+                "fading_dark_sector");
         }
 
         // A massless LCDM target is its own pseudo cosmology: R = 1, and the pseudo baseline is the target's own
@@ -114,7 +172,7 @@ namespace FML::COSMOLOGY {
         std::unique_ptr<Perturbations> ref_pert;
         std::unique_ptr<PowerSpectrum> ref_ps;
         const PowerSpectrum * lcdm_ps = this;
-        if (model != "lcdm") {
+        if (model != "lcdm" && !coupled_cdm) {
             auto ref_params = p;
             ref_params.model = "lcdm";
             ref_params.model_params.clear();

@@ -29,6 +29,11 @@ namespace FML {
                 Func1 logEprimeofx;
                 Func1 muofx;
                 Func1 wofx;
+                // An extra friction Gamma(x) in the velocity equation of the matter, delta'' + (2 + dlogE/dx + Gamma)
+                // delta' (e.g. -beta dphi/dx for CDM whose particle mass varies as exp(-beta phi) in coupled
+                // quintessence); empty: 0
+                Func1 frictionofx;
+                double friction(double x) const { return frictionofx ? frictionofx(x) : 0.0; }
 
                 //============================================================
                 // Cosmological parameters
@@ -47,6 +52,7 @@ namespace FML {
                 SphericalCollapseModel & operator=(const SphericalCollapseModel & rhs) {
                     OmegaM = rhs.OmegaM;
                     is_lcdm = rhs.is_lcdm;
+                    frictionofx = rhs.frictionofx;
                     if (is_lcdm) {
                         set_model_lcdm();
                     } else {
@@ -109,7 +115,7 @@ namespace FML {
 
                     // Growth ODE
                     dydx[0] = ddeltadx;
-                    dydx[1] = -(2.0 + dlogEdloga) * ddeltadx + 1.5 * om * mu * delta;
+                    dydx[1] = -(2.0 + dlogEdloga + friction(x)) * ddeltadx + 1.5 * om * mu * delta;
                     return GSL_SUCCESS;
                 }
 
@@ -132,12 +138,12 @@ namespace FML {
 
                     // Spherical collapse
                     dydx[0] = ddeltadx;
-                    dydx[1] = -(2.0 + dlogEdloga) * ddeltadx + 1.5 * om * mu * delta * (1 + delta) +
+                    dydx[1] = -(2.0 + dlogEdloga + friction(x)) * ddeltadx + 1.5 * om * mu * delta * (1 + delta) +
                               4.0 / 3.0 * ddeltadx * ddeltadx / (1.0 + delta);
 
                     // Linear evolution
                     dydx[2] = ddeltadx_lin;
-                    dydx[3] = -(2.0 + dlogEdloga) * ddeltadx_lin + 1.5 * om * mu * delta_lin;
+                    dydx[3] = -(2.0 + dlogEdloga + friction(x)) * ddeltadx_lin + 1.5 * om * mu * delta_lin;
                     return GSL_SUCCESS;
                 }
 

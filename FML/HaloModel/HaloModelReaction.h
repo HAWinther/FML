@@ -78,6 +78,14 @@ namespace FML {
                     double OmegaNu{0.0}; ///< Massive neutrinos today
                     /// The target background E(x) = H/H0 and dlog E / dx (x = log a); empty: flat LCDM with OmegaM
                     Func1 Eofx{}, logEprimeofx{};
+                    /// Coupled dark matter (e.g. coupled quintessence, the Fading Dark Sector). The density parameter
+                    /// of the clustering CDM + baryons at x (empty: Omega_cb e^{-3x} / E^2), the linear (unscreened)
+                    /// G_eff/G of the CDM + baryon fluid (empty: 1) and its extra velocity friction (empty: 0), used
+                    /// by the real collapses and their linear growth
+                    Func1 OmegaCBofx{}, muofx{}, frictionofx{};
+                    /// true: sigma(M) of the real halos from the target P_cb and delta_c extrapolated with the
+                    /// target's linear growth (scale-independent G_eff); false: P_cb^LCDM and the LCDM growth (ReACT)
+                    bool target_linear{false};
                 };
 
                 /// Linear spectra at the redshift: k [h/Mpc] -> P [(Mpc/h)^3]

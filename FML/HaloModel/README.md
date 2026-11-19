@@ -97,7 +97,10 @@ double R = hm.reaction(k);                             // P_NL = R P_NL,pseudo
 
 The real halos collapse in the target background with the fifth force (mass and environment dependent); delta_c(M)
 is extrapolated with the LCDM growth and nu = delta_c / sigma uses the LCDM cold spectrum, as in ReACT. The pseudo
-halos are GR halos of the target P(k) in an LCDM background. `ReactionTable` tabulates R(z, k) for the solver
+halos are GR halos of the target P(k) in an LCDM background. For coupled dark matter (coupled quintessence, the
+Fading Dark Sector) `Cosmology::OmegaCBofx`, `muofx` and `frictionofx` give the clustering density, G_eff/G and the
+drag of the real collapses, and `target_linear = true` takes nu from the target P_cb with delta_c extrapolated by the
+model's own (scale-independent) growth. `ReactionTable` tabulates R(z, k) for the solver
 (`nonlinear = react`, `Cosmology/Spectra/PowerSpectrumReACT.cpp`). The one-loop P(k0) for k* comes from
 `PerturbationTheory/MGOneLoop.h` (kernels solved in time with the model's mu, gamma2, gamma3; all redshifts in one
 call, ~1 s). About 1 s per redshift for f(R) (30 collapses), 0.1 s for GR or dark energy.

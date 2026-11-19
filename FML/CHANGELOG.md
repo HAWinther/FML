@@ -27,6 +27,11 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
   `sn.desdovekie` (`python/fetch_sn_data.py desdovekie`); `SNIaLikelihood` takes an inverse covariance.
 - `params/mcmc_fds_cmb_desi_dovekie.ini`: the Fading Dark Sector (`model = fading_dark_sector`, `fds_c`,
   `fds_cprime`) with CamSpec PR4 + low-ell + ACT DR6 + Planck PR4 lensing, DESI DR2 BAO and DES-Dovekie (Obied, Vafa & Wu 2026).
+- `nonlinear = react` for `coupled_quintessence` and `fading_dark_sector`: the unscreened fifth force G(1 + 2 beta^2
+  f_c^2) and drag f_c (-beta dphi/dx) of the CDM (CDM + baryons as one fluid) in the spherical collapses
+  (`SphericalCollapseModel::frictionofx`) and the one-loop kernels (`MGKernelModel::friction`, `Omega_source_of_a`),
+  the target's Omega_cb(x) and linear growth for the real halos (`HaloModelReaction::Cosmology::OmegaCBofx`, `muofx`,
+  `frictionofx`, `target_linear`). `tests/test_react_fds`: LCDM limit, collapse-model growth = Boltzmann growth to 2e-3.
 - `tests/check_fds_kernels` (with `python/fds_kernels_dchi2.py`): the one-loop P_cb and P_thetatheta of the Fading Dark
   Sector with exact-time two-fluid kernels against EdS kernels; the difference changes the DESI DR1 full-shape chi^2 by
   0.01 (0.001 after refitting the linear nuisance parameters), so EdS kernels suffice for the FDS fits.

@@ -29,7 +29,9 @@ by HMcode-2020 of the matched GR pseudo cosmology (LCDM background, the target's
 reaction is computed natively (no external code): the screened spherical collapse
 (`SphericalCollapse/ScreenedSphericalCollapse.h`), the real and pseudo halo models (`HaloModel/HaloModelReaction.h`)
 and the modified-gravity one-loop P for k* (`PerturbationTheory/MGOneLoop.h`). It supports flat `lcdm`, `fr` with
-n=1, `w0wa` and normal-branch `dgp` with `dgp_lcdm_background=1`, including massive neutrinos. The reaction is
+n=1, `w0wa`, normal-branch `dgp` with `dgp_lcdm_background=1`, and `coupled_quintessence` / `fading_dark_sector`
+(the CDM's unscreened fifth force G(1 + 2 beta^2 f_c^2) and drag f_c (-beta dphi/dx) in the collapses and one-loop
+kernels, sigma(M) and delta_c from the target's own linear growth), including massive neutrinos. The reaction is
 tabulated at `react_n_z` redshifts up to `react_z_max` (default 2.5, at most 10; validated against ReACT for
 z <= 2) and `react_n_k` k from 1e-5 to 100 h/Mpc, with `react_mass_loop` collapses per redshift; above
 `react_z_max` the solver uses the matched pseudo with R=1 (and says so). The native reaction agrees with the

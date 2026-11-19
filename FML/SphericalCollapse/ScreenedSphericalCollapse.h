@@ -22,6 +22,9 @@
 ///
 ///     delta'' = -(2 + dlogE/dx) delta' + 4/3 delta'^2 / (1 + delta) + 3/2 OmegaM(x) (1 + F) delta (1 + delta)
 ///
+/// With the model's frictionofx Gamma(x), 2 + dlogE/dx -> 2 + dlogE/dx + Gamma in all three equations (CDM of
+/// varying mass in coupled quintessence: Gamma = -beta dphi/dx; the virial condition is unchanged).
+///
 /// F(x, delta, delta_env) is any function (FifthForce). Provided:
 ///  - fifth_force_hu_sawicki: chameleon thin shell of Hu-Sawicki f(R) (n = 1 is the usual model):
 ///        Delta R / R = (|f_R(rho_env)| - |f_R(rho_halo)|) / (2 Phi_N),  Phi_N = G M / R = (H0 R_th)^2 OmegaM / (2 a y)

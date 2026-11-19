@@ -80,16 +80,25 @@ namespace FML {
                 };
                 // Real: target background, Omega_cb clusters; pseudo: LCDM, OmegaM clusters
                 const double Oc = is_real ? Ocb : Om;
-                const auto model = is_real ? collapse_model(cosmo.Eofx, cosmo.logEprimeofx, Ocb)
-                                           : collapse_model(E_lcdm, dlogE_lcdm, Om);
-                // delta_c is extrapolated with the growth of the LCDM background (source Oc)
+                auto model = is_real ? collapse_model(cosmo.Eofx, cosmo.logEprimeofx, Ocb)
+                                     : collapse_model(E_lcdm, dlogE_lcdm, Om);
+                if (is_real) {
+                    // coupled dark matter: the target's clustering density, G_eff and friction
+                    if (cosmo.OmegaCBofx)
+                        model.OmegaMofx = cosmo.OmegaCBofx;
+                    if (cosmo.muofx)
+                        model.muofx = cosmo.muofx;
+                    model.frictionofx = cosmo.frictionofx;
+                }
+                // delta_c is extrapolated with the growth of the LCDM background (source Oc), or of the target
                 const auto lcdm = collapse_model(E_lcdm, dlogE_lcdm, Oc);
-                const double growth_ratio = growth(lcdm, o.xini, x) / std::exp(o.xini);
+                const bool target = is_real and cosmo.target_linear;
+                const double growth_ratio = growth(target ? model : lcdm, o.xini, x) / std::exp(o.xini);
                 if (is_real)
                     gde = growth(lcdm, o.xini, 0.0) / growth(model, o.xini, 0.0);
 
-                // sigma(R) of P_cb^LCDM (real) or P (pseudo)
-                const Func1 & P = is_real ? spec.Pcb_lcdm : spec.P;
+                // sigma(R) of P_cb^LCDM (real; the target P_cb with target_linear) or P (pseudo)
+                const Func1 & P = is_real ? (target ? spec.Pcb : spec.Pcb_lcdm) : spec.P;
                 const LinearVariance var(
                     [&P](double k) { return k * k * k * P(k) / (2.0 * M_PI * M_PI); }, opt.kmin_sigma, opt.kmax_sigma,
                     opt.n_sigma);

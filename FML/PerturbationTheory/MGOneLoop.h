@@ -16,12 +16,13 @@
 /// (Taruya et al. 2014, arXiv:1408.4232; Bose & Koyama 2016, arXiv:1606.02520): the matter (or cold matter) obeys
 ///
 ///   delta' - theta = alpha(k1, k2) theta_1 delta_2
-///   theta' + (2 + dlog E/dlog a) theta - 3/2 Omega_s(a) mu(k, a) delta = beta(k1, k2) theta_1 theta_2
+///   theta' + (2 + dlog E/dlog a + friction(a)) theta - 3/2 Omega_s(a) mu(k, a) delta = beta(k1, k2) theta_1 theta_2
 ///                                  + gamma2(k1, k2) delta_1 delta_2 + gamma3(k1, k2, k3) delta_1 delta_2 delta_3
 ///
 /// (' = d/dlog a, theta = -div v / (a H), convolutions implied; Omega_s(a) = Omega_s a^-3 / E^2 the clustering
-/// source) with the linear modification mu(k, a) = G_eff/G and the nonlinear (screening) sources gamma2, gamma3 of the
-/// scalar field. gamma3 is given as one cyclic term (k1 alone, k2 and k3 the pair); the source is the average over
+/// source, or any Omega_source_of_a) with the linear modification mu(k, a) = G_eff/G, an optional extra friction (e.g.
+/// -beta dphi/dlna of CDM coupled to a scalar, whose particle mass varies) and the nonlinear (screening) sources
+/// gamma2, gamma3 of the scalar field. gamma3 is given as one cyclic term (k1 alone, k2 and k3 the pair); the source is the average over
 /// the three.
 ///
 /// The kernels F1(k), F1(q), F1(|k - q|), F2(q, k - q), F2(k, q), F2(k, -q) and F3(k, q, -q) are integrated in log a
@@ -59,6 +60,12 @@ namespace FML::PERTURBATION {
         std::function<double(double a, const Vec3 & k1, const Vec3 & k2)> gamma2;
         /// One cyclic term of the third-order source (k1 alone; k2, k3 the pair) (empty: 0)
         std::function<double(double a, const Vec3 & k1, const Vec3 & k2, const Vec3 & k3)> gamma3;
+        /// The clustering source Omega_s(a) (density parameter at a) when it does not scale as a^-3 (e.g. CDM with a
+        /// varying particle mass); empty: Omega_source a^-3 / E^2
+        std::function<double(double a)> Omega_source_of_a;
+        /// An extra friction in the velocity equation, theta' + (2 + dlog E/dlog a + friction) theta (e.g.
+        /// -beta dphi/dlna for coupled CDM); empty: 0
+        std::function<double(double a)> friction;
     };
 
     /// H0 in h/Mpc
@@ -196,8 +203,9 @@ namespace FML::PERTURBATION {
             // y: 0,1 F1/T1(k); 2,3 (q); 4,5 (k - q); 6,7 F2/T2(q, k - q); 8,9 (k, q); 10,11 (k, -q); 12,13 F3/T3
             auto rhs = [&](double a, const double * y, double * dy) {
                 const double h = m.dlogE_dloga(a);
-                const double S = 1.5 * m.Omega_source / (a * a * a) / std::pow(m.E(a), 2);
-                const double fr = 2.0 + h;
+                const double S =
+                    1.5 * (m.Omega_source_of_a ? m.Omega_source_of_a(a) : m.Omega_source / (a * a * a) / std::pow(m.E(a), 2));
+                const double fr = 2.0 + h + (m.friction ? m.friction(a) : 0.0);
                 dy[0] = y[1];
                 dy[1] = -fr * y[1] + S * mu(a, k) * y[0];
                 dy[2] = y[3];
