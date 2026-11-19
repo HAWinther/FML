@@ -37,6 +37,7 @@ FriendsOfFriends/tests/test_*
 Experimental/Delaunay/tests/test_*
 !Experimental/Delaunay/tests/test_*.cpp
 Experimental/Delaunay/tests/compare_cgal
+Experimental/Delaunay/tests/compare_library
 Emulator/example/ee2
 FFTLog/example/fftlog
 FFTWGrid/example/fftwgrid

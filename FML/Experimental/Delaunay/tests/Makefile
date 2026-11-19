@@ -21,6 +21,17 @@ compare_cgal: compare_cgal.o Global.o
 	$(CC) -o $@ $^ $(OPTIONS) $(LIB) -L$(CGAL_LIB) $(LINK) -lgmp -lmpfr
 EXTRA_CLEAN += compare_cgal
 
+# The native tessellation against the library's MPIPeriodicDelaunay (volumes, neighbours, DTFE densities):
+# make compare_library [CGAL2D=true] CGAL_INCLUDE=...
+ifeq ($(CGAL2D),true)
+compare_library.o: OPTIONS += -DCGAL_NDIM=2
+endif
+compare_library.o: OPTIONS += -DUSE_CGAL
+compare_library.o: INC += -I$(CGAL_INCLUDE)
+compare_library: compare_library.o Global.o
+	$(CC) -o $@ $^ $(OPTIONS) $(LIB) -L$(CGAL_LIB) $(LINK) -lgmp -lmpfr
+EXTRA_CLEAN += compare_library
+
 MPIRUN ?= mpirun
 NP_LIST ?= 1 2 3 4
 ifeq ($(USE_MPI),true)
