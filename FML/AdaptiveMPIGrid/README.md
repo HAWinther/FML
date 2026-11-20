@@ -73,3 +73,11 @@ cd example && make FML_INCLUDE=/path/to/folder/containing/FML && mpirun -np 4 ./
 - No ghost "image shift" is stored. For positions across a periodic boundary, use the minimum-image convention.
 - Message counts are `int` elements of `sizeof(T)` bytes per pair of tasks.
 - No OpenMP yet.
+
+## Method reference
+
+Sparse setup/migration uses NBX from Hoefler, Siebert & Lumsdaine (2010),
+[Scalable Communication Protocols for Dynamic Sparse Data Exchange](https://doi.org/10.1145/1693453.1693476)
+([author PDF](https://spcl.inf.ethz.ch/Publications/.pdf/hoefler-dsde-protocols.pdf)).
+The linear leaf storage, balance, ownership and multigrid integration are FML implementations;
+this method citation does not establish large-machine scaling of the current code.

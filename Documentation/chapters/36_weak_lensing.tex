@@ -1,5 +1,5 @@
 \chapter{Weak lensing}\label{ch:weak-lensing}
-\chapterstatus{written}{2026-11-14}
+\chapterstatus{written}{2026-11-20}
 
 Projection operators for weak-lensing observables: Born-approximation convergence maps for source distributions from
 lightcone density shells, flat-sky shear, extended-Limber angular spectra, and projected galaxy--matter profiles. The density
@@ -65,6 +65,42 @@ auto W = convergence_kernel(sources, geo);
 PowerSpectrum mm{Pmm_of_k_z, kmin, kmax, zmin, zmax};
 auto Ckk = limber_spectrum(ells, W, W, mm, geo, radial_edges);
 \end{cppcode}
+
+\section{Tomographic cosmic shear and COSEBIs}\label{sec:wl-cosmic-shear}
+
+\file{WeakLensing/CosmicShear.h} adds \cls{ShearModel}, \cls{ShearSystematics}, \code{shear_spectra},
+\code{shear_correlation_binned} and \cls{LogCOSEBIs}. The basic Born maps above retain the GR density kernel;
+the tomographic API separately accepts a scale-independent \code{lensing_strength} $\Sigma(z)$ on each lensing kernel.
+It includes nonlinear intrinsic alignments (NLA) \cite{HirataSeljak2004,BridleKing2007}:
+\begin{align}
+C_\ell^{ij}&=S_\ell\int\frac{\dd\chi}{\chi^2}
+ [q_iq_j+(q_ip_j+p_iq_j)F+p_ip_jF^2]P_m((\ell+1/2)/\chi,z),\\
+F(z)&=-A_{\rm IA}\,0.013877\,\Om\,D(z)^{-1}
+ [(1+z)/(1+z_{\rm pivot})]^{\eta_{\rm IA}},
+\end{align}
+with $D(0)=1$, $z_{\rm pivot}=0.62$, $p_i=n_i(z)\dd z/\dd\chi$ normalised, and optional spin factor
+$S_\ell=(\ell-1)\ell(\ell+1)(\ell+2)/(\ell+1/2)^4$ (otherwise 1).
+Per-bin photo-$z$ shifts use $n_i(z-\Delta z_i)$ and multiplicative biases multiply each pair by $(1+m_i)(1+m_j)$.
+The caller supplies nonlinear total-matter power, including any baryonic feedback.
+
+The flat-sky Hankel transforms give $\xi_\pm$ with $J_0$ and $J_4$, including angular-bin averages.
+Logarithmic COSEBIs \cite{Schneider2010,Asgari2021} separate E/B information on a finite angular interval:
+\begin{equation}
+E_n=\frac12\int\dd\theta\,\theta[T_{+n}\xi_++T_{-n}\xi_-],\qquad
+B_n=\frac12\int\dd\theta\,\theta[T_{+n}\xi_+-T_{-n}\xi_-].
+\end{equation}
+The native filters use an orthonormal polynomial basis and tabulated Fourier windows.
+Method/convention comparisons use \href{https://github.com/LSSTDESC/CCL}{CCL} and
+\href{https://github.com/joezuntz/cosmosis-standard-library}{CosmoSIS}; this is an independent implementation.
+Data likelihoods belong to \file{CosmologyFitting}, including KiDS-1000 (\cref{ch:sampling-fitting}).
+There are no TATT, beyond-Limber, reduced-shear or general scale-dependent $\Sigma(k,z)$ corrections here.
+
+\begin{validation}[Validation: cosmic shear]
+\file{test_cosmic_shear.cpp} compares with independent QUADPACK integrals and CCL 3.3.6 at matched power,
+distances and growth: spectra agree to $10^{-5}$ with QUADPACK and $3\times10^{-4}$ with CCL on the tested bins.
+COSEBI filters for $n\le5$, $0.5'$--$300'$, match 60-digit references to $10^{-14}$; E/B transform checks are
+at $7\times10^{-6}$ and $5\times10^{-6}$ of the E signal. These are numerical checks, not a new survey calibration.
+\end{validation}
 
 \begin{validation}[Validation: weak lensing]
 Analytic source efficiencies and finite-shell integrals; streaming with local ownership and error cases; source measure conversion; radial refinement; analytic

@@ -1,5 +1,5 @@
 \chapter{The halo model}\label{ch:halo-model}
-\chapterstatus{written}{2026-11-19}
+\chapterstatus{written}{2026-11-20}
 
 The halo model writes the nonlinear matter field as a sum over halos with universal profiles, so the power spectrum is a
 two-halo term (correlated halos) plus a one-halo term (pairs in one halo) \cite{CooraySheth2002}. \fml{} has a general
@@ -133,10 +133,14 @@ simulations for $k<10\hMpc$, $z<2$ \cite{Mead2021}.
 
 \section{The halo-model reaction}\label{sec:hm-react}
 
+The upstream code is \href{https://github.com/nebblu/ACTio-ReACTio}{ACTio-ReACTio (ReACT v2)};
+FML implements the framework natively and uses revision \code{a36dda02} for comparison fixtures.
+The coupled-quintessence/FDS extension below is an FML extension; the ReACT papers do not calibrate it.
+
 For a target cosmology with modified gravity, dark energy or massive neutrinos, the nonlinear spectrum is written
 $P_{\rm NL}=\mathcal R(k)P_{\rm NL,pseudo}$, where the \emph{pseudo} cosmology has a $\Lambda$CDM background and GR but the
 target's linear spectrum, so that $P_{\rm NL,pseudo}$ can come from HMcode or an emulator, and the reaction from the halo
-model \cite{Cataneo2019,Bose2020,Bose2021}:
+model \cite{Cataneo2019,Bose2020,Bose2021,ReACTv2}:
 \begin{gather}
 \mathcal R(k)=\frac{(1-f_\nu)^2P_h+2f_\nu(1-f_\nu)\sqrt{P_hP_\nu}+f_\nu^2P_\nu}{P_L+P_{1h,\rm pseudo}},\\
 P_h=\left[(1-\mathcal E)e^{-k/k_*}+\mathcal E\right]P_{L,cb}+P_{1h,\rm real}.

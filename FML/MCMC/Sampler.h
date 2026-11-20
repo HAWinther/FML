@@ -19,6 +19,8 @@
 //     Cobaya do (the largest eigenvalue of W^-1 B, W the mean of the chain covariances, B the covariance of the
 //     chain means; 1 chain: infinite); the run stops when R-1 < Rminus1_stop and every chain has min_samples
 //     samples (converged() is then true), or after max_steps steps per chain (with a warning).
+//   * Fast/slow method: Lewis (2013), https://arxiv.org/abs/1304.4473;
+//     reference implementation https://github.com/cmbant/CosmoMC (method reference, not a code port).
 //   * Fast/slow parameters (Lewis 2013, as CosmoMC): parameters marked fast (likelihood nuisance parameters, cheap
 //     to vary because the theory is cached) come last. Each step is one slow update followed by oversample_fast
 //     updates of the fast ones only. The slow update draws only the slow coordinates (L z with z_fast = 0, L the

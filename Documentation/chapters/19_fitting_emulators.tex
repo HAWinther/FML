@@ -1,16 +1,16 @@
 \chapter{Fitting functions and emulators}\label{ch:fitting-emulators}
-\chapterstatus{written}{2026-11-14}
+\chapterstatus{written}{2026-11-20}
 
 Beside the halo models of \cref{ch:halo-model}, \fml{} has the standard fitting functions and emulators of the nonlinear
-matter power spectrum: Halofit with the neutrino correction of Bird et al., EuclidEmulator2, the $f(R)$ and Brans--Dicke
+matter power spectrum: e-MANTIS, Halofit with the neutrino correction of Bird et al., EuclidEmulator2, the $f(R)$ and Brans--Dicke
 boosts, the Eisenstein--Hu transfer functions, and a general neural-network emulator that can be trained in C++ or loaded
-from PyTorch. The Einstein--Boltzmann solver gives all of them through one option (\cref{tab:nonlinear-options}).
+from PyTorch. The solver's selectable nonlinear prescriptions are listed in \cref{tab:nonlinear-options}.
 
 \begin{modulebox}{Cosmology/Spectra, Emulator}
 \nsp{FML::COSMOLOGY}: \file{Cosmology/Spectra/Halofit.h} (\cls{Halofit}, versions \code{Takahashi2012} and \code{Bird}),
 \file{EisensteinHu.h}, \file{PowerSpectrum.h} (the solver's nonlinear tables, \code{solve_jbd_boost}).\par
 \nsp{FML::EMULATOR}: \file{Emulator/EuclidEmulator2.h} (\nsp{EUCLIDEMULATOR2}, data file \file{EuclidEmulator2.dat}),
-\file{Emulator/FofrFittingFunction.h} (\nsp{FOFRFITTINGFUNCTION}), \file{Emulator/NeuralNetwork/NeuralNetwork.h}
+\file{Emulator/EMantis/EMantis.h} (\nsp{EMANTIS}), \file{Emulator/FofrFittingFunction.h} (\nsp{FOFRFITTINGFUNCTION}), \file{Emulator/NeuralNetwork/NeuralNetwork.h}
 (\nsp{NEURALNETWORK}) with \file{export_lightning_emulator.py}; the training points from \file{LatinHyperCube}.\par
 Documentation: \file{Cosmology/Spectra/NONLINEAR.md}, \file{Cosmology/EinsteinBoltzmannSolver/OPTIONS.md},
 \file{Emulator/NeuralNetwork/README.md}. Tests: \file{tests/test_emulator.cpp}, the solver's \file{test_nonlinear},
@@ -32,6 +32,7 @@ of \file{matter_power*.txt}; with \code{lensing = true} the same ratio multiplie
 \code{hmcode2016} & HMcode-2016 as CAMB \code{mead2016}, with neutrinos (\cref{sec:hm-hmcode2016}) \\
 \code{hmcode2020} & gravity-only HMcode-2020, with neutrinos (\cref{sec:hm-hmcode2020}) \\
 \code{react} & the halo-model reaction times HMcode-2020 of the pseudo cosmology (\cref{sec:hm-react}) \\
+\code{emantis} & e-MANTIS $f(R)$ boost times a matched GR nonlinear spectrum (\cref{sec:fit-emantis}) \\
 \code{ee2} & EuclidEmulator2 (flat \code{lcdm}, \code{w0wa}, within its ranges) \\
 \code{jbd_boost} & Brans--Dicke: Sletmoen \& Winther (2024) from the mapped GR universe \\
 \code{axionhmcode} & mixed cold/ultralight-axion halo model for \code{model = axion} (\cref{sec:hm-axion}) \\
@@ -74,6 +75,50 @@ using namespace FML::EMULATOR::EUCLIDEMULATOR2;
 EuclidEmulator ee2(0.049, 0.315, 0.06, 0.966, 0.674, -1.0, 0.0, 2.1e-9);
 auto [k, B] = ee2.compute_boost(1.0);      // k [h/Mpc], B = P_NL / P_L at z = 1
 \end{cppcode}
+
+\section{e-MANTIS}\label{sec:fit-emantis}
+
+\file{Emulator/EMantis/EMantis.h} ports the prediction part of
+\href{https://gitlab.obspm.fr/e-mantis/e-mantis}{e-MANTIS 1.4.0}, including its trained Gaussian processes and
+principal-component reconstruction. Cite the $f(R)$ power paper \cite{SaezCasares2023}, the halo-mass-function paper
+\cite{SaezCasares2024}, and the software \cite{EMantisSoftware} as applicable. The wCDM power boost has no dedicated
+paper in this release; cite the software. Training and cross-validation are not ported.
+
+\cls{NonLinearMGBoostEmulator} returns $P_{f(R)}/P_{\rm GR}$; \cls{NonLinearBoostEmulator} returns the wCDM
+$P_{\rm NL}/P_L$; \cls{HMFEmulator} returns $\dd n/\dd\ln M$ for spherical-overdensity or FoF masses;
+\cls{Sigma8Emulator} converts $A_s$ to $\sigma_8$. Units are $k$ in $h$/Mpc and mass in $M_\odot/h$.
+Queries outside the trained ranges throw unless a documented extrapolation option is selected.
+The data files are exported from the Python package; see \file{Emulator/EMantis/README.md} for the full ranges.
+
+For \code{model = fr}, \code{fR_n = 1}, the solver's \code{nonlinear = emantis} computes
+$P_{\rm NL,fR}=P_{\rm NL,GR} B_{fR}$ from a second GR perturbation solve with the same initial conditions.
+\param{emantis_gr} chooses \code{ee2} (default), \code{hmcode2020}, \code{hmcode2016}, \code{halofit} or
+\code{halofit_bird}. Flat geometry and a single perturbation component are required.
+For nonzero $f_{R0}$ the allowed range is $10^{-7}\le |f_{R0}|\le10^{-4}$; zero gives GR.
+Cosmological inputs outside the emulator range throw, or clamp with \param{emantis_extrapolate_cosmo}.
+For $z\le3$ the boost is interpolated on \param{emantis_n_z} nodes; below the first bin
+($0.029\hMpc$) it is extrapolated toward unity and above $9.7\hMpc$ it is held fixed.
+At $z>3$ the solver continues the boost from $z=3$ with the linear $f(R)$/GR ratio.
+SimulationCode also uses e-MANTIS for its $n=1$ $f(R)$ nonlinear comparison column, with an EE2 GR baseline;
+there it clamps cosmological inputs and returns linear theory above $z=3$ (\file{SimulationCode/ANALYSIS.md}).
+The older Winther fitting-function API remains available.
+
+\begin{cppcode}[Nonlinear f(R) boost]
+#include <FML/Emulator/EMantis/EMantis.h>
+using namespace FML::EMULATOR::EMANTIS;
+Parameters p;
+p.Omega_b = 0.049; p.Omega_m = 0.31; p.h = 0.68; p.n_s = 0.965;
+p.sigma8 = 0.81; p.logfR0 = 5.0;   // sigma8 of matched LCDM; |fR0| = 1e-5
+NonLinearMGBoostEmulator emulator("fR");
+auto B = emulator.boost(p, 1.0, {0.1, 1.0});
+\end{cppcode}
+
+\begin{validation}[Validation: e-MANTIS port]
+\file{Emulator/EMantis/tests} compares with Python 1.4.0: typically $10^{-10}$ relative,
+a few $10^{-8}$ when converting $A_s$ to $\sigma_8$. These measure port reproducibility,
+not the percent-level physical emulator error. Solver boost-table interpolation is checked separately by
+\file{test_emantis_boost}; extrapolated results have no additional calibration.
+\end{validation}
 
 \section{Modified-gravity boosts}\label{sec:fit-mg}
 

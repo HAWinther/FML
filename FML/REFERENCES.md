@@ -6,8 +6,9 @@ comparison targets. The scope statement for each module remains authoritative:
 using a method as inspiration is not the same as copying its implementation, and
 agreement with a code is not by itself a physical accuracy claim.
 
-Reference coverage last reviewed on 2026-11-13 through commit `1c32171`, following
-the library-wide pass at `c03def9`. Module documentation records the actual
+Reference coverage last reviewed on 2026-11-20 through commit `3d63d15` (120 commits since `1c32171`),
+following the library-wide pass at `c03def9`. The audit and documentation coverage map are in
+[Documentation/CITATION_AUDIT_2026-11-20.md](../Documentation/CITATION_AUDIT_2026-11-20.md). Module documentation records the actual
 validation scope; adding a citation does not extend it.
 
 ## Cosmology and nonlinear structure
@@ -20,7 +21,8 @@ validation scope; adding a citation does not extend it.
 | ReACT | Halo-model reaction and extensions: Cataneo et al. (2019), [arXiv:1812.05594](https://arxiv.org/abs/1812.05594); Bose et al. (2020), [arXiv:2005.12184](https://arxiv.org/abs/2005.12184); [arXiv:2105.12114](https://arxiv.org/abs/2105.12114); [ReACT v2, arXiv:2210.01094](https://arxiv.org/abs/2210.01094). | Native implementation (`HaloModel/HaloModelReaction.h`, `SphericalCollapse/ScreenedSphericalCollapse.h`, `PerturbationTheory/MGOneLoop.h`) checked against [ACTio-ReACTio](https://github.com/nebblu/ACTio-ReACTio) a36dda02 (references and tools in `tests/reference/react`); f(R) third-order kernels: Koyama, Taruya & Hiramatsu (2009), [arXiv:0902.0618](https://arxiv.org/abs/0902.0618); Bose & Koyama (2016), [arXiv:1606.02520](https://arxiv.org/abs/1606.02520) (ReACT's gamma3 is 1/3 of theirs); environment: Lombriser et al. (2013), [arXiv:1304.6395](https://arxiv.org/abs/1304.6395). |
 | AxionHMcode | Vogt et al. (2022), [arXiv:2209.13445](https://arxiv.org/abs/2209.13445); Dome et al. (2024), [arXiv:2409.11469](https://arxiv.org/abs/2409.11469). | Pinned [axionHMcode](https://github.com/SophieMLV/axionHMcode) and [axionCAMB](https://github.com/dgrin1/axionCAMB) revisions; reference procedure and limits: [AxionHMcode README](AxionHMcode/README.md). |
 | EuclidEmulator2 and f(R) fitting function | EuclidEmulator2, [arXiv:2010.11288](https://arxiv.org/abs/2010.11288); f(R) fitting function, Winther et al. (2019), [arXiv:1903.08798](https://arxiv.org/abs/1903.08798). | [EuclidEmulator2 implementation](Emulator/EuclidEmulator2.h), [f(R) fit](Emulator/FofrFittingFunction.h); tests and calibration scope are documented in [SimulationCode ANALYSIS.md](SimulationCode/ANALYSIS.md). |
-| e-MANTIS | Sáez-Casares et al., P(k) in f(R): [arXiv:2303.08899](https://arxiv.org/abs/2303.08899); halo mass function in f(R) and wCDM: [arXiv:2410.05226](https://arxiv.org/abs/2410.05226); code [doi:10.5281/zenodo.7738362](https://doi.org/10.5281/zenodo.7738362). | [Emulator/EMantis](Emulator/EMantis/README.md); the f(R) nonlinear P(k) in SimulationCode ([ANALYSIS.md](SimulationCode/ANALYSIS.md)) and the Einstein-Boltzmann solver (`nonlinear = emantis`, [OPTIONS.md](Cosmology/EinsteinBoltzmannSolver/OPTIONS.md)). |
+| e-MANTIS | P(k) in f(R): Sáez-Casares, Rasera & Li, MNRAS 527, 7242 (2024), [arXiv:2303.08899](https://arxiv.org/abs/2303.08899), [doi:10.1093/mnras/stad3343](https://doi.org/10.1093/mnras/stad3343); halo mass function in f(R) and wCDM: Sáez-Casares, Rasera, Richardson & Corasaniti, A&A 691, A323 (2024), [arXiv:2410.05226](https://arxiv.org/abs/2410.05226), [doi:10.1051/0004-6361/202450193](https://doi.org/10.1051/0004-6361/202450193); the wCDM P(k) boost has no paper yet: code [doi:10.5281/zenodo.7738362](https://doi.org/10.5281/zenodo.7738362) (GPL-3.0-or-later). | [Emulator/EMantis](Emulator/EMantis/README.md) (GPL-3.0-or-later, [COPYING](Emulator/EMantis/COPYING)); the f(R) nonlinear P(k) in SimulationCode ([ANALYSIS.md](SimulationCode/ANALYSIS.md)) and the Einstein-Boltzmann solver (`nonlinear = emantis`, [OPTIONS.md](Cosmology/EinsteinBoltzmannSolver/OPTIONS.md)). |
+| baccoemu | Linear P(k): Aricò, Angulo & Zennaro (2021), [arXiv:2104.14568](https://arxiv.org/abs/2104.14568); nonlinear P(k): Angulo et al. (2021), [arXiv:2004.06245](https://arxiv.org/abs/2004.06245), Aricò et al. (2023), [arXiv:2303.05537](https://arxiv.org/abs/2303.05537); baryons: Aricò et al. (2021), [arXiv:2011.15018](https://arxiv.org/abs/2011.15018), Burger et al. (2025), [arXiv:2506.18974](https://arxiv.org/abs/2506.18974); code [bitbucket.org/rangulo/baccoemu](https://bitbucket.org/rangulo/baccoemu) (MIT). | [Emulator/Bacco](Emulator/Bacco/README.md); checked against baccoemu 2.3.0 ([tests](Emulator/Bacco/tests/test_bacco.cpp)). |
 | Mixed ultralight-axion linear evolution | [axionCAMB](https://github.com/dgrin1/axionCAMB) is the model/comparison reference. | Native scalar-field/effective-fluid evolution, distinct from AxionHMcode; [solver overview](Cosmology/EinsteinBoltzmannSolver/README.md). SimulationCode uses axions in the initial conditions only, not wave evolution. |
 | Brans–Dicke nonlinear boost | Sletmoen & Winther (2024), [arXiv:2403.03786](https://arxiv.org/abs/2403.03786). | Native `jbd_boost` maps to a matched GR nonlinear spectrum; [solver overview](Cosmology/EinsteinBoltzmannSolver/README.md), [PowerSpectrum.h](Cosmology/Spectra/PowerSpectrum.h). |
 
@@ -88,3 +90,36 @@ interpreting a test as a validation claim.
 Third-party dependencies such as FFTW, GSL and CGAL are implementation dependencies,
 not algorithm citations; consult the build documentation and the projects' own citation
 instructions when publishing work that uses them.
+
+## Recent additions: citation and implementation scope
+
+- Native tessellation: [Shewchuk (1997)](https://doi.org/10.1007/PL00009321),
+  [author reference code](https://www.cs.cmu.edu/~quake/robust.html),
+  [Devillers & Teillaud (2011)](https://doi.org/10.1016/j.comgeo.2010.09.010),
+  and [CGAL](https://github.com/CGAL/cgal) conventions/comparisons;
+  [Triangulation/DELAUNAY.md](Triangulation/DELAUNAY.md) records exactness limits and fixtures.
+- Tomographic shear, NLA and COSEBIs: [Hirata & Seljak, corrected](https://arxiv.org/abs/astro-ph/0406275v3),
+  [Bridle & King](https://arxiv.org/abs/0705.0166), [Schneider et al.](https://arxiv.org/abs/1002.2136),
+  [Asgari et al.](https://arxiv.org/abs/2007.15633). [WeakLensing README](WeakLensing/README.md)
+  distinguishes independent methods, CCL comparisons and CosmoSIS conventions.
+- Fast/slow Metropolis sampling: [Lewis (2013)](https://arxiv.org/abs/1304.4473),
+  [CosmoMC](https://github.com/cmbant/CosmoMC) method reference; [MCMC](MCMC/README.md).
+- Finite-volume Euler gas: [Toro, Spruce & Speares HLLC](https://doi.org/10.1007/BF01414629),
+  [Clawpack reference discussion](https://www.clawpack.org/riemann_book/html/Euler_approximate.html);
+  independent implementation and positivity limits in [Hydrodynamics](Hydrodynamics/README.md).
+- Conservative SPH: [Price (2012)](https://arxiv.org/abs/1012.1885); independent implementation,
+  adaptive smoothing, dissipation and cosmological conventions in [SPH](SPH/README.md).
+- Coupled-dark-matter ReACT is an FML extension of the reaction framework, not an upstream ReACT calibration.
+  Its one-fluid collapse, mass variation and concentration assumptions are documented in
+  [HaloModel](HaloModel/README.md), with [Baldi et al.](https://arxiv.org/abs/0812.3901)
+  and the [Fading Dark Sector paper](https://arxiv.org/abs/2611.17422) as model references.
+- Field-level validation reports are bounded studies, including failed gates. The completed calibration pilot
+  passed all declared gates in only 2/8 datasets. Box-1 observation ingestion does not establish a real-catalog
+  posterior; see [current validation records](FieldLevel/docs/VALIDATION.md).
+
+- Sparse dynamic MPI exchange (NBX): [Hoefler, Siebert & Lumsdaine (2010)](https://doi.org/10.1145/1693453.1693476);
+  [AdaptiveMPIGrid README](AdaptiveMPIGrid/README.md) documents threshold and scaling limits.
+- Replica exchange: [Earl & Deem (2005)](https://arxiv.org/abs/physics/0508111);
+  [serial FieldLevel prototype](FieldLevel/validation/galaxy/tempering/README.md).
+- Bowyer-Watson insertion: [Bowyer (1981)](https://doi.org/10.1093/comjnl/24.2.162),
+  [Watson (1981)](https://doi.org/10.1093/comjnl/24.2.167).

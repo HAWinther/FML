@@ -1,5 +1,8 @@
 #ifndef FML_VALIDATION_REPLICA_EXCHANGE_H
 #define FML_VALIDATION_REPLICA_EXCHANGE_H
+// Replica exchange method: Earl & Deem (2005), https://arxiv.org/abs/physics/0508111.
+// Native likelihood-only tempering prototype; beta=0 prior refresh and bounded validation are described
+// in this directory's README.md. This header is not a production distributed-replica sampler.
 #include <FML/FieldLevel/Framework.h>
 #include <random>
 namespace EXCHANGE {

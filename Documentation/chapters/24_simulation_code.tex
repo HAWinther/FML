@@ -1,5 +1,5 @@
 \chapter{SimulationCode}\label{ch:simulation-code}
-\chapterstatus{written}{2026-11-18}
+\chapterstatus{written}{2026-11-20}
 
 SimulationCode is the complete particle--mesh and COLA simulation program of \fml{}: one parameter file sets up the
 initial conditions, the evolution and the analysis during the run. It uses the slab decomposition, so it is not meant
@@ -131,7 +131,7 @@ all the dark matter (\code{axion_as_cdm}, \cref{sec:transfer}); the evolution is
 
 \begin{itemize}
 \item \textbf{Power spectra} of the CDM+baryons and the total matter at every step (\code{pofk_every_step}) with linear
-      theory and a nonlinear prediction (EuclidEmulator2, and the $f(R)$ fitting function of \cite{Winther2019};
+      theory and a nonlinear prediction (EuclidEmulator2, with the e-MANTIS boost for $n=1$ $f(R)$ \cite{SaezCasares2023};
       \cref{ch:fitting-emulators}); at the outputs with a chosen assignment, interlacing and shot-noise subtraction
       (\cref{ch:power-spectra}); per species with separate baryons or neutrino particles.
 \item \textbf{Redshift-space multipoles} (plane-parallel, averaged over the three axes) and \textbf{bispectra}.

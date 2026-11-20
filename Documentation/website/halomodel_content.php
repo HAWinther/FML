@@ -16,6 +16,7 @@
 <a href="#References">Method references and scope</a><br>
 <a href="#AssemblyBias">Decorated HOD and marginal satellite occupations</a><br>
 <a href="#Reaction">Native screened collapse and halo-model reactions</a><br>
+<a href="#EMantis">e-MANTIS emulators</a><br>
 </p>
 
 <header class="entry-header text-center">
@@ -67,6 +68,7 @@ The same ratio is used in the solver's existing Limber lensing calculation. Meth
 <tr><td><tt>hmcode2016</tt></td><td><a href="https://arxiv.org/abs/1505.07833" style="display: inline">HMcode-2015</a> with the neutrino update of <a href="https://arxiv.org/abs/1602.02154" style="display: inline">Mead et al. (2016)</a></td><td>As CAMB <tt>mead2016</tt>; includes massive-neutrino treatment. The library prescription is built on the general halo model.</td></tr>
 <tr><td><tt>hmcode2020</tt></td><td><a href="https://arxiv.org/abs/2009.01858" style="display: inline">HMcode-2020 (Mead et al. 2021)</a></td><td>Gravity-only prescription with cold-matter variances, neutrino corrections, BAO damping, halo bloating and the smoothed one/two-halo transition. Solver accepts LCDM and smooth w0wa backgrounds, including curvature; other models are rejected.</td></tr>
 <tr><td><tt>react</tt></td><td>Matched pseudo spectrum times <a href="https://arxiv.org/abs/1812.05594" style="display: inline">ReACT reaction</a></td><td>Native halo-model reaction. Solver support: flat LCDM, Hu&ndash;Sawicki $f(R)$ with $n=1$, CPL $w_0w_a$, normal-branch DGP on a LCDM background, coupled quintessence and the Fading Dark Sector; massive neutrinos are supported. Reactions stop at $z=2.5$ by default.</td></tr>
+<tr><td><tt>emantis</tt></td><td><a href="https://arxiv.org/abs/2303.08899" style="display: inline">e-MANTIS f(R) boost</a> times matched GR power</td><td>Flat <tt>model = fr</tt>, <tt>fR_n = 1</tt>; <tt>emantis_gr</tt> selects EE2 (default), HMcode or Halofit. Nonzero |fR0|: 1e-7 to 1e-4. Trained redshifts through z=3; higher redshifts continue with the linear f(R)/GR ratio. See <a href="halomodel.php#EMantis" style="display: inline">ranges and conventions</a>.</td></tr>
 <tr><td><tt>axionhmcode</tt></td><td>Native mixed cold/axion halo model</td><td><tt>model = axion</tt>; axion/cold spectra enter separately. The Dome calibration is limited in mass, fraction and redshift; extrapolation must be assessed explicitly.</td></tr>
 <tr><td><tt>ee2</tt></td><td>EuclidEmulator2 nonlinear boost</td><td>Flat LCDM or w0wa within the emulator domain. Tabulated over $0\le z\le10$; linear above $z=10$.</td></tr>
 <tr><td><tt>jbd_boost</tt></td><td>Brans–Dicke boost from a matched GR nonlinear spectrum</td><td><tt>model = jbd</tt>; GR baseline selected by <tt>jbd_boost_gr</tt>, EuclidEmulator2 by default.</td></tr>
@@ -102,7 +104,7 @@ The reaction multiplies a matched HMcode-2020 pseudo spectrum. Comparisons with 
 </p>
 $$P_{\rm total}=(1-f)^2P_{\rm cold}+2f(1-f)P_{\rm cold,axion}+f^2P_{\rm axion},\qquad f=\frac{\Omega_{\rm axion}}{\Omega_b+\Omega_{\rm cdm}+\Omega_{\rm axion}}.$$
 <p>
-Its ingredients include the axion Jeans cutoff, a soliton-plus-NFW axion profile, clustered and unclustered axion fractions, and cold/axion cross power. The <tt>Basic</tt> and calibrated <tt>Dome2024</tt> variants are available. This is a standalone library with its own example and tests; it is not currently an Einstein&ndash;Boltzmann Solver nonlinear option. It requires supplied linear spectra (for example from axionCAMB), GSL, a flat late-time LCDM expansion, and has no massive-neutrino or baryonic-feedback model. The FML axion-like EDE background is different physics and does not supply the required axion transfer spectra. The Dome calibration bounds and extrapolation policy are documented in the <a href="https://github.com/HAWinther/FML/blob/master/FML/AxionHMcode/README.md">module README</a>.
+Its ingredients include the axion Jeans cutoff, a soliton-plus-NFW axion profile, clustered and unclustered axion fractions, and cold/axion cross power. The <tt>Basic</tt> and calibrated <tt>Dome2024</tt> variants are available. The standalone library has its own example and tests and is also exposed by the Einstein&ndash;Boltzmann solver as <tt>nonlinear = axionhmcode</tt> for <tt>model = axion</tt>. It requires supplied linear spectra (for example from axionCAMB), GSL, a flat late-time LCDM expansion, and has no massive-neutrino or baryonic-feedback model. The FML axion-like EDE background is different physics and does not supply the required axion transfer spectra. The Dome calibration bounds and extrapolation policy are documented in the <a href="https://github.com/HAWinther/FML/blob/master/FML/AxionHMcode/README.md">module README</a>.
 </p>
 <figure class="science-figure">
   <img src="images/axionhmcode-components.svg" alt="AxionHMcode flow from supplied cold and axion linear spectra to nonlinear cold, cross, axion, and weighted total power, with a schematic soliton-to-NFW profile">
@@ -216,5 +218,20 @@ The N-body code (<a href="nbodycode.php" style="display: inline">SimulationCode<
 <hr/>
 
 <p>
-Decorated HOD assembly bias follows <a href="https://arxiv.org/abs/1512.03050" style="display: inline">Hearin et al. (2016)</a> and the Halotools Heaviside prescription. <tt>HOD/AssemblyBias.h</tt> decorates the central probability and the <em>marginal</em> satellite mean at fixed mass; callers supply calibrated conditional percentiles. Population-weighted first moments are preserved, rather than each realized galaxy count. See the <a href="https://github.com/HAWinther/FML/blob/master/FML/HOD/README.md" style="display: inline">HOD conventions and comparison scope</a>. Native halo-model reactions follow <a href="https://arxiv.org/abs/1812.05594" style="display: inline">Cataneo et al. (2019)</a> and <a href="https://arxiv.org/abs/2005.12184" style="display: inline">Bose et al. (2020)</a>; <a href="https://github.com/nebblu/ACTio-ReACTio" style="display: inline">ACTio-ReACTio</a> supplies comparison fixtures.
+Decorated HOD assembly bias follows <a href="https://arxiv.org/abs/1512.03050" style="display: inline">Hearin et al. (2016)</a> and the Halotools Heaviside prescription. <tt>HOD/AssemblyBias.h</tt> decorates the central probability and the <em>marginal</em> satellite mean at fixed mass; callers supply calibrated conditional percentiles. Population-weighted first moments are preserved, rather than each realized galaxy count. See the <a href="https://github.com/HAWinther/FML/blob/master/FML/HOD/README.md" style="display: inline">HOD conventions and comparison scope</a>. Native halo-model reactions also cite <a href="https://arxiv.org/abs/2105.12114">the massive-neutrino extension</a> and <a href="https://arxiv.org/abs/2210.01094">ReACT v2</a>. Native halo-model reactions follow <a href="https://arxiv.org/abs/1812.05594" style="display: inline">Cataneo et al. (2019)</a> and <a href="https://arxiv.org/abs/2005.12184" style="display: inline">Bose et al. (2020)</a>; <a href="https://github.com/nebblu/ACTio-ReACTio" style="display: inline">ACTio-ReACTio</a> supplies comparison fixtures.
 </p>
+
+<header class="entry-header text-center"><h1 class="entry-title" id="EMantis">e-MANTIS emulators</h1></header>
+<p><tt>Emulator/EMantis/EMantis.h</tt> ports the prediction code and trained Gaussian processes of
+<a href="https://gitlab.obspm.fr/e-mantis/e-mantis">e-MANTIS 1.4.0</a>.
+Cite <a href="https://arxiv.org/abs/2303.08899">Saez-Casares, Rasera &amp; Li</a> for the f(R) power boost,
+<a href="https://arxiv.org/abs/2410.05226">the halo-mass-function paper</a> for f(R)/wCDM HMFs,
+and <a href="https://doi.org/10.5281/zenodo.7738362">the software</a> (also for the wCDM power boost, which has no dedicated paper in this release).
+The API also exposes the sigma8 emulator and generic exported GP predictions. Training is not ported.</p>
+<p>The solver computes P_NL,fR = P_NL,GR B_fR using a second GR solve with the same initial conditions.
+The f(R) boost covers scale factors 0.25 to 1 and k up to 9.7 h/Mpc (held above; extrapolated toward unity below 0.029 h/Mpc).
+Out-of-range cosmologies throw unless <tt>emantis_extrapolate_cosmo</tt> is enabled to clamp them.
+The API's <tt>logfR0</tt> is <em>minus</em> log10|fR0|. SimulationCode uses an EE2 GR baseline for its nonlinear comparison column,
+clamps cosmological inputs and returns linear theory above z=3; the solver instead continues the boost with linear evolution.
+<a href="https://github.com/HAWinther/FML/blob/master/FML/Emulator/EMantis/README.md">The module notes</a>
+record all parameter ranges and Python comparison tests. Agreement with Python at roughly 1e-10 measures the port, not physical emulator accuracy.</p>

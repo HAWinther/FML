@@ -308,3 +308,13 @@ studies remain follow-ups.
 Equations follow standard Born/flat-sky projections, e.g.
 [MillenniumTNG lensing definitions](https://doi.org/10.1093/mnras/stad2205) and
 [extended-Limber source-distribution treatment](https://www.aanda.org/articles/aa/pdf/2025/01/aa51494-24.pdf).
+
+### Cosmic-shear references and lineage
+
+The alignment convention follows [Hirata & Seljak, corrected version](https://arxiv.org/abs/astro-ph/0406275v3),
+with the nonlinear-power substitution of [Bridle & King (2007)](https://arxiv.org/abs/0705.0166).
+COSEBIs follow [Schneider, Eifler & Krause (2010)](https://arxiv.org/abs/1002.2136);
+[Asgari et al. (2021)](https://arxiv.org/abs/2007.15633) is the KiDS-1000 application reference.
+[CCL](https://github.com/LSSTDESC/CCL) is a numerical comparison and
+[CosmoSIS standard library](https://github.com/joezuntz/cosmosis-standard-library) supplies convention references.
+These are method/comparison credits, not a claim that this header is a port of either package.

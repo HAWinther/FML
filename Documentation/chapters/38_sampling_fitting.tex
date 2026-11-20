@@ -1,5 +1,5 @@
 \chapter{Sampling, optimisation and cosmology fitting}\label{ch:sampling-fitting}
-\chapterstatus{written}{2026-11-19}
+\chapterstatus{written}{2026-11-20}
 
 General samplers and optimisers for any posterior (adaptive Metropolis--Hastings, Hamiltonian Monte Carlo, Nelder--Mead with profile
 likelihoods), convergence diagnostics, and the program \file{./mcmc} that fits cosmological parameters to supernova, BAO and CMB data with
@@ -19,7 +19,9 @@ Documentation: \file{MCMC/README.md}, \file{CosmologyFitting/README.md}. Tests: 
 Gaussian priors and a proposal step, derived parameters, and a likelihood function. During burn-in the proposal covariance and scale adapt towards 25\%
 acceptance \cite{Haario2001}; at the end of burn-in the covariance pooled from all chains is frozen, so the sampling phase is an exact Markov chain. Points
 where the likelihood throws or is not finite are rejected. Fast parameters (e.g.\ likelihood nuisances, for which the theory is cached) get extra updates along
-their conditional covariance \cite{Lewis2013}. The run stops when every chain has enough samples and the multivariate Gelman--Rubin $R-1$ (the largest eigenvalue
+their conditional covariance \cite{Lewis2013}. The slow move draws only the slow Cholesky coordinates
+($z_{\rm fast}=0$ in $Lz$), moving fast parameters along their regression on the slow ones; its scale depends on the
+number of slow coordinates. Fast-only moves set $z_{\rm slow}=0$ and have a separately tuned scale. The run stops when every chain has enough samples and the multivariate Gelman--Rubin $R-1$ (the largest eigenvalue
 of $W^{-1}B$, as CosmoMC and Cobaya \cite{Gelman1992}) is below the threshold. Checkpoints hold the complete chain state, so a resumed run continues exactly as
 an uninterrupted one, with any number of processes. Output is in GetDist format.
 

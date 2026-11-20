@@ -273,3 +273,12 @@ bounded-uniform priors with independent white/noise/initial/sampler domains. The
 new FML_MOCK_2 metadata and exact prior/truth enter checkpoint identity. Existing
 fixed-truth formats remain compatible. Native prior/noise and analytic SBC
 controls are separate from the long nonlinear calibration campaign.
+
+## Method reference
+
+Replica exchange follows the detailed-balance construction reviewed by
+[Earl & Deem (2005)](https://arxiv.org/abs/physics/0508111). This is a native,
+likelihood-only tempering prototype: the prior is not heated, beta=0 refreshes
+from the actual prior, and only beta=1 is a posterior draw. The reference does
+not establish mixing or coverage for these fixtures; consult the individual
+frozen study reports, including their failed gates.

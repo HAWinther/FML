@@ -727,6 +727,8 @@ namespace FML {
         //==========================================================================================
         /// Sparse personalized exchange: every task sends a buffer to a few other tasks and does not
         /// know who will send to it. Uses the NBX algorithm (Hoefler, Siebert & Lumsdaine, PPoPP 2010):
+        /// https://doi.org/10.1145/1693453.1693476; author copy:
+        /// https://spcl.inf.ethz.ch/Publications/.pdf/hoefler-dsde-protocols.pdf.
         /// synchronous sends + probing for incoming messages + a non-blocking barrier that is entered
         /// once all our sends have been matched. No O(NTasks) collective or O(NTasks) memory is
         /// needed; cost scales with the number of tasks we actually talk to.

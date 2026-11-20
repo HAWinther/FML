@@ -17,6 +17,11 @@
 //       E_n = 1/2 int dtheta theta [T_+n xi_+ + T_-n xi_-],  B_n = 1/2 int dtheta theta [T_+n xi_+ - T_-n xi_-],
 //     = int dell ell/(2 pi) C^E_ell W_n(ell) with W_n(ell) = int dtheta theta T_+n(theta) J_0(ell theta).
 //
+// Method references (independent implementation):
+//   Linear alignments, including the corrected convention: https://arxiv.org/abs/astro-ph/0406275 (v3);
+//   nonlinear alignment prescription: https://arxiv.org/abs/0705.0166;
+//   COSEBIs: https://arxiv.org/abs/1002.2136; KiDS-1000: https://arxiv.org/abs/2007.15633.
+// Comparison codes: https://github.com/LSSTDESC/CCL and https://github.com/joezuntz/cosmosis-standard-library.
 // The matter power spectrum is the caller's (nonlinear, total matter, including any baryonic feedback).
 // Standalone C++17 like WeakLensing.h; the Bessel functions are POSIX j0/jn (glibc, macOS libm).
 #include <FML/WeakLensing/WeakLensing.h>

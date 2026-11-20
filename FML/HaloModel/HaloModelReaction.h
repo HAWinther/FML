@@ -8,6 +8,12 @@
 #include <vector>
 
 //=====================================================================================================================
+/// Scientific framework and comparison implementation:
+/// https://arxiv.org/abs/1812.05594; https://arxiv.org/abs/2005.12184;
+/// https://arxiv.org/abs/2105.12114; https://arxiv.org/abs/2210.01094 (ReACT v2).
+/// Upstream: https://github.com/nebblu/ACTio-ReACTio (reference fixtures pin a36dda02).
+/// FML is a native implementation; agreement with those fixtures is not a new simulation calibration.
+/// Coupled-dark-matter extensions and their limits: FML/HaloModel/README.md.
 ///
 /// The halo-model reaction R(k) at one redshift (Cataneo et al. 2019, arXiv:1812.05594; Bose et al. 2020,
 /// arXiv:2005.12184; massive neutrinos: Bose et al. 2021, arXiv:2105.12114): the ratio of the nonlinear P(k) of a

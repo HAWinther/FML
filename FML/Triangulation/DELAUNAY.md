@@ -184,3 +184,13 @@ A removal and insertion costs about 6 fresh insertions in 3D (~35 us), an in-pla
 - Coordinates are rounded to 2^-40 of the box; positions closer than that are duplicates and rejected.
 - References: J. R. Shewchuk, Discrete Comput. Geom. 18, 305 (1997); O. Devillers & M. Teillaud, Comput. Geom. 44
   (2011); V. Springel, MNRAS 401, 791 (2010) for the use of such tessellations in AREPO.
+
+### Linked method references
+
+- Incremental insertion: [Bowyer (1981)](https://doi.org/10.1093/comjnl/24.2.162) and
+  [Watson (1981)](https://doi.org/10.1093/comjnl/24.2.167).
+- Adaptive predicates and expansion arithmetic: [Shewchuk (1997)](https://doi.org/10.1007/PL00009321),
+  [author paper and reference code](https://www.cs.cmu.edu/~quake/robust.html).
+- Symbolic perturbation: [Devillers & Teillaud (2011)](https://doi.org/10.1016/j.comgeo.2010.09.010).
+- [CGAL](https://github.com/CGAL/cgal) supplies conventions and independent comparison triangulations,
+  not a required dependency of the native backend. The native backend's limitations above still apply.

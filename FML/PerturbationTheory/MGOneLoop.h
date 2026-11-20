@@ -11,6 +11,12 @@
 #include <vector>
 
 //=====================================================================================================================
+/// Scientific framework and comparison implementation:
+/// https://arxiv.org/abs/1812.05594; https://arxiv.org/abs/2005.12184;
+/// https://arxiv.org/abs/2105.12114; https://arxiv.org/abs/2210.01094 (ReACT v2).
+/// Upstream: https://github.com/nebblu/ACTio-ReACTio (reference fixtures pin a36dda02).
+/// FML is a native implementation; agreement with those fixtures is not a new simulation calibration.
+/// Coupled-dark-matter extensions and their limits: FML/HaloModel/README.md.
 ///
 /// One-loop SPT for modified gravity and dark energy with the perturbation-theory kernels solved numerically in time
 /// (Taruya et al. 2014, arXiv:1408.4232; Bose & Koyama 2016, arXiv:1606.02520): the matter (or cold matter) obeys
@@ -22,8 +28,8 @@
 /// (' = d/dlog a, theta = -div v / (a H), convolutions implied; Omega_s(a) = Omega_s a^-3 / E^2 the clustering
 /// source, or any Omega_source_of_a) with the linear modification mu(k, a) = G_eff/G, an optional extra friction (e.g.
 /// -beta dphi/dlna of CDM coupled to a scalar, whose particle mass varies) and the nonlinear (screening) sources
-/// gamma2, gamma3 of the scalar field. gamma3 is given as one cyclic term (k1 alone, k2 and k3 the pair); the source is the average over
-/// the three.
+/// gamma2, gamma3 of the scalar field. gamma3 is given as one cyclic term (k1 alone, k2 and k3 the pair); the source is
+/// the average over the three.
 ///
 /// The kernels F1(k), F1(q), F1(|k - q|), F2(q, k - q), F2(k, q), F2(k, -q) and F3(k, q, -q) are integrated in log a
 /// (4th-order Runge-Kutta from a_ini with the growing mode delta = theta = a) for each loop node (P22 over q and

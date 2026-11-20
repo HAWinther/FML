@@ -17,6 +17,10 @@
 namespace FML {
 
     //==========================================================================================
+    /// Incremental insertion: Bowyer (1981), https://doi.org/10.1093/comjnl/24.2.162;
+    /// Watson (1981), https://doi.org/10.1093/comjnl/24.2.167.
+    /// Symbolic perturbation: Devillers & Teillaud (2011), https://doi.org/10.1016/j.comgeo.2010.09.010.
+    /// Comparison implementation: https://github.com/CGAL/cgal; scope: Triangulation/DELAUNAY.md.
     /// Native Delaunay triangulation and Voronoi tessellation in 2D and 3D (no external dependencies).
     ///
     /// Delaunay<D>: incremental Bowyer-Watson insertion inside an enclosing super simplex, with exact predicates

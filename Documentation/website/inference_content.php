@@ -16,6 +16,7 @@
 <a href="#Emulator">7. The EuclidEmulator2</a><br>
 <a href="#References">Method references and scope</a><br>
 <a href="#NeuralNetwork">Trainable neural-network emulators</a><br>
+<a href="#CosmicShear">Tomographic cosmic shear and COSEBIs</a><br>
 </p>
 
 <header class="entry-header text-center">
@@ -35,7 +36,7 @@ Given data $d$ and a model with parameters $\theta$, the posterior is $P(\theta|
 <p>
 From the current point $\theta$ a proposal $\theta' = \theta + sL\vec z$ ($\vec z$ standard normal, $LL^T$ the proposal covariance, $s$ a scale) is accepted with probability $\min[1, P(\theta'|d)/P(\theta|d)]$. During the burn-in the covariance is adapted to the sample covariance of the chain (Haario et al. 2001) and the scale towards 25% acceptance; at the end of the burn-in the covariance pooled from all chains is frozen, so the sampling phase is an exact Markov chain. Several chains run in parallel (OpenMP threads and MPI processes) and the run stops when every chain has enough samples and the Gelman&ndash;Rubin statistic satisfies $R - 1 &lt; \epsilon$,
 $$\hat R = \sqrt{\frac{\frac{n-1}{n}W + \frac{1}{n}B}{W}},$$
-with $W$ the mean within-chain and $B/n$ the between-chain variance. Fast/slow parameters (Lewis 2013): parameters that are cheap to vary (e.g. likelihood nuisance parameters, with the theory cached) are updated <tt>oversample_fast</tt> times per step along their conditional directions. The full state of each chain is checkpointed, and a resumed run continues exactly as an uninterrupted one. Chains are written in GetDist format.
+with $W$ the mean within-chain and $B/n$ the between-chain variance. Fast/slow parameters (<a href="https://arxiv.org/abs/1304.4473" style="display: inline">Lewis 2013</a>; method reference <a href="https://github.com/cmbant/CosmoMC" style="display: inline">CosmoMC</a>): parameters that are cheap to vary (e.g. likelihood nuisance parameters, with the theory cached) are updated <tt>oversample_fast</tt> times per step along their conditional directions. The slow move draws only the slow Cholesky coordinates, moving fast parameters along their regression on the slow ones; its step scale depends on the slow dimension. Fast-only moves use the conditional covariance and a separately tuned scale. The full state of each chain is checkpointed, and a resumed run continues exactly as an uninterrupted one. Chains are written in GetDist format.
 </p>
 <div style="text-align: center">
   <div style="width:700px;display: inline-block;text-align: left">
@@ -211,3 +212,17 @@ auto restored = NeuralNetwork::load(&quot;emulator.txt&quot;);</pre></div></div>
 <p>
 The native neural-network emulator (<tt>Emulator/NeuralNetwork</tt>) follows the <a href="https://github.com/renmau/Sesame_pipeline/blob/main/Pipeline/neural_network_emulator/Emulator.py" style="display: inline">Sesame pipeline training recipe</a>, using <a href="https://arxiv.org/abs/1412.6980" style="display: inline">Kingma &amp; Ba, Adam</a>, <a href="https://arxiv.org/abs/1803.05407" style="display: inline">Izmailov et al., stochastic weight averaging</a>, and <a href="https://proceedings.mlr.press/v9/glorot10a.html" style="display: inline">Glorot &amp; Bengio (2010) initialization</a>. The C++ implementation is independent; PyTorch supplies comparison fixtures and exportable checkpoints. Input/output standardization and initialization differ from Sesame defaults, as documented in the <a href="https://github.com/HAWinther/FML/blob/master/FML/Emulator/NeuralNetwork/README.md" style="display: inline">module README</a>.
 </p>
+
+<header class="entry-header text-center"><h1 class="entry-title" id="CosmicShear">Tomographic cosmic shear and COSEBIs</h1></header>
+<p><tt>WeakLensing/CosmicShear.h</tt> adds tomographic GG, GI and II Limber spectra, nonlinear intrinsic alignments,
+per-bin photo-z shifts and multiplicative shear calibration, flat-sky xi_+/xi_- (including angular bins), and logarithmic COSEBIs.
+The caller supplies total nonlinear matter power and growth; an optional scale-independent Sigma(z) multiplies each lensing kernel.
+The basic streaming Born maps keep their existing GR density kernel. This API does not add general Sigma(k,z), TATT or beyond-Limber corrections.</p>
+<p>Method references: <a href="https://arxiv.org/abs/astro-ph/0406275v3">Hirata &amp; Seljak (corrected alignment convention)</a>,
+<a href="https://arxiv.org/abs/0705.0166">Bridle &amp; King (NLA)</a>,
+<a href="https://arxiv.org/abs/1002.2136">Schneider, Eifler &amp; Krause (COSEBIs)</a>, and
+<a href="https://arxiv.org/abs/2007.15633">Asgari et al. (KiDS-1000)</a>.
+Independent numerical comparisons use <a href="https://github.com/LSSTDESC/CCL">CCL</a> and QUADPACK;
+conventions also follow <a href="https://github.com/joezuntz/cosmosis-standard-library">CosmoSIS</a>.
+The <a href="https://github.com/HAWinther/FML/blob/master/FML/WeakLensing/README.md">module documentation</a>
+records API examples, units, finite integration ranges and test tolerances. KiDS likelihood data and theory integration belong to CosmologyFitting.</p>

@@ -11,6 +11,8 @@ namespace FML {
     namespace DELAUNAY {
 
         //==========================================================================================
+        /// Method: Shewchuk (1997), https://doi.org/10.1007/PL00009321;
+        /// author's paper and reference code: https://www.cs.cmu.edu/~quake/robust.html.
         /// Exact geometric predicates for the Delaunay triangulation in 2D and 3D.
         ///
         /// The sign of a determinant is first computed in floating point together with an upper bound on its

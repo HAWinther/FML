@@ -573,3 +573,9 @@ Dark scattering follows <a href="https://arxiv.org/abs/1007.1034" style="display
 <p>
 The cubic Galileon uses the quasi-static screening treatment discussed by <a href="https://arxiv.org/abs/1306.3219" style="display: inline">Barreira et al. (2013)</a>. Reduced Horndeski models use the Lagrangian-to-background/force workflow of <a href="https://arxiv.org/abs/2209.01666" style="display: inline">Wright et al. (2023), Hi-COLA</a> and the quasi-static force derivation of <a href="https://arxiv.org/abs/1111.6749" style="display: inline">Kimura, Kobayashi &amp; Yamamoto (2012)</a>. FML has its own symbolic frontend and force tables. Approximate screening follows <a href="https://arxiv.org/abs/1403.6492" style="display: inline">Winther &amp; Ferreira (2014)</a> and, for Vainshtein COLA, <a href="https://arxiv.org/abs/2303.09549" style="display: inline">Brando, Koyama &amp; Winther (2023)</a>; the model documentation specifies the supported force solvers and approximations.
 </p>
+
+<p>The nonlinear comparison column now uses <a href="halomodel.php#EMantis">e-MANTIS</a> for Hu-Sawicki n=1 f(R),
+with an EE2 matched-GR baseline and the same initial conditions. Cite
+<a href="https://arxiv.org/abs/2303.08899">Saez-Casares, Rasera &amp; Li</a> and
+<a href="https://gitlab.obspm.fr/e-mantis/e-mantis">the upstream e-MANTIS code</a>.
+This changes the diagnostic prediction, not the evolved particle force. The legacy fitting-function API remains available.</p>

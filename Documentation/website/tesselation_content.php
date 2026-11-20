@@ -263,3 +263,11 @@ PdT.free();
 <p>
 The triangulation is the basis of several other methods in the library: the <a href="watershed.php">watershed</a> algorithm (the ZOBOV void finder), <a href="dtfe.php">DTFE</a> for interpolating fields from particles to a grid, the <a href="voidfinders.php">void finders</a> and <a href="cosmicweb.php">ORIGAMI</a> halo finding. All of them use FML's own tessellation by default and CGAL's as an option. FML's own tessellation is also the first step towards an AREPO-style moving-mesh hydro solver.
 </p>                          
+
+<p>Native insertion follows <a href="https://doi.org/10.1093/comjnl/24.2.162">Bowyer (1981)</a> and
+<a href="https://doi.org/10.1093/comjnl/24.2.167">Watson (1981)</a>; robust predicates follow
+<a href="https://www.cs.cmu.edu/~quake/robust.html">Shewchuk (1997), including the author reference implementation</a>,
+and symbolic perturbation follows <a href="https://doi.org/10.1016/j.comgeo.2010.09.010">Devillers &amp; Teillaud (2011)</a>.
+<a href="https://github.com/CGAL/cgal">CGAL</a> supplies conventions and comparison triangulations.
+See <a href="https://github.com/HAWinther/FML/blob/master/FML/Triangulation/DELAUNAY.md">the native backend notes</a>
+for coordinate rounding, geometric certification limits and the scope of the tests.</p>

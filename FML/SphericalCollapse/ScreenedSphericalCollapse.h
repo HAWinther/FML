@@ -7,6 +7,12 @@
 #include <functional>
 
 //=====================================================================================================================
+/// Scientific framework and comparison implementation:
+/// https://arxiv.org/abs/1812.05594; https://arxiv.org/abs/2005.12184;
+/// https://arxiv.org/abs/2105.12114; https://arxiv.org/abs/2210.01094 (ReACT v2).
+/// Upstream: https://github.com/nebblu/ACTio-ReACTio (reference fixtures pin a36dda02).
+/// FML is a native implementation; agreement with those fixtures is not a new simulation calibration.
+/// Coupled-dark-matter extensions and their limits: FML/HaloModel/README.md.
 ///
 /// Spherical collapse of a top-hat in modified gravity with screening: the fifth force depends on the halo's own
 /// state (density, mass) and on its environment, so the collapse threshold delta_c(M, z) and the virial quantities

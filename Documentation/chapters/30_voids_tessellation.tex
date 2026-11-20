@@ -1,5 +1,5 @@
 \chapter{Voids and tessellations}\label{ch:voids}
-\chapterstatus{written}{2026-11-19}
+\chapterstatus{written}{2026-11-20}
 
 The Delaunay tessellation of the particles gives density and velocity fields without a grid (DTFE) and the Voronoi densities of
 watershed void finders. \fml{} has its own MPI-parallel Delaunay triangulation and periodic Voronoi tessellation in 2D and 3D, with
@@ -32,7 +32,7 @@ oriented simplex), with CGAL's conventions. The determinant is evaluated in floa
 of the input coordinates, with a fixed-size stack version when all coordinate differences are exact doubles (lattices, quantized
 coordinates). The result is exact for any double input barring overflow.
 
-\paragraph*{Triangulation.} \cls{Delaunay}$\langle D\rangle$ ($D=2,3$) inserts the points in Peano--Hilbert order into a super
+\paragraph*{Triangulation.} \cls{Delaunay}$\langle D\rangle$ ($D=2,3$) uses incremental insertion \cite{Bowyer1981,Watson1981}, placing the points in Peano--Hilbert order into a super
 simplex (Bowyer--Watson): a visibility walk from the last new simplex locates the point, a breadth-first search finds the cavity of
 simplices whose circumspheres contain it, and the cavity is replaced by the simplices joining its boundary facets to the point.
 Cospherical points (lattices) are resolved by the symbolic perturbation of Devillers \& Teillaud \cite{DevillersTeillaud2011},
