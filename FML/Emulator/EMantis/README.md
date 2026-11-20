@@ -1,14 +1,14 @@
 # e-MANTIS emulators
 
 `EMantis.h` is a C++ port of the prediction part of [e-MANTIS](https://gitlab.obspm.fr/e-mantis/e-mantis) 1.4.0
-(I. Sáez-Casares et al., GPL-3.0-or-later): Gaussian-process emulators trained on N-body simulations. Header only, no
-dependencies. Cite the papers when using them:
+(I. Sáez-Casares et al., GPL-3.0-or-later, see [Licence](#licence)): Gaussian-process emulators trained on N-body
+simulations. Header only, no dependencies. Cite the papers when using them:
 
 | Class | Emulates | Parameters | Paper |
 | --- | --- | --- | --- |
-| `NonLinearMGBoostEmulator("fR")` | B(k, a) = P_f(R) / P_ΛCDM, nonlinear, Hu-Sawicki n = 1 | Ω_b, Ω_m, h, n_s, σ8_ΛCDM (or A_s), log10\|fR0\| ∈ [4, 7] | [arXiv:2303.08899](https://arxiv.org/abs/2303.08899) |
+| `NonLinearMGBoostEmulator("fR")` | B(k, a) = P_f(R) / P_ΛCDM, nonlinear, Hu-Sawicki n = 1 | Ω_b, Ω_m, h, n_s, σ8_ΛCDM (or A_s), log10\|fR0\| ∈ [4, 7] | Sáez-Casares, Rasera & Li, MNRAS 527, 7242 (2024), [arXiv:2303.08899](https://arxiv.org/abs/2303.08899), [doi:10.1093/mnras/stad3343](https://doi.org/10.1093/mnras/stad3343) |
 | `NonLinearBoostEmulator("wCDM")` | P_nl(k, a) / P_lin(k, a) | Ω_b, Ω_m, h, n_s, σ8 (or A_s), w ∈ [-1.5, -0.5] | none yet; cite the package ([doi:10.5281/zenodo.7738362](https://doi.org/10.5281/zenodo.7738362)) |
-| `HMFEmulator(model, mass_def, res_corr)` | dn/dlnM in (h/Mpc)³ and its std; `200c`, `500c`, `1000c`, FoF `b0.2` | as above, `fR` or `wCDM` | [arXiv:2410.05226](https://arxiv.org/abs/2410.05226) |
+| `HMFEmulator(model, mass_def, res_corr)` | dn/dlnM in (h/Mpc)³ and its std; `200c`, `500c`, `1000c`, FoF `b0.2` | as above, `fR` or `wCDM` | Sáez-Casares, Rasera, Richardson & Corasaniti, A&A 691, A323 (2024), [arXiv:2410.05226](https://arxiv.org/abs/2410.05226), [doi:10.1051/0004-6361/202450193](https://doi.org/10.1051/0004-6361/202450193) |
 | `Sigma8Emulator("LCDM" / "wCDM")` | σ8 from A_s (used when A_s is given) | Ω_b, Ω_m, h, n_s, A_s (, w) | |
 
 Ranges: 0.25 ≤ a ≤ 1, Ω_b ∈ [0.037, 0.062], Ω_m ∈ [0.155, 0.465], h ∈ [0.55, 0.85], n_s ∈ [0.72, 1.2],
@@ -64,3 +64,16 @@ summation changes. This is far below the emulation errors (percent level).
 
 Not ported: the deprecated `FofrBoost` / `fR_v1` emulator, training, cross-validation, and batching over many
 cosmologies at once (call the classes in a loop; each call is cheap).
+
+## Licence
+
+e-MANTIS is distributed under the GNU General Public License, version 3 or later (GPL-3.0-or-later), and this folder
+is a modified version of it: `EMantis.h` is a C++ port of its prediction code (FML, H. A. Winther, November 2026),
+`data/` holds the trained emulators exported from it by `export_emantis.py`, and the tests use its predictions. Everything
+in this folder is therefore distributed under the GPL-3.0-or-later; the licence text is in [COPYING](COPYING). It comes
+without any warranty.
+
+The rest of FML does not carry a licence of its own. Code that includes `EMantis.h` (`Cosmology/Spectra/PowerSpectrum.cpp`,
+i.e. the Einstein-Boltzmann solver's `nonlinear = emantis`, and SimulationCode's f(R) model) forms a combined work with
+it: distributing such a program, in particular as a binary, has to follow the GPL (the complete source, under the GPL).
+Distributing the FML sources with this folder kept as it is (with its notices and COPYING) is fine.

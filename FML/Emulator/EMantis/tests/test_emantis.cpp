@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Part of FML's port of e-MANTIS (GPL-3.0-or-later, see ../COPYING and ../README.md).
 // =============================================================================
 // Tests of the e-MANTIS emulators (EMantis.h). Run with `make run` in this folder.
 //

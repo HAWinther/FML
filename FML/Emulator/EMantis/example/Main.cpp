@@ -1,9 +1,11 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Part of FML's port of e-MANTIS (GPL-3.0-or-later, see ../COPYING and ../README.md).
 #include <FML/Emulator/EMantis/EMantis.h>
 
 #include <iomanip>
 #include <iostream>
 
-// e-MANTIS (Saez-Casares, Rasera & Li): emulators of the nonlinear matter power spectrum and the halo mass function
+// e-MANTIS (Saez-Casares et al.; arXiv:2303.08899, arXiv:2410.05226): emulators of the nonlinear matter power spectrum and the halo mass function
 // in f(R) gravity and wCDM. See EMantis.h / README.md, and cite the e-MANTIS papers when using them.
 //
 // The data files are found next to EMantis.h; if you move them, call

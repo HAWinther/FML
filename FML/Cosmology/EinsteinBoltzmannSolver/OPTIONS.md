@@ -57,8 +57,8 @@ from `jbd_boost_gr` (`ee2` as the paper, or `hmcode2020`, `hmcode2016`, `halofit
 A_s,GR to 2e-4 and the boost to 2e-4 at z = 0–3 for 0.009 ≤ k ≤ 9 h/Mpc (`tests/test_brans_dicke`; FML's emulator
 agrees with `ee2.exe` to 1e-5). For ω → ∞ it is `ee2` for ΛCDM.
 
-`nonlinear = emantis` (with `model = fr`, `fR_n = 1`) uses the e-MANTIS emulator (Sáez-Casares et al. 2023,
-arXiv:2303.08899; `FML/Emulator/EMantis`): P_fR(k) = P_GR(k) · B(k), with P_GR the nonlinear P(k) of the GR (ΛCDM)
+`nonlinear = emantis` (with `model = fr`, `fR_n = 1`) uses the e-MANTIS emulator (Sáez-Casares, Rasera & Li 2024,
+arXiv:2303.08899; `FML/Emulator/EMantis`, GPL-3.0-or-later): P_fR(k) = P_GR(k) · B(k), with P_GR the nonlinear P(k) of the GR (ΛCDM)
 universe with the same parameters, i.e. the same initial conditions (`emantis_gr`: `ee2` by default, or `hmcode2020`,
 `hmcode2016`, `halofit`, `halofit_bird`; a second perturbation solve), and B = P_fR/P_GR from the emulator for
 Ω_b, Ω_m (with the massive neutrinos), h, n_s, A_s (at the pivot 0.05/Mpc; e-MANTIS converts it to σ₈ of ΛCDM) and

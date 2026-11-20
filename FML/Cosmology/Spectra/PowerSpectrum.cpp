@@ -4,7 +4,7 @@
 #include <FML/AxionHMcode/AxionHMcode.h>
 #include <FML/Cosmology/Background/FieldEquation_BransDicke.h>
 #include <FML/Emulator/EuclidEmulator2.h>
-#include <FML/Emulator/EMantis/EMantis.h>
+#include <FML/Emulator/EMantis/EMantis.h> // GPL-3.0-or-later (port of e-MANTIS): see Emulator/EMantis/README.md
 #include <FML/Spline/Spline.h>
 #include <FML/HaloModel/HMcode2016.h>
 #include <FML/HaloModel/HMcode2020.h>

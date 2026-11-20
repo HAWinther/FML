@@ -1,15 +1,29 @@
 #ifndef FML_EMULATOR_EMANTIS_H
 #define FML_EMULATOR_EMANTIS_H
 
+// SPDX-License-Identifier: GPL-3.0-or-later
 //=====================================================================================================================
 // e-MANTIS in C++: emulators of the nonlinear matter power spectrum and the halo mass function in f(R) gravity and
 // wCDM, built from Gaussian processes trained on N-body simulations.
 //
-//   e-MANTIS: I. Saez-Casares et al., https://gitlab.obspm.fr/e-mantis/e-mantis (GPL-3.0-or-later, as this file)
-//   P(k) f(R) boost: Saez-Casares, Rasera & Li, MNRAS (arXiv:2303.08899, doi:10.1093/mnras/stad3343)
-//   HMF:             Saez-Casares et al., A&A (arXiv:2410.05226, doi:10.1051/0004-6361/202450193)
+// Licence. This file is a modified version (a C++ port, FML, H. A. Winther, November 2026) of the prediction code of
+// e-MANTIS 1.4.0 by I. Saez-Casares and the e-MANTIS authors (https://gitlab.obspm.fr/e-mantis/e-mantis), which is
+// distributed under the GNU General Public License, version 3 or later. This file, export_emantis.py, the files in
+// data/ (exported from e-MANTIS) and the tests are therefore also distributed under the GNU General Public License,
+// version 3 or (at your option) any later version. This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License in COPYING (in this folder) or https://www.gnu.org/licenses/ for more details.
+// Code that includes this header and is distributed (in particular as a binary) is a combined work covered by the GPL;
+// see README.md.
+//
+// Cite the papers when using the emulators:
+//   P(k) f(R) boost: I. Saez-Casares, Y. Rasera & B. Li, "The e-MANTIS emulator: fast predictions of the non-linear
+//                    matter power spectrum in f(R)CDM cosmology", MNRAS 527, 7242 (2024), arXiv:2303.08899,
+//                    doi:10.1093/mnras/stad3343
+//   HMF:             I. Saez-Casares, Y. Rasera, T. R. G. Richardson & P.-S. Corasaniti, "The e-MANTIS emulator: fast
+//                    and accurate predictions of the halo mass function in f(R)CDM and wCDM cosmologies",
+//                    A&A 691, A323 (2024), arXiv:2410.05226, doi:10.1051/0004-6361/202450193
 //   The wCDM P_nl/P_lin boost has no paper yet (e-MANTIS 1.4.0); cite the package (doi:10.5281/zenodo.7738362)
-//   Cite the papers when using the emulators.
 //
 // This is a port of the prediction part of e-MANTIS 1.4.0 (the Python package). The trained emulators are exported by
 // export_emantis.py to the plain text files in data/ (GP weights precomputed). The predictions agree with the

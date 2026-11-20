@@ -129,7 +129,7 @@ namespace FML::COSMOLOGY {
         // (EE2 as the paper, HMcode2020, HMcode2016, Halofit or HalofitBird). 1% for omega >= 100, z <= 3, k <= 1 h/Mpc
         // (2% to 5 h/Mpc) against N-body simulations.
         Nonlinear jbd_boost_gr = Nonlinear::EE2;
-        // EMantis (model fr, fR_n = 1; the e-MANTIS emulator, Saez-Casares et al., arXiv:2303.08899,
+        // EMantis (model fr, fR_n = 1; the e-MANTIS emulator, Saez-Casares et al. 2024, arXiv:2303.08899, GPL,
         // FML/Emulator/EMantis): P_fR = P_GR B, with P_GR the nonlinear P(k) of the GR (lcdm) universe with the same
         // parameters (the same initial conditions) from the method emantis_gr (EE2, HMcode2020, HMcode2016, Halofit or
         // HalofitBird) and B = P_fR / P_GR of e-MANTIS: 1e-7 <= |fR0| <= 1e-4, Omega_b, Omega_m, h, n_s, A_s (sigma8 of

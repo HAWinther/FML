@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Part of FML's port of e-MANTIS (GPL-3.0-or-later, see COPYING and README.md).
 """Export the trained e-MANTIS emulators to the plain-text files read by EMantis.h.
 
 e-MANTIS (Saez-Casares et al., https://gitlab.obspm.fr/e-mantis/e-mantis, GPL-3.0-or-later) ships the fitted

@@ -5,6 +5,13 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Emulator/EMantis: licence and citations
+- `Emulator/EMantis` is a modified version of e-MANTIS and so GPL-3.0-or-later: added `COPYING` (the GPL-3.0 text from
+  e-MANTIS 1.4.0), the GPL notice and modification statement in `EMantis.h`, SPDX lines in every source and script of
+  the folder, and a Licence section in its README (what this means for the code that includes `EMantis.h`:
+  PowerSpectrum.cpp, SimulationCode's f(R) model). Full references (journal, volume, DOI) for the two e-MANTIS papers
+  in `EMantis.h`, the README and REFERENCES.md; corrected the year (2024) where the P(k) paper was cited as 2023.
+
 ### ReACT: one collapse per redshift for coupled dark matter (8 s -> 0.9 s)
 - `HaloModelReaction::Cosmology::fifth_force_mass_independent`: with an unscreened fifth force delta_c and Delta_vir
   do not depend on the halo, so one collapse per redshift instead of one per mass (react_mass_loop = 30). Set for

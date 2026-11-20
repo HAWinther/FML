@@ -15,7 +15,7 @@
 #include <string>
 
 #include <FML/Cosmology/Perturbations/QuasiStaticGravity_HuSawicky.h>
-#include <FML/Emulator/EMantis/EMantis.h>
+#include <FML/Emulator/EMantis/EMantis.h> // GPL-3.0-or-later (port of e-MANTIS): see Emulator/EMantis/README.md
 #include <FML/MultigridSolver/FofrSolver.h>
 
 /// Hu-Sawicky f(R): mu(k, a), f_R(a) and the scalaron mass from the shared quasi-static theory
