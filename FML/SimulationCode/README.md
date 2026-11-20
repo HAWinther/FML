@@ -27,7 +27,7 @@ snapshots from other simulations. There is more documentation on [the website](h
   - Ultralight-axion dark matter in the initial conditions (`ic_axion_fraction`: the solver's mixed axion + CDM
     model, the particles all the dark matter).
 - **[Forces, time stepping and COLA](EVOLUTION.md)**
-  - PM forces with NGP to PQS mass assignment and a choice of kernels; interlaced and NUFFT forces.
+  - PM forces with CIC to PQS mass assignment and a choice of kernels; interlaced and NUFFT forces.
   - COLA, also with scale-dependent growth.
   - Quinn, Tassev, FastPM and BullFrog time stepping, including starting from the Big Bang.
   - Optional [short-range forces](SHORT_RANGE.md) (P3M or TreePM).

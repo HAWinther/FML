@@ -609,7 +609,7 @@ end
 ------------------------------------------------------------
 -- Grid to use for computing PM forces
 force_nmesh = 128
--- Density assignment method: NGP, CIC, TSC, PCS, PQS
+-- Density assignment method: CIC, TSC, PCS, PQS (not NGP, see EVOLUTION.md)
 force_density_assignment_method = "CIC"
 -- The kernel to use for D^2 when solving the Poisson equation
 -- Options: (fiducial = continuous, discrete_2pt, discrete_4pt)

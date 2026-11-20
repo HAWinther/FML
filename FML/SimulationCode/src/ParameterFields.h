@@ -66,6 +66,9 @@ namespace SIMCODE {
     /// Lists of allowed values used by several parameters
     namespace choices {
         inline const std::vector<std::string> assignment_methods{"NGP", "CIC", "TSC", "PCS", "PQS"};
+        // The PM force: not NGP. Its force only changes when a particle crosses a cell boundary, so for particles near
+        // the initial lattice it is either zero or jumps by order one (see EVOLUTION.md)
+        inline const std::vector<std::string> force_assignment_methods{"CIC", "TSC", "PCS", "PQS"};
         inline const std::vector<std::string> kernels{"fiducial", "continuous", "discrete_2pt", "discrete_4pt"};
         inline const std::vector<std::string> smoothing_filters{"tophat", "sharpk", "gaussian"};
     } // namespace choices

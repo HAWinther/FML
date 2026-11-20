@@ -245,7 +245,7 @@ namespace SIMCODE {
     struct ForceSettings {
         ShortRangeSettings short_range;
         int nmesh;                             // The gridsize to bin particles to and compute PM forces
-        std::string density_assignment_method; // Density assignment (NGP,CIC,TSC,PCS,PQS)
+        std::string density_assignment_method; // Density assignment (CIC,TSC,PCS,PQS; not NGP)
         bool linear_massive_neutrinos;         // Include the effects of massive neutrinos using linear theory
         bool neutrino_energy_density;          // Source the Poisson equation with the neutrino energy density
         bool nbody_gauge;                      // Add the linear N-body gauge source (radiation, neutrinos, GR)
@@ -272,8 +272,9 @@ namespace SIMCODE {
             f.optional("force_density_assignment_method",
                        density_assignment_method,
                        "CIC",
-                       "Density assignment method",
-                       choices::assignment_methods);
+                       "Density assignment method (not NGP: its force only changes when a particle crosses a cell "
+                       "boundary, so near the initial lattice it is zero or jumps by order one, see EVOLUTION.md)",
+                       choices::force_assignment_methods);
             f.optional("force_greens_function_kernel",
                        greens_function_kernel,
                        "fiducial",
@@ -341,8 +342,8 @@ namespace SIMCODE {
                 f.always_optional("force_early_density_assignment_method",
                                   early_density_assignment_method,
                                   "TSC",
-                                  "Assignment kernel at early times",
-                                  choices::assignment_methods);
+                                  "Assignment kernel at early times (not NGP)",
+                                  choices::force_assignment_methods);
             });
             f.always_optional("force_interpolation_method",
                               interpolation_method,

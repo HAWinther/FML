@@ -2,8 +2,13 @@
 
 ## Forces
 
-The code computes particle-mesh (PM) forces: the particles are assigned to a grid of size `force_nmesh` (NGP, CIC,
-TSC, PCS or PQS), and the force is found with Fourier transforms. The Green's function and the gradient kernel are
+The code computes particle-mesh (PM) forces: the particles are assigned to a grid of size `force_nmesh` (CIC, TSC,
+PCS or PQS), and the force is found with Fourier transforms. NGP is not allowed for the force: its force only changes
+when a particle crosses a cell boundary, so for particles near the initial lattice it is either zero (no particle
+leaves its cell) or jumps by order one (particles on the cell boundaries). In a linear test (one step at sigma8 = 0.01,
+128^3 particles) P(k) was off by -40% (no force at all) or by a factor ~10^3 for every lattice placement and grid size,
+with the cell convention of the code and with nearest-node cells. NGP is still available for the analysis (P(k),
+density grids, images). The Green's function and the gradient kernel are
 options: the continuous kernels, and the kernels of Hamming, Hockney & Eastwood and GADGET; the fiducial gradient
 kernel depends on the grid, see below. The force of the screened models is described in
 [MODELS.md](MODELS.md#screening). Short-range forces on top of the PM force (P3M or TreePM, a common time step) are

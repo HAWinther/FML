@@ -5,6 +5,13 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: NGP is not allowed for the force
+- `force_density_assignment_method` and `force_early_density_assignment_method` no longer accept NGP. The NGP force
+  only changes when a particle crosses a cell boundary, so for particles near the initial lattice it is either zero or
+  jumps by order one: in a linear test (one step at sigma8 = 0.01) P(k) was off by -40% (no force) or by a factor
+  ~10^3 for every lattice placement and grid size, also with a nearest-node NGP. NGP is still available for the
+  analysis (P(k), density grids, images). EVOLUTION.md explains it; the regression cases are bit-identical.
+
 ### SimulationCode: force deconvolution with the NUFFT and sheet_nufft densities
 - `force_deconvolve_window` divided the force by W(k)^2 also when the density or the interpolation is exact (a NUFFT),
   which over-corrects: with `force_density_method = sheet_nufft` (PCS) or `nufft` with assignment interpolation the
