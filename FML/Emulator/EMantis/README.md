@@ -73,7 +73,6 @@ is a modified version of it: `EMantis.h` is a C++ port of its prediction code (F
 in this folder is therefore distributed under the GPL-3.0-or-later; the licence text is in [COPYING](COPYING). It comes
 without any warranty.
 
-The rest of FML does not carry a licence of its own. Code that includes `EMantis.h` (`Cosmology/Spectra/PowerSpectrum.cpp`,
-i.e. the Einstein-Boltzmann solver's `nonlinear = emantis`, and SimulationCode's f(R) model) forms a combined work with
-it: distributing such a program, in particular as a binary, has to follow the GPL (the complete source, under the GPL).
-Distributing the FML sources with this folder kept as it is (with its notices and COPYING) is fine.
+FML itself is GPL-3.0-or-later too (see the repository's LICENCE), so the port fits the library's licence. Code that
+includes `EMantis.h` (`Cosmology/Spectra/PowerSpectrum.cpp`, i.e. the Einstein-Boltzmann solver's `nonlinear = emantis`,
+and SimulationCode's f(R) model) forms a combined work with it, which, like the rest of FML, is distributed under the GPL.

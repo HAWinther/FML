@@ -255,6 +255,8 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public 
 
 Third-party code retains its existing copyright and license notices. In particular, `FML/Global/SystemMemory.h`
 carries a CC BY 3.0 notice; this GPL statement does not relicense that file. Its compatibility or replacement must be
-resolved before distributing a combined GPL-covered work that includes it. Other bundled third-party components and
+resolved before distributing a combined GPL-covered work that includes it. `FML/Emulator/EMantis` is a port of e-MANTIS
+(GPL-3.0-or-later, its `COPYING`), and `FML/Emulator/Bacco` a port of baccoemu (MIT, its `LICENSE`, which must be kept
+with copies); the baccoemu networks are not distributed with FML (`get_data.sh` downloads them). Other bundled third-party components and
 external dependencies remain subject to their respective licenses. This statement covers source code and does not
 change the licensing of separately published documentation.

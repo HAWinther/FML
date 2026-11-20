@@ -13,8 +13,7 @@
 // version 3 or (at your option) any later version. This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 // See the GNU General Public License in COPYING (in this folder) or https://www.gnu.org/licenses/ for more details.
-// Code that includes this header and is distributed (in particular as a binary) is a combined work covered by the GPL;
-// see README.md.
+// FML is GPL-3.0-or-later as well (see LICENCE at the top of the repository); see README.md.
 //
 // Cite the papers when using the emulators:
 //   P(k) f(R) boost: I. Saez-Casares, Y. Rasera & B. Li, "The e-MANTIS emulator: fast predictions of the non-linear
