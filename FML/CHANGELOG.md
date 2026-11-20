@@ -5,13 +5,6 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
-### Emulator/EMantis: licence and citations
-- `Emulator/EMantis` is a modified version of e-MANTIS and so GPL-3.0-or-later: added `COPYING` (the GPL-3.0 text from
-  e-MANTIS 1.4.0), the GPL notice and modification statement in `EMantis.h`, SPDX lines in every source and script of
-  the folder, and a Licence section in its README (what this means for the code that includes `EMantis.h`:
-  PowerSpectrum.cpp, SimulationCode's f(R) model). Full references (journal, volume, DOI) for the two e-MANTIS papers
-  in `EMantis.h`, the README and REFERENCES.md; corrected the year (2024) where the P(k) paper was cited as 2023.
-
 ### ReACT: one collapse per redshift for coupled dark matter (8 s -> 0.9 s)
 - `HaloModelReaction::Cosmology::fifth_force_mass_independent`: with an unscreened fifth force delta_c and Delta_vir
   do not depend on the halo, so one collapse per redshift instead of one per mass (react_mass_loop = 30). Set for
@@ -34,6 +27,31 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
   cosmological parameters is 7-9 times larger (a Gaussian with the posterior covariance of those chains: tau ESS
   830 against 90 in 16000 steps); `test_sampler` checks it (2 slow + 24 fast: ESS 2600 against 280). Runs without
   fast parameters are unchanged. Restart, rather than resume, runs made before this change.
+
+### Emulator/EMantis: licence and citations
+- `Emulator/EMantis` is a modified version of e-MANTIS and so GPL-3.0-or-later: added `COPYING` (the GPL-3.0 text from
+  e-MANTIS 1.4.0), the GPL notice and modification statement in `EMantis.h`, SPDX lines in every source and script of
+  the folder, and a Licence section in its README (what this means for the code that includes `EMantis.h`:
+  PowerSpectrum.cpp, SimulationCode's f(R) model). Full references (journal, volume, DOI) for the two e-MANTIS papers
+  in `EMantis.h`, the README and REFERENCES.md; corrected the year (2024) where the P(k) paper was cited as 2023.
+
+### Emulator/Bacco: the baccoemu emulators in C++
+- `Emulator/Bacco/Bacco.h` (header only, `FML::EMULATOR::BACCO`): a port of the prediction part of baccoemu 2.3.0
+  (Angulo, Zennaro, Arico, Pellejero Ibanez, Burger; MIT licence, kept in `Emulator/Bacco/LICENSE`):
+  `MatterPowerSpectrum` (sigma8/sigma12/A_s, linear P(k) of cold and total matter, no-wiggle and BAO-smeared P(k),
+  nonlinear boost and P_nl with neutrinos and w0-wa, models Angulo2021 and Arico2023; baryonic boost Arico2021 or
+  Burger2025), `MatterBispectrum` (baryonic boost of B(k), Burger2025), `LbiasExpansion` (the 15 spectra of the
+  2nd order Lagrangian bias expansion, nonlinear and LPT, galaxy auto and cross spectra; Zennaro et al. 2021),
+  `LbiasExpansionRSD` (the same in redshift space, multipoles 0/2/4, galaxy multipoles and P(k, mu) with fingers of
+  god and noise; Pellejero Ibanez et al. 2023) and the coevolution relations (`COEVOLUTION::`). The ReLU networks
+  use `NeuralNetwork`; the CosmoPower-activation networks of Burger et al. have their own small evaluator; scipy's
+  not-a-knot cubic spline and baccoemu's `pkmulti` are reproduced. Same range checks and k rules as the Python package.
+- The networks are not distributed with FML: `get_data.sh` downloads them from bacco.dipc.org (`--matter` for only
+  the matter emulators, `BACCO_URL` for a mirror), checks pinned SHA-256 sums and converts them with `export_bacco.py`
+  into `data/` (git-ignored; binary float32 networks: 9 MB for the matter emulators, 89 MB for the bias expansion).
+  Without the data the constructors throw `MissingDataError` saying how to get it; `data_available()` checks for it; `tests/test_bacco.cpp` checks 251 cases against the
+  Python package (`make_bacco_reference.py`, networks evaluated in float64): agreement ~1e-15, including the parameter
+  named by each range error (baccoemu's own float32 evaluation moves its results by up to ~1.5e-6).
 
 ### Emulator/EMantis: the e-MANTIS emulators in C++
 - `Emulator/EMantis/EMantis.h` (header only, `FML::EMULATOR::EMANTIS`): a port of the prediction part of e-MANTIS

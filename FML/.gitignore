@@ -42,6 +42,11 @@ Emulator/example/ee2
 Emulator/EMantis/example/emantis
 Emulator/EMantis/tests/test_*
 !Emulator/EMantis/tests/test_*.cpp
+Emulator/Bacco/example/bacco
+Emulator/Bacco/tests/test_*
+!Emulator/Bacco/tests/test_*.cpp
+Emulator/Bacco/weights/
+Emulator/Bacco/data/
 FFTLog/example/fftlog
 FFTWGrid/example/fftwgrid
 FileUtils/example/fileutils
