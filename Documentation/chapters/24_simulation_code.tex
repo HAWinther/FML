@@ -27,19 +27,35 @@ A run proceeds as follows.
 \begin{enumerate}
 \item \textbf{Parameters} are read from a Lua file and checked against a schema (\file{ParameterSchema.h}): types,
       allowed values, dependencies (``used when''), incompatible combinations (an error) and unknown names (a warning
-      suggesting the intended name). \code{./nbody --parameters PARAMETERS.md} writes the reference of all parameters.
+      suggesting the intended name). \code{./nbody --parameters PARAMETERS.md} writes the reference of all parameters
+      (also \cref{app:simcode-parameters}). Parameters not in the file take their defaults, unless
+      \param{all_parameters_must_be_in_file} is set: then every parameter that is used must be given, so the file
+      documents the run completely.
 \item \textbf{Cosmology and gravity model}: the background from the registry of \cref{ch:background}
-      (\param{cosmology_model}) and the gravity model (\param{gravity_model}), which provides
+      (\param{cosmology_model}; besides the densities every cosmology has the curvature \param{cosmology_OmegaK}, the CMB
+      temperature \param{cosmology_TCMB_kelvin} and \param{cosmology_Neffective}) and the gravity model (\param{gravity_model}), which provides
       $G_{\rm eff}(k,a)/G$, the growth factors (\cref{ch:growth-transfer}) and the force.
 \item \textbf{Transfer input} (\param{ic_type_of_input}: a $P(k)$ or $T(k)$ file, \code{camb}, \code{class},
-      \code{internal}, \code{tables}; \cref{sec:transfer}), with optional $\sigma_8$ normalisation.
-\item \textbf{Initial conditions}: a Gaussian or non-Gaussian field (\cref{ch:random-fields}), LPT displacements to
-      order \param{ic_LPT_order} (\cref{ch:lpt}) for each species; or particles or phases from a GADGET snapshot.
+      \code{internal}, \code{tables}; \cref{sec:transfer}), with optional $\sigma_8$ normalisation
+      (\param{ic_sigma8_normalization}: \param{ic_sigma8} at \param{ic_sigma8_redshift}). CLASS output may be in either gauge
+      (\param{ic_input_gauge}; the Newtonian gauge is converted to the CDM-synchronous gauge of the initial conditions).
+      For modified gravity \param{ic_use_gravity_model_GR} treats the input as a $\Lambda$CDM spectrum and scales it to
+      the initial redshift with the GR growth, so the initial conditions are those of the matching $\Lambda$CDM run.
+\item \textbf{Initial conditions}: a Gaussian or non-Gaussian field on an \param{ic_nmesh}$^3$ grid
+      (\cref{ch:random-fields}), LPT displacements to order \param{ic_LPT_order} (\cref{ch:lpt}) for each species; or
+      particles or phases from a GADGET snapshot (\param{ic_reconstruct_gadgetfilepath}), whose density field is
+      reconstructed with \param{ic_reconstruct_assigment_method} and \param{ic_reconstruct_interlacing} and smoothed with
+      \param{ic_reconstruct_smoothing_filter} on the scale \param{ic_reconstruct_dimless_smoothing_scale} (in units of the
+      box).
 \item \textbf{Evolution}: fixed steps between the output redshifts (\param{timestep_nsteps},
-      \param{timestep_method}); in each step the density (and its $P(k)$, almost free since it is already in Fourier
-      space), the force of the gravity model, the kick and the drift, with COLA if enabled; particle migration between
-      slabs; the lightcone.
-\item \textbf{Outputs} at \param{output_redshifts}: snapshots and the analyses switched on.
+      \param{timestep_method}; uniform in $a^p$ with \param{timestep_spacing_power} for the \code{powerlaw} spacing,
+      \cref{sec:nbody-timestepping}; kick--drift--kick, \param{timestep_algorithm}, the only ordering implemented); in each
+      step the density (and its $P(k)$, almost free since it is already in Fourier
+      space), the force of the gravity model, the kick and the drift, with COLA if enabled (with
+      \param{simulation_enforce_LPT_trajectories} the PM force is skipped and the particles follow their LPT trajectories,
+      a check of the COLA frame); particle migration between slabs; the lightcone.
+\item \textbf{Outputs} at \param{output_redshifts}: snapshots (\param{output_particles}; GADGET binary or HDF5,
+      \param{output_fileformat}) and the analyses switched on.
 \end{enumerate}
 
 \begin{paramfile}[A minimal COLA run (excerpt of parameterfile.lua)]
@@ -92,6 +108,10 @@ field: the force is sourced by
 \delta_m(\vk,a)=\left[(1-f_\nu)+f_\nu\frac{T_\nu(k,a)}{T_{cb}(k,a)}\right]\delta_{cb}(\vk,a),\qquad f_\nu=\frac{\Om_\nu}{\Om_m},
 \end{equation}
 with the transfer functions of the provider, and the growth factors are scale dependent (scale-dependent COLA).
+With \param{force_neutrino_energy_density} the neutrinos source the Poisson equation with their energy density,
+$f_\nu\langle E/m\rangle(a)\,\delta_\nu$ with $\langle E/m\rangle=\langle\sqrt{1+(q/am)^2}\rangle$ over the Fermi--Dirac
+distribution, instead of their mass density (for linear neutrinos and for neutrino particles, which are then weighted by
+$E/m$); it matters at high redshift for light neutrinos ($\langle E/m\rangle=1.33$ at $z=50$ for 0.033\,eV).
 
 \paragraph*{Neutrino particles: the $\delta f$ method} \cite{Elbers2021} (\param{particle_neutrinos}). The bulk part of
 the initial conditions is made like the CDM, $\delta_\nu=\delta_{cb}T_\nu/T_{cb}$ with the neutrino growth rate; each
@@ -109,7 +129,9 @@ w=1-\frac{f_0(y)}{f_i},\qquad f_i=f_0(y_{\rm ini})(1+\delta_{\rm ini}),
 ($f_i$ is the phase-space density the particle carries, conserved along its path), so the weighted density
 $(N_{\rm grid}^3/N_\nu)\sum_iw_iW(\vx-\vx_i)$ is $\delta_\nu$: the particles carry only the perturbation, which removes
 most of the shot noise. The force uses $\delta_m=(1-f_\nu)\delta_{cb}+f_\nu\delta_\nu$. Different masses are one set of
-particles, each assigned one of the species by a hash of its ID. Validation ($1024\Mpch$, $128^3$ CDM and $128^3$
+particles, each assigned one of the species by a hash of its ID. There are \param{particle_neutrino_Npart_1D}$^3$ of
+them (0: as many as the CDM particles); \param{particle_neutrino_deltaf} \code{= false} drops the weights (plain
+particles, much noisier; for tests). Validation ($1024\Mpch$, $128^3$ CDM and $128^3$
 neutrino particles): $P_\nu$ follows linear theory to 2\% (0.4\,eV) and 7\% (0.1\,eV) relative to the simulation's own
 $P_{cb}$, and $P_{cb}$ agrees with the linear-neutrino run to $<0.2\%$. Not yet with COLA, time stepping other than
 Quinn, interlacing, the $N$-body gauge or the lightcone.
@@ -120,7 +142,8 @@ effect of radiation and neutrinos on the growth, and the meaning of the position
 by $\rho_{cb}(\delta_{cb}+\delta_{\rm extra})$ (\cref{sec:transfer-gauges}). The source is added to the density at every
 force calculation and the initial conditions use the $N$-body gauge transfer functions; with \code{internal} input
 the solver provides both (integrating the linear growth with the source reproduces the solver's $\delta_{cb}$ to
-$10^{-5}$), and for CAMB input \file{scripts/make_nbody_gauge_transfer.py} makes them with CLASS. For a start at $z=49$
+$10^{-5}$), and for CAMB input \file{scripts/make_nbody_gauge_transfer.py} makes them with CLASS
+(the table $T_{\rm extra}(k,z)$ given as \param{force_nbody_gauge_filename}). For a start at $z=49$
 the effect on $P(k,z=0)$ is $\approx2\%$ at $k=10^{-3}\hMpc$ and $\ll0.1\%$ above $0.01\hMpc$.
 
 \paragraph*{Ultralight axions in the initial conditions.} With \param{ic_axion_fraction} the initial conditions come
@@ -133,8 +156,13 @@ all the dark matter (\code{axion_as_cdm}, \cref{sec:transfer}); the evolution is
 \item \textbf{Power spectra} of the CDM+baryons and the total matter at every step (\code{pofk_every_step}) with linear
       theory and a nonlinear prediction (EuclidEmulator2, with the e-MANTIS boost for $n=1$ $f(R)$ \cite{SaezCasares2023};
       \cref{ch:fitting-emulators}); at the outputs with a chosen assignment, interlacing and shot-noise subtraction
-      (\cref{ch:power-spectra}); per species with separate baryons or neutrino particles.
-\item \textbf{Redshift-space multipoles} (plane-parallel, averaged over the three axes) and \textbf{bispectra}.
+      (\param{pofk_subtract_shotnoise}, also for the spectra of every step; \cref{ch:power-spectra}); per species with
+      separate baryons or neutrino particles.
+\item \textbf{Redshift-space multipoles} (plane-parallel, averaged over the three axes; \param{pofk_multipole_nmesh},
+      \param{pofk_multipole_density_assignment_method}, \param{pofk_multipole_interlacing},
+      \param{pofk_multipole_subtract_shotnoise} for the monopole) and \textbf{bispectra}
+      (\param{bispectrum_density_assignment_method}, \param{bispectrum_interlacing}, \param{bispectrum_subtract_shotnoise};
+      \cref{sec:pk-multipoles,sec:pk-polyspectra}).
 \item \textbf{Hybrid bias spectra} (\code{hybridbias}): the 15 cross spectra of the Lagrangian operators $1$,
       $\delta_L$, $\delta_L^2-\langle\delta_L^2\rangle$, $s^2-\langle s^2\rangle$, $\nabla^2\delta_L$ advected with the
       particles \cite{Modi2020,Kokron2021}, with Zel'dovich and one-loop predictions (\cref{ch:power-spectra}), and with
@@ -152,17 +180,28 @@ all the dark matter (\code{axion_as_cdm}, \cref{sec:transfer}); the evolution is
       or linear theory on top of $\delta_{cb}$); and \code{fifth_force}, $|\bm F_5|/|\bm F_N|$ with the gravity model's
       own screening method or exact solver (whose state for the next step is kept: the $P(k)$ are the same with and
       without images). Settings \param{images_fields}, \param{images_nmesh}, \param{images_npix}, \param{images_axis},
-      \param{images_slab_center}, \param{images_slab_thickness}, \param{images_colormap}, \param{images_npy}.
-\item \textbf{Snapshots}: GADGET binary or HDF5 (CDM type 1, baryons type 2, neutrinos type 3 with their weights).
-\item \textbf{Lightcones}: particles crossing the past lightcone of an observer (with box replicas), written in ascii,
-      GADGET or HDF5, in batches if needed, and HEALPix ``onion'' density maps; with \code{plc_relativistic_effects} the
+      \param{images_slab_center}, \param{images_slab_thickness}, \param{images_colormap}, \param{images_npy},
+      \param{images_density_assignment_method}.
+\item \textbf{Snapshots}: GADGET binary or HDF5 (\param{output_fileformat}; CDM type 1, baryons type 2, neutrinos
+      type 3 with their weights).
+\item \textbf{Lightcones} (\param{lightcone}): particles crossing the past lightcone of an observer at
+      \param{plc_pos_observer} (in units of the box) between \param{plc_z_init} and \param{plc_z_finish}, with box
+      replicas (\param{plc_use_replicas}; \param{plc_ndim_rep} of the dimensions replicated in both directions, in 3D 0 for
+      an octant and 3 for the full sky), written in ascii, GADGET or HDF5 (\param{plc_output_asciifile},
+      \param{plc_output_gadgetfile}, \param{plc_output_hdf5file}), in batches if needed (\param{plc_output_in_batches}),
+      and HEALPix ``onion'' density maps $\delta(z,\hat{\bm n})$ (\param{plc_make_onion_density_maps}, resolution
+      \param{plc_nside}, shells of width \param{plc_da_maps} in $a$; sparse maps can be stored with chunkpix,
+      \param{plc_use_chunkpix} with chunks of \param{plc_nside_chunks}); with \code{plc_relativistic_effects} the
       potential $\Phi/c^2$, radial velocity and the observed redshift $1+z_{\rm obs}=(1+z)(1+v_r/c-\Phi/c^2)$ (Doppler and
       gravitational redshift to first order; no ISW, Shapiro delay or lensing deflection).
 \item \textbf{Haloes on the lightcone} (\param{plc_halos}): at every lightcone step friends-of-friends on the particles
-      near the shell of the step (within \param{plc_boundary_mpch}, in any replica and across the faces of the box);
+      near the shell of the step (within \param{plc_boundary_mpch}, in any replica and across the faces of the box), with
+      the linking length \param{plc_halos_linking_length}, at least \param{plc_halos_nmin_per_halo} particles and the
+      buffer \param{plc_halos_buffer_mpch} from the neighbouring tasks;
       each halo moves with the mean velocity of its particles and is recorded once, where its centre of mass crosses the
       lightcone, with the same crossing code as the particles (\file{halos_lightcone.txt}: position, velocity, redshift,
-      $N$, FoF mass, velocity dispersion). The shell restriction gives the same catalogue as linking all the particles.
+      $N$, FoF mass, velocity dispersion). The shell restriction (\param{plc_halos_shell_only}, default) gives the same
+      catalogue as linking all the particles.
       Against FoF run afterwards on the particle lightcone ($64^3$ in $128\Mpch$, an octant to $z=0.12$) the halo counts
       per radial shell agree to 2\% and 99.9\% of the haloes with $\geq50$ particles are matched, with 1\% lower masses
       (the haloes are found at the start of the step). In a $192^3$, $1\,h^{-1}$Gpc run with an octant to $z=1$ the haloes
@@ -174,7 +213,11 @@ The same analysis layer is available for snapshots of any simulation through Sna
 
 Every time-consuming step uses MPI (slabs) and OpenMP. With both, the threads of each task need their own cores (e.g.\
 \code{OMP_NUM_THREADS=4 mpirun --map-by slot:PE=4 -np 2 ./nbody params.lua}); the code warns when OpenMPI binds a task
-to one core. FFTW plans can be measured (\param{simulation_fftw_planner}) and stored as wisdom. At the end of a run the
+to one core. FFTW plans can be measured (\param{simulation_fftw_planner}) and stored as wisdom, which later runs read with
+\param{simulation_fftw_wisdom_file} to skip the planning. Each task allocates \param{particle_allocation_factor} (default
+1.5) times its mean number of particles, since particles move between tasks; \param{particle_sort_every_nsteps} reorders
+the particles in memory by position every so many steps, which speeds up the density assignment and the force
+interpolation once they have moved far from their lattice order (the results change only by round-off). At the end of a run the
 time spent in density assignment and FFTs, $P(k)$, force, kick and drift is printed; memory is logged when compiled
 with memory logging.
 

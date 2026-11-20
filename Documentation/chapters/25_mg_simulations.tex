@@ -1,5 +1,5 @@
 \chapter{Modified gravity and dark-sector simulations}\label{ch:mg-simulations}
-\chapterstatus{written}{2026-11-19}
+\chapterstatus{written}{2026-11-20}
 
 SimulationCode separates the \emph{cosmology} (the background, \param{cosmology_model}) from the \emph{gravity model}
 (the growth of perturbations and the force, \param{gravity_model}), so that one can be changed while the other is
@@ -41,6 +41,25 @@ curvature, $\Lambda$ and the primordial parameters; the backgrounds are those of
 \end{tabularx}
 \end{table}
 
+\paragraph*{Cosmology parameters.} Beyond the $\Lambda$CDM parameters each cosmology reads its own:
+$w(a)=w_0+w_a(1-a)$ from \param{cosmology_w0}, \param{cosmology_wa}; for \code{JBD} $\omega_{\rm BD}$
+(\param{cosmology_JBD_wBD}), $G_{\rm eff}/G$ today (\param{cosmology_JBD_GeffG_today}) and which $G$ defines the density
+parameters (\param{cosmology_JBD_density_parameter_definition}: \code{hi-class} by default, or \code{Gbare},
+\code{Gnewton}, \code{Gtoday}); for \code{DGP} $\Omega_{rc}=1/(4r_c^2H_0^2)$ (\param{cosmology_dgp_OmegaRC}). Quintessence has
+$V=V_0u(\phi)$ with $V_0$ fixed by $\Omega_{\rm DE}$ today and $u$ chosen by \param{cosmology_quintessence_potential}
+(\code{exponential}: \param{cosmology_quintessence_lambda}; \code{inverse_power_law}: \param{cosmology_quintessence_alpha};
+\code{pngb}: \param{cosmology_quintessence_f}; \code{hilltop}: \param{cosmology_quintessence_mu},
+\param{cosmology_quintessence_p}), starting from \param{cosmology_quintessence_phi_ini} and
+\param{cosmology_quintessence_dphidlna_ini} deep in the radiation era; early dark energy has
+$V=m^2f^2(1-\cos\phi/f)^n$ with the peak fraction \param{cosmology_ede_fEDE} at \param{cosmology_ede_zc}, the initial
+angle \param{cosmology_ede_theta_ini} and \param{cosmology_ede_n}. \code{Tabulated} reads \param{cosmology_tabulated_filename}
+in the format \param{cosmology_tabulated_format} (\code{H}: $z$, $H/H_0$; \code{CLASS}: a background file; \code{w}: $a$,
+$w(a)$). Dark scattering has $w$ (\param{cosmology_ds_w}), the dark-energy sound speed \param{cosmology_ds_cs2} (for initial
+conditions from the solver) and $\xi$ (\param{cosmology_ds_xi}) or, covariantised, $\alpha$ (\param{cosmology_cds_alpha});
+coupled quintessence $\lambda$ and $\beta$ (\param{cosmology_cq_lambda}, \param{cosmology_cq_beta}); interacting dark
+energy $w$, $\xi$ and the sound speed (\param{cosmology_ide_w}, \param{cosmology_ide_xi}, \param{cosmology_ide_cs2}; the
+model needs $\xi/[3(1+w)]\le0$); and \code{Horndeski} the frontend's table (\param{cosmology_horndeski_filename}).
+
 \begin{table}[htbp]
 \centering\small
 \caption{Gravity models (\param{gravity_model}).}
@@ -73,6 +92,19 @@ $\mu=(1+\beta_1\lambda_1^2k^2a^s)/(1+\lambda_1^2k^2a^s)$ or a table $\mu(a)$ or 
 modifies only the potential that moves the particles (not the lensing potential); a $k$-dependent $\mu$ gives
 scale-dependent growth.
 
+\paragraph*{Gravity-model parameters.} $f(R)$: $f_{R0}$ and $n$ (\param{gravity_model_fofr_fofr0},
+\param{gravity_model_fofr_nfofr}); DGP: $r_cH_0/c$ (\param{gravity_model_dgp_rcH0overc}); symmetron: $a_{\rm ssb}$, $\beta$,
+the vacuum range $L$ in $\Mpch$ and the powers of $V=-(\phi/\phi_*)^N/N+(\phi/\phi_*)^M/M$
+(\param{gravity_model_symmetron_assb}, \param{gravity_model_symmetron_beta}, \param{gravity_model_symmetron_L_mpch},
+\param{gravity_model_symmetron_N}, \param{gravity_model_symmetron_M}); dilaton: $A_2$, $\beta_0$, $r$ and $\xi=H_0/m_0$ (the
+range today is $2998\,\xi\Mpch$; \param{gravity_model_dilaton_A2}, \param{gravity_model_dilaton_beta0},
+\param{gravity_model_dilaton_r}, \param{gravity_model_dilaton_xi}); $(m,\beta)$: $(\beta_0,n,m_0,m)$ of $\beta=\beta_0a^n$,
+$m=m_0H_0a^m$ (\param{gravity_model_mbeta_params}); $\mu$: the form \param{gravity_model_mu_parametrization} (\code{DE}:
+$\mu=1+\mu_0\Omega_{\rm DE}(a)/\Omega_{\rm DE}(1)$ with \param{gravity_model_mu_mu0}; \code{BZ}: $(\beta_1,\lambda_1,s)$ in
+\param{gravity_model_mu_BZ_params}; \code{table}: \param{gravity_model_mu_filename}, rows $a$, $\mu$ or $a$, $k$, $\mu$ on a
+regular grid); Horndeski: the frontend's table (\param{gravity_model_horndeski_filename}, by default that of the
+cosmology).
+
 \section{Fifth forces and screening}\label{sec:mgsim-screening}
 
 Screened theories suppress the fifth force in dense regions, which is essential for their nonlinear predictions. The
@@ -88,7 +120,11 @@ fifth-force density is computed in one of four ways:
             $\phi(a)/(2\beta\Mpl)$ for the symmetron and $(m,\beta)$, $1/(2A_2)$ for the dilaton (\cref{sec:ext-quasistatic});
       \item \emph{density (Vainshtein)}: for a spherical top hat the field equation of the brane-bending mode gives
             $f=2(\sqrt{1+e}-1)/e$ with $e\propto(r_cH_0/c)^2\Om_m\,\delta/\beta^2$, evaluated on the density smoothed with a
-            filter (\code{gravity_model_dgp_smoothing_filter}, scale \code{_smoothing_scale_over_boxsize}); for DGP the
+            filter on a scale $R$ in units of the box (\param{gravity_model_dgp_smoothing_filter},
+            \param{gravity_model_dgp_smoothing_scale_over_boxsize}; for the cubic Galileon and Horndeski
+            \param{gravity_model_cubic_galileon_smoothing_filter}, \param{gravity_model_cubic_galileon_smoothing_scale_over_boxsize},
+            \param{gravity_model_horndeski_smoothing_filter}, \param{gravity_model_horndeski_smoothing_scale_over_boxsize});
+            for DGP the
             form with $\Om_m$ today and $1+\delta$ is used, which reproduces the exact solution best (0.5\% rms in $P(k)$
             at $z=0$);
       \end{itemize}
@@ -98,7 +134,10 @@ fifth-force density is computed in one of four ways:
       $F=e^{-k^2/2k_*^2}$ (\param{gravity_model_screening_linear_scale_hmpc}), so that the linear evolution on large
       scales is exact (switch: \param{gravity_model_screening_enforce_largescale_linear}). Usually the best choice.
 \item \textbf{Exact}: the nonlinear field equation is solved with the multigrid solvers of \cref{ch:multigrid}
-      (\code{gravity_model_<model>_exact_solution}), as in high-resolution codes such as ECOSMOG \cite{Li2012ECOSMOG}.
+      (\param{gravity_model_fofr_exact_solution}, \param{gravity_model_symmetron_exact_solution},
+      \param{gravity_model_dilaton_exact_solution}, \param{gravity_model_dgp_exact_solution},
+      \param{gravity_model_cubic_galileon_exact_solution}, \param{gravity_model_horndeski_exact_solution}), as in
+      high-resolution codes such as ECOSMOG \cite{Li2012ECOSMOG}.
       For $f(R)$ the field is $u=\sqrt{|f_R|}$ by default, which converges for any $f_{R0}$, $n$ and redshift (the
       original $\ln|f_R|$ can give NaN for small $|f_{R0}|$ at high redshift). The solution of the previous step is the
       starting point of the next solve. The field can be solved on a grid coarser than the force grid (the density

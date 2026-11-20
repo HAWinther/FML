@@ -15,7 +15,7 @@ API reference in `doxygen/` (`./run_doxygen.sh` there).
 | `main.tex` | Parts and chapter order |
 | `preamble.tex` | Packages, boxes (`modulebox`, `implementation`, `validation`, `caveat`, `planned`), listings (`cppcode`, `paramfile`), markup (`\file`, `\code`, `\cls`, `\param` (indexed), `\arxiv`, `\github`) and physics macros |
 | `references.bib` | Bibliography (natbib, `unsrtnat`); keys `FirstAuthorYear`; every entry has an eprint or doi |
-| `chapters/NN_name.tex` | One chapter per file; `A_module_index.tex` maps every module directory to its chapters |
+| `chapters/NN_name.tex` | One chapter per file; `A_module_index.tex` maps every module directory to its chapters; `B_simulationcode_parameters.tex` lists every SimulationCode parameter and is generated (do not edit) from `FML/SimulationCode/PARAMETERS.md` by `tools/simcode_parameters.py`, which `make` runs when that file changes |
 | `figures/` | Figures made for the book. Figures of the Einstein-Boltzmann solver report are used in place from `../FML/Cosmology/EinsteinBoltzmannSolver/report/figures/` (see `\graphicspath`) |
 
 ## Conventions for writing a chapter
@@ -49,4 +49,4 @@ Page counts change as features are documented; `main.pdf` is the local build out
 | VIII Statistics | 31 Power spectra, 32 Configuration space, 33 Four-point and ensembles, 34 Galaxy mocks |
 | IX Surveys and inference | 35 Surveys, 36 Weak lensing, 37 Field-level inference, 38 Sampling and fitting |
 | X Applications | 39 Snapshot analysis |
-| Appendix | A Module index |
+| Appendix | A Module index, B SimulationCode parameters |

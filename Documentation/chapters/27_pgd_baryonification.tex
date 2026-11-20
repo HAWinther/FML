@@ -1,5 +1,5 @@
 \chapter{Potential gradient descent and baryonification}\label{ch:pgd-baryonification}
-\chapterstatus{written}{2026-11-14}
+\chapterstatus{written}{2026-11-20}
 
 Two post-processing methods move the particles of a gravity-only simulation to mimic physics it does not resolve or
 contain: potential gradient descent (PGD) sharpens the haloes of low-resolution PM simulations, and baryonification
@@ -54,6 +54,24 @@ no correlated two-halo term. Velocities, masses and IDs are unchanged.
 centres, rejection of truncated, nested or unresolved hosts, a power-law concentration (illustrative, not fitted from PM
 cores), and outputs of the corrected and original $P(k)$ and their ratio, the host catalogue and optionally the
 displaced particles. Requires 3D GR, one CDM+baryon species and no massive neutrinos.
+
+The parameters map onto the model above (\param{baryonification_model} \code{= schneider2019}, the only family; the
+defaults are illustrative, not calibrated). Gas: $M_c$ (\param{baryonification_gas_mass_scale_msunh}), $\mu$
+(\param{baryonification_gas_mass_exponent}), $\theta_{\rm co}$ and $\theta_{\rm ej}$ in units of $R_{200c}$
+(\param{baryonification_gas_core_radius_over_r200}, \param{baryonification_gas_ejection_radius_over_r200}); the NFW
+truncation $\epsilon$ (\param{baryonification_truncation_radius_over_r200}). Stars: $M_1$, $A_\star$, the exponents of the
+total and central stellar fractions and $R_h/R_{200c}$ (\param{baryonification_stellar_mass_scale_msunh},
+\param{baryonification_stellar_amplitude}, \param{baryonification_stellar_total_exponent},
+\param{baryonification_stellar_central_exponent}, \param{baryonification_stellar_radius_over_r200}). Relaxation:
+\param{baryonification_relax_collisionless} with $A$ and $n$ (\param{baryonification_relaxation_amplitude},
+\param{baryonification_relaxation_exponent}). Concentration $c=c_0(M_{200c}/M_{\rm piv})^{\alpha}(1+z)^{\gamma}$
+(\param{baryonification_concentration_norm}, \param{baryonification_concentration_pivot_mass_msunh},
+\param{baryonification_concentration_mass_slope}, \param{baryonification_concentration_redshift_power}). Hosts: FoF seeds
+with \param{baryonification_fof_linking_length}, \param{baryonification_fof_min_particles},
+\param{baryonification_fof_nmesh_max} and \param{baryonification_fof_buffer_mpch} (larger than the halo radii), and
+$M_{200c}\ge$\,\param{baryonification_min_halo_mass_msunh}. Tables: \param{baryonification_profile_radial_bins} radii from
+\param{baryonification_min_radius_over_r200} to the support \param{baryonification_max_radius_over_r200} (less than half the
+box). \param{baryonification_output_particles} writes the displaced particles as a separate snapshot.
 
 \begin{cppcode}[Baryonifying a catalogue]
 #include <FML/Baryonification/Baryonification.h>

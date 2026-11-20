@@ -1,5 +1,5 @@
 \chapter{Power spectra and polyspectra}\label{ch:power-spectra}
-\chapterstatus{written}{2026-11-17}
+\chapterstatus{written}{2026-11-20}
 
 Fourier-space statistics of particles and fields in periodic boxes: auto and cross power spectra, redshift-space
 multipoles, the bispectrum and higher polyspectra with the shell-product method, and the hybrid Lagrangian-bias basis
@@ -110,7 +110,16 @@ snapshot and $s_{ij}=(k_ik_j/k^2-\delta_{ij}/3)\delta_L$. The 15 cross spectra $
 $P_{tt}=\sum_{ab}b_ab_bP_{ab}$, $P_{tm}=\sum_ab_aP_{1a}$. The operators are computed exactly at the lattice points (on a grid of the lattice size), each
 particle carries the weights $\mathcal O_a(\bm q_i)$ of its lattice point (from its ID, fetched from the owning task), and the advected fields are the
 weighted densities. The linear field comes from the initial conditions or from a file (\file{HybridBiasLinearFieldIO.h}, written by
-\file{SimulationCode} with \param{hybridbias_output_linear_field}); \param{hybridbias} computes them at every output.
+\file{SimulationCode} with \param{hybridbias_output_linear_field}); \param{hybridbias} computes them at every output on an
+\param{hybridbias_nmesh}$^3$ grid (\param{hybridbias_density_assignment_method}, \param{hybridbias_interlacing}), for the first
+\param{hybridbias_noperators} operators (5 gives the 15 spectra). The linear field keeps the modes below
+\param{hybridbias_kcut_over_nyquist} times the particle Nyquist frequency (a spherical cut, so the operators are isotropic as
+the predictions assume) and can be smoothed first (\param{hybridbias_smoothing_filter}, \param{hybridbias_smoothing_scale}).
+The spectra keep the Poisson shot noise unless \param{hybridbias_subtract_shotnoise}. The Zel'dovich control variate uses
+$\beta(k)=[1-\tanh((k-k_0)/\Delta k)]/2$ \cite{Kokron2022} (\param{hybridbias_zeldovich_cv_beta_k0},
+\param{hybridbias_zeldovich_cv_beta_dk}); with \param{hybridbias_zeldovich_field_only} the code writes only the spectra of the
+Zel'dovich field of the initial conditions, without time stepping, which is cheap for averaging the control variate over many
+realizations.
 
 \paragraph*{Predictions.} \file{HybridBiasZeldovich.h} gives the resummed Zel'dovich prediction, $P_{ab}=\int\dd^3q\,e^{i\bm k\cdot\bm q}
 e^{-k_ik_jA_{ij}(q)/2}F_{ab}(\bm k,\bm q)$ with $F_{ab}$ polynomials in the correlators of the fields and the displacement; the angular structure is found by
@@ -119,6 +128,8 @@ projecting kernel products on spherical harmonics, the part linear in the correl
 with Matsubara's $Q_n$, $R_n$ \cite{Matsubara2008} computed in $k$-space (so a sharp cut of $P(k)$ is handled exactly), extended to $\nabla^2\delta$.
 \file{HybridBiasOneLoopMG.h} solves the second- and third-order LPT kernels in time for $\mu(k,a)$ models, $f(R)$ and DGP with or without screening
 \cite{KoyamaTaruyaHiramatsu2009,Aviles2017}, including the transverse second-order displacement of scale-dependent growth.
+In \file{SimulationCode} \param{hybridbias_oneloop_kernels} chooses EdS kernels with the model's linear $P(k)$ or the
+model's own kernels, and \param{hybridbias_lpt_kmin} the lower limit of the $k$ integrals.
 
 \begin{validation}[Validation: hybrid bias]
 \file{tests/test_hybridbias.cpp}: the MG loop functions with GR in Einstein--de Sitter reproduce the EdS ones; the scale-dependent kernels $c_2$, $c_3$ agree

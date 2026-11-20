@@ -1,5 +1,5 @@
 \chapter{Particle--mesh gravity, time stepping and COLA}\label{ch:nbody-pm}
-\chapterstatus{written}{2026-11-14}
+\chapterstatus{written}{2026-11-20}
 
 This chapter describes how \fml{} moves particles under their own gravity: the comoving equations of motion and their
 units, the particle--mesh (PM) force with its choices of Green's function, gradient, assignment and anti-aliasing,
@@ -43,7 +43,10 @@ Fourier space and interpolates the force back to the particles:
 \end{equation}
 with the assignment window $W$ of order $p$ (NGP, CIC, TSC, PCS, PQS; \cref{ch:mass-assignment}),
 $W(\vk)=\prod_j[\mathrm{sinc}(k_j\Delta x/2)]^p$, used both to assign and to interpolate so that the self-force vanishes
-and momentum is conserved \cite{HockneyEastwood1988}. The kernels (\cls{ForceOptions}) are, with $\Delta x=1/N_{\rm mesh}$:
+and momentum is conserved \cite{HockneyEastwood1988}. In SimulationCode the kernel is \param{force_density_assignment_method}
+(CIC by default) and \param{force_interpolation_method} chooses how the force reaches the particles: with the same kernel
+(\code{assignment}), or by evaluating its Fourier series exactly at the particles (\code{nufft}; \code{fiducial}, the
+default, does this when the density is also a NUFFT, so that there is still no self-force). The kernels (\cls{ForceOptions}) are, with $\Delta x=1/N_{\rm mesh}$:
 \begin{center}\small
 \begin{tabularx}{\textwidth}{@{}lXX@{}}
 \toprule
@@ -59,7 +62,8 @@ For an even mesh every gradient kernel is zero for the Nyquist component $k_j=k_
 image, so its derivative is ambiguous; this keeps the force of a reflected density the reflected force); the
 discrete Green's functions set modes where $\sum_jD_j^2$ vanishes to zero. \code{laplace_kernel_from_name} and
 \code{gradient_kernel_from_name} map \code{continuous}, \code{discrete_2pt}, \code{discrete_4pt}. Finite-difference
-forces on the grid (with a stencil order) are an alternative to Fourier differentiation. There are no global defaults:
+forces on the grid (with a stencil order) are an alternative to Fourier differentiation (in SimulationCode,
+experimental: \param{force_use_finite_difference_force}, \param{force_finite_difference_stencil_order}). There are no global defaults:
 each call takes its \cls{ForceOptions}.
 
 \begin{cppcode}[A PM force]
@@ -109,9 +113,12 @@ all but the largest scales ($-13\%$ at $k=0.2\hMpc$ for $64^3$ particles in $256
 \item \param{force_density_method} \code{= nufft}: the exact Fourier modes of the particles by a non-uniform FFT
       (\cref{ch:mass-assignment}, accuracy \param{force_nufft_epsilon}, default $10^{-5}$) and the force evaluated
       exactly at the particles; slightly better again at twice the cost;
-\item \code{sheet}/\code{sheet_nufft}: spectral sheet interpolation (mostly a library feature);
+\item \code{sheet}/\code{sheet_nufft}: spectral sheet interpolation, with \param{force_sheet_refinement}$^3$ tracers per
+      particle placed by Fourier interpolation of the displacement field (mostly a library feature);
 \item \param{force_early_method} \code{= interlaced} or \code{nufft} until \param{force_early_until_redshift}: an
-      accurate force only at early times, when the particles are close to the lattice and CIC is worst.
+      accurate force only at early times, when the particles are close to the lattice and CIC is worst (the interlaced
+      force uses \param{force_early_interlacing_order} shifted grids with \param{force_early_density_assignment_method},
+      default TSC, and deconvolution).
 \end{itemize}
 These options are only meant for $N_{\rm mesh}=N_p^{1/3}$: on finer grids the modes between the particle and grid
 Nyquist frequencies are dominated by discreteness, and removing the smoothing there gives far too much power.
