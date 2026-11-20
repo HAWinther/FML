@@ -524,7 +524,7 @@ ic_random_field_type = "gaussian"
 -- The grid-size used to generate the IC
 ic_nmesh = particle_Npart_1D
 -- Offset of the particle lattice from the force grid nodes: fiducial (half a force-grid cell if
--- force_nmesh > particle_Npart_1D, see EVOLUTION.md), none, half_force_cell
+-- force_nmesh > particle_Npart_1D, see EVOLUTION.md), none, half_force_cell, quarter_force_cell
 ic_lattice_offset = "fiducial"
 -- For MG: input LCDM P(k) and use GR to scale back and ensure same IC as for LCDM
 -- ONLY use this if you don't have the P(k) for the MG model or if you want to consider PMG/PLCDM run with same IC at high z
@@ -634,6 +634,15 @@ force_interpolation_method = "fiducial"
 -- of the assignment window W(k)^2 (only stable with interlacing). See EVOLUTION.md
 force_interlacing_order = 1
 force_deconvolve_window = false
+-- Experimental: the lattice-calibrated Green's function, which makes the linear force exact while the particles
+-- are close to the initial lattice (no extra cost; needs force_nmesh = integer x particle_Npart_1D and no CIC
+-- copy of the lattice on the grid nodes). -1 = fiducial for the taper and the cap. See EVOLUTION.md
+force_lattice_greens_function = false
+if force_lattice_greens_function then
+  force_lattice_greens_until_redshift = -1.0
+  force_lattice_greens_taper_kmin = -1.0
+  force_lattice_greens_cap = -1.0
+end
 -- Experimental: a more accurate force at early times (nufft or interlaced) for z > force_early_until_redshift
 -- (only for force_nmesh = particle_Npart_1D). See EVOLUTION.md
 force_early_method = "none"

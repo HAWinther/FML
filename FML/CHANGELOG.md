@@ -5,6 +5,24 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: the lattice-calibrated Green's function (experimental)
+- `force_lattice_greens_function = true` multiplies the Green's function by (1 - E)/(T - E), with T(k) the linear
+  response of the PM force for particles on the initial lattice, computed in closed form from the assignment, kernels,
+  deconvolution, grid factor, lattice offset and interlacing (`FML/NBody/LatticeGreensFunction.h`,
+  `ForceOptions::lattice_greens`). The linear force is then exact while the particles are close to the lattice: in a
+  linear test (sigma8 = 0.01, 20 FastPM steps z = 19 -> 0) P/P_lin - 1 at k_Ny/2 is +0.02% for plain PCS on a 1x grid
+  (-84% without, -0.08% with interlacing + deconvolution at twice the cost), +0.07% for CIC with the lattice offset by
+  half a cell, +0.4% for CIC on a 2x grid (-18% without). No extra run time; for force grids finer than the particle
+  grid the factor is tabulated on the particle modes of the local slab (at most 1/m^2 of the force grid in single
+  precision). Options: `force_lattice_greens_until_redshift`, `force_lattice_greens_taper_kmin`,
+  `force_lattice_greens_cap`. CIC with a lattice copy on the grid nodes is refused (its response is not linear).
+- `ic_lattice_offset = quarter_force_cell`: with force interlacing (order 2) neither copy of the lattice is then on the
+  nodes.
+- Nonlinearly (64^3 particles, 100 steps, against 128^3) it does not beat the best standard forces when used
+  throughout (1x PCS: -1.3% at k = 0.1 h/Mpc vs -0.6% for interlacing + deconvolution; 2x CIC overshoots by +2% at
+  k = 0.2 h/Mpc); it is meant for early times (`force_lattice_greens_until_redshift` ~ 10). Experimental, off by default.
+- Runs without the option are bit-identical (the regression cases).
+
 ### SimulationCode: NGP is not allowed for the force
 - `force_density_assignment_method` and `force_early_density_assignment_method` no longer accept NGP. The NGP force
   only changes when a particle crosses a cell boundary, so for particles near the initial lattice it is either zero or

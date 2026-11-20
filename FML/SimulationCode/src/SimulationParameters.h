@@ -263,6 +263,11 @@ namespace SIMCODE {
         double early_until_redshift;                 // Use the early force for steps with z > this
         int early_interlacing_order;                 // early_method = interlaced: number of shifted grids
         std::string early_density_assignment_method; // early_method = interlaced: assignment kernel
+        // The lattice-calibrated Green's function (FML/NBody/LatticeGreensFunction.h)
+        bool lattice_greens;                  // Multiply the Green's function by the lattice-calibrated factor
+        double lattice_greens_until_redshift; // ... for steps with z > this
+        double lattice_greens_taper_kmin;     // Taper the factor from this (units of the particle k_Ny); < 0: fiducial
+        double lattice_greens_cap;            // Clip the factor to [1/cap, cap]
 
         /// The parameters (see ParameterFields.h)
         template <class F>
@@ -316,6 +321,35 @@ namespace SIMCODE {
                               "interpolation; by W(k) if one of them is a NUFFT: force_density_method = nufft or "
                               "sheet_nufft, or force_interpolation_method = nufft; not at all if both are). Unstable unless the aliasing is suppressed (force_interlacing_order "
                               "> 1, see EVOLUTION.md)");
+            f.always_optional(
+                "force_lattice_greens_function",
+                lattice_greens,
+                false,
+                "Multiply the Green's function by the lattice-calibrated factor (1 - E)/(T - E), with T(k) the linear "
+                "response of the PM force for particles on the initial lattice, computed in closed form from the "
+                "assignment, kernels, grid factor, lattice offset, interlacing and deconvolution. The linear force is "
+                "then exact up to the particle Nyquist frequency while the particles are close to the lattice. Needs "
+                "force_nmesh = an integer times particle_Npart_1D, assignment density and interpolation, IC on a "
+                "lattice and no CIC copy of the lattice on the grid nodes (use ic_lattice_offset). See "
+                "EVOLUTION.md");
+            f.if_true("force_lattice_greens_function", [&]() {
+                f.always_optional("force_lattice_greens_until_redshift",
+                                  lattice_greens_until_redshift,
+                                  -1.0,
+                                  "Use the lattice-calibrated Green's function for steps with z > this (-1: always)");
+                f.always_optional("force_lattice_greens_taper_kmin",
+                                  lattice_greens_taper_kmin,
+                                  -1.0,
+                                  "The factor is applied fully below this wavenumber of the particle mode (units of "
+                                  "the particle Nyquist frequency) and tapered to 1 at the particle Nyquist "
+                                  "frequency. -1: fiducial (1, no taper, if force_nmesh = particle_Npart_1D, "
+                                  "otherwise 0.7: on a finer grid the untapered factor is unstable over many steps)");
+                f.always_optional("force_lattice_greens_cap",
+                                  lattice_greens_cap,
+                                  -1.0,
+                                  "Clip the factor to [1/cap, cap]. -1: fiducial (no clipping if force_nmesh = "
+                                  "particle_Npart_1D, otherwise 3)");
+            });
             f.always_optional("force_early_method",
                               early_method,
                               "none",
@@ -521,8 +555,9 @@ namespace SIMCODE {
                 "Offset of the initial particle lattice from the nodes of the force grid. fiducial: half a "
                 "force grid cell if force_nmesh > particle_Npart_1D, otherwise none. With particles "
                 "exactly on the nodes of a finer grid, CIC responds to the size of the displacement and gives large "
-                "spurious forces (see the force grid section of EVOLUTION.md)",
-                {"fiducial", "none", "half_force_cell"});
+                "spurious forces (see the force grid section of EVOLUTION.md). quarter_force_cell: a quarter of a "
+                "force cell (with force_interlacing_order = 2 no copy of the lattice is then on the nodes)",
+                {"fiducial", "none", "half_force_cell", "quarter_force_cell"});
             f.choice(Need::Required,
                      "ic_type_of_input",
                      type_of_input,
@@ -680,6 +715,16 @@ namespace SIMCODE {
                    });
         }
     };
+
+    /// The offset of the initial particle lattice from the force grid nodes in units of the force cell
+    /// (ic_lattice_offset; fiducial: half a cell if the force grid is finer than the particle grid)
+    inline double lattice_offset_in_force_cells(const ICSettings & ic, int force_nmesh, int Npart_1D) {
+        if (ic.lattice_offset == "half_force_cell" or (ic.lattice_offset == "fiducial" and force_nmesh > Npart_1D))
+            return 0.5;
+        if (ic.lattice_offset == "quarter_force_cell")
+            return 0.25;
+        return 0.0;
+    }
 
     struct ParticleSettings {
         int Npart_1D;                     // Number of particles per dimension (total is N^NDIM)
@@ -1655,6 +1700,58 @@ namespace SIMCODE {
                     fail("force_interlacing_order = " + std::to_string(force.interlacing_order) +
                          " is not supported (use 1, 2, 4, 8, 16, 27, 32, 64, ...)");
                 }
+            }
+            if (force.lattice_greens) {
+                const int Np = particle.Npart_1D;
+                if (force.lattice_greens_cap >= 0.0 and force.lattice_greens_cap < 1.0)
+                    fail("force_lattice_greens_cap must be >= 1 (or -1: fiducial)");
+                if (force.lattice_greens_taper_kmin == 0.0 or force.lattice_greens_taper_kmin > 1.0)
+                    fail("force_lattice_greens_taper_kmin must be in (0, 1] (or -1: fiducial)");
+                if (NDIM_SPACE != 3)
+                    fail("force_lattice_greens_function is only implemented in 3D");
+                if (force.nmesh % Np != 0 or Np % 2 != 0)
+                    fail("force_lattice_greens_function needs force_nmesh = an integer times particle_Npart_1D "
+                         "(even)");
+                if (force.density_method != "assignment" or force.interpolation_method != "assignment" or
+                    force.early_method == "nufft")
+                    fail("force_lattice_greens_function needs force_density_method = assignment, "
+                         "force_interpolation_method = assignment and force_early_method != nufft (the response "
+                         "of the other methods is not derived)");
+                if (force.short_range.enabled)
+                    fail("force_lattice_greens_function does not support force_short_range");
+                if (ic.reads_particles())
+                    fail("force_lattice_greens_function needs the IC on a lattice (not read from a file)");
+                if (particle.baryons and particle.baryon_lattice != "same")
+                    fail("force_lattice_greens_function needs one lattice: particle_baryon_lattice = same");
+                if (particle.neutrinos and particle.neutrino_Npart_1D != 0 and particle.neutrino_Npart_1D != Np)
+                    fail("force_lattice_greens_function needs the neutrino particles on the same lattice "
+                         "(particle_neutrino_Npart_1D = 0)");
+                // CIC responds to the size of the displacement for a particle on a node: not linear, the factor
+                // runs away. CIC is a product of 1D kernels with a kink at the node, so no copy of the lattice
+                // (offset + interlacing shift) may have any coordinate on a node
+                const double offset = lattice_offset_in_force_cells(ic, force.nmesh, Np);
+                auto check_cic = [&](const std::string & method, int order, const std::string & what) {
+                    if (method != "CIC")
+                        return;
+                    for (auto & sh : FML::INTERPOLATION::generate_interlacing_shifts<3>(order, 1.0)) {
+                        bool on_a_node = false;
+                        for (auto v : sh) {
+                            const double x = offset + v;
+                            on_a_node = on_a_node or std::abs(x - std::round(x)) < 1e-12;
+                        }
+                        if (on_a_node)
+                            fail("force_lattice_greens_function with CIC" + what +
+                                 ": a copy of the lattice has a coordinate on the grid nodes, where CIC is not "
+                                 "linear. Offset the lattice (ic_lattice_offset = half_force_cell without "
+                                 "interlacing, quarter_force_cell with force_interlacing_order = 2, 4 or 8) or use "
+                                 "TSC or higher");
+                    }
+                };
+                check_cic(force.density_assignment_method, force.interlacing_order, "");
+                if (force.early_method == "interlaced")
+                    check_cic(force.early_density_assignment_method,
+                              force.early_interlacing_order,
+                              " (force_early_density_assignment_method)");
             }
             if (ic.input_filename.empty() and ic.type_of_input != ICInputType::InternalTransfer and
                 not ic.reads_particles())

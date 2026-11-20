@@ -72,6 +72,15 @@ or use TSC, or (as SimulationCode does by default, see `SimulationCode/EVOLUTION
 offset the lattice by half a force cell and use the four-point gradient.
 `NBody/example` uses the two-point gradient.
 
+## Lattice-calibrated Green's function
+
+`ForceOptions::lattice_greens` (a pointer, default null) multiplies the Green's function of every force mode by the
+factor of `LatticeGreensFunction` (`LatticeGreensFunction.h`): (1 - E)/(T - E) with T(k) the closed-form linear
+response of the PM force for particles on a cubic lattice with Nmesh = m Npart_1D. The linear force is then exact while
+the particles are close to the lattice. Construct it once from the particle and force grids, the assignment order, the
+kernels, the lattice offset, the interlacing shifts and the deconvolution power used in the force, and keep it alive
+while the options point to it. Null leaves the force unchanged (bit-identical). See `SimulationCode/EVOLUTION.md`.
+
 ## Migration
 
 The old `FIDUCIAL_LAPLACE_KERNEL`, `FIDUCIAL_GRADIENT_KERNEL`,

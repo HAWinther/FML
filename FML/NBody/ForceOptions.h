@@ -36,6 +36,8 @@ namespace FML::NBODY {
     /// growth of the large-scale modes can be wrong by tens of per cent (a factor of several in a test at very
     /// small amplitude). Use gradient_kernel = DISCRETE_TWO_POINT_GRADIENT (or TSC, or offset the lattice by half
     /// a force cell and use DISCRETE_FOUR_POINT_GRADIENT as SimulationCode does). See ForceOptions.md.
+    class LatticeGreensFunction;
+
     struct ForceOptions {
         GreensFunctionLaplaceOperatorKernels laplace_kernel{CONTINUOUS_GREENS_FUNCTION};
         GradientKernels gradient_kernel{CONTINUOUS_GRADIENT};
@@ -43,6 +45,9 @@ namespace FML::NBODY {
         // The number of window functions W(k) in the force that deconvolve divides out: 2 for assignment and
         // interpolation with the kernel, 1 if one of them is exact (NUFFT), 0 if both are
         int deconvolve_window_power{2};
+        // If set, the Green's function of every force mode is multiplied by the lattice-calibrated factor (see
+        // LatticeGreensFunction.h): the linear force on particles near a lattice is then exact. Not owned
+        const LatticeGreensFunction * lattice_greens{nullptr};
         void validate() const {
             if (laplace_kernel < CONTINUOUS_GREENS_FUNCTION ||
                 laplace_kernel > DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT || gradient_kernel < CONTINUOUS_GRADIENT ||

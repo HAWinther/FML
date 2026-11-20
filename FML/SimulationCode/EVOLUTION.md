@@ -123,6 +123,78 @@ P(k) is the same to 0.1% for force_nufft_epsilon = 1e-3 to 1e-6, but in a linear
 eps = 1e-3 gives +5% and 1e-4 -0.2%, so the default is 1e-5. The NUFFT needs FFTs on a grid 2x finer than
 force_nmesh.
 
+## The lattice-calibrated Green's function (experimental)
+
+`force_lattice_greens_function = true` multiplies the Green's function of every force mode q by a factor
+C(k) = (1 - E)/(T - E) of the particle mode k = fold(q) (q modulo the particle Nyquist zone). T(k) is the linear
+response of the PM force for particles on the initial lattice: the force on a displacement mode k divided by the
+exact force. It follows in closed form from the assignment window, the Green's function and gradient kernels, the
+deconvolution, the grid factor m = force_nmesh / particle_Npart_1D, the lattice offset and the interlacing shifts
+(`FML/NBody/LatticeGreensFunction.h`). E is the response from the force field the undisplaced lattice already has
+(nonzero for m >= 3). With the factor the linear force is exact up to the particle Nyquist frequency while the
+particles are close to the lattice, at no extra run time: it is computed on the fly for m = 1 (one term per mode) and
+tabulated for m >= 2 on the particle modes of the local slab (1/(2m^2) to 1/m^2 of the force grid in single
+precision). The idea goes back to Bouchet & Kandrup (1985, ApJ 299, 1).
+
+- `force_lattice_greens_until_redshift` (-1: always): use it only for steps at z > this.
+- `force_lattice_greens_taper_kmin` (fiducial: 1 for m = 1, 0.7 for m >= 2) and `force_lattice_greens_cap`
+  (fiducial: none for m = 1, 3 for m >= 2): on a finer grid the largest corrections (T small near the particle
+  Nyquist frequency) amplify the lattice images as the particles move and the run goes unstable within ~20 steps,
+  so the factor is tapered to 1 at the particle Nyquist frequency and clipped. Particle modes with |k| > k_Ny get no
+  correction.
+- Requirements (checked): force_nmesh an integer times particle_Npart_1D, assignment density and interpolation (not
+  NUFFT or sheet), the IC on a lattice (not read from a file), one lattice for all species, no short-range force.
+- The response must be linear in the displacement. The assignment kernel of order p (CIC p = 2, TSC 3, PCS 4) has
+  knots, where it is only p - 2 times differentiable: on the nodes for even p and half-way between them for odd p.
+  For CIC the knots are kinks and the response of a particle on one is not linear at all, so a CIC lattice copy on
+  the nodes is refused: use `ic_lattice_offset = half_force_cell` (no interlacing) or `quarter_force_cell` (with
+  force_interlacing_order = 2, whose second copy is shifted by half a cell). For TSC the lattice should be on the
+  nodes (`ic_lattice_offset = none`): at half a cell the factor works for one step but drifts by -1.3% at k_Ny/2 in
+  20 steps. PCS is smooth enough anywhere.
+
+Linear test: 128^3 particles in 256 Mpc/h at sigma8 = 0.01 (fixed amplitude), 2LPT at z = 19, P/P_lin - 1 of the
+displacement field at k / k_Ny(particles) = 0.25 / 0.5 / 0.75 after 20 FastPM steps to z = 0, fiducial kernels:
+
+| Setup                                     | Standard                    | Calibrated              |
+|-------------------------------------------|-----------------------------|-------------------------|
+| 1x PCS                                    | -42% / -84% / -95%          | +0.03% / +0.02% / +0.02% |
+| 1x TSC (nodes)                            | -37% / -79% / -93%          | +0.03% / +0.04% / +0.04% |
+| 1x CIC, offset 1/2                        | -29% / -71% / -91%          | +0.03% / +0.07% / +0.23% |
+| 1x CIC, interlacing 2, offset 1/4         | -26% / -67% / -89%          | +0.03% / +0.06% / +0.18% |
+| (1x PCS, interlacing 2, deconvolved)      | +0.02% / -0.08% / -1.9%     |                         |
+| 2x CIC (offset 1/2)                       | -5.3% / -18% / -34%         | +0.08% / +0.42% / -2.4% |
+| 2x CIC, interlacing 2, offset 1/4         | -1.8% / -5.2% / -11%        | +0.09% / +0.53% / +0.52% |
+| 3x CIC (offset 1/2)                       | -3.9% / -14% / -28%         | +0.11% / +0.62% / -1.3% |
+| 3x TSC, nodes                             | +0.24% / +0.58% / -1.8%     | +0.05% / +0.58% / +1.5% |
+
+In one step every calibrated setup is exact to 0.01% below 0.5 k_Ny (1x: to k_Ny). On the 1x grid the calibrated
+factor makes plain PCS, TSC or (offset) CIC better than interlacing + deconvolution at half its cost. On finer grids
+the error after 20 steps (+0.4-0.6% at k_Ny/2) comes from the particles moving off the lattice, where the response
+drifts. The factor is exact only near the lattice, so `force_lattice_greens_until_redshift` switches it off at late
+times.
+
+Nonlinear test: 64^3 particles in 256 Mpc/h, sigma8 = 0.8, 2LPT at z = 19, 100 FastPM steps, P(k) at z = 0 relative
+to a run with 128^3 particles (3x grid, TSC), at k = 0.03 / 0.1 / 0.2 / 0.4 h/Mpc (k_Ny = 0.79 h/Mpc):
+
+| Setup (64^3 particles)                         | k = 0.03 / 0.1 / 0.2 / 0.4 h/Mpc     |
+|------------------------------------------------|--------------------------------------|
+| 6x grid, TSC                                   | -0.03% / -0.34% / -1.1% / -3.8%      |
+| 1x CIC (default)                               | -0.73% / -4.2% / -13% / -32%         |
+| 1x PCS, interlacing 2, deconvolved             | -0.12% / -0.60% / -1.2% / -2.1%      |
+| 1x PCS, calibrated                             | -0.39% / -1.3% / -1.9% / -2.3%       |
+| 1x PCS, interlacing 2, deconvolved, cal. z > 10 | -0.14% / -0.64% / -1.2% / -2.3%      |
+| 1x CIC, offset 1/2, calibrated                 | -1.3% / -3.8% / -6.7% / -11%         |
+| 2x CIC (default)                               | +0.02% / -0.03% / -0.20% / -2.4%     |
+| 2x CIC, calibrated                             | +0.09% / +0.63% / +2.1% / +5.8%      |
+| 2x CIC, calibrated z > 10                      | +0.04% / +0.17% / +0.48% / -0.38%    |
+
+The linear exactness does not carry over to the nonlinear regime: the factor is right for a lattice, not for particles
+in halos. On a 1x grid the calibrated PCS is much better than PCS or CIC but 0.3-0.7% below PCS with interlacing and
+deconvolution on large scales (at half its cost); on finer grids the calibration used throughout overshoots, because
+the standard force has the (slower) linear growth of the discrete particle system and the nonlinear P(k) follows that
+system. The recommended use is therefore at early times, `force_lattice_greens_until_redshift` ~ 10, with the best
+late-time force for the grid. The test is small (64^3, one seed); the defaults are unchanged.
+
 ## Starting from the Big Bang with BullFrog
 
 A BullFrog step is exact for the second order (2LPT) growing mode, so the simulation can start at (almost) a = 0 with

@@ -134,6 +134,10 @@ class NBodySimulation {
     bool early_force{false}; // current_force are the early-time settings
     FML::NBODY::ForceOptions force_options;
     void set_force_settings_for_step(double a);
+    /// The lattice-calibrated Green's functions (force_lattice_greens_function), one per force configuration used
+    /// (the early-time settings can differ); freed once the run is past force_lattice_greens_until_redshift
+    std::map<std::string, std::unique_ptr<FML::NBODY::LatticeGreensFunction>> lattice_greens_cache;
+    const FML::NBODY::LatticeGreensFunction * lattice_greens_for_current_force();
 
     /// The linear N-body gauge source (if force_nbody_gauge)
     std::shared_ptr<SIMCODE::NBodyGaugeSource> nbody_gauge;
@@ -365,6 +369,8 @@ class NBodySimulation {
     std::function<double(double)> ic_velocity_norm_2LPT_of_kBox(double fac) const;
     void store_cola_potentials(const FFTWGrid<NDIM> & delta_cb_fourier, FFTWGrid<NDIM> * phi_2LPT_ini_fourier);
     void apply_lattice_offset();
+    /// The offset of the initial particle lattice from the force grid nodes (units of the force cell)
+    double lattice_offset_in_force_cells() const;
     void read_ic();
     void setup_nbody_gauge();
 

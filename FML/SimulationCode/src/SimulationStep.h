@@ -172,11 +172,65 @@ void NBodySimulation<NDIM, T>::set_force_settings_for_step(double a) {
     force_options.deconvolve_window_power =
         int(current_force.density_method == "assignment" or current_force.density_method == "sheet") +
         int(current_force.interpolation_method == "assignment");
+    // The lattice-calibrated Green's function while the particles are close to the lattice
+    force_options.lattice_greens = nullptr;
+    if (f.lattice_greens) {
+        if (1.0 / a - 1.0 > f.lattice_greens_until_redshift) {
+            force_options.lattice_greens = lattice_greens_for_current_force();
+        } else if (not lattice_greens_cache.empty()) {
+            lattice_greens_cache.clear();
+            if (FML::ThisTask == 0)
+                std::cout << "End of the lattice-calibrated Green's function at z = " << 1.0 / a - 1.0 << "\n";
+        }
+    }
     early_force = early;
     if (not early)
         initial_density_field.end_of_early_force();
     if (early and FML::ThisTask == 0)
         std::cout << "Using the early-time force (" << f.early_method << ") at z = " << 1.0 / a - 1.0 << "\n";
+}
+
+/// The lattice-calibrated Green's function for the force settings of the step (current_force, force_options), made
+/// the first time they are used. See FML/NBody/LatticeGreensFunction.h
+template <int NDIM, class T>
+auto NBodySimulation<NDIM, T>::lattice_greens_for_current_force() -> const FML::NBODY::LatticeGreensFunction * {
+    if constexpr (NDIM != 3) {
+        throw std::runtime_error("force_lattice_greens_function is only implemented in 3D");
+    } else {
+        const auto & f = current_force;
+        const int deconvolve_power = force_options.deconvolve ? force_options.deconvolve_window_power : 0;
+        const std::string key = f.density_assignment_method + "_" + std::to_string(f.interlacing_order) + "_" +
+                                std::to_string(deconvolve_power) + "_" + std::to_string(force_options.laplace_kernel) +
+                                "_" + std::to_string(force_options.gradient_kernel);
+        auto & lg = lattice_greens_cache[key];
+        if (lg)
+            return lg.get();
+        FML::NBODY::LatticeGreensFunction::Settings st;
+        st.Npart_1D = params.particle.Npart_1D;
+        st.Nmesh = f.nmesh;
+        st.assignment_order = FML::INTERPOLATION::interpolation_order_from_name(f.density_assignment_method);
+        st.lattice_offset.fill(lattice_offset_in_force_cells());
+        st.shifts = FML::INTERPOLATION::generate_interlacing_shifts<3>(f.interlacing_order, 1.0);
+        st.laplace_kernel = force_options.laplace_kernel;
+        st.gradient_kernel = force_options.gradient_kernel;
+        st.deconvolve_window_power = deconvolve_power;
+        const int m = f.nmesh / params.particle.Npart_1D;
+        st.taper_kmin = params.force.lattice_greens_taper_kmin > 0.0 ? params.force.lattice_greens_taper_kmin
+                                                                     : (m == 1 ? 1.0 : 0.7);
+        st.taper_kmax = 1.0;
+        st.cap = params.force.lattice_greens_cap >= 1.0 ? params.force.lattice_greens_cap
+                                                         : (m == 1 ? std::numeric_limits<double>::infinity() : 3.0);
+        timer.StartTiming("LatticeGreensFunction");
+        lg = std::make_unique<FML::NBODY::LatticeGreensFunction>(st);
+        timer.EndTiming("LatticeGreensFunction");
+        if (FML::ThisTask == 0)
+            std::cout << "Lattice-calibrated Green's function: " << f.density_assignment_method
+                      << ", force grid = " << m << " x particle grid, lattice offset "
+                      << lattice_offset_in_force_cells() << " cell, " << st.shifts.size()
+                      << " interlacing shift(s), deconvolution power " << deconvolve_power << ", taper from "
+                      << st.taper_kmin << " k_Ny, cap " << st.cap << "\n";
+        return lg.get();
+    }
 }
 
 /// The density grid of the PM step (the grid of the previous step if it has the same size and extra slices,

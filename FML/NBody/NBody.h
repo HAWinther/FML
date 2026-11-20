@@ -13,6 +13,7 @@
 #include <FML/FFTWGrid/GridInterface.h>
 #include <FML/Global/Global.h>
 #include <FML/NBody/ForceOptions.h>
+#include <FML/NBody/LatticeGreensFunction.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/LPT/DisplacementFields.h>
 #include <FML/MPIParticles/MPIParticles.h>
@@ -415,6 +416,8 @@ namespace FML {
                     const int nover2 = Nmesh / 2;
                     const int nover2plus1 = Nmesh / 2 + 1;
                     const double twopi = 2.0 * M_PI;
+                    if (options.lattice_greens)
+                        options.lattice_greens->prepare(Local_x_start, Local_nx);
                 // OpenMP over the rows (islice, iy): a task can have fewer slices than threads
 #ifdef USE_OMP
 #pragma omp parallel for collapse(2)
@@ -446,6 +449,8 @@ namespace FML {
                                 value *=
                                     greens_function_laplace_operator_fourier<N>(kmag2, kvec, Nmesh, LAPLACE_KERNEL);
                             }
+                            if (options.lattice_greens)
+                                value *= options.lattice_greens->correction(k_vec_integer);
                             if (DECONVOLVE) {
                                 double W = window_table(kvec);
                                 value /= (options.deconvolve_window_power == 2 ? W * W : (options.deconvolve_window_power == 1 ? W : 1.0));
@@ -464,6 +469,9 @@ namespace FML {
                     force_real[idim].fftw_c2r();
                 return;
                 }
+
+            if (options.lattice_greens and N != 3)
+                throw std::runtime_error("[compute_force_from_density_fourier] lattice_greens is 3D only");
 
             // Loop over all local fourier grid cells
 #ifdef USE_OMP
@@ -499,6 +507,12 @@ namespace FML {
                     } else {
                         value *= greens_function_laplace_operator_fourier<N>(kmag2, kvec, Nmesh, LAPLACE_KERNEL);
                     }
+
+                    // The lattice-calibrated factor (3D only)
+                    if constexpr (N == 3)
+                        if (options.lattice_greens)
+                            value *= options.lattice_greens->correction(
+                                {int(k_vec_integer[0]), int(k_vec_integer[1]), int(k_vec_integer[2])});
 
                     // Deconvolve the density assignment?
                     if (DECONVOLVE) {

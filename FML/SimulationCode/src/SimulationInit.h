@@ -593,18 +593,21 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_one_species(const FFT
 /// (a rectified response) and this gives large spurious forces.
 /// This is a uniform translation of all the particles (all species) so it does not change the physics
 template <int NDIM, class T>
+double NBodySimulation<NDIM, T>::lattice_offset_in_force_cells() const {
+    return SIMCODE::lattice_offset_in_force_cells(params.ic, params.force.nmesh, params.particle.Npart_1D);
+}
+
+template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::apply_lattice_offset() {
-    const auto & ic = params.ic;
-    const bool offset_lattice = ic.lattice_offset == "half_force_cell" or
-                                (ic.lattice_offset == "fiducial" and params.force.nmesh > params.particle.Npart_1D);
-    if (not offset_lattice)
+    const double offset_cells = lattice_offset_in_force_cells();
+    if (offset_cells == 0.0)
         return;
-    const double shift = 0.5 / double(params.force.nmesh);
+    const double shift = offset_cells / double(params.force.nmesh);
     // Scale-dependent COLA interpolates its LPT potentials (of the lattice before the offset) at q - shift
     cola.lattice_offset = shift;
     if (FML::ThisTask == 0)
-        std::cout << "Offsetting the particle lattice by half a force grid cell (" << shift * params.simulation.boxsize
-                  << " Mpc/h) in each direction\n";
+        std::cout << "Offsetting the particle lattice by " << offset_cells << " force grid cell ("
+                  << shift * params.simulation.boxsize << " Mpc/h) in each direction\n";
     for_each_species([&](auto & particles, const SIMCODE::SpeciesInfo &) {
         using P = std::remove_reference_t<decltype(*particles.get_particles_ptr())>;
         for (auto & p : particles) {
