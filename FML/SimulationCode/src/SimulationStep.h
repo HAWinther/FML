@@ -167,6 +167,11 @@ void NBodySimulation<NDIM, T>::set_force_settings_for_step(double a) {
         current_force.deconvolve_window = true;
     }
     force_options.deconvolve = current_force.deconvolve_window;
+    // The windows in the force: one from the density (assignment and sheet assign with the kernel; nufft and
+    // sheet_nufft are exact) and one from the interpolation to the particles (assignment; nufft is exact)
+    force_options.deconvolve_window_power =
+        int(current_force.density_method == "assignment" or current_force.density_method == "sheet") +
+        int(current_force.interpolation_method == "assignment");
     early_force = early;
     if (not early)
         initial_density_field.end_of_early_force();

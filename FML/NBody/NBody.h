@@ -448,7 +448,7 @@ namespace FML {
                             }
                             if (DECONVOLVE) {
                                 double W = window_table(kvec);
-                                value /= (W * W);
+                                value /= (options.deconvolve_window_power == 2 ? W * W : (options.deconvolve_window_power == 1 ? W : 1.0));
                             }
                             for (int idim = 0; idim < N; idim++) {
                                 force_real[idim].set_fourier_from_index(
@@ -503,7 +503,7 @@ namespace FML {
                     // Deconvolve the density assignment?
                     if (DECONVOLVE) {
                         double W = window_function(kvec);
-                        value /= (W * W);
+                        value /= (options.deconvolve_window_power == 2 ? W * W : (options.deconvolve_window_power == 1 ? W : 1.0));
                     }
 
                     // Apply kernel for D to get force so in the end we have
@@ -1625,7 +1625,7 @@ namespace FML {
                         potential_deconvolved.get_fourier_wavevector_and_norm2_by_index(fourier_index, kvec, kmag2);
                         const double W = window_table(kvec);
                         auto value = potential_deconvolved.get_fourier_from_index(fourier_index);
-                        value /= (W * W);
+                        value /= (options.deconvolve_window_power == 2 ? W * W : (options.deconvolve_window_power == 1 ? W : 1.0));
                         potential_deconvolved.set_fourier_from_index(fourier_index, value);
                     }
                 }

@@ -256,7 +256,7 @@ Every parameter of SimulationCode (\cref{ch:simulation-code}), as the code defin
 \param{force_gradient_kernel}\newline{\footnotesize string, \code{"fiducial"}} & always & Kernel for D when computing the forces. fiducial = continuous if \code{force_nmesh} = \code{particle_Npart_1D}, \code{discrete_4pt} if \code{force_nmesh} is up to 3x larger and \code{discrete_2pt} if it is even larger (the continuous kernel gives spurious forces from the particle lattice when the force grid is finer than it). Options: \code{fiducial}, \code{continuous}, \code{discrete_2pt}, \code{discrete_4pt} \\[2pt]
 \param{force_density_method}\newline{\footnotesize string, \code{"assignment"}} & always & How the density field for the force is computed. assignment: particles to grid with \code{force_density_assignment_method.} nufft: the exact Fourier modes of the particle distribution (non-uniform FFT; no window function or aliasing). sheet: spectral sheet interpolation, R\textasciicircum{}NDIM tracers per particle placed by Fourier interpolating the displacement field x - q, assigned with \code{force_density_assignment_method.} \code{sheet_nufft}: sheet interpolation with the exact Fourier modes of the tracers (NUFFT). The force is always interpolated back to the particles with \code{force_density_assignment_method.} Options: \code{assignment}, \code{nufft}, \code{sheet}, \code{sheet_nufft} \\[2pt]
 \param{force_interlacing_order}\newline{\footnotesize int, \code{1}} & always & Force interlacing: compute the force for this many copies of the particles shifted by a fraction of a cell relative to the grid and average (at the particles). 1: off, 2: shift (1/2,1/2,1/2), 4: the half-cell face diagonals, 8: all half-cell corners, 64: quarter cells. Cancels the leading aliasing of the density assignment and the force interpolation at the cost of this many force calculations \\[2pt]
-\param{force_deconvolve_window}\newline{\footnotesize bool, \code{false}} & always & Divide the force by W(k)\textasciicircum{}2 where W is the window function of \code{force_density_assignment_method} (corrects for the smoothing of the assignment and the interpolation). Unstable unless the aliasing is suppressed (\code{force_interlacing_order} > 1, see EVOLUTION.md) \\[2pt]
+\param{force_deconvolve_window}\newline{\footnotesize bool, \code{false}} & always & Divide the force by W(k)\textasciicircum{}2 where W is the window function of \code{force_density_assignment_method} (corrects for the smoothing of the assignment and the interpolation; by W(k) if one of them is a NUFFT: \code{force_density_method} = nufft or \code{sheet_nufft}, or \code{force_interpolation_method} = nufft; not at all if both are). Unstable unless the aliasing is suppressed (\code{force_interlacing_order} > 1, see EVOLUTION.md) \\[2pt]
 \param{force_early_method}\newline{\footnotesize string, \code{"none"}} & always & A more accurate force at early times (when the particles are still close to the lattice and CIC is inaccurate): nufft (NUFFT density and interpolation) or interlaced (\code{force_early_interlacing_order} shifted grids with \code{force_early_density_assignment_method} and window deconvolution) for steps at z > \code{force_early_until_redshift}, then the normal force settings. none: off. Options: \code{none}, \code{nufft}, \code{interlaced} \\[2pt]
 \param{force_early_until_redshift}\newline{\footnotesize double, \code{10}} & \code{force_early_method} in \{nufft, interlaced\} & Use the early force for z > this \\[2pt]
 \param{force_early_interlacing_order}\newline{\footnotesize int, \code{2}} & \code{force_early_method} = interlaced & Number of shifted grids at early times \\[2pt]
@@ -508,8 +508,8 @@ Not everything is implemented yet for CDM and baryons as separate particles (\co
 \endhead
 \bottomrule
 \endlastfoot
-\code{timestep_method = Quinn} &  & yes \\
-\code{simulation_use_cola = false} &  & yes \\
+\code{timestep_method = Quinn} (the relativistic factors of each neutrino are applied on the plain kick and drift; FastPM, Tassev and BullFrog take their factors from the growth of a cold fluid, which the free-streaming neutrinos do not follow) &  & yes \\
+\code{simulation_use_cola = false} (the LPT frame of the CDM+baryons does not describe the neutrinos: their thermal motion is not small relative to it) &  & yes \\
 \code{timestep_method} other than \code{Tassev} with COLA (the modified Tassev operators get the baryon-CDM relative velocity wrong: +30\% in \code{P_b}-c with 20 linear steps) & yes &  \\
 \code{simulation_cola_LPT_order} <= \code{ic_LPT_order} (with COLA) & yes &  \\
 \code{simulation_enforce_LPT_trajectories = false} & yes & yes \\
@@ -517,10 +517,7 @@ Not everything is implemented yet for CDM and baryons as separate particles (\co
 \code{ic_random_field_type = gaussian} or \code{nongaussian} & yes & yes \\
 \code{ic_LPT_order = 1} or \code{2} & yes &  \\
 \code{force_linear_massive_neutrinos = false} (the particles replace the linear neutrinos) &  & yes \\
-\code{force_density_method = assignment} & yes & yes \\
-\code{force_interpolation_method} other than \code{nufft} & yes & yes \\
-\code{force_interlacing_order = 1} & yes & yes \\
-\code{force_early_method = none} & yes & yes \\
+\code{force_density_method = assignment} or \code{nufft} (not the sheet densities) & yes & yes \\
 \code{force_nbody_gauge = false} & yes & yes \\
 \code{lightcone = false} & yes & yes \\
 \code{pofk_multipole = false} & yes & yes \\

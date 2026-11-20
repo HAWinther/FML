@@ -5,6 +5,16 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: force deconvolution with the NUFFT and sheet_nufft densities
+- `force_deconvolve_window` divided the force by W(k)^2 also when the density or the interpolation is exact (a NUFFT),
+  which over-corrects: with `force_density_method = sheet_nufft` (PCS) or `nufft` with assignment interpolation the
+  linear growth at k_Ny/2 was +25% too large in one step, and with `nufft` (exact interpolation) the deconvolution was
+  applied although there is no window at all. The force is now divided by W(k)^p with p the number of windows in it:
+  one for an `assignment` or `sheet` density and one for `assignment` interpolation (`ForceOptions::deconvolve_window_power`,
+  set every step from the force settings). With the fix: sheet_nufft PCS +0.36% (sheet PCS: +0.32%), nufft density +
+  PCS interpolation +0.35%, nufft +0.000%. Runs with an assignment density are unchanged (the regression cases are
+  bit-identical); `force_early_method = nufft` was not affected (it turns the deconvolution off).
+
 ### SimulationCode: force interlacing and the NUFFT force with several particle species
 - Force interlacing, the NUFFT force (`force_density_method` / `force_interpolation_method = nufft`) and the
   early-time force (`force_early_method`) now work with CDM and baryon particles (`particle_baryons`) and with

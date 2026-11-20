@@ -312,7 +312,8 @@ namespace SIMCODE {
                               false,
                               "Divide the force by W(k)^2 where W is the window function of "
                               "force_density_assignment_method (corrects for the smoothing of the assignment and the "
-                              "interpolation). Unstable unless the aliasing is suppressed (force_interlacing_order "
+                              "interpolation; by W(k) if one of them is a NUFFT: force_density_method = nufft or "
+                              "sheet_nufft, or force_interpolation_method = nufft; not at all if both are). Unstable unless the aliasing is suppressed (force_interlacing_order "
                               "> 1, see EVOLUTION.md)");
             f.always_optional("force_early_method",
                               early_method,

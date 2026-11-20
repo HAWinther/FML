@@ -40,6 +40,9 @@ namespace FML::NBODY {
         GreensFunctionLaplaceOperatorKernels laplace_kernel{CONTINUOUS_GREENS_FUNCTION};
         GradientKernels gradient_kernel{CONTINUOUS_GRADIENT};
         bool deconvolve{false};
+        // The number of window functions W(k) in the force that deconvolve divides out: 2 for assignment and
+        // interpolation with the kernel, 1 if one of them is exact (NUFFT), 0 if both are
+        int deconvolve_window_power{2};
         void validate() const {
             if (laplace_kernel < CONTINUOUS_GREENS_FUNCTION ||
                 laplace_kernel > DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT || gradient_kernel < CONTINUOUS_GRADIENT ||
