@@ -59,6 +59,14 @@ namespace SIMCODE {
             if (params.particle.baryons and params.force.short_range.enabled)
                 fail("cosmology_model = CoupledQuintessence with particle_baryons = true is not implemented with "
                      "force_short_range");
+            // The fifth force of the CDM on the CDM (kick_cdm_fifth_force) is computed with plain density assignment
+            // and interpolation
+            const auto & f = params.force;
+            if (params.particle.baryons and (f.interlacing_order > 1 or f.density_method != "assignment" or
+                                             f.interpolation_method == "nufft" or f.early_method != "none"))
+                fail("cosmology_model = CoupledQuintessence with particle_baryons = true needs force_density_method = "
+                     "assignment, force_interpolation_method = assignment, force_interlacing_order = 1 and "
+                     "force_early_method = none (the fifth force of the CDM is computed without interlacing or NUFFT)");
             if (params.particle.baryons and params.timestep.method == FML::NBODY::TimestepMethod::BullFrog)
                 fail("cosmology_model = CoupledQuintessence with particle_baryons = true needs timestep_method = "
                      "Quinn, Tassev or FastPM (BullFrog follows the growth of one fluid)");

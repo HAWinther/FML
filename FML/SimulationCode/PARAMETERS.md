@@ -396,8 +396,8 @@ Not everything is implemented yet for CDM and baryons as separate particles (`pa
 
 | Needs | `particle_baryons` | `particle_neutrinos` |
 |---|---|---|
-| `timestep_method = Quinn` |  | yes |
-| `simulation_use_cola = false` |  | yes |
+| `timestep_method = Quinn` (the relativistic factors of each neutrino are applied on the plain kick and drift; FastPM, Tassev and BullFrog take their factors from the growth of a cold fluid, which the free-streaming neutrinos do not follow) |  | yes |
+| `simulation_use_cola = false` (the LPT frame of the CDM+baryons does not describe the neutrinos: their thermal motion is not small relative to it) |  | yes |
 | `timestep_method` other than `Tassev` with COLA (the modified Tassev operators get the baryon-CDM relative velocity wrong: +30% in P_b-c with 20 linear steps) | yes |  |
 | `simulation_cola_LPT_order` <= `ic_LPT_order` (with COLA) | yes |  |
 | `simulation_enforce_LPT_trajectories = false` | yes | yes |
@@ -405,10 +405,7 @@ Not everything is implemented yet for CDM and baryons as separate particles (`pa
 | `ic_random_field_type = gaussian` or `nongaussian` | yes | yes |
 | `ic_LPT_order = 1` or `2` | yes |  |
 | `force_linear_massive_neutrinos = false` (the particles replace the linear neutrinos) |  | yes |
-| `force_density_method = assignment` | yes | yes |
-| `force_interpolation_method` other than `nufft` | yes | yes |
-| `force_interlacing_order = 1` | yes | yes |
-| `force_early_method = none` | yes | yes |
+| `force_density_method = assignment` or `nufft` (not the sheet densities) | yes | yes |
 | `force_nbody_gauge = false` | yes | yes |
 | `lightcone = false` | yes | yes |
 | `pofk_multipole = false` | yes | yes |

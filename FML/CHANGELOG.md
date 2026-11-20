@@ -5,6 +5,22 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: force interlacing and the NUFFT force with several particle species
+- Force interlacing, the NUFFT force (`force_density_method` / `force_interpolation_method = nufft`) and the
+  early-time force (`force_early_method`) now work with CDM and baryon particles (`particle_baryons`) and with
+  neutrino particles (`particle_neutrinos`). The density is that of all the species (weighted; the neutrinos with
+  their delta-f weights) and each species is kicked with the force at its positions, with its own step (and the
+  relativistic factor for the neutrinos). With interlacing all the species are shifted together. The COLA correction
+  for species with their own friction and the delta-f weight update now follow every kick path
+  (`kick_species_extras`). Not with coupled quintessence and two species (the fifth force of the CDM uses plain
+  assignment); the sheet densities are still one species only.
+- `FML/NUFFT`: `particle_weights` uses the delta-f weights of particles that have them (as `particles_to_grid`).
+- The NUFFT kick transforms the force grids once and evaluates them for every species.
+- `SPECIES.md`: why the neutrino particles are Quinn only and without COLA; the error messages say it too.
+- Validation (`SPECIES.md`): P_cb with CDM and baryon particles relative to one species with the same force agrees
+  in the same way for CIC, interlacing and NUFFT (+0.07% at k = 0.03, +1.1-1.6% at k = 0.4 h/Mpc); P_nu / P_cb is the
+  same with the three forces to 0.03% at k = 0.03. Five new regression cases; the existing cases are bit-identical.
+
 ### ReACT: one collapse per redshift for coupled dark matter (8 s -> 0.9 s)
 - `HaloModelReaction::Cosmology::fifth_force_mass_independent`: with an unscreened fifth force delta_c and Delta_vir
   do not depend on the halo, so one collapse per redshift instead of one per mass (react_mass_loop = 30). Set for

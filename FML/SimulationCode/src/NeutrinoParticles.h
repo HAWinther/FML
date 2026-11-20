@@ -6,6 +6,7 @@
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/MPIParticles/MPIParticles.h>
+#include <FML/NUFFT/NUFFT.h>
 #include <FML/Spline/Spline.h>
 
 #include "ICFromParameters.h"
@@ -159,6 +160,8 @@ namespace SIMCODE {
 
         /// The neutrino density delta_nu(k) (the grid must be allocated). The k = 0 mode is set to zero
         void density_fourier(SimulationGrid<NDIM> & density, const std::string & density_assignment_method);
+        /// The same with a NUFFT (no window function, no aliasing; force_density_method = nufft)
+        void density_fourier_nufft(SimulationGrid<NDIM> & density, double nufft_epsilon);
 
       private:
         Container part;
@@ -337,6 +340,16 @@ namespace SIMCODE {
         // Without the delta-f weights the density is 1 + delta
         if (FML::ThisTask == 0)
             density.set_fourier_from_index(0, 0.0);
+    }
+
+    template <int NDIM>
+    void NeutrinoParticles<NDIM>::density_fourier_nufft(SimulationGrid<NDIM> & density, double nufft_epsilon) {
+        // The weights are the delta-f weights (NUFFT::particle_weights) and the k = 0 mode is zero
+        FML::NUFFT::particles_to_fourier_grid_nufft<NDIM>(part.get_particles_ptr(),
+                                                          part.get_npart(),
+                                                          part.get_npart_total(),
+                                                          density,
+                                                          nufft_epsilon);
     }
 
 } // namespace SIMCODE

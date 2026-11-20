@@ -1240,11 +1240,18 @@ namespace FML {
             interpolate_from_fine_grid<N, T>(fine, part, NumPart, kernel, result, ordering);
         }
 
-        /// @brief The particle weights c_p = mass / mean mass (or 1 if the particles have no mass)
+        /// @brief The particle weights c_p = mass / mean mass (or 1 if the particles have no mass). Delta-f
+        /// particles (get_deltaf_weight) only carry the perturbation and have c_p = w_p, as in particles_to_grid
         template <class T>
         std::vector<double> particle_weights(const T * part, size_t NumPart, size_t NumPartTot) {
             std::vector<double> values(NumPart, 1.0);
-            if constexpr (FML::PARTICLE::has_get_mass<T>()) {
+            static_assert(not(FML::PARTICLE::has_get_mass<T>() and FML::PARTICLE::has_get_deltaf_weight<T>()),
+                          "[NUFFT::particle_weights] A particle cannot have both get_mass and get_deltaf_weight");
+            if constexpr (FML::PARTICLE::has_get_deltaf_weight<T>()) {
+                (void)NumPartTot;
+                for (size_t i = 0; i < NumPart; i++)
+                    values[i] = FML::PARTICLE::GetDeltafWeight(const_cast<T *>(part)[i]);
+            } else if constexpr (FML::PARTICLE::has_get_mass<T>()) {
                 double mean_mass = 0.0;
                 for (size_t i = 0; i < NumPart; i++) {
                     values[i] = FML::PARTICLE::GetMass(const_cast<T *>(part)[i]);

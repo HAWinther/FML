@@ -266,12 +266,21 @@ void NBodySimulation<NDIM, T>::step(const Step & s) {
 
         timer.StartTiming("Kick");
         if (force.interpolation_method == "nufft") {
-            // Exact evaluation of the Fourier series of the force at the particle positions (one species)
-            SIMCODE::kick_particles_nufft<NDIM>(part,
-                                                force_real,
-                                                s.delta_time_kick,
-                                                s.velocity_scale,
-                                                force.nufft_epsilon);
+            // Exact evaluation of the Fourier series of the force at the particle positions (the force grids are
+            // transformed once and used for all the species)
+            for (int idim = 0; idim < NDIM; idim++)
+                force_real[idim].fftw_r2c();
+            for_each_species([&](auto & particles, const SIMCODE::SpeciesInfo & info) {
+                const Step & si = step_of(s, info);
+                SIMCODE::kick_particles_nufft<NDIM>(particles,
+                                                    info,
+                                                    force_real,
+                                                    s.apos,
+                                                    si.delta_time_kick,
+                                                    si.velocity_scale,
+                                                    force.nufft_epsilon,
+                                                    sim.boxsize);
+            });
         } else {
             for_each_species([&](auto & particles, const SIMCODE::SpeciesInfo & info) {
                 const Step & si = step_of(s, info);
@@ -284,23 +293,9 @@ void NBodySimulation<NDIM, T>::step(const Step & s) {
                                               force.density_assignment_method,
                                               sim.boxsize);
             });
-            // COLA with a species whose friction differs from that of the frame (CDM+baryons): its COLA velocity
-            // v - v_LPT gets (velocity_scale_species - velocity_scale_frame) v_LPT(avel), the part of the change of
-            // the LPT velocity the frame's kick (below) does not have
-            if (cola.enabled)
-                for_each_cb_species([&](MPIParticles & particles, const SIMCODE::SpeciesInfo & info) {
-                    const double extra = step_of(s, info).velocity_scale - s.velocity_scale;
-                    if (extra != 0.0)
-                        cola.add_on_LPT_velocity(particles, s.avel, extra);
-                });
-            // Coupled quintessence with CDM and baryon particles: the fifth force on the CDM
-            if (cdm_fifth_force_separate())
-                kick_cdm_fifth_force(s, density_grid_fourier, force_real);
         }
+        kick_species_extras(s, density_grid_fourier, force_real);
         kick_short_range_force(s);
-        // The delta-f weights depend on the momenta
-        if (has_neutrino_particles())
-            part_neutrinos.update_weights();
         timer.EndTiming("Kick");
     }
     drift_and_lightcone(s);
@@ -334,6 +329,29 @@ void NBodySimulation<NDIM, T>::kick_cdm_fifth_force(const Step & s,
                                           params.simulation.boxsize);
     });
     timer.EndTiming("CDMFifthForce");
+}
+
+/// What every PM kick of the species is followed by (whichever way the force was computed and interpolated):
+/// - COLA with a species whose friction differs from that of the frame (CDM+baryons): its COLA velocity v - v_LPT
+///   gets (velocity_scale_species - velocity_scale_frame) v_LPT(avel), the part of the change of the LPT velocity
+///   the frame's kick does not have
+/// - coupled quintessence with CDM and baryon particles: the fifth force on the CDM (computed in the density and
+///   force grids of the step; not with force interlacing or NUFFT, see ModelCompatibility.h)
+/// - the delta-f weights of the neutrino particles (they depend on the momenta)
+template <int NDIM, class T>
+void NBodySimulation<NDIM, T>::kick_species_extras(const Step & s,
+                                                   FFTWGrid<NDIM> & density,
+                                                   std::array<FFTWGrid<NDIM>, NDIM> & force) {
+    if (cola.enabled)
+        for_each_cb_species([&](MPIParticles & particles, const SIMCODE::SpeciesInfo & info) {
+            const double extra = step_of(s, info).velocity_scale - s.velocity_scale;
+            if (extra != 0.0)
+                cola.add_on_LPT_velocity(particles, s.avel, extra);
+        });
+    if (cdm_fifth_force_separate())
+        kick_cdm_fifth_force(s, density, force);
+    if (has_neutrino_particles())
+        part_neutrinos.update_weights();
 }
 
 /// Add the short acceleration once, after the ordinary PM velocity scaling and before any drift.
@@ -430,7 +448,8 @@ void NBodySimulation<NDIM, T>::drift_and_lightcone(const Step & s) {
 /// The kick with force interlacing: the force is computed for force_interlacing_order copies of the particles
 /// shifted by a fraction of a cell relative to the grid (see FML::INTERPOLATION::generate_interlacing_shifts),
 /// interpolated to the shifted particles and averaged. This cancels the leading aliasing terms of both the
-/// density assignment and the force interpolation
+/// density assignment and the force interpolation. All the species (CDM and baryons, neutrino particles) are
+/// shifted together: the density field of each shift is that of all the matter
 template <int NDIM, class T>
 void NBodySimulation<NDIM, T>::kick_with_interlaced_force(const Step & s) {
     const auto & sim = params.simulation;
@@ -445,15 +464,27 @@ void NBodySimulation<NDIM, T>::kick_with_interlaced_force(const Step & s) {
     const bool y_split = not domain.is_slab() and domain.pencil_py() > 1;
     const int wrap_type = FML::NTasks == 1 ? 1 : (y_split ? 3 : 2);
 
-    auto * p = part.get_particles_ptr();
-    const size_t npart = part.get_npart();
-    std::array<std::vector<FML::GRID::FloatType>, NDIM> force_sum;
-    for (auto & f : force_sum)
-        f.assign(npart, 0.0);
-    // The positions are restored exactly after each shift (shifting back changes them in the last digit)
-    const auto saved_pos = FML::PARTICLE::save_particle_positions<T, NDIM>(p, npart);
+    // The force summed over the shifts and the unshifted positions of each species (in the order of
+    // for_each_species; the positions are restored exactly after each shift, shifting back changes them in the last
+    // digit. Stored as double, which holds the float or double positions exactly)
+    std::vector<std::array<std::vector<FML::GRID::FloatType>, NDIM>> force_sum;
+    std::vector<std::vector<double>> saved_pos;
+    for_each_species([&](auto & particles, const SIMCODE::SpeciesInfo &) {
+        using P = std::remove_reference_t<decltype(*particles.get_particles_ptr())>;
+        const auto saved =
+            FML::PARTICLE::save_particle_positions<P, NDIM>(particles.get_particles_ptr(), particles.get_npart());
+        saved_pos.emplace_back(saved.begin(), saved.end());
+        force_sum.emplace_back();
+        for (auto & f : force_sum.back())
+            f.assign(particles.get_npart(), 0.0);
+    });
+
     for (auto & shift : shifts) {
-        FML::PARTICLE::shift_particles<T, NDIM>(p, npart, shift, +1.0, wrap_type);
+        for_each_species([&](auto & particles, const SIMCODE::SpeciesInfo &) {
+            using P = std::remove_reference_t<decltype(*particles.get_particles_ptr())>;
+            FML::PARTICLE::shift_particles<P, NDIM>(
+                particles.get_particles_ptr(), particles.get_npart(), shift, +1.0, wrap_type);
+        });
         density_shift = shift;
 
         FFTWGrid<NDIM> & density_grid_fourier =
@@ -477,32 +508,38 @@ void NBodySimulation<NDIM, T>::kick_with_interlaced_force(const Step & s) {
         for (int idim = 0; idim < NDIM; idim++)
             force_real[idim].communicate_boundaries();
         const double norm = 1.0 / double(shifts.size());
-        auto add_force = [&](size_t i, const std::array<FML::GRID::FloatType, NDIM> & f) {
-            for (int idim = 0; idim < NDIM; idim++)
-                force_sum[idim][i] += f[idim] * norm;
-            return 0.0;
-        };
-        FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions_apply<NDIM, T>(
-            force_real,
-            p,
-            npart,
-            force.density_assignment_method,
-            add_force);
+        size_t ispecies = 0;
+        for_each_species([&](auto & particles, const SIMCODE::SpeciesInfo &) {
+            using P = std::remove_reference_t<decltype(*particles.get_particles_ptr())>;
+            auto & fsum = force_sum[ispecies];
+            auto add_force = [&](size_t i, const std::array<FML::GRID::FloatType, NDIM> & f) {
+                for (int idim = 0; idim < NDIM; idim++)
+                    fsum[idim][i] += f[idim] * norm;
+                return 0.0;
+            };
+            FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions_apply<NDIM, P>(
+                force_real,
+                particles.get_particles_ptr(),
+                particles.get_npart(),
+                force.density_assignment_method,
+                add_force);
+            FML::PARTICLE::restore_particle_positions<P, NDIM>(
+                particles.get_particles_ptr(), particles.get_npart(), saved_pos[ispecies]);
+            ispecies++;
+        });
         timer.EndTiming("Kick");
-
-        FML::PARTICLE::restore_particle_positions<T, NDIM>(p, npart, saved_pos);
     }
     density_shift = {};
 
-    // Kick: v -> velocity_scale * v - F dt
-#ifdef USE_OMP
-#pragma omp parallel for
-#endif
-    for (size_t i = 0; i < npart; i++) {
-        auto * vel = FML::PARTICLE::GetVel(p[i]);
-        for (int idim = 0; idim < NDIM; idim++)
-            vel[idim] = vel[idim] * s.velocity_scale - force_sum[idim][i] * s.delta_time_kick;
-    }
+    // Kick: v -> velocity_scale * v - F dt (each species with its own step)
+    size_t ispecies = 0;
+    for_each_species([&](auto & particles, const SIMCODE::SpeciesInfo & info) {
+        const Step & si = step_of(s, info);
+        SIMCODE::kick_particles_with_force<NDIM>(
+            particles, info, force_sum[ispecies], s.apos, si.delta_time_kick, si.velocity_scale, sim.boxsize);
+        ispecies++;
+    });
+    kick_species_extras(s, pm_density_workspace(force.nmesh, nleftright.first, nleftright.second + 1), pm_force_grids);
     kick_short_range_force(s);
 }
 

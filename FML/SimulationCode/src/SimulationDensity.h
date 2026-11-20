@@ -77,15 +77,6 @@ void NBodySimulation<NDIM, T>::assign_cb_particles_to_grid(FFTWGrid<NDIM> & dens
                                                            double a,
                                                            const SIMCODE::ForceSettings & force,
                                                            bool bin_pofk) {
-    if (force.density_method == "nufft") {
-        // The exact Fourier modes (no window function, no aliasing) for |m_i| < Nmesh/2
-        FML::NUFFT::particles_to_fourier_grid_nufft<NDIM>(part.get_particles_ptr(),
-                                                          part.get_npart(),
-                                                          part.get_npart_total(),
-                                                          density_grid_fourier,
-                                                          force.nufft_epsilon);
-        return;
-    }
     if (force.density_method == "sheet" or force.density_method == "sheet_nufft") {
         if constexpr (FML::PARTICLE::has_get_q<T>()) {
             FML::INTERPOLATION::particles_to_fourier_grid_sheet<NDIM>(
@@ -103,24 +94,34 @@ void NBodySimulation<NDIM, T>::assign_cb_particles_to_grid(FFTWGrid<NDIM> & dens
     }
 
     // Each CDM+baryon species to a grid. The first one goes into density_grid_fourier and the others are added
-    // with their weights
+    // with their weights. With force_density_method = nufft: the exact Fourier modes (no window function, no
+    // aliasing) for |m_i| < Nmesh/2
+    const bool nufft = force.density_method == "nufft";
     int ncb = 0;
     for (auto & info : species)
         ncb += info.in_cb() ? 1 : 0;
-    const bool bin_species = ncb > 1 and params.pofk.every_step and bin_pofk;
+    const bool bin_species = ncb > 1 and params.pofk.every_step and bin_pofk and not particles_shifted();
     int icb = 0;
     double weight_first = 1.0;
     for_each_cb_species([&](MPIParticles & particles, const SIMCODE::SpeciesInfo & info) {
         auto assign = [&](FFTWGrid<NDIM> & grid) {
-            FML::INTERPOLATION::particles_to_grid(particles.get_particles_ptr(),
-                                                  particles.get_npart(),
-                                                  particles.get_npart_total(),
-                                                  grid,
-                                                  force.density_assignment_method);
-            grid.fftw_r2c();
+            if (nufft) {
+                FML::NUFFT::particles_to_fourier_grid_nufft<NDIM>(particles.get_particles_ptr(),
+                                                                  particles.get_npart(),
+                                                                  particles.get_npart_total(),
+                                                                  grid,
+                                                                  force.nufft_epsilon);
+            } else {
+                FML::INTERPOLATION::particles_to_grid(particles.get_particles_ptr(),
+                                                      particles.get_npart(),
+                                                      particles.get_npart_total(),
+                                                      grid,
+                                                      force.density_assignment_method);
+                grid.fftw_r2c();
+            }
             if (bin_species)
                 bin_up_power_spectrum_every_step(grid,
-                                                 true,
+                                                 not nufft,
                                                  params.pofk.subtract_shotnoise ? species_shotnoise(info) : 0.0,
                                                  a,
                                                  pofk_species_every_step[info.species]);
@@ -185,10 +186,14 @@ void NBodySimulation<NDIM, T>::add_neutrino_particles(FFTWGrid<NDIM> & density_g
             part_neutrinos,
             a,
             params.force.neutrino_energy_density);
-        part_neutrinos.density_fourier(density_nu, current_force.density_assignment_method);
+        const bool nufft = current_force.density_method == "nufft";
+        if (nufft)
+            part_neutrinos.density_fourier_nufft(density_nu, current_force.nufft_epsilon);
+        else
+            part_neutrinos.density_fourier(density_nu, current_force.density_assignment_method);
         if (params.pofk.every_step and not particles_shifted())
             bin_up_power_spectrum_every_step(density_nu,
-                                             true,
+                                             not nufft,
                                              params.pofk.subtract_shotnoise ? part_neutrinos.shotnoise() : 0.0,
                                              a,
                                              pofk_species_every_step[SIMCODE::ParticleSpecies::MassiveNeutrino]);

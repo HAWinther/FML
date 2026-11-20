@@ -137,7 +137,17 @@ of the CDM growth is -9.1% / -6.2% at k = 0.008 h/Mpc, -9.0% / -8.5% at k = 0.03
 baryons agree to 1e-4 for k >= 0.05. So the N-body equations (the dark energy at rest, as in the N-body work on this
 model) hold for k > ~0.05 h/Mpc.
 
-Not implemented for two species yet (the code stops with a message): COLA with the Tassev operators, reading the IC from file, NUFFT / sheet densities, force interlacing and the early-time force, the N-body gauge, the lightcone, multipoles and the bispectrum (the full list is the table at the end of [PARAMETERS.md](PARAMETERS.md)). Use `ic_input_redshift = ic_initial_redshift` (the two species are made from the transfer functions at zini).
+Force interlacing, the NUFFT force (`force_density_method = nufft`, `force_interpolation_method = nufft`) and the early-time force (`force_early_method`) work with all the species: the density is that of all the matter (each species assigned or NUFFT-transformed with its weight, the neutrino particles with their delta-f weights) and every species is kicked with the force at its own positions (interlacing: all the species are shifted together; each species with its own step and, for the neutrinos, the relativistic factor). Coupled quintessence with CDM and baryon particles is the exception: the fifth force of the CDM on the CDM is computed with plain assignment, so it needs the plain force. Test: 64^3 of each species in 256 Mpc/h, 128^3 force grid, 20 Quinn steps from z = 20, P_cb at z = 0 with CDM and baryon particles relative to one set of CDM+baryon particles with the same force (the offset comes from the two species, not from the force method):
+
+| k (h/Mpc) | 0.03 | 0.1 | 0.2 | 0.4 |
+|---|---|---|---|---|
+| CIC (%) | +0.08 | +0.28 | +0.71 | +1.6 |
+| interlaced, PCS, 2 grids (%) | +0.07 | +0.26 | +0.59 | +1.1 |
+| NUFFT (%) | +0.07 | +0.26 | +0.62 | +1.2 |
+
+and with 0.4 eV neutrino particles P_nu / P_cb at z = 0 is 0.3602 / 0.0579 / 0.0152 at k = 0.03 / 0.1 / 0.2 with CIC, 0.3603 / 0.0591 / 0.0158 interlaced and 0.3603 / 0.0590 / 0.0158 with NUFFT (the neutrinos follow the CDM+baryons in the same way; the small-scale power of all the matter is larger with interlacing and NUFFT than with CIC, as with one species).
+
+Not implemented for two species yet (the code stops with a message): COLA with the Tassev operators, reading the IC from file, the sheet densities, the N-body gauge, the lightcone, multipoles and the bispectrum (the full list is the table at the end of [PARAMETERS.md](PARAMETERS.md)). Use `ic_input_redshift = ic_initial_redshift` (the two species are made from the transfer functions at zini).
 
 ## Neutrino masses
 
@@ -194,7 +204,11 @@ that of all the neutrinos together (the transfer functions of their sum) for eve
 masses the heavier ones cluster more already at zini, which this misses (small at high zini). With equal masses
 nothing changes (bitwise the same as before). Not run with unequal masses yet.
 
-Not implemented for neutrino particles yet (the code stops with a message): time stepping other than Quinn, COLA, reading the IC from file, NUFFT / sheet densities, force interlacing and the early-time force, the N-body gauge, the lightcone, multipoles and the bispectrum (see the table at the end of [PARAMETERS.md](PARAMETERS.md)). The initial conditions use the same density perturbation for all momenta (Elbers et al. use momentum-dependent initial conditions from integrating linear geodesics, which is more accurate for light neutrinos at high redshift).
+Force interlacing, the NUFFT force and the early-time force work with neutrino particles (see above).
+
+Time stepping: Quinn only, and no COLA. The kick and drift of a neutrino have the relativistic factors (1 + 2u^2) / sqrt(1 + u^2) and 1 / sqrt(1 + u^2) of its own momentum (`src/Neutrinos.h`), applied on the plain kick and drift integrals of Quinn. FastPM, Tassev and BullFrog take their kick and drift factors from the growth of a cold fluid (FastPM and BullFrog so that the linear growing mode is exact at any step size), and COLA moves the particles in the LPT frame of the CDM+baryons. The neutrinos follow neither: they free-stream with thermal velocities that are not small relative to that frame, and their growth depends on scale, so these schemes would have no advantage for them and are not derived for the relativistic factors.
+
+Not implemented for neutrino particles yet (the code stops with a message): reading the IC from file, the sheet densities, the N-body gauge, the lightcone, multipoles and the bispectrum (see the table at the end of [PARAMETERS.md](PARAMETERS.md)). The initial conditions use the same density perturbation for all momenta (Elbers et al. use momentum-dependent initial conditions from integrating linear geodesics, which is more accurate for light neutrinos at high redshift).
 
 ## Radiation, neutrinos and GR: the N-body gauge
 

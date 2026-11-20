@@ -73,22 +73,81 @@ namespace SIMCODE {
             std::cout << "[Kick " << info.name << "] max u = q/(amc) = " << std::sqrt(max_u) << "\n";
     }
 
-    /// The kick v -> velocity_scale v - F dt with the force evaluated exactly at the particle positions (the
-    /// Fourier series of the force grid, see FML::NUFFT::nufft_type2; non-relativistic particles)
-    template <int NDIM, class P>
-    void kick_particles_nufft(FML::PARTICLE::MPIParticles<P> & part,
-                              std::array<SimulationGrid<NDIM>, NDIM> & force_real,
-                              double delta_time,
-                              double velocity_scale,
-                              double nufft_epsilon) {
+    /// The kick v -> velocity_scale v - F dt (times (1 + 2u^2) / sqrt(1 + u^2) for relativistic species) with the
+    /// force F of each particle given (force[idim][i], e.g. averaged over interlaced grids)
+    template <int NDIM, class P, class F>
+    void kick_particles_with_force(FML::PARTICLE::MPIParticles<P> & part,
+                                   const SpeciesInfo & info,
+                                   const std::array<std::vector<F>, NDIM> & force,
+                                   double apos,
+                                   double delta_time,
+                                   double velocity_scale,
+                                   double boxsize) {
         auto * p = part.get_particles_ptr();
         const size_t npart = part.get_npart();
-        FML::NBODY::ScaleVelocities<NDIM>(p, npart, velocity_scale);
+        if (not info.relativistic) {
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+            for (size_t i = 0; i < npart; i++) {
+                auto * vel = FML::PARTICLE::GetVel(p[i]);
+                for (int idim = 0; idim < NDIM; idim++)
+                    vel[idim] = vel[idim] * velocity_scale - force[idim][i] * delta_time;
+            }
+            return;
+        }
+
+        // Relativistic species (as in kick_particles)
+        namespace NU = SIMCODE::NEUTRINOS;
+        const double inv_ac = 1.0 / (apos * NU::c_code(boxsize));
+        double max_u2 = 0.0;
+#ifdef USE_OMP
+#pragma omp parallel for reduction(max : max_u2)
+#endif
+        for (size_t i = 0; i < npart; i++) {
+            auto * vel = FML::PARTICLE::GetVel(p[i]);
+            double v2 = 0.0;
+            for (int idim = 0; idim < NDIM; idim++) {
+                vel[idim] *= velocity_scale;
+                v2 += vel[idim] * vel[idim];
+            }
+            const double u2 = v2 * inv_ac * inv_ac;
+            const double R = NU::kick_factor(u2);
+            for (int idim = 0; idim < NDIM; idim++)
+                vel[idim] -= force[idim][i] * delta_time * R;
+            max_u2 = std::max(max_u2, u2);
+        }
+        FML::MaxOverTasks(&max_u2);
+        if (FML::ThisTask == 0)
+            std::cout << "[Kick " << info.name << "] max u = q/(amc) = " << std::sqrt(max_u2) << "\n";
+    }
+
+    /// The kick v -> velocity_scale v - F dt with the force evaluated exactly at the particle positions (the
+    /// Fourier series of the force grid, see FML::NUFFT::nufft_type2). The force grids must be in Fourier space
+    /// (fftw_r2c), so that several species can be kicked with the same grids
+    template <int NDIM, class P>
+    void kick_particles_nufft(FML::PARTICLE::MPIParticles<P> & part,
+                              const SpeciesInfo & info,
+                              std::array<SimulationGrid<NDIM>, NDIM> & force_fourier,
+                              double apos,
+                              double delta_time,
+                              double velocity_scale,
+                              double nufft_epsilon,
+                              double boxsize) {
+        auto * p = part.get_particles_ptr();
+        const size_t npart = part.get_npart();
         FML::NUFFT::ESKernel kernel(nufft_epsilon);
+        if (info.relativistic) {
+            std::array<std::vector<FML::GRID::FloatType>, NDIM> force;
+            for (int idim = 0; idim < NDIM; idim++)
+                FML::NUFFT::nufft_type2<NDIM>(force_fourier[idim], p, npart, force[idim], kernel);
+            kick_particles_with_force<NDIM>(part, info, force, apos, delta_time, velocity_scale, boxsize);
+            return;
+        }
+        FML::NBODY::ScaleVelocities<NDIM>(p, npart, velocity_scale);
         std::vector<FML::GRID::FloatType> force_particle;
         for (int idim = 0; idim < NDIM; idim++) {
-            force_real[idim].fftw_r2c();
-            FML::NUFFT::nufft_type2<NDIM>(force_real[idim], p, npart, force_particle, kernel);
+            FML::NUFFT::nufft_type2<NDIM>(force_fourier[idim], p, npart, force_particle, kernel);
 #ifdef USE_OMP
 #pragma omp parallel for
 #endif

@@ -731,6 +731,68 @@ CASES = {
         fof_so_definitions=["200m", "200c"],
         fof_buffer_length_mpch=6.0,
     ),
+    # CDM and baryons as separate particles with force interlacing (both species shifted together), COLA + Quinn
+    "two_species_interlaced_force": dict(
+        particle_baryons=True,
+        simulation_use_cola=True,
+        timestep_method="Quinn",
+        force_interlacing_order=2,
+        force_density_assignment_method="PCS",
+        force_deconvolve_window=True,
+        ic_type_of_input="tables",
+        ic_input_filename=INPUT + "/transfer_tables/lcdm_nu0.0.txt",
+        ic_input_redshift=20.0,
+    ),
+    # CDM and baryons (offset lattices) with the NUFFT force (density of both species, force at both), FastPM
+    "two_species_nufft_force": dict(
+        particle_baryons=True,
+        particle_baryon_lattice="offset",
+        simulation_use_cola=False,
+        timestep_method="FastPM",
+        force_density_method="nufft",
+        ic_type_of_input="tables",
+        ic_input_filename=INPUT + "/transfer_tables/lcdm_nu0.0.txt",
+        ic_input_redshift=20.0,
+    ),
+    # CDM and baryons with the early-time force switch (interlaced for z > 5, then CIC)
+    "two_species_early_force_switch": dict(
+        particle_baryons=True,
+        simulation_use_cola=False,
+        timestep_method="Quinn",
+        force_early_method="interlaced",
+        force_early_until_redshift=5.0,
+        ic_type_of_input="tables",
+        ic_input_filename=INPUT + "/transfer_tables/lcdm_nu0.0.txt",
+        ic_input_redshift=20.0,
+    ),
+    # Massive neutrinos as particles (delta-f) with force interlacing (all species shifted together)
+    "neutrino_particles_interlaced_force": dict(
+        particle_neutrinos=True,
+        simulation_use_cola=False,
+        timestep_method="Quinn",
+        cosmology_OmegaMNu=0.0095,
+        cosmology_OmegaCDM=0.259,
+        force_linear_massive_neutrinos=False,
+        force_interlacing_order=2,
+        force_density_assignment_method="PCS",
+        force_deconvolve_window=True,
+        ic_type_of_input="tables",
+        ic_input_filename=INPUT + "/transfer_tables/lcdm_nu0.4.txt",
+        ic_input_redshift=20.0,
+    ),
+    # Massive neutrinos as particles with the NUFFT force (delta-f weights in the NUFFT density, relativistic kick)
+    "neutrino_particles_nufft_force": dict(
+        particle_neutrinos=True,
+        simulation_use_cola=False,
+        timestep_method="Quinn",
+        cosmology_OmegaMNu=0.0095,
+        cosmology_OmegaCDM=0.259,
+        force_linear_massive_neutrinos=False,
+        force_density_method="nufft",
+        ic_type_of_input="tables",
+        ic_input_filename=INPUT + "/transfer_tables/lcdm_nu0.4.txt",
+        ic_input_redshift=20.0,
+    ),
     # Massive neutrinos as particles (delta-f) with 0.4 eV, IC from the transfer functions at zini
     "neutrino_particles": dict(
         particle_neutrinos=True,

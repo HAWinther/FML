@@ -4,6 +4,8 @@
 //   - nufft_type2: the same values at the particles (PSWF and ES kernels)
 //   - compute_force_nufft_with_kernel: the same forces
 //   - copy_fourier_modes between grids of different sizes and types (FFTWGrid <-> PencilGrid): the same modes
+//   - delta-f particles (get_deltaf_weight): the density of type 1 has the weights w_p as the values (unit weights:
+//     the same as plain particles)
 // on every pencil layout of the tasks (3D) and on the PencilGrid<2> slabs (2D)
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/FFTWGrid/GridInterface.h>
@@ -32,6 +34,17 @@ namespace {
         double pos[N];
         double id;
         double * get_pos() { return pos; }
+        constexpr int get_ndim() const { return N; }
+    };
+
+    // A delta-f particle (only carries the perturbation: weight w)
+    template <int N>
+    struct PartW {
+        double pos[N];
+        double id;
+        double w;
+        double * get_pos() { return pos; }
+        double get_deltaf_weight() const { return w; }
         constexpr int get_ndim() const { return N; }
     };
 
@@ -149,6 +162,38 @@ namespace {
         std::array<std::map<long, double>, N> ref_force;
         for (int d = 0; d < N; d++)
             ref_force[d] = by_id(pslab, force[d]);
+        // Delta-f particles: unit weights give the plain density, other weights are the values of type 1
+        {
+            std::vector<PartW<N>> unit, weighted;
+            for (auto & q : mine) {
+                PartW<N> pw{};
+                for (int d = 0; d < N; d++)
+                    pw.pos[d] = q.pos[d];
+                pw.id = q.id;
+                pw.w = 1.0;
+                unit.push_back(pw);
+                pw.w = std::sin(0.37 * q.id) - 0.2;
+                weighted.push_back(pw);
+            }
+            FML::PARTICLE::MPIParticles<PartW<N>> pu, pw;
+            pu.create(unit, 3 * mine.size() + 1000, FML::PARTICLE::Input::Distributed);
+            pw.create(weighted, 3 * mine.size() + 1000, FML::PARTICLE::Input::Distributed);
+            FML::GRID::FFTWGrid<N> gu(nmesh), gw(nmesh), gref(nmesh);
+            FML::NUFFT::particles_to_fourier_grid_nufft<N>(pu.get_particles_ptr(), pu.get_npart(), npart, gu, eps);
+            const double du = max_rel_diff(global_modes(gu), ref_modes);
+            FML::NUFFT::particles_to_fourier_grid_nufft<N>(pw.get_particles_ptr(), pw.get_npart(), npart, gw, eps);
+            std::vector<double> values;
+            for (size_t i = 0; i < pw.get_npart(); i++)
+                values.push_back(pw[i].w);
+            FML::NUFFT::nufft_type1<N, PartW<N>>(pw.get_particles_ptr(), pw.get_npart(), values, 1.0 / double(npart),
+                                                gref, FML::NUFFT::PSWFKernel<N>(eps, 2.0));
+            FML::NUFFT::detail::zero_dc_mode<N>(gref);
+            const double dw = max_rel_diff(global_modes(gw), global_modes(gref));
+            check(du == 0.0 and dw == 0.0,
+                  dim + ": delta-f particles in the NUFFT density (unit weights " + num(du, 2) + ", weights " +
+                      num(dw, 2) + ")");
+        }
+
         FML::GRID::FFTWGrid<N> ref_small(nsmall);
         FML::NUFFT::copy_fourier_modes<N>(ref, ref_small, [](const std::array<int, N> & m) { return 1.0 + m[0]; });
         const auto ref_small_modes = global_modes(ref_small);

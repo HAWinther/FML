@@ -1751,10 +1751,9 @@ namespace SIMCODE {
                 if (req.satisfied(*this))
                     continue;
                 if (particle.baryons and req.baryons)
-                    fail("particle_baryons = true needs " + req.requirement + " (not implemented for two species yet)");
+                    fail("particle_baryons = true needs " + req.requirement + " (see SPECIES.md)");
                 if (particle.neutrinos and req.neutrinos)
-                    fail("particle_neutrinos = true needs " + req.requirement +
-                         " (not implemented for neutrino particles yet)");
+                    fail("particle_neutrinos = true needs " + req.requirement + " (see SPECIES.md)");
             }
         }
     };
@@ -1762,8 +1761,17 @@ namespace SIMCODE {
     inline std::vector<SpeciesRequirement> species_requirements() {
         using P = const SimulationParameters &;
         return {
-            {"`timestep_method = Quinn`", false, true, [](P p) { return p.timestep.method == TimestepMethod::Quinn; }},
-            {"`simulation_use_cola = false`", false, true, [](P p) { return not p.simulation.use_cola; }},
+            {"`timestep_method = Quinn` (the relativistic factors of each neutrino are applied on the plain kick and "
+             "drift; FastPM, Tassev and BullFrog take their factors from the growth of a cold fluid, which the "
+             "free-streaming neutrinos do not follow)",
+             false,
+             true,
+             [](P p) { return p.timestep.method == TimestepMethod::Quinn; }},
+            {"`simulation_use_cola = false` (the LPT frame of the CDM+baryons does not describe the neutrinos: their "
+             "thermal motion is not small relative to it)",
+             false,
+             true,
+             [](P p) { return not p.simulation.use_cola; }},
             {"`timestep_method` other than `Tassev` with COLA (the modified Tassev operators get the baryon-CDM "
              "relative "
              "velocity wrong: +30% in P_b-c with 20 linear steps)",
@@ -1794,16 +1802,10 @@ namespace SIMCODE {
              false,
              true,
              [](P p) { return not p.force.linear_massive_neutrinos; }},
-            {"`force_density_method = assignment`",
+            {"`force_density_method = assignment` or `nufft` (not the sheet densities)",
              true,
              true,
-             [](P p) { return p.force.density_method == "assignment"; }},
-            {"`force_interpolation_method` other than `nufft`",
-             true,
-             true,
-             [](P p) { return p.force.interpolation_method != "nufft"; }},
-            {"`force_interlacing_order = 1`", true, true, [](P p) { return p.force.interlacing_order <= 1; }},
-            {"`force_early_method = none`", true, true, [](P p) { return p.force.early_method == "none"; }},
+             [](P p) { return p.force.density_method == "assignment" or p.force.density_method == "nufft"; }},
             {"`force_nbody_gauge = false`", true, true, [](P p) { return not p.force.nbody_gauge; }},
             {"`lightcone = false`", true, true, [](P p) { return not p.lightcone.enabled; }},
             {"`pofk_multipole = false`", true, true, [](P p) { return not p.pofk_multipole.enabled; }},
