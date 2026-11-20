@@ -13,6 +13,7 @@
       <ul class="nav navbar-nav">
         <li><a href="index.php">Home</a></li>
         <li><a href="documentation.php">Documentation</a></li>
+        <li><a href="main.pdf">Book (PDF)</a></li>
         <li><a href="cosmology.php">Einstein&ndash;Boltzmann</a></li>
         <li><a href="nbodycode.php">SimulationCode</a></li>
         <li><a href="doxygen/index.html">Doxygen</a></li>

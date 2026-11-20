@@ -10,4 +10,5 @@ php -S localhost:8000 -t Documentation/website     # from the repository root
 ```
 
 Deploy by copying the folder to the web server. The Doxygen reference (`../doxygen`) is uploaded to its `doxygen/`
-folder.
+folder, and the book (`../main.pdf`, built with `make` in `Documentation/`) next to `index.php` as `main.pdf`, where
+`header.php`, `index_content.php` and `documentation_content.php` link to it.

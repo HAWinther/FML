@@ -12,6 +12,7 @@
 <a href="#Requirements">Requirements</a><br>
 <a href="#Compiling">Compiling</a><br>
 <a href="documentation.php">Documentation</a><br>
+<a href="main.pdf">The FML book (PDF)</a><br>
 <a href="#Example">Code examples</a><br>
 </p>
 
@@ -30,6 +31,9 @@
 
 <p>
 FML is a C++17 library for large-scale-structure cosmology. It started as a set of general building blocks for working in parallel: grids that do Fourier transforms, particle containers, mass assignment and PDE solvers, where the library takes care of the MPI and OpenMP parallelisation so that you can write an algorithm without thinking about how the data is split over tasks. On top of these it has grown to cover almost everything one needs in large-scale structure: the expansion history and an <a href="cosmology.php" style="display: inline">Einstein&ndash;Boltzmann solver</a>, initial conditions and <a href="nbodycode.php" style="display: inline">simulations</a>, halo and void finding, clustering statistics, survey estimators and parameter inference. And not only for $\Lambda$CDM, but for any cosmological model you add. Every module has a README with its conventions and validation, examples, and tests that run in continuous integration.
+</p>
+<p>
+The <a href="main.pdf" style="display: inline">FML book</a> (PDF) collects it all in one place: the equations each module solves, the algorithms, how to use them, how they are validated, and the references.
 </p>
 
 <hr/>
