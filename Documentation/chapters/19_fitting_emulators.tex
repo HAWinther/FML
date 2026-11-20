@@ -2,18 +2,20 @@
 \chapterstatus{written}{2026-11-20}
 
 Beside the halo models of \cref{ch:halo-model}, \fml{} has the standard fitting functions and emulators of the nonlinear
-matter power spectrum: e-MANTIS, Halofit with the neutrino correction of Bird et al., EuclidEmulator2, the $f(R)$ and Brans--Dicke
-boosts, the Eisenstein--Hu transfer functions, and a general neural-network emulator that can be trained in C++ or loaded
+matter power spectrum: e-MANTIS, baccoemu (also its baryonic boosts and the Lagrangian bias expansion of tracers), Halofit
+with the neutrino correction of Bird et al., EuclidEmulator2, the $f(R)$ and Brans--Dicke boosts, the Eisenstein--Hu transfer functions, and a general neural-network emulator that can be trained in C++ or loaded
 from PyTorch. The solver's selectable nonlinear prescriptions are listed in \cref{tab:nonlinear-options}.
 
 \begin{modulebox}{Cosmology/Spectra, Emulator}
 \nsp{FML::COSMOLOGY}: \file{Cosmology/Spectra/Halofit.h} (\cls{Halofit}, versions \code{Takahashi2012} and \code{Bird}),
 \file{EisensteinHu.h}, \file{PowerSpectrum.h} (the solver's nonlinear tables, \code{solve_jbd_boost}).\par
 \nsp{FML::EMULATOR}: \file{Emulator/EuclidEmulator2.h} (\nsp{EUCLIDEMULATOR2}, data file \file{EuclidEmulator2.dat}),
-\file{Emulator/EMantis/EMantis.h} (\nsp{EMANTIS}), \file{Emulator/FofrFittingFunction.h} (\nsp{FOFRFITTINGFUNCTION}), \file{Emulator/NeuralNetwork/NeuralNetwork.h}
+\file{Emulator/EMantis/EMantis.h} (\nsp{EMANTIS}), \file{Emulator/Bacco/Bacco.h} (\nsp{BACCO}; networks fetched by
+\file{get_data.sh}), \file{Emulator/FofrFittingFunction.h} (\nsp{FOFRFITTINGFUNCTION}), \file{Emulator/NeuralNetwork/NeuralNetwork.h}
 (\nsp{NEURALNETWORK}) with \file{export_lightning_emulator.py}; the training points from \file{LatinHyperCube}.\par
 Documentation: \file{Cosmology/Spectra/NONLINEAR.md}, \file{Cosmology/EinsteinBoltzmannSolver/OPTIONS.md},
-\file{Emulator/NeuralNetwork/README.md}. Tests: \file{tests/test_emulator.cpp}, the solver's \file{test_nonlinear},
+\file{Emulator/NeuralNetwork/README.md}, \file{Emulator/EMantis/README.md}, \file{Emulator/Bacco/README.md}. Tests:
+\file{tests/test_emulator.cpp}, \file{Emulator/EMantis/tests}, \file{Emulator/Bacco/tests}, the solver's \file{test_nonlinear},
 \file{test_brans_dicke}, \file{Emulator/NeuralNetwork/tests}.
 \end{modulebox}
 
@@ -82,7 +84,9 @@ auto [k, B] = ee2.compute_boost(1.0);      // k [h/Mpc], B = P_NL / P_L at z = 1
 \href{https://gitlab.obspm.fr/e-mantis/e-mantis}{e-MANTIS 1.4.0}, including its trained Gaussian processes and
 principal-component reconstruction. Cite the $f(R)$ power paper \cite{SaezCasares2023}, the halo-mass-function paper
 \cite{SaezCasares2024}, and the software \cite{EMantisSoftware} as applicable. The wCDM power boost has no dedicated
-paper in this release; cite the software. Training and cross-validation are not ported.
+paper in this release; cite the software. Training and cross-validation are not ported. e-MANTIS is distributed under
+the GPL (version 3 or later), and so is the port, like \fml{} itself: \file{Emulator/EMantis} keeps the licence text
+(\file{COPYING}) and the notices of the original.
 
 \cls{NonLinearMGBoostEmulator} returns $P_{f(R)}/P_{\rm GR}$; \cls{NonLinearBoostEmulator} returns the wCDM
 $P_{\rm NL}/P_L$; \cls{HMFEmulator} returns $\dd n/\dd\ln M$ for spherical-overdensity or FoF masses;
@@ -118,6 +122,77 @@ auto B = emulator.boost(p, 1.0, {0.1, 1.0});
 a few $10^{-8}$ when converting $A_s$ to $\sigma_8$. These measure port reproducibility,
 not the percent-level physical emulator error. Solver boost-table interpolation is checked separately by
 \file{test_emantis_boost}; extrapolated results have no additional calibration.
+\end{validation}
+
+\section{baccoemu}\label{sec:fit-bacco}
+
+\file{Emulator/Bacco/Bacco.h} ports the prediction part of
+\href{https://bitbucket.org/rangulo/baccoemu}{baccoemu 2.3.0} (MIT licence, kept in \file{Emulator/Bacco/LICENSE}):
+neural-network emulators trained on the BACCO simulations, with massive neutrinos and $w_0$--$w_a$ dark energy. Cite the
+papers of the parts used: the linear spectra \cite{Arico2021Linear}, the nonlinear boost \cite{Angulo2021} (model
+\code{Angulo2021}, the default) or \cite{Arico2023} (\code{Arico2023}, wider ranges), the baryonic boosts
+\cite{Arico2021Baryons} (\code{Arico2021}) and \cite{Burger2025} (\code{Burger2025}, also for the bispectrum), and the
+Lagrangian bias expansion in real \cite{Zennaro2023} and redshift space \cite{PellejeroIbanez2023} (its LPT spectra are an
+emulator of velocileptors \cite{Chen2021}).
+
+The conventions are baccoemu's: $\Omega_{\rm cold}=\Omega_c+\Omega_b$, $\Omega_\nu=M_\nu/(93.14\,h^2)$, $\sigma_{8,\rm cold}$ of
+the cold matter at $z=0$ (or $A_s$ at $0.05\,{\rm Mpc}^{-1}$, converted with the $\sigma_8$ emulator), $k$ in $\hMpc$.
+\begin{itemize}
+\item \cls{MatterPowerSpectrum}: $\sigma_8$, $\sigma_{12}$ and $A_s$; the linear $P(k)$ of the cold or total matter; the
+      no-wiggle and BAO-smeared spectra; the nonlinear boost and $P_{\rm NL}$ of the cold or total matter, where the boost
+      $Q$ multiplies the BAO-smeared spectrum
+      $P_{\rm sm}=P_LG+P_{\rm nw}(1-G)$, $G=e^{-k^2\sigma_\ast^2/2}$, $\sigma_\ast^2=\int P_L\,\dd k/(3\pi^2)$, and the
+      neutrinos enter as $P_{\rm tot}=(1-f_\nu)^2P_{\rm cold}+[P_{L,\rm tot}-(1-f_\nu)^2P_{L,\rm cold}]$; the baryonic
+      suppression $S(k)=P_{\rm hydro}/P_{\rm grav}$ of a baryonification model (seven parameters: $M_c$, $\eta$, $\beta$,
+      $M_{1,z_0,\rm cen}$, $\vartheta_{\rm out}$, $\vartheta_{\rm inn}$, $M_{\rm inn}$, or five for Burger et al.).
+\item \cls{MatterBispectrum}: the baryonic suppression of the matter bispectrum for triangles $(k_1,k_2,k_3)$.
+\item \cls{LbiasExpansion}: the 15 spectra $P_{ij}$ of the operators $(1,\delta,\delta^2,s^2,\nabla^2\delta)$ of the
+      second order Lagrangian bias expansion (nonlinear, from the simulations, and LPT) for $k\le0.75\hMpc$, and the galaxy
+      spectra $P_{gg}=\sum_{i\le j}(2-\delta_{ij})b_ib_jP_{ij}$, $P_{gm}=\sum_ib_iP_{0i}$ with $b_0=1$ and Lagrangian
+      $(b_1,b_2,b_{s^2},b_{\nabla^2})$.
+\item \cls{LbiasExpansionRSD}: the multipoles $\ell=0,2,4$ of the 15 spectra in redshift space ($k\le0.64\hMpc$), the galaxy
+      $P(k,\mu)$ with fingers of god $\big[(1-f_{\rm sat})+f_{\rm sat}\lambda^2/(\lambda^2+k^2\mu^2)\big]^2$ and noise
+      $(\epsilon_1+\epsilon_2k^2+\epsilon_3k^2\mu^2)/\bar n$, and its multipoles.
+\item \nsp{COEVOLUTION}: the coevolution relations of the bias parameters of haloes and galaxies \cite{Zennaro2022}.
+\end{itemize}
+
+\begin{implementation}
+The ReLU networks are evaluated with \cls{NeuralNetwork} (\cref{sec:fit-nn}), the networks of Burger et al.\ (CosmoPower
+activation $(\beta+\mathrm{sigmoid}(\alpha x)(1-\beta))x$, with $\alpha$, $\beta$ per neuron) with a small evaluator of their
+own; baccoemu evaluates in single precision, the port in double. Everything around the networks follows the Python package,
+including its interpolations (linear in $\ln k$, or the not-a-knot cubic spline of \code{scipy.interpolate.interp1d} for the
+bias spectra), the patches of the LPT terms in redshift space, and the projection of $P(k,\mu)$ on multipoles (a quartic fit
+in $\mu$ on $\mu=0,0.01,\ldots,0.99$ integrated with an 8-point Gauss--Legendre rule). Parameters outside the training
+ranges throw \cls{EmulationRangeError} naming the parameter.
+
+The trained networks are not distributed with \fml{}: \file{Emulator/Bacco/get_data.sh} downloads them from bacco.dipc.org
+(pinned SHA-256 sums; \code{--matter} for the matter emulators only, $\sim$10\,MB, otherwise $\sim$105\,MB) and converts
+them with \file{export_bacco.py} (numpy and h5py) to \file{data/}: binary single-precision networks, 9\,MB for the matter
+emulators and 89\,MB for the bias expansion. Without them the constructors throw \cls{MissingDataError}, which says how to
+get them. Not ported: the BAO smearing via a DST of the linear spectrum (used by baccoemu only when both the smeared-BAO
+and the no-wiggle emulators are off) and baccoemu's late-time distance helpers.
+\end{implementation}
+
+\begin{cppcode}[baccoemu: nonlinear and galaxy spectra]
+#include <FML/Emulator/Bacco/Bacco.h>
+using namespace FML::EMULATOR::BACCO;
+Parameters p;
+p.Omega_cold = 0.31; p.Omega_b = 0.049; p.sigma8_cold = 0.81;   // or p.Omega_m, p.A_s
+p.h = 0.67; p.n_s = 0.965; p.M_nu = 0.06; p.w0 = -1.0; p.wa = 0.0;
+MatterPowerSpectrum::Options opt;
+opt.nonlinear_model = "Arico2023";
+MatterPowerSpectrum emu(opt);
+auto pnl = emu.nonlinear_pk(p, a, k, /*cold=*/false);     // total matter, (Mpc/h)^3
+LbiasExpansion lb;
+auto g = lb.galaxy_real_pk({b1, b2, bs2, bl}, p, a, k);    // g.auto_pk, g.cross_pk
+\end{cppcode}
+
+\begin{validation}[Validation: baccoemu port]
+\file{Emulator/Bacco/tests} compares 251 cases with the Python package (every function, both nonlinear and both baryonic
+models, cold and total matter with neutrinos, given linear spectra, the bias expansion in real and redshift space with and
+without noise, and 18 out-of-range inputs, which name the same parameter). With the networks evaluated in double precision
+in Python too the agreement is $\sim10^{-15}$; baccoemu's own single-precision evaluation moves its results by up to
+$1.5\times10^{-6}$. This measures the port, not the emulators' accuracy against simulations, which is given in the papers.
 \end{validation}
 
 \section{Modified-gravity boosts}\label{sec:fit-mg}

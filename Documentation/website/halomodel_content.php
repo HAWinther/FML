@@ -17,6 +17,7 @@
 <a href="#AssemblyBias">Decorated HOD and marginal satellite occupations</a><br>
 <a href="#Reaction">Native screened collapse and halo-model reactions</a><br>
 <a href="#EMantis">e-MANTIS emulators</a><br>
+<a href="#Bacco">baccoemu emulators: matter, baryons and galaxy bias</a><br>
 </p>
 
 <header class="entry-header text-center">
@@ -235,3 +236,41 @@ The API's <tt>logfR0</tt> is <em>minus</em> log10|fR0|. SimulationCode uses an E
 clamps cosmological inputs and returns linear theory above z=3; the solver instead continues the boost with linear evolution.
 <a href="https://github.com/HAWinther/FML/blob/master/FML/Emulator/EMantis/README.md">The module notes</a>
 record all parameter ranges and Python comparison tests. Agreement with Python at roughly 1e-10 measures the port, not physical emulator accuracy.</p>
+<p>Cite <a href="https://doi.org/10.1093/mnras/stad3343">Saez-Casares, Rasera &amp; Li, MNRAS 527, 7242 (2024)</a> and
+<a href="https://doi.org/10.1051/0004-6361/202450193">Saez-Casares, Rasera, Richardson &amp; Corasaniti, A&amp;A 691, A323 (2024)</a>.
+e-MANTIS is distributed under the GPL (version 3 or later), and so is the port, like FML itself: <tt>Emulator/EMantis</tt> keeps the
+licence text (<tt>COPYING</tt>) and the notices of the original
+(<a href="https://github.com/HAWinther/FML/blob/master/FML/Emulator/EMantis/README.md#licence">licence notes</a>).</p>
+
+<header class="entry-header text-center"><h1 class="entry-title" id="Bacco">baccoemu emulators: matter, baryons and galaxy bias</h1></header>
+<p><tt>Emulator/Bacco/Bacco.h</tt> ports the prediction part of <a href="https://bitbucket.org/rangulo/baccoemu">baccoemu 2.3.0</a>
+(Angulo, Zennaro, Aric&ograve;, Pellejero Ib&aacute;&ntilde;ez, Burger; MIT licence): neural-network emulators trained on the BACCO
+simulations, with massive neutrinos and $w_0$&ndash;$w_a$ dark energy.</p>
+<ul>
+<li><tt>MatterPowerSpectrum</tt>: $\sigma_8$, $\sigma_{12}$ and $A_s$, the linear $P(k)$ of the cold or total matter
+(<a href="https://arxiv.org/abs/2104.14568">Aric&ograve; et al. 2021</a>), the no-wiggle and BAO-smeared spectra, the nonlinear boost and
+$P_{\rm NL}$ (<a href="https://arxiv.org/abs/2004.06245">Angulo et al. 2021</a>, or the wider ranges of
+<a href="https://arxiv.org/abs/2303.05537">Aric&ograve; et al. 2023</a>), and the baryonic suppression of $P(k)$
+(<a href="https://arxiv.org/abs/2011.15018">Aric&ograve; et al. 2021</a> or <a href="https://arxiv.org/abs/2506.18974">Burger et al. 2025</a>).</li>
+<li><tt>MatterBispectrum</tt>: the baryonic suppression of the matter bispectrum (<a href="https://arxiv.org/abs/2506.18974">Burger et al. 2025</a>).</li>
+<li><tt>LbiasExpansion</tt>: the 15 spectra of the second order Lagrangian bias expansion and the galaxy auto and cross spectra in real space,
+$k\le0.75\,h$/Mpc (<a href="https://arxiv.org/abs/2101.12187">Zennaro et al.</a>).</li>
+<li><tt>LbiasExpansionRSD</tt>: the same in redshift space (multipoles 0, 2, 4), the galaxy multipoles and $P(k,\mu)$ with fingers of god and
+noise, $k\le0.64\,h$/Mpc (<a href="https://arxiv.org/abs/2207.06437">Pellejero Ib&aacute;&ntilde;ez et al. 2023</a>; LPT from an emulator of
+<a href="https://arxiv.org/abs/2012.04636">velocileptors</a>), and the bias coevolution relations (<a href="https://arxiv.org/abs/2110.05408">Zennaro et al. 2022</a>).</li>
+</ul>
+<div style="text-align: center"><div style="max-width:800px;display:inline-block;text-align:left;width:100%"><pre class="prettyprint">#include &lt;FML/Emulator/Bacco/Bacco.h&gt;
+using namespace FML::EMULATOR::BACCO;
+Parameters p;
+p.Omega_cold = 0.31; p.Omega_b = 0.049; p.sigma8_cold = 0.81;   // or p.Omega_m, p.A_s
+p.h = 0.67; p.n_s = 0.965; p.M_nu = 0.06;
+MatterPowerSpectrum emu;                                    // options: nonlinear_model, baryonic_model, ...
+auto pnl = emu.nonlinear_pk(p, a, k, /*cold=*/false);       // total matter, (Mpc/h)^3
+LbiasExpansionRSD lbz;
+LbiasExpansionRSD::RSDParameters rsd; rsd.f_sat = 0.1; rsd.lambda_FoG = 2.5;
+auto multipoles = lbz.galaxy_pk({b1, b2, bs2, blaplacian}, rsd, p, a, k);</pre></div></div>
+<p>The trained networks are not distributed with FML: run <tt>Emulator/Bacco/get_data.sh</tt> once (it downloads them from bacco.dipc.org,
+checks pinned SHA-256 sums and converts them with numpy and h5py; <tt>--matter</tt> fetches only the ~10 MB of matter emulators). Without
+them the constructors throw an error that says how to get them. The predictions agree with the Python package to ~1e-15 (with the
+networks evaluated in double precision in both) in 251 test cases;
+<a href="https://github.com/HAWinther/FML/blob/master/FML/Emulator/Bacco/README.md">the module notes</a> list the parameter ranges.</p>

@@ -137,6 +137,7 @@ The library provides the following building blocks and cosmology workflows. Modu
 </ul>
 <p><b>Inference</b></p>
 <ul>
+<li><a href="halomodel.php#Bacco" style="display: inline">baccoemu emulators</a>: linear and nonlinear matter power with neutrinos and $w_0w_a$, baryonic suppression of $P(k)$ and $B(k)$, and the Lagrangian bias expansion of galaxies in real and redshift space; <a href="halomodel.php#EMantis" style="display: inline">e-MANTIS</a> for $f(R)$ and wCDM.</li>
 <li><a href="inference.php#NeuralNetwork" style="display: inline">Trainable neural-network emulators</a> with Jacobians and PyTorch export, and <a href="random.php#LatinHypercube" style="display: inline">Latin hypercube experiment designs</a>.</li>
 <li><a href="inference.php" style="display: inline">MCMC</a>: adaptive Metropolis&ndash;Hastings with parallel chains, fast/slow parameters and checkpoints, a minimizer with profile likelihoods and Hessians, Hamiltonian Monte Carlo for millions of parameters, and rank-normalized $\hat R$ and bulk/tail ESS diagnostics.</li>
 <li><a href="inference.php#CosmicShear" style="display: inline">Tomographic cosmic shear</a>: NLA intrinsic alignments, photo-z and calibration nuisances, angular correlations and logarithmic COSEBIs, with optional scale-independent Sigma(z).</li>
