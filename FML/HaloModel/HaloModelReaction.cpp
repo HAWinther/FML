@@ -118,10 +118,16 @@ namespace FML {
                 pop.halos.resize(n);
                 std::exception_ptr exception = nullptr;
                 // GR collapses do not depend on the mass: do one
-                const bool mass_dependent = is_real and mg;
+                const bool mass_dependent = is_real and mg and not cosmo.fifth_force_mass_independent;
                 ScreenedCollapseResult gr;
                 if (not mass_dependent)
-                    gr = screened_spherical_collapse(model, fifth_force_none(), x, 0.0, o);
+                    gr = screened_spherical_collapse(
+                        model,
+                        is_real and mg ? fifth_force(radius_of_mass(std::pow(10.0, opt.log10M_min), pop.rho)) :
+                                         fifth_force_none(),
+                        x,
+                        env,
+                        o);
 #ifdef USE_OMP
 #pragma omp parallel for schedule(dynamic, 1)
 #endif

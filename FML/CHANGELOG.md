@@ -5,6 +5,13 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### ReACT: one collapse per redshift for coupled dark matter (8 s -> 0.9 s)
+- `HaloModelReaction::Cosmology::fifth_force_mass_independent`: with an unscreened fifth force delta_c and Delta_vir
+  do not depend on the halo, so one collapse per redshift instead of one per mass (react_mass_loop = 30). Set for
+  coupled_quintessence and fading_dark_sector: the same P_NL bitwise, and the reaction costs ~1.5 s on top of the
+  HMcode-2020 pseudo (~3 s) instead of ~9 s (precision = fast, pert_k_max = 1, 2 threads; the Boltzmann solve ~32 s).
+  `tests/test_halomodel_reaction` checks that both give the same halo model.
+
 ### Build: no objects reused from other folders through VPATH
 - The solver's `./cmb` and CosmologyFitting's `./mcmc` put their objects in `build/`: both folders are also source
   folders (FML_MODULES) of other programs, whose make found and reused the objects there through VPATH, with other

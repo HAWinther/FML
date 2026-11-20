@@ -86,6 +86,9 @@ namespace FML {
                     /// true: sigma(M) of the real halos from the target P_cb and delta_c extrapolated with the
                     /// target's linear growth (scale-independent G_eff); false: P_cb^LCDM and the LCDM growth (ReACT)
                     bool target_linear{false};
+                    // The fifth force does not depend on the halo (unscreened, e.g. coupled dark matter): one collapse
+                    // per redshift instead of one per mass
+                    bool fifth_force_mass_independent{false};
                 };
 
                 /// Linear spectra at the redshift: k [h/Mpc] -> P [(Mpc/h)^3]

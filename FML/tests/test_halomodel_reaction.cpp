@@ -216,6 +216,28 @@ int main() {
         check_local(not hm.modified_gravity() and hm.E() == 1.0, "GR: E = 1");
     }
 
+    std::cout << "Mass-independent fifth force: one collapse per redshift\n";
+    {
+        // An unscreened fifth force (G_eff/G = 1.05) does not depend on the halo: fifth_force_mass_independent gives
+        // the same halo model as one collapse per mass, with 1/n_mass of the collapses
+        const auto lin = read(refdir + "gr_linear.txt");
+        HaloModelReaction::Cosmology cosmo;
+        cosmo.OmegaM = Ocb;
+        const auto F0 = fifth_force_unscreened([](double) { return 1.05; });
+        auto F = [F0](double) { return F0; };
+        auto fast = cosmo;
+        fast.fifth_force_mass_independent = true;
+        HaloModelReaction a(cosmo, 1.0, spectra(lin, 0), F), b(fast, 1.0, spectra(lin, 0), F);
+        a.set_one_loop(1.0, 1.0);
+        b.set_one_loop(1.0, 1.0);
+        double d = 0;
+        for (double lm : {12.0, 13.5, 15.0})
+            d = std::max(d, std::abs(a.deltac(lm) / b.deltac(lm) - 1) + std::abs(a.DeltaVir(lm) / b.DeltaVir(lm) - 1));
+        for (double k : {0.02, 0.1, 1.0, 10.0})
+            d = std::max(d, std::abs(a.reaction(k) / b.reaction(k) - 1));
+        check_local(d < 1e-12, "the same delta_c, Delta_vir and reaction (" + fmt(d) + ")");
+    }
+
     std::cout << "Modified gravity needs k*; fallback; invalid input\n";
     {
         const auto lin = read(refdir + "fr_linear.txt");

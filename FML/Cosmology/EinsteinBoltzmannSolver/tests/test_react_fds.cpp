@@ -152,7 +152,7 @@ int main() {
                 const double b = f2.pnl(z, k) / f2.plin(z, k);
                 ok = ok && std::isfinite(b) && b > 0.5;
             }
-        check(ok, "c' = 0.2 (mass-dependent collapses with a strong fifth force): P_NL finite and positive");
+        check(ok, "c' = 0.2 (a strong fifth force): P_NL finite and positive");
     }
     return FML::TESTS::summary("ReACT coupled-quintessence");
 }

@@ -124,6 +124,8 @@ namespace FML::COSMOLOGY {
             // The concentrations scale with g = D_LCDM/D_model (normalised early): the halos of a model with more
             // late growth formed later (lower c, as in coupled-DE N-body simulations)
             hc.target_linear = true;
+            // the fifth force is unscreened: delta_c and Delta_vir do not depend on the mass (one collapse per z)
+            hc.fifth_force_mass_independent = true;
             if (beta != 0) {
                 mg = true;
                 const auto F = SC::fifth_force_unscreened(hc.muofx);
