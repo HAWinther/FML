@@ -1691,8 +1691,11 @@ namespace SIMCODE {
                          "hybridbias_kcut_over_nyquist * particle_Npart_1D <= min(ic_nmesh, particle_Npart_1D)");
             }
             if (force.interlacing_order > 1) {
-                if (force.density_method != "assignment" or force.interpolation_method != "assignment")
-                    fail("force_interlacing_order > 1 needs force_density_method = assignment and "
+                // Sheet interpolation assigns its tracers with force_density_assignment_method, so interlacing
+                // removes their aliasing as for the particles (the tracers follow the shifted particles)
+                if ((force.density_method != "assignment" and force.density_method != "sheet") or
+                    force.interpolation_method != "assignment")
+                    fail("force_interlacing_order > 1 needs force_density_method = assignment or sheet and "
                          "force_interpolation_method = assignment (the NUFFT has no aliasing to remove)");
                 try {
                     FML::INTERPOLATION::generate_interlacing_shifts<3>(force.interlacing_order, 1.0);

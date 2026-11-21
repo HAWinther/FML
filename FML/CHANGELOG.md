@@ -5,6 +5,11 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: force interlacing with sheet interpolation
+- `force_interlacing_order > 1` is now allowed with `force_density_method = sheet`: the sheet tracers are assigned with
+  `force_density_assignment_method`, so interlacing removes their aliasing as for the particles. Used for the one-step
+  BullFrog start from z = 1e7 (sheet, PCS, interlacing 2, deconvolution).
+
 ### SimulationCode: starting at high redshift (forward initial conditions, massive neutrinos)
 Found by starting linear runs at z = 1000 (8000 Mpc/h, 128^3) and comparing P_cb(k, z = 0) with the internal
 Einstein-Boltzmann solver (SPECIES.md, "Starting at high redshift"):
