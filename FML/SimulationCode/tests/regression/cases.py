@@ -318,6 +318,12 @@ CASES = {
         force_density_assignment_method="PCS",
         force_deconvolve_window=True,
     ),
+    # Force interlacing with a rank-1 lattice of 7 shifts (FML::INTERPOLATION::rank1_interlacing_generator)
+    "interlaced_force_rank1": dict(
+        force_interlacing_order=7,
+        force_density_assignment_method="PCS",
+        force_deconvolve_window=True,
+    ),
     # BullFrog from (almost) the Big Bang: Zel'dovich initial conditions at z = 1e7
     "bullfrog_bigbang": dict(
         simulation_use_cola=False,

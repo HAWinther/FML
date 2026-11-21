@@ -1633,20 +1633,80 @@ namespace FML {
         }
 
         //===================================================================================
+        /// @brief The generator g of the rank-1 lattice of shifts s_j = (j g / M mod 1) dx, j = 0, ..., M-1, for the
+        /// interlacing orders M (2 <= M < 64) in 2D and 3D that the half-cell and sub-lattice schemes do not have.
+        /// Alias n (the image at k + 2 k_Ny n) is then cancelled unless n.g = 0 mod M. Each g = (1, a[, b]) is the
+        /// one with the smallest aliased power of the density assignment (CIC, P(k) ~ k^-1.5) at |k| = 0.75 k_Ny in
+        /// the worst of 400 directions, out of all (1, a[, b]) with a <= b < M. Returns g = 0 for orders not in the
+        /// table
+        //===================================================================================
+        template <int NDIM>
+        std::array<int, NDIM> rank1_interlacing_generator(int interlacing_order) {
+            std::array<int, NDIM> g{};
+            if constexpr (NDIM == 2) {
+                static const int table[][3] = {
+                {3, 1, 1}, {5, 1, 3}, {6, 1, 2}, {7, 1, 5}, {10, 1, 3}, {11, 1, 3}, {12, 1, 5}, {13, 1, 5},
+                {14, 1, 3}, {15, 1, 11}, {17, 1, 10}, {18, 1, 13}, {19, 1, 11}, {20, 1, 11}, {21, 1, 13},
+                {22, 1, 13}, {23, 1, 10}, {24, 1, 17}, {26, 1, 7}, {27, 1, 8}, {28, 1, 5}, {29, 1, 17}, {30, 1, 11},
+                {31, 1, 12}, {33, 1, 10}, {34, 1, 21}, {35, 1, 13}, {37, 1, 10}, {38, 1, 17}, {39, 1, 23},
+                {40, 1, 11}, {41, 1, 29}, {42, 1, 13}, {43, 1, 31}, {44, 1, 13}, {45, 1, 19}, {46, 1, 27},
+                {47, 1, 13}, {48, 1, 35}, {50, 1, 31}, {51, 1, 11}, {52, 1, 11}, {53, 1, 23}, {54, 1, 16},
+                {55, 1, 21}, {56, 1, 23}, {57, 1, 35}, {58, 1, 41}, {59, 1, 36}, {60, 1, 47}, {61, 1, 18},
+                {62, 1, 23}, {63, 1, 46}};
+                for (auto & row : table)
+                    if (row[0] == interlacing_order)
+                        g = {row[1], row[2]};
+            } else if constexpr (NDIM == 3) {
+                static const int table[][4] = {
+                {3, 1, 1, 2}, {5, 1, 2, 3}, {6, 1, 1, 4}, {7, 1, 2, 3}, {9, 1, 2, 4}, {10, 1, 7, 8}, {11, 1, 4, 5},
+                {12, 1, 2, 5}, {13, 1, 3, 4}, {14, 1, 3, 9}, {15, 1, 2, 7}, {17, 1, 4, 11}, {18, 1, 5, 7},
+                {19, 1, 7, 11}, {20, 1, 9, 14}, {21, 1, 4, 16}, {22, 1, 9, 16}, {23, 1, 14, 17}, {24, 1, 17, 19},
+                {25, 1, 9, 11}, {26, 1, 6, 15}, {28, 1, 15, 22}, {29, 1, 8, 17}, {30, 1, 17, 23}, {31, 1, 7, 22},
+                {33, 1, 5, 8}, {34, 1, 13, 25}, {35, 1, 19, 24}, {36, 1, 21, 25}, {37, 1, 8, 23}, {38, 1, 7, 27},
+                {39, 1, 14, 30}, {40, 1, 17, 33}, {41, 1, 17, 30}, {42, 1, 29, 33}, {43, 1, 9, 31}, {44, 1, 17, 25},
+                {45, 1, 28, 32}, {46, 1, 20, 29}, {47, 1, 9, 34}, {48, 1, 28, 35}, {49, 1, 31, 38}, {50, 1, 9, 22},
+                {51, 1, 14, 20}, {52, 1, 16, 23}, {53, 1, 12, 37}, {54, 1, 15, 32}, {55, 1, 12, 39}, {56, 1, 13, 36},
+                {57, 1, 24, 44}, {58, 1, 17, 36}, {59, 1, 32, 36}, {60, 1, 16, 25}, {61, 1, 14, 22}, {62, 1, 13, 45},
+                {63, 1, 17, 26}};
+                for (auto & row : table)
+                    if (row[0] == interlacing_order)
+                        g = {row[1], row[2], row[3]};
+            }
+            return g;
+        }
+
+        //===================================================================================
         /// @brief Generate the set of shifts used for interlacing (alias reduction by averaging the density field
         /// computed from several copies of the particle distribution shifted by a fraction of a cell).
         ///
-        /// The order is the number of grids (including the unshifted one). Supported orders:
+        /// The order is the number of grids (including the unshifted one). The aliases of a grid mode k are the
+        /// images at k + 2 k_Ny n (n a nonzero integer vector). After the phase of each shift s_j is undone, alias n
+        /// is multiplied by A(n) = (1/order) sum_j exp(2 pi i n.s_j/dx), so it cancels where A(n) = 0. The largest
+        /// aliases are those with the fewest nonzero n_i and the smallest |n_i| (each nonzero n_i costs about a
+        /// factor (k dx / (2 pi |n_i|))^p of the window of order p). Supported orders:
         ///  - 1: no interlacing (only the zero shift)
-        ///  - any order in 1D: shifts i/order * dx
-        ///  - 2 in any dimension: 0 and (1/2,...,1/2) dx. Cancels the aliases (images at k + 2 k_Ny n) with odd
-        ///    sum(n)
-        ///  - 2^(NDIM-1) for NDIM >= 3 (e.g. 4 in 3D): all corners of the half-cell cube with an even number of
-        ///    1/2's: 0, (1/2,1/2,0), (1/2,0,1/2), (0,1/2,1/2). Cancels all aliases except those with all n_i odd
-        ///    (the (1,1,1) family which has the smallest amplitude)
-        ///  - n^NDIM: a regular sub-lattice with n points per dimension (e.g. 8 = 2^3 in 3D cancels all aliases with
-        ///    some odd n_i)
-        ///  - 2^m >= 2^NDIM: the 2^NDIM corners of the half-cell cube, recursively refined along the diagonal
+        ///  - any order in 1D: shifts i/order * dx. Cancels all n that are not multiples of the order
+        ///  - 2 in any dimension: 0 and (1/2,...,1/2) dx. A(n) = (1 + (-1)^sum(n)) / 2: cancels the n with odd
+        ///    sum(n), e.g. (1,0,0) and (1,1,1). Leaves (1,1,0) and (2,0,0)
+        ///  - 2^(NDIM-1) for NDIM >= 3 (e.g. 4 in 3D): the corners of the half-cell cube with an even number of
+        ///    1/2's: 0, (1/2,1/2,0), (1/2,0,1/2), (0,1/2,1/2). Cancels every n with both odd and even components,
+        ///    e.g. (1,0,0) and (1,1,0). Leaves the n with all n_i odd ((1,1,1)) and all n_i even ((2,0,0))
+        ///  - n^NDIM: a regular sub-lattice with n points per dimension. Cancels every n except those with all n_i
+        ///    multiples of n: 8 = 2^3 in 3D leaves the all-even n, (2,0,0) and (2,2,0) (no half-cell scheme
+        ///    cancels them, so 8 is no better than 4 along the axes); 27 leaves (3,0,0); 64 (quarter cells) leaves
+        ///    (4,0,0)
+        ///  - 2^m >= 2^NDIM (when not n^NDIM): the 2^NDIM corners of the half-cell cube, recursively refined along
+        ///    the diagonal by dx/4, dx/8, ... Level l multiplies A(n) by (1 + exp(2 pi i sum(n) / 2^(l+1))) / 2, so
+        ///    16 also cancels the all-even n with sum(n)/2 odd ((2,0,0), (2,2,2)), leaving (4,0,0) and (2,2,0);
+        ///    32 also cancels sum(n) = 4 mod 8 ((2,2,0), (4,0,0)), leaving (2,-2,0) and (4,4,0). The n with
+        ///    sum(n) = 0, e.g. (2,-2,0), are never cancelled by diagonal shifts
+        ///  - any other order 2 < M < 64 in 2D and 3D (3, 5, 6, 7, 9, 10, ...): a rank-1 lattice
+        ///    s_j = (j g / M mod 1) dx with the generator g of rank1_interlacing_generator. Then A(n) = 1 if
+        ///    n.g = 0 mod M and 0 otherwise, so every alias is either cancelled or left whole, and g is chosen so
+        ///    that the ones left are far from the origin. Unlike half-cell shifts these also cancel all-even n such
+        ///    as (2,0,0): M = 7 leaves about as little aliasing as 16, and M = 13 less. The residual depends on the
+        ///    direction of k (the aliases left are not symmetric under sign changes of n_i). The orders of the
+        ///    schemes above keep their shifts even where a rank-1 lattice would be better (e.g. 8)
         /// The shifts are in [0, dx) in each coordinate.
         ///
         /// @tparam NDIM The dimension
@@ -1728,6 +1788,18 @@ namespace FML {
                             shift[idim] += extra;
                         shifts.push_back(shift);
                     }
+                }
+                return shifts;
+            }
+
+            // Any other order below 64 in 2D and 3D: a rank-1 lattice s_j = (j g / M mod 1) dx
+            const auto g = rank1_interlacing_generator<NDIM>(interlacing_order);
+            if (g[0] != 0) {
+                for (int j = 0; j < interlacing_order; j++) {
+                    std::array<double, NDIM> shift{};
+                    for (int idim = 0; idim < NDIM; idim++)
+                        shift[idim] = double((long(j) * g[idim]) % interlacing_order) / double(interlacing_order) * dx;
+                    shifts.push_back(shift);
                 }
                 return shifts;
             }

@@ -146,7 +146,7 @@ void run_case(const std::string & label, bool empty_rank = false) {
         worst_legacy = std::max(worst_legacy, relative_difference(actual, reference, true));
 
         // Reference for the old generalized algorithm: shift a copy, deposit and undo the Fourier phase.
-        for (int order : {1, 2, 4, 8}) {
+        for (int order : {1, 2, 4, 8, 3, 7, 13}) {
             reference.fill_fourier_grid(0.0);
             reference.set_grid_status_real(false);
             const auto shifts = I::generate_interlacing_shifts<N>(order, 1.0 / nmesh);
@@ -181,7 +181,7 @@ void run_case(const std::string & label, bool empty_rank = false) {
     }
     check(worst_deposition < FML::TESTS::grid_tol(2e-12, 1e-5), label + " shifted deposition matches explicit-shift reference");
     check(worst_legacy < FML::TESTS::grid_tol(2e-12, 1e-5), label + " legacy two-grid Fourier field unchanged");
-    check(worst_multi < FML::TESTS::grid_tol(2e-12, 1e-5), label + " generalized 1/2/4/8-grid Fourier fields agree");
+    check(worst_multi < FML::TESTS::grid_tol(2e-12, 1e-5), label + " generalized 1/2/4/8/3/7/13-grid Fourier fields agree");
     check(conserved, label + " mass/weight is conserved");
     check(p.empty() || std::memcmp(original.data(), p.data(), original.size()) == 0,
           label + " all particle bytes preserved exactly");

@@ -311,8 +311,13 @@ namespace SIMCODE {
                               "Force interlacing: compute the force for this many copies of the particles shifted "
                               "by a fraction of a cell relative to the grid and average (at the particles). 1: off, "
                               "2: shift (1/2,1/2,1/2), 4: the half-cell face diagonals, 8: all half-cell corners, "
-                              "64: quarter cells. Cancels the leading aliasing of the density assignment and the force "
-                              "interpolation at the cost of this many force calculations");
+                              "16, 32: the half-cell corners refined along the diagonal, n^3 (27, 64, ...): a sub-lattice "
+                              "of n points per cell side, any other order below 64 (3, 5, 6, 7, 9, ...): a rank-1 lattice "
+                              "j g / M (7 and 9 cancel about as much as 16, 13 more). Cancels the leading aliasing of the density assignment and "
+                              "the force interpolation (the images at k + 2 k_Ny n with only one nonzero n_i, n_i = 1) at "
+                              "the cost of this many force calculations. 2 and 4 also cancel some of the others but "
+                              "leave n = (2,0,0) (so does 8; the rank-1 lattices cancel it); 16 and 64 leave (4,0,0), 27 leaves (3,0,0) (see "
+                              "generate_interlacing_shifts)");
             f.always_optional("force_deconvolve_window",
                               deconvolve_window,
                               false,
@@ -1697,13 +1702,19 @@ namespace SIMCODE {
                     force.interpolation_method != "assignment")
                     fail("force_interlacing_order > 1 needs force_density_method = assignment or sheet and "
                          "force_interpolation_method = assignment (the NUFFT has no aliasing to remove)");
-                try {
-                    FML::INTERPOLATION::generate_interlacing_shifts<3>(force.interlacing_order, 1.0);
-                } catch (std::exception & e) {
-                    fail("force_interlacing_order = " + std::to_string(force.interlacing_order) +
-                         " is not supported (use 1, 2, 4, 8, 16, 27, 32, 64, ...)");
-                }
             }
+            // The orders that have shifts: 1 to 63, and above that powers of 2 and cubes
+            auto check_interlacing_order = [&](int order, const std::string & name) {
+                try {
+                    FML::INTERPOLATION::generate_interlacing_shifts<NDIM_SPACE>(order, 1.0);
+                } catch (std::exception & e) {
+                    fail(name + " = " + std::to_string(order) +
+                         " is not supported (use 1 to 63, or above that a power of 2 or a cube)");
+                }
+            };
+            check_interlacing_order(force.interlacing_order, "force_interlacing_order");
+            if (force.early_method == "interlaced")
+                check_interlacing_order(force.early_interlacing_order, "force_early_interlacing_order");
             if (force.lattice_greens) {
                 const int Np = particle.Npart_1D;
                 if (force.lattice_greens_cap >= 0.0 and force.lattice_greens_cap < 1.0)

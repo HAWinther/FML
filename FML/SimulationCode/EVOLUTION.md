@@ -66,12 +66,16 @@ the smoothing there gives far too much small-scale power (+14% to +58% at k = 0.
 grid), while the standard settings (CIC, lattice offset, discrete_4pt/2pt kernel) are already accurate there.
 
 - `force_interlacing_order` = M > 1: the force is computed for M copies of the particles shifted by a fraction of a
-  cell (2: (1/2,1/2,1/2); 4: half-cell face diagonals; 8: all half-cell corners; 64: quarter cells), interpolated to
+  cell (2: (1/2,1/2,1/2); 4: half-cell face diagonals; 8: all half-cell corners; 64: quarter cells; other orders below
+  64, e.g. 3, 7, 13: a rank-1 lattice of shifts j g / M), interpolated to
   the shifted particles and averaged. This cancels the leading aliasing of the assignment and the interpolation.
 - `force_deconvolve_window = true`: divide the force by W(k)^2 (undo the smoothing of the assignment and the
   interpolation). Unstable on its own (it amplifies the aliased power), but with interlacing it works. TSC or PCS
   with M = 2 plus deconvolution is the combination of List, Hahn & Rampf (2024). M = 4 or 8 gives the same as 2 for
-  TSC/PCS (the remaining aliases are the even images, which only quarter-cell shifts cancel).
+  TSC/PCS (the remaining aliases are the even images, n = (2,0,0) and the like, which no half-cell shift cancels).
+  The rank-1 lattices cancel them too: the density error of PCS (deconvolved, k < k_Ny/2, random particles,
+  `tests/test_grid_tools.cpp`) is 1.1e-4 with M = 2, 4 or 8, 2.0e-5 with M = 3, 6.5e-6 with 16 or 64, 6.4e-7 with
+  M = 7 and 5.4e-8 with M = 13.
 - `force_density_method = nufft`: the exact Fourier modes of the particles (non-uniform FFT, FML/NUFFT/NUFFT.h,
   accuracy force_nufft_epsilon) for |k_i| < k_Nyquist; the force is then also evaluated exactly at the particles
   (force_interpolation_method = fiducial = nufft). Using the NUFFT only for the density (with CIC interpolation)

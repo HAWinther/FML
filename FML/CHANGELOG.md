@@ -5,6 +5,21 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Interpolation: interlacing with rank-1 lattices of shifts (any order below 64)
+- `generate_interlacing_shifts` has every order 3 <= M < 64 in 2D and 3D that the half-cell and sub-lattice schemes
+  do not have (3, 5, 6, 7, 9, 10, ...): the rank-1 lattice s_j = (j g / M mod 1) dx with a tabulated generator
+  (`rank1_interlacing_generator`, chosen for the smallest aliased power in the worst direction). Alias n is then
+  cancelled unless n.g = 0 mod M, which also removes the even images (n = (2,0,0), ...) that no half-cell scheme
+  can. Density error of PCS for k < k_Ny/2 (deconvolved): 1.1e-4 with 2, 4 or 8 grids, 6.5e-6 with 64, 6.4e-7 with
+  7 and 5.4e-8 with 13 grids. The existing orders keep their shifts (all regression cases bit-identical).
+- The comments of `generate_interlacing_shifts` and of `force_interlacing_order` now say which aliases each order
+  cancels and which it leaves (the all-even n survive every half-cell scheme, 8 included).
+- SimulationCode: `force_interlacing_order` and `force_early_interlacing_order` accept 1 to 63 (above that powers of
+  2 and cubes); the early order is now checked when the parameters are read. New regression case
+  `interlaced_force_rank1` (7 grids).
+- Tests: `test_grid_tools` checks A(n) of every rank-1 order and the density error of orders 3, 7, 13 and 16;
+  `test_interlacing_offset` also compares orders 3, 7 and 13 with explicit shifts.
+
 ### SimulationCode: force interlacing with sheet interpolation
 - `force_interlacing_order > 1` is now allowed with `force_density_method = sheet`: the sheet tracers are assigned with
   `force_density_assignment_method`, so interlacing removes their aliasing as for the particles. Used for the one-step

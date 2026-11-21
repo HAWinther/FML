@@ -262,6 +262,63 @@ void test_redistribution_suite() {
     }
 }
 
+
+// The rank-1 lattices of generate_interlacing_shifts (orders 3 to 63 without a half-cell or sub-lattice scheme):
+// M distinct shifts in [0, 1), and the shift average A(n) = |sum_j exp(2 pi i n.s_j)| / M of every alias n with
+// |n_i| <= 3 is 1 if n.g = 0 mod M and 0 otherwise. The leading aliases (one nonzero n_i, |n_i| <= 2: (1,0,0),
+// (2,0,0)) are always cancelled
+template <int N>
+void check_rank1_interlacing() {
+    bool ok = true;
+    int ntested = 0;
+    for (int M = 3; M < 64; M++) {
+        const auto g = FML::INTERPOLATION::rank1_interlacing_generator<N>(M);
+        if (g[0] == 0)
+            continue;
+        ntested++;
+        const auto shifts = FML::INTERPOLATION::generate_interlacing_shifts<N>(M, 1.0);
+        ok = ok and int(shifts.size()) == M;
+        for (size_t i = 0; i < shifts.size(); i++) {
+            for (auto x : shifts[i])
+                ok = ok and x >= 0.0 and x < 1.0;
+            for (size_t j = 0; j < i; j++)
+                ok = ok and shifts[i] != shifts[j];
+        }
+        std::array<int, N> n{};
+        const int R = 3, side = 2 * R + 1;
+        int total = 1;
+        for (int d = 0; d < N; d++)
+            total *= side;
+        for (int idx = 0; idx < total; idx++) {
+            int rest = idx, ndot = 0, nnonzero = 0, nmax = 0;
+            for (int d = 0; d < N; d++) {
+                n[d] = rest % side - R;
+                rest /= side;
+                ndot += n[d] * g[d];
+                nnonzero += n[d] != 0;
+                nmax = std::max(nmax, std::abs(n[d]));
+            }
+            if (nnonzero == 0)
+                continue;
+            std::complex<double> sum = 0.0;
+            for (auto & s : shifts) {
+                double phase = 0.0;
+                for (int d = 0; d < N; d++)
+                    phase += n[d] * s[d];
+                sum += std::polar(1.0, 2 * M_PI * phase);
+            }
+            const double A = std::abs(sum) / M;
+            const bool survives = ((ndot % M) + M) % M == 0;
+            ok = ok and std::abs(A - (survives ? 1.0 : 0.0)) < 1e-10;
+            if (nnonzero == 1 and nmax <= 2)
+                ok = ok and not survives;
+        }
+    }
+    check_local(ok and ntested > 40,
+                "generate_interlacing_shifts: rank-1 lattices in " + std::to_string(N) + "D (" +
+                    std::to_string(ntested) + " orders; A(n) is 0 or 1, the leading aliases cancel)");
+}
+
 int main(int argc, char ** argv) {
 #ifdef USE_MPI
     std::vector<std::vector<int>> outgoing(FML::NTasks);
@@ -377,11 +434,13 @@ int main(int argc, char ** argv) {
         }
         bool threw = false;
         try {
-            FML::INTERPOLATION::generate_interlacing_shifts<3>(3, 1.0);
+            FML::INTERPOLATION::generate_interlacing_shifts<3>(65, 1.0);
         } catch (std::runtime_error &) {
             threw = true;
         }
-        check_local(ok and threw, "generate_interlacing_shifts (orders 2, 4, 8, 16 in 3D; 3 is rejected)");
+        check_local(ok and threw, "generate_interlacing_shifts (orders 2, 4, 8, 16 in 3D; 65 is rejected)");
+        check_rank1_interlacing<2>();
+        check_rank1_interlacing<3>();
     }
 
     //===========================================================
@@ -403,7 +462,10 @@ int main(int argc, char ** argv) {
         FFTWGrid<3> exact(n);
         FML::NUFFT::particles_to_fourier_grid_nufft<3>(part.data(), part.size(), NumPartTot, exact, 1e-8);
         std::vector<double> err;
-        for (int order : {1, 2, 4, 8, 64}) {
+        // The half-cell and sub-lattice schemes (1, 2, 4, 8, 64), then the rank-1 lattices (3, 7, 13) and the
+        // diagonal refinement (16)
+        const std::vector<int> orders = {1, 2, 4, 8, 64, 3, 7, 13, 16};
+        for (int order : orders) {
             FFTWGrid<3> grid(n);
             FML::INTERPOLATION::particles_to_fourier_grid_interlaced<3>(part.data(),
                                                                         part.size(),
@@ -429,14 +491,22 @@ int main(int argc, char ** argv) {
             FML::SumOverTasks(&sum_ref);
             err.push_back(std::sqrt(sum_err / sum_ref));
         }
-        if (FML::ThisTask == 0)
-            std::cout << "       PCS, k < kNy/2: rms error vs exact for interlacing order 1,2,4,8,64: " << err[0] << " "
-                      << err[1] << " " << err[2] << " " << err[3] << " " << err[4] << "\n";
+        if (FML::ThisTask == 0) {
+            std::cout << "       PCS, k < kNy/2: rms error vs exact for interlacing order";
+            for (size_t i = 0; i < orders.size(); i++)
+                std::cout << " " << orders[i] << ": " << err[i];
+            std::cout << "\n";
+        }
         // Half-cell shifts cancel the odd alias images (the largest, n = (1,0,0)). After that the error is
         // dominated by the even images (n = (2,0,0), ...) which only quarter-cell shifts (order 4^3 = 64) cancel
         check_local(err[1] < 0.1 * err[0] and err[2] < 1.01 * err[1] and err[3] < 1.01 * err[1] and
                         err[4] < 0.1 * err[3],
                     "Interlacing of order 1, 2, 4, 8, 64 reduces aliasing as expected");
+        // The rank-1 lattices also cancel the even images: 3 grids beat 8 half-cell grids, 7 beat 64 quarter cells.
+        // 16 (diagonal refinement) leaves (4,0,0) like 64
+        check_local(err[5] < 0.5 * err[3] and err[6] < 0.2 * err[4] and err[7] < 0.2 * err[6] and
+                        std::abs(err[8] / err[4] - 1.0) < 0.1,
+                    "Interlacing with the rank-1 lattices of order 3, 7, 13 reduces aliasing as expected");
     }
 
     //===========================================================
