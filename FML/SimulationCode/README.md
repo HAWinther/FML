@@ -27,13 +27,19 @@ snapshots from other simulations. There is more documentation on [the website](h
   - Ultralight-axion dark matter in the initial conditions (`ic_axion_fraction`: the solver's mixed axion + CDM
     model, the particles all the dark matter).
 - **[Forces, time stepping and COLA](EVOLUTION.md)**
-  - PM forces with CIC to PQS mass assignment and a choice of kernels; interlaced and NUFFT forces.
+  - PM forces with CIC to PQS mass assignment and a choice of kernels; interlaced, NUFFT and sheet forces; a
+    lattice-calibrated Green's function that makes the linear force exact while the particles are close to the
+    lattice (experimental).
   - COLA, also with scale-dependent growth.
-  - Quinn, Tassev, FastPM and BullFrog time stepping, including starting from the Big Bang.
+  - Quinn, Tassev, FastPM and BullFrog time stepping, including starting from the Big Bang (one or a few BullFrog
+    steps to z ~ 20 instead of 2LPT initial conditions).
+  - FastPM with a scale-dependent kick: the linear growth of any G_eff(k, a), or of massive neutrinos, followed
+    exactly for any step size (experimental).
   - Optional [short-range forces](SHORT_RANGE.md) (P3M or TreePM).
 - **[Matter content](SPECIES.md)**
   - CDM+baryons as one species or as two.
-  - Massive neutrinos as a linear field (with any masses) or as δf particles.
+  - Massive neutrinos as a linear field (with any masses) or as δf particles, from any starting redshift (while they
+    are relativistic they are radiation, as massless neutrinos).
   - The N-body gauge, for radiation and GR on the largest scales.
 - **[On-the-fly analysis and output](ANALYSIS.md)**
   - P(k) at every step with nonlinear predictions (EuclidEmulator2, and the e-MANTIS f(R) emulator).
@@ -125,8 +131,8 @@ Everything goes to `output_folder`, labelled with `simulation_name`:
 | [PARAMETERS.md](PARAMETERS.md) | Every parameter: type, default, when it is used, allowed values |
 | [MODELS.md](MODELS.md) | The cosmologies and gravity models, screening |
 | [INITIAL_CONDITIONS.md](INITIAL_CONDITIONS.md) | Random fields, non-Gaussianity, input spectra and transfer functions (CAMB, CLASS, the internal solver), snapshots as initial conditions |
-| [EVOLUTION.md](EVOLUTION.md) | PM forces, the force grid, accurate forces on a coarse grid, time stepping, starting from the Big Bang, COLA |
-| [SPECIES.md](SPECIES.md) | Separate CDM and baryons, neutrino masses, neutrino particles, the N-body gauge |
+| [EVOLUTION.md](EVOLUTION.md) | PM forces, the force grid, accurate forces on a coarse grid, the lattice-calibrated Green's function, time stepping (also FastPM with a scale-dependent kick), starting from the Big Bang, COLA |
+| [SPECIES.md](SPECIES.md) | Separate CDM and baryons, neutrino masses, neutrino particles, the N-body gauge, starting at high redshift |
 | [ANALYSIS.md](ANALYSIS.md) | P(k), multipoles, halos, bispectra, hybrid-bias spectra (real and redshift space), baryonification, snapshots and lightcones |
 | [SHORT_RANGE.md](SHORT_RANGE.md), [COLA_SHORT_RANGE.md](COLA_SHORT_RANGE.md) | Short-range forces with PM and with COLA ([results](SHORT_RANGE_RESULTS.md), [clustered force](CLUSTERED_FORCE.md), [dynamics](DYNAMICS.md)) |
 | [DEVELOPING.md](DEVELOPING.md) | The code layout, adding parameters, particle types and models |

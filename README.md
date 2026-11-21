@@ -72,7 +72,8 @@ cosmological model you add.
   approximated, massive neutrinos, separate CDM and baryons, lightcones, and power spectra, bispectra, halos and
   more computed on the fly.
 - The pieces to build your own: Gaussian and non-Gaussian initial conditions (N-GenIC compatible), 1LPT–3LPT and
-  arbitrary-order LPT, PM forces and time stepping (COLA, FastPM, BullFrog), short-range forces for P3M/TreePM, and
+  arbitrary-order LPT, PM forces and time stepping (COLA, FastPM, also with a scale-dependent kick, and BullFrog,
+  which can start from the Big Bang), short-range forces for P3M/TreePM, and
   modified-gravity solvers.
 - Smaller, newer codes: an [AMR N-body code](FML/AMRCode/README.md), [wave dark matter](FML/WaveDarkMatter/README.md)
   (Schrödinger–Poisson), and gas dynamics with [finite volumes](FML/Hydrodynamics/README.md) and

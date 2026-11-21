@@ -123,6 +123,31 @@ all but the largest scales ($-13\%$ at $k=0.2\hMpc$ for $64^3$ particles in $256
 These options are only meant for $N_{\rm mesh}=N_p^{1/3}$: on finer grids the modes between the particle and grid
 Nyquist frequencies are dominated by discreteness, and removing the smoothing there gives far too much power.
 
+\subsection{The lattice-calibrated Green's function}
+
+While the particles are close to a cubic lattice, the PM force on a linear mode differs from the true force by a factor
+that follows from the lattice images alone. For a displacement $\bm\Psi(\vq)$ of particles on the lattice $\vq$ with
+$N_{\rm mesh}=m\,N_p^{1/3}$, the assigned density of a mode $\vk$ below the particle Nyquist frequency contains the mode
+itself and its images at $\vk+2k_{\rm Ny}^{(p)}\bm n$; interpolating the force back to the particles adds the images of
+the grid. Summing the separable one-dimensional image sums (closed forms for CIC and the higher B-splines, with the
+lattice offset and the interlacing shifts) gives the linear response $T(\vk)$ of the scheme, and a lattice-field term
+$E(\vk)$ (for $m\ge3$) from the grid modes the lattice itself excites. \cls{LatticeGreensFunction}
+(\file{NBody/LatticeGreensFunction.h}, \code{ForceOptions::lattice_greens}) multiplies the Green's function by
+\begin{equation}
+C(\vk)=\frac{1-E(\vk)}{T(\vk)-E(\vk)},
+\end{equation}
+which makes the linear force exact for particles near the lattice (for $m\ge2$ tapered from $0.7\,k_{\rm Ny}$ and capped
+at 3). On a grid equal to the particle grid the exact correction is the ideal low-pass filter at the particle Nyquist
+frequency, which is what the NUFFT force computes; on finer grids the modes between the two Nyquist frequencies are
+discreteness and the NUFFT is not the right reference. With particles on the nodes of a finer grid CIC responds to the
+size of the displacement and is not linear, so CIC needs the lattice offset (half a cell, or a quarter with two
+interlaced grids). In linear runs of 20 steps the growth at $k_{\rm Ny}/2$ is then off by $+0.02\%$ (PCS, $1\times$),
+$+0.07\%$ (CIC, $1\times$, offset by half a cell) and $+0.4\%$ (CIC, $2\times$). Once the particles have moved away
+from the lattice the factor is no longer right (used throughout it is worse than PCS with interlacing and
+deconvolution), so in SimulationCode it is an early force (\param{force_lattice_greens_function} until
+\param{force_lattice_greens_until_redshift}, $\approx10$): a 1LPT start at $z=1000$ then gives $P(k,z=0)$ within
+$0.1\%$ of 2LPT at $z=19$, at the cost of the CIC force.
+
 \section{Time stepping}\label{sec:nbody-timestepping}
 
 The steps are fixed before the run: the scale factors of the steps are uniform in $a$ (\code{linear}, default),
@@ -157,6 +182,21 @@ $\bm v=G_p\bm\Psi$, $\bm F=G_f\bm\Psi$, is followed exactly for any step size:
 \Delta_K=\frac{G_p(a_{\rm vel}^{\rm new})-s\,G_p(a_{\rm vel})}{G_f(a_{\rm pos})},\\
 G_p=a^3E\frac{\dd D}{\dd a},\qquad G_f=\tfrac32\Om_m\mu\,aD .
 \end{gather}
+With a scale-dependent growth $D(k,a)$ (a $G_{\rm eff}(k,a)$, massive neutrinos) FastPM is exact for one growth
+history only: the drift factor is one number per step, while each mode needs its own $\Delta D(k)$. The kick can
+depend on $k$, as the force is computed in Fourier space. With the velocity between two kicks the effective
+$V_{n+1/2}(k)=[D(k,a_{n+1})-D(k,a_n)]/\Delta_D$, the common drift gives each mode its own growth, and the kick needs the
+factor
+\begin{equation}
+R(k)=\frac{V_{\rm after}(k)-s\,V_{\rm before}(k)}{\Delta_K\,G_f(k,a_{\rm pos})},\qquad
+G_f(k,a)=\tfrac32\,a\,\Om_m(a)E^2a^3\,\frac{G_{\rm eff}}{G}(a,k)\,S(a,k)\,D(k,a),
+\end{equation}
+on the force, with $V=G_p(k,a)$ at the start and after a synchronising step, and $G_f$ the right hand side of the
+growth equation of the model ($S$: the source factor of massive neutrinos and interacting dark energy). Then every
+linear mode is followed exactly for any step size. In SimulationCode this is the experimental option
+\param{timestep_scaledependent_kick}, implemented in \file{SimulationCode/src/ScaleDependentKick.h}. For f(R) with $|f_{R0}|=10^{-5}$ (linear, $z=49\to0$) one step is
+within $0.015\%$ for $k\le0.4\hMpc$, where five plain FastPM steps are off by up to $6\%$; with $0.1$\,eV neutrinos
+from $z=10^7$ one step is exact, where ten plain steps are off by 2--7\%.
 
 \paragraph*{BullFrog} \cite{Rampf2025}: a drift--kick--drift step in growth-factor time that follows the 2LPT growing
 mode exactly after every step. With $\bm w=\dd\vx/\dd D=\bm v/G_p$ and $\bm g=\bm F/G_f$ (normalised so that
@@ -174,6 +214,13 @@ to second order, BullFrog can start from (almost) $a=0$ with the particles on th
 (e.g.\ $10^7$); the first step produces the 2LPT displacement itself. This needs an accurate force while the particles
 are close to the lattice: with \param{force_early_method} \code{= nufft} until $z\approx10$ the result equals that of
 2LPT initial conditions at $z=19$ with the same force; with CIC throughout it does not.
+A single step can replace the initial conditions \cite{ListBigBang2024}: one BullFrog step from $z=10^7$ to $z\approx18$
+with sheet interpolation ($R=2$), PCS, two interlaced grids and deconvolution on a $2\times$ grid has a displacement
+error of 12\% of the beyond-Zel'dovich displacement against dealiased 3LPT ($128^3$), as close to 3LPT as dealiased
+2LPT and closer below $0.7\,k_{\rm Ny}$, for about the cost of 23 CIC steps; the rest is particle discreteness near the
+Nyquist frequency, which more steps do not remove. With massive neutrinos one BullFrog step is not enough (the growth
+depends on $k$ while the large modes cross the horizon); one FastPM step with the scale-dependent kick to $z\approx100$
+and then one BullFrog step comes within 2\% of the converged beyond-Zel'dovich displacement.
 
 \paragraph*{Velocity friction and several species.} With $\dd\bm v/\dd\ln a=-\Gamma\bm v+\bm F$, the steps are those
 of the friction-free $\bm u=e^{I}\bm v$, $I(a)=\int\Gamma\,\dd\ln a$, converted back: $s=e^{-[I(a_{\rm vel}^{\rm new})-

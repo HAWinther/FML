@@ -128,7 +128,11 @@ with the moments
 \end{equation}
 For $M\to0$ and $\Psi_\ell=-\mathcal N_\ell\,\dd\ln f_0/\dd\ln q$ this reduces to the massless system. The defaults are
 \param{n_q_ncdm} $=8$ Gauss--Laguerre momenta and \param{lmax_ncdm} $=17$ (as CLASS; 16 momenta or $\ell_{\max}=25$
-change $C_\ell$ and $P(k)$ by $<3\times10^{-5}$). Deep inside the horizon, $k\eta>$ \param{ncdm_fluid_trigger} $=31$,
+change $C_\ell$ and $P(k)$ by $<3\times10^{-5}$). The metric source terms of the hierarchy (and its initial conditions)
+are scaled so that the quadrature of the density source, $\sum_iw_iq_i^2\epsilon_i(-\dd\ln f_0/\dd\ln q)_i$, is the exact
+$3(\rho+p)$: with 8 momenta it is otherwise off by $\sim10^{-5}$, the constraint equations then see a $\delta\rho_\nu$
+that does not follow the continuity equation, and the mismatch stays in $\delta_{\rm cdm}$ as a $k$-independent offset
+that hides the synchronous-gauge densities, $\propto(k\eta)^2$, at early times and on large scales. Deep inside the horizon, $k\eta>$ \param{ncdm_fluid_trigger} $=31$,
 the hierarchy is replaced by the fluid approximation of Lesgourgues and Tram \cite{LesgourguesTram2011} for
 $\delta_\nu,\theta_\nu,\sigma_\nu$, with the adiabatic sound speed $c_a^2=\frac{w}{3(1+w)}(5-\mathfrak p/p)$ and a
 viscosity closure for the shear, as in CLASS. This reduces the system from $\sim190$ to $\sim49$ variables and changes

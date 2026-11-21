@@ -197,6 +197,11 @@ Two integrators that follow the linear growing mode exactly whatever the step si
 <p>
 With 10 steps from $z = 19$, FastPM and BullFrog get $P(k,z=0)$ to about 0.5% for $k &lt; 0.1\,h$/Mpc and 1&ndash;2% up to $k = 0.5\,h$/Mpc, where Quinn steps are off by 7&ndash;12%. Steps can be placed linearly, logarithmically, as a power law in $a$ or uniformly in the growth factor $D(a)$ (which reduces the BullFrog error by 15&ndash;40%).
 </p>
+<p>
+<b>FastPM with a scale-dependent kick</b> (<tt>timestep_scaledependent_kick = true</tt>, experimental). FastPM and BullFrog are exact only for one growth history. With a scale-dependent growth $D(k,a)$ &ndash; a $G_{\rm eff}(k,a)$ or massive neutrinos &ndash; the drift $\vec x \mathrel{+}= d\,\vec v$ cannot be exact, as $d$ is one number per step. The kick can depend on $k$, since the force is computed in Fourier space: with the velocity between two kicks taken as the effective $V(k) = [D(k,a_{n+1}) - D(k,a_n)]/d$, the force of each kick is multiplied by
+$$R(k) = \frac{V_{\rm after}(k) - s\,V_{\rm before}(k)}{\Delta_K\,G_f(k,a)},\qquad G_f(k,a) = \tfrac32\,a\,\Omega_m(a)E^2a^3\,\frac{G_{\rm eff}}{G}(a,k)\,S(a,k)\,D(k,a),$$
+where $G_f$ is the right hand side of the model's own growth equation ($S$: the neutrino and interacting-dark-energy source factor), so every linear mode is followed exactly with any number of steps, for any model. It costs one table of $R(k)$ per step and does nothing without scale-dependent growth. For f(R) with $|f_{R0}| = 10^{-5}$ (linear, $z = 49 \to 0$) one step is within 0.015% for $k \le 0.4\,h$/Mpc, where five plain FastPM steps are off by up to 6%; with 0.1 eV neutrinos from $z = 10^7$ one step is exact. Beyond linear order it is FastPM (one step from $a \approx 0$ gives Zel'dovich positions).
+</p>
 
 <header class="entry-header text-center">
   <h1 class="entry-title" id="LPTgrowth">LPT growth factors</h1>
@@ -394,6 +399,9 @@ The total density field in fourier space is then computed as
 $$\delta_M(k,a) =  \frac{\Omega_M - \Omega_{M\nu}}{\Omega_M}\delta_{\rm cb}(k,a) + \frac{\Omega_{M\nu}}{\Omega_M}\delta_{\nu}(k,a)$$
 wher $\delta_{\rm cb}(k,a)$ comes from binning particles to the grid.
 </p>
+<p>
+<b>Starting at high redshift.</b> Massive neutrinos are radiation while they are relativistic (0.033 eV neutrinos become non-relativistic at $z \approx 60$). If they are relativistic at the start ($\langle E/m\rangle &gt; 3$), the growth factors start from the radiation&ndash;matter growing mode as in $\Lambda$CDM, the neutrinos do not cluster before the transfer tables begin, and back-scaled initial conditions only need the tables from where they become non-relativistic. Use <tt>force_neutrino_energy_density = true</tt> then. Converged runs from $z = 1000$ and $z = 10^7$ agree with a start at $z = 50$ to about 0.1% at $z = 18$.
+</p>
 
 <header class="entry-header text-center">
   <h1 class="entry-title" id="COLA">COLA</h1>
@@ -506,6 +514,12 @@ with $\mu = 1 + \mu_0\Omega_{\rm DE}(a)/\Omega_{\rm DE,0}$ (the late-time parame
 
 <p>
 With a force grid finer than the particle lattice by an integer factor the particles start exactly on grid nodes, where the CIC kernel has a kink and the density responds to the size of the displacement; this gives spurious forces at the lattice frequency. The code offsets the lattice by half a force cell and offers other gradient kernels and an accurate force on a grid equal to the particle grid (interlacing, TSC and deconvolution, or the exact NUFFT force). A BullFrog step is exact for 2LPT, so the simulation can start at (almost) $a = 0$ from the particle lattice with the Zel'dovich velocity: the first step produces the 2LPT displacement itself (List, Hahn &amp; Rampf 2024). This needs an accurate force while the particles are close to the lattice, so <tt>force_early_method = "nufft"</tt> uses the NUFFT force at $z &gt; 10$; then 10 steps from $z = 10^7$ give $P(k)$ within 0.2% of the reference up to $k = 0.4\,h$/Mpc. The growth-factor tables start in the radiation era with the M&eacute;sz&aacute;ros growing modes.
+</p>
+<p>
+<b>The lattice-calibrated Green's function</b> (<tt>force_lattice_greens_function</tt>, experimental). While the particles are close to the lattice, the PM force of a linear mode differs from the true one by a factor that can be computed in closed form from the lattice images: $T(k)$ for the mass assignment, the interpolation, the kernels, the lattice offset and the interlacing shifts. Dividing the Green's function by it (with the lattice-field term, $C = (1-E)/(T-E)$) makes the linear force exact: in linear runs of 20 steps the growth at $k_{\rm Ny}/2$ is off by +0.02% (PCS, $1\times$ grid), +0.07% (CIC with the lattice offset by half a cell) and +0.4% ($2\times$ CIC), where the uncorrected force can be off by per cent to tens of per cent. Once the particles have moved away from the lattice the correction is no longer right, so it is meant for early times (<tt>force_lattice_greens_until_redshift</tt> $\approx 10$): then a 1LPT start at $z = 1000$ gives the same $P(k, z = 0)$ as 2LPT at $z = 19$ to 0.1%, at the cost of the plain CIC force. A NUFFT force does the same at a higher cost and is exact at any time.
+</p>
+<p>
+<b>One step from the Big Bang.</b> As in <a href="https://arxiv.org/abs/2309.10865" style="display: inline">List, Hahn &amp; Rampf (2024)</a>, a single BullFrog step from $z = 10^7$ to $z \approx 18$ can replace the initial conditions, with an accurate enough force: sheet interpolation ($R = 2$), PCS, two interlaced grids and deconvolution on a $2\times$ grid. Against dealiased 3LPT its displacement error is 12% of the beyond-Zel'dovich displacement at $128^3$, as close to 3LPT as dealiased 2LPT is and closer below $0.7\,k_{\rm Ny}$; what is left is the particle discreteness near the Nyquist frequency, which more steps do not remove. The step costs about as much as 23 CIC steps. With massive neutrinos one BullFrog step is not enough (the growth depends on $k$ while the large modes cross the horizon: from $z = 10^7$ it is $-18\%$ at $k = 0.008\,h$/Mpc); one scale-dependent FastPM step to $z \approx 100$&ndash;$200$ followed by one BullFrog step comes within 2% of the converged beyond-Zel'dovich displacement.
 </p>
 
 <header class="entry-header text-center">

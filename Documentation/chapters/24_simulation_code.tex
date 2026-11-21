@@ -113,6 +113,15 @@ $f_\nu\langle E/m\rangle(a)\,\delta_\nu$ with $\langle E/m\rangle=\langle\sqrt{1
 distribution, instead of their mass density (for linear neutrinos and for neutrino particles, which are then weighted by
 $E/m$); it matters at high redshift for light neutrinos ($\langle E/m\rangle=1.33$ at $z=50$ for 0.033\,eV).
 
+\paragraph*{Starting at high redshift with massive neutrinos.} While they are relativistic the neutrinos are radiation,
+as massless neutrinos in $\Lambda$CDM. If they are relativistic at the start ($\langle E/m\rangle>3$; $z\gtrsim200$ for
+0.033\,eV), the growth factors start from the radiation--matter growing mode instead of the growth rate of the transfer
+tables (which hold the synchronous-gauge super-horizon mode there), the neutrinos do not cluster before the tables
+begin (in the growth factors and in the force), and back-scaled initial conditions only need the tables from where the
+neutrinos become non-relativistic. Converged runs from $z=1000$ and $z=10^7$ then agree with a start at $z=50$ to
+$\approx0.1\%$ at $z=18$. FastPM and BullFrog take their growth from one scale; FastPM with the scale-dependent kick
+(\cref{sec:nbody-timestepping}) is exact for every linear mode.
+
 \paragraph*{Neutrino particles: the $\delta f$ method} \cite{Elbers2021} (\param{particle_neutrinos}). The bulk part of
 the initial conditions is made like the CDM, $\delta_\nu=\delta_{cb}T_\nu/T_{cb}$ with the neutrino growth rate; each
 particle then gets a thermal momentum $q=y\,k_BT_{\nu0}/c$ in a random direction, with $y$ drawn from the relativistic
