@@ -503,6 +503,11 @@ timestep_scalefactor_spacing = "linear"
 if timestep_scalefactor_spacing == "powerlaw" then
   timestep_spacing_power = 1.0
 end
+-- Experimental, FastPM: a kick factor per k so that a scale-dependent linear growth D(k, a) (G_eff(k, a), massive
+-- neutrinos) is followed exactly for any step size (see src/ScaleDependentKick.h)
+if timestep_method == "FastPM" then
+  timestep_scaledependent_kick = false
+end
 
 ------------------------------------------------------------
 -- Initial conditions

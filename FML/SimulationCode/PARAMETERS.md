@@ -150,6 +150,7 @@ Parameters marked *optional* take the default value if they are not in the param
 | `timestep_cola_nLPT` | double | `-2.5` | always | The nLPT parameter of the Tassev time-stepping |
 | `timestep_scalefactor_spacing` | string | `"linear"` | always | Spacing of the steps in the scale factor (powerlaw: uniform in a^timestep_spacing_power, growthfactor: uniform in the linear growth factor D(a), as in Rampf, List & Hahn 2024). Options: `linear`, `logarithmic`, `powerlaw`, `growthfactor` |
 | `timestep_spacing_power` | double | `1` | timestep_scalefactor_spacing = powerlaw | The steps are uniform in a^power |
+| `timestep_scaledependent_kick` | bool | `false` | timestep_method = FastPM | Experimental: multiply the force of each kick by a factor per k such that the linear growing mode of a scale-dependent growth D(k, a) (G_eff(k, a), massive neutrinos) is followed exactly for any step size (Zel'dovich-consistent at every k; the drift is unchanged and the velocities between the kicks are effective ones). Nothing changes without scale-dependent growth (see ScaleDependentKick.h) |
 
 ## Initial conditions
 

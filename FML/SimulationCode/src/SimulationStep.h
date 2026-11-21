@@ -81,6 +81,8 @@ void NBodySimulation<NDIM, T>::run() {
         // The steps to take till the next output
         const double amin = (ioutput == 0) ? 1.0 / (1.0 + zini) : 1.0 / (1.0 + output_redshifts[ioutput - 1]);
         const double amax = 1.0 / (1.0 + output_redshifts[ioutput]);
+        if (params.timestep.scaledependent_kick and not scaledependent_kick)
+            scaledependent_kick = std::make_unique<SIMCODE::ScaleDependentKick<NDIM>>(cosmo, grav);
         const auto steps = stepper.steps(amin, amax, nsteps[ioutput]);
         std::map<SIMCODE::ParticleSpecies, std::vector<Step>> steps_of_species;
         for (auto & [species, species_stepper] : species_steppers)
@@ -312,7 +314,10 @@ void NBodySimulation<NDIM, T>::step(const Step & s) {
     const auto nleftright = FML::INTERPOLATION::get_extra_slices(force.density_assignment_method);
     if (force.interlacing_order > 1 and s.delta_time_kick != 0.0 and not sim.enforce_LPT_trajectories) {
         kick_with_interlaced_force(s);
-        return drift_and_lightcone(s);
+        drift_and_lightcone(s);
+        if (scaledependent_kick)
+            scaledependent_kick->after_step(s);
+        return;
     }
 
     // Compute total density field
@@ -335,6 +340,8 @@ void NBodySimulation<NDIM, T>::step(const Step & s) {
     // Compute forces and kick particles (updates velocity)
     std::array<FFTWGrid<NDIM>, NDIM> & force_real = pm_force_grids;
     if (s.delta_time_kick != 0.0 and not sim.enforce_LPT_trajectories) {
+        if (scaledependent_kick)
+            scaledependent_kick->apply(density_grid_fourier, s, params.simulation.boxsize);
         timer.StartTiming("ComputeForce");
         grav->compute_force_for_step(s.apos,
                                      grav->H0_hmpc * sim.boxsize,
@@ -380,6 +387,8 @@ void NBodySimulation<NDIM, T>::step(const Step & s) {
         timer.EndTiming("Kick");
     }
     drift_and_lightcone(s);
+    if (scaledependent_kick)
+        scaledependent_kick->after_step(s);
 }
 
 /// A force of the CDM on the CDM alone (GravityModel::has_cdm_fifth_force: coupled quintessence) with CDM and baryon
@@ -572,6 +581,8 @@ void NBodySimulation<NDIM, T>::kick_with_interlaced_force(const Step & s) {
             pm_density_workspace(force.nmesh, nleftright.first, nleftright.second + 1);
         timer.StartTiming("ComputeDensityField");
         compute_density_field_fourier(density_grid_fourier, s.apos);
+        if (scaledependent_kick)
+            scaledependent_kick->apply(density_grid_fourier, s, params.simulation.boxsize);
         timer.EndTiming("ComputeDensityField");
 
         timer.StartTiming("ComputeForce");

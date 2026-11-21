@@ -823,6 +823,7 @@ namespace SIMCODE {
         double cola_nLPT;           // nLPT. For method = Tassev
         ScaleFactorSpacing spacing; // linear, logarithmic, powerlaw, growthfactor
         double spacing_power;       // For spacing = powerlaw
+        bool scaledependent_kick{false}; // FastPM: kick factor per k for a scale-dependent growth (experimental)
 
         /// The parameters (see ParameterFields.h)
         template <class F>
@@ -864,6 +865,16 @@ namespace SIMCODE {
                    [&]() {
                        f.optional("timestep_spacing_power", spacing_power, 1.0, "The steps are uniform in a^power");
                    });
+            f.when(is_one_of("timestep_method", {"FastPM"}), "timestep_method = FastPM", [&]() {
+                f.always_optional("timestep_scaledependent_kick",
+                                  scaledependent_kick,
+                                  false,
+                                  "Experimental: multiply the force of each kick by a factor per k such that the "
+                                  "linear growing mode of a scale-dependent growth D(k, a) (G_eff(k, a), massive "
+                                  "neutrinos) is followed exactly for any step size (Zel'dovich-consistent at every "
+                                  "k; the drift is unchanged and the velocities between the kicks are effective "
+                                  "ones). Nothing changes without scale-dependent growth (see ScaleDependentKick.h)");
+            });
         }
     };
 
@@ -1854,6 +1865,10 @@ namespace SIMCODE {
                 fail("timestep_cola_nLPT cannot be 0 with timestep_method = Tassev");
             if (timestep.spacing == ScaleFactorSpacing::Powerlaw and timestep.spacing_power == 0.0)
                 fail("timestep_spacing_power cannot be 0 (use logarithmic spacing)");
+            if (timestep.scaledependent_kick and (simulation.use_cola or particle.baryons or particle.neutrinos or
+                                                  force.nbody_gauge or force.short_range.enabled))
+                fail("timestep_scaledependent_kick (experimental) is only for one set of particles (no baryons or "
+                     "neutrinos as particles) without COLA, the N-body gauge or a short-range force");
 
             // The mass-encoded relative mode: CDM and baryons start from the same lattice (the masses compensate)
             if (particle.baryons and particle.baryon_relative_mode != "displacement" and

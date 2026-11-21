@@ -278,6 +278,21 @@ The steps are placed by `timestep_scalefactor_spacing`: `linear` (the default), 
 
 Logarithmic spacing is a poor choice when starting at very high redshift (most steps are spent where nothing happens).
 
+### FastPM with a scale-dependent kick (experimental)
+
+FastPM follows the linear growing mode exactly only when the growth does not depend on scale. With `G_eff(k, a)`
+(f(R), the mu-parametrization, ...) or massive neutrinos it does, and FastPM then needs many steps: f(R) with
+|fR0| = 1e-5 (no screening, linear, 500 Mpc/h, 128^3, z = 49 to 0) is -0.05% / -1.1% / -5.8% off at k = 0.02 / 0.1 /
+0.7 h/Mpc with 5 steps (GR: 0.00%), and 0.1 eV neutrinos from z = 1e7 are -2 to -7% off at z = 18 with 10 steps.
+`timestep_scaledependent_kick = true` multiplies the density of the force of each kick by a factor R(k) (from the
+growth D(k, a) and the right hand side of the growth equation of the model, see
+[src/ScaleDependentKick.h](src/ScaleDependentKick.h)) such that every linear mode is followed exactly with any number
+of steps; the drift is unchanged and the velocities between the kicks are effective ones (physical at the outputs). In
+the tests above one step is within 0.015% for k <= 0.4 h/Mpc (f(R); 0.1% at 0.7 h/Mpc, near the Nyquist frequency)
+and 0.00% (neutrinos), five steps within 0.002%. It costs one table of R(k) per step and changes nothing without
+scale-dependent growth. Not with velocity friction, the N-body gauge, COLA, baryons or neutrinos as separate particles,
+or a short-range force. Beyond linear order it is FastPM: one step from a ~ 0 gives Zel'dovich positions.
+
 The Quinn, Tassev, FastPM and BullFrog coefficients come from the library's
 [NBody/TimeStepping.h](../NBody/TimeStepping.h); see the [interface and growth conventions](../NBody/TimeStepping.md).
 SimulationCode keeps its model adapters, output scheduling and step reporting.

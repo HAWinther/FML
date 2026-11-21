@@ -34,6 +34,7 @@
 #include "Particles.h"
 #include "SimulationParameters.h"
 #include "ShortRangeForce.h"
+#include "ScaleDependentKick.h"
 #include "Species.h"
 #include "SpeciesTimeStepping.h"
 #include "TimeStepping.h"
@@ -391,6 +392,8 @@ class NBodySimulation {
     bool cdm_fifth_force_separate() const { return grav->has_cdm_fifth_force() and has_baryons(); }
     void kick_cdm_fifth_force(const Step & s, FFTWGrid<NDIM> & density, std::array<FFTWGrid<NDIM>, NDIM> & force);
     void step(const Step & s);
+    /// timestep_scaledependent_kick (FastPM): the kick factor per k (nullptr if off)
+    std::unique_ptr<SIMCODE::ScaleDependentKick<NDIM>> scaledependent_kick;
     /// Interacting dark energy: the masses of the CDM (or CDM+baryon) particles at a (SimulationIDE.h)
     void update_ide_masses(double a);
     double ide_masses_a{-1.0}; // the scale factor of the last update

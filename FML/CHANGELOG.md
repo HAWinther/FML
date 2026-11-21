@@ -5,6 +5,17 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: FastPM with a scale-dependent kick (experimental)
+- `timestep_scaledependent_kick = true` (FastPM): the density of the force of each kick is multiplied by a factor R(k)
+  so that every linear mode follows its own growth D(k, a) exactly for any step size (Zel'dovich-consistent at every k;
+  the drift is unchanged and the velocities between the kicks are effective ones, physical at the outputs). R(k) comes
+  from D(k, a) and the right hand side of the model's growth equation (G_eff/G(a, k) and source_factor_1LPT), so it
+  works for any G_eff(k, a), massive neutrinos and interacting dark energy (`src/ScaleDependentKick.h`). f(R) with
+  |fR0| = 1e-5 (linear, z = 49 to 0): one step within 0.015% for k <= 0.4 h/Mpc against -1.1% (k = 0.1) to -5.8%
+  (k = 0.7) for 5 plain FastPM steps; 0.1 eV neutrinos from z = 1e7: exact with one step (plain FastPM, 10 steps: -2 to
+  -7%). Nothing changes without scale-dependent growth or with the option off (regression suite bit-identical). Not
+  with velocity friction, the N-body gauge, COLA, baryons or neutrinos as separate particles, or a short-range force.
+
 ### SimulationCode: massive neutrinos that are relativistic at the start
 Found by starting linear runs with massive neutrinos at z = 1e3 - 1e7 (1000 Mpc/h, 128^3, 0.1 eV linear neutrinos,
 P_cb at z = 18 against the internal Einstein-Boltzmann solver):
