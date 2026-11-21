@@ -4,6 +4,33 @@ The particle positions and velocities are made with 1LPT, 2LPT or 3LPT (`ic_LPT_
 non-Gaussian initial density field. When the initial conditions are made the code stores what the particle type has
 room for: the initial Lagrangian position, a unique ID and the 1LPT and 2LPT displacement fields (for COLA).
 
+## LPT growth factors and dealiasing
+
+The 2LPT and 3LPT displacements use the growth factors of the model at `ic_initial_redshift`: the potentials made
+with the Einstein-de Sitter factors (D2 = -3/7 D1^2, D3a = -1/3 D1^3, D3b = 5/21 D1^3) are multiplied by
+D_n(k, zini) / D_n^EdS(k, zini), which depends on k when the growth does (massive neutrinos, f(R), ...). The factor is
+close to 1 at z ~ 20-50 in LCDM (1.008 at z = 20), but not in the radiation era (0.79 at z = 1e7 with 0.1 eV
+neutrinos). The log prints it. The displacements, the velocities and the COLA frame (which grows the 2LPT field as
+D2(a) / D2(zini)) therefore agree with the growth factors used by the time stepping. The 3LPT transverse (curl) term
+is not included. Initial conditions read from a snapshot keep the Einstein-de Sitter 2LPT of the reconstruction
+(below), as made by external generators.
+
+`ic_LPT_dealiasing = true` computes the quadratic and cubic LPT sources on a larger mesh (3N/2 for 2LPT, 2N for 3LPT;
+`LPT::Dealiasing::Padding`) so that products of modes do not alias back onto the grid. It costs (3/2)^3 = 3.4x
+(2LPT) or 8x (3LPT) the memory of one IC grid while the initial conditions are made. In a one-step test (128^3 in
+100 Mpc/h with 0.1 eV neutrinos, to z = 18), the error in the beyond-Zel'dovich displacement relative to 64
+scale-dependent FastPM steps was:
+
+| Start                                    | EdS 2LPT | model 2LPT | model 2LPT, dealiased |
+|------------------------------------------|----------|------------|-----------------------|
+| 2LPT at z = 18                           | 0.236    | 0.237      | 0.139                 |
+| 2LPT at z = 49, 1 scale-dependent COLA step  | 0.168    | 0.169      | 0.097                 |
+| 2LPT at z = 1e3, 1 scale-dependent COLA step | 0.226    | 0.228      | 0.137                 |
+| 2LPT at z = 1e7, 1 scale-dependent COLA step | 0.375    | 0.236      | 0.138                 |
+
+The aliasing error is largest at high k (0.90 -> 0.49 in the bin k > k_Ny). With both options a single COLA step
+from z = 1e7 is as good as 2LPT at the final redshift.
+
 ## Random fields
 
 The initial field can be generated in Fourier space or from a white-noise field in real space, with a choice of

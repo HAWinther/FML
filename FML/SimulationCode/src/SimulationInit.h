@@ -438,6 +438,66 @@ std::function<double(double)> NBodySimulation<NDIM, T>::ic_velocity_norm_2LPT_of
     };
 }
 
+/// The LPT options of the initial conditions. The library makes the 2LPT and 3LPT potentials with the Einstein-de
+/// Sitter growth factors, D2 = -3/7 D1^2, D3a = -1/3 D1^3, D3b = 5/21 D1^3. The model's at zini differ: in the
+/// radiation era D2 / D1^2 = -0.25, at z = 49 by ~0.1%, and with scale-dependent growth with k. The displacements,
+/// the velocities and the COLA frame (which grows the 2LPT field as D2(a) / D2(zini)) then disagree with the growth
+/// factors of the simulation: from z = 1e7 the frame's 2LPT was 1.7x too large. The factors D_n(k, zini) / D_n^EdS
+/// make them agree
+template <int NDIM, class T>
+FML::NBODY::LPTInitialConditionsOptions NBodySimulation<NDIM, T>::lpt_ic_options() const {
+    FML::NBODY::LPTInitialConditionsOptions options;
+    options.dealiasing = params.ic.LPT_dealiasing ? FML::COSMOLOGY::LPT::Dealiasing::Padding :
+                                                    FML::COSMOLOGY::LPT::Dealiasing::None;
+    const double aini = params.ic.a_initial();
+    const double boxsize = params.simulation.boxsize;
+    auto g = grav_ic;
+    const bool scaledependent = g->is_growth_scaledependent();
+    auto koverH0 = [g, boxsize, scaledependent](double kBox) {
+        return scaledependent ? kBox / boxsize / g->H0_hmpc : 0.0;
+    };
+    options.potential_norm_2LPT_of_kBox = [g, aini, koverH0](double kBox) {
+        const double k = koverH0(kBox), D1 = g->get_D_1LPT(aini, k);
+        return g->get_D_2LPT(aini, k) / (-3.0 / 7.0 * D1 * D1);
+    };
+    options.potential_norm_3LPTa_of_kBox = [g, aini, koverH0](double kBox) {
+        const double k = koverH0(kBox), D1 = g->get_D_1LPT(aini, k);
+        return g->get_D_3LPTa(aini, k) / (-1.0 / 3.0 * D1 * D1 * D1);
+    };
+    options.potential_norm_3LPTb_of_kBox = [g, aini, koverH0](double kBox) {
+        const double k = koverH0(kBox), D1 = g->get_D_1LPT(aini, k);
+        return g->get_D_3LPTb(aini, k) / (5.0 / 21.0 * D1 * D1 * D1);
+    };
+    if (FML::ThisTask == 0 and params.ic.LPT_order >= 2)
+        std::cout << "# LPT growth at zini relative to Einstein-de Sitter: D2 / (-3/7 D1^2) = "
+                  << options.potential_norm_2LPT_of_kBox(0.0) << " (large scales)"
+                  << (scaledependent ? ", " + std::to_string(options.potential_norm_2LPT_of_kBox(boxsize)) +
+                                           " (k = 1 h/Mpc)" :
+                                       std::string(""))
+                  << (params.ic.LPT_order >= 3 ?
+                          "; D3a: " + std::to_string(options.potential_norm_3LPTa_of_kBox(0.0)) +
+                              ", D3b: " + std::to_string(options.potential_norm_3LPTb_of_kBox(0.0)) :
+                          std::string(""))
+                  << (params.ic.LPT_dealiasing ? "; dealiased (padding)" : "") << "\n";
+    return options;
+}
+
+template <int NDIM, class T>
+void NBodySimulation<NDIM, T>::compute_2LPT_potential_ic(const FFTWGrid<NDIM> & delta_fourier,
+                                                         FFTWGrid<NDIM> & phi_2LPT) const {
+    const auto options = lpt_ic_options();
+    FML::COSMOLOGY::LPT::compute_2LPT_potential_fourier(delta_fourier, phi_2LPT, options.dealiasing);
+    const double boxsize = params.simulation.boxsize;
+    (void)boxsize;
+    FML::GRID::for_each_fourier_mode<NDIM>(phi_2LPT, [&](size_t fourier_index, double kmag) {
+        if (kmag == 0.0)
+            return;
+        phi_2LPT.set_fourier_from_index(fourier_index,
+                                        phi_2LPT.get_fourier_from_index(fourier_index) *
+                                            FML::GRID::FloatType(options.potential_norm_2LPT_of_kBox(kmag)));
+    });
+}
+
 /// The scale-dependent 1LPT velocity norm of one species (nullptr if it is that of k = 0). With COLA the velocities
 /// it gives are relative to the COLA frame.
 /// N-body gauge: the growth rate (and so the 1LPT velocity) is scale-dependent on large scales; we take it from the
@@ -528,7 +588,7 @@ void NBodySimulation<NDIM, T>::store_cola_potentials(const FFTWGrid<NDIM> & delt
         if (phi_2LPT_ini_fourier)
             cola.phi_2LPT_ini_fourier = std::move(*phi_2LPT_ini_fourier);
         else
-            FML::COSMOLOGY::LPT::compute_2LPT_potential_fourier(delta_cb_fourier, cola.phi_2LPT_ini_fourier);
+            compute_2LPT_potential_ic(delta_cb_fourier, cola.phi_2LPT_ini_fourier);
         cola.phi_2LPT_ini_fourier.add_memory_label("phi_2LPT(k,zini)");
     }
 }
@@ -583,7 +643,8 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_one_species(const FFT
                                                 nullptr,
                                                 nullptr,
                                                 nullptr,
-                                                velocity_norm_2LPT_of_kBox);
+                                                velocity_norm_2LPT_of_kBox,
+                                                lpt_ic_options());
 
     store_cola_potentials(delta_cb_fourier, store_2LPT ? &phi_nLPT_potentials[0] : nullptr);
 }
@@ -736,7 +797,8 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
                                                             info.id_offset,
                                                             cola.enabled,
                                                             mass_contrast,
-                                                            velocity_norm_2LPT);
+                                                            velocity_norm_2LPT,
+                                                            lpt_ic_options());
     };
     make_species(part, cdm, splines.ratio_cdm, splines.f_cdm, &eps_today.first, 0.0);
     const double baryon_shift = params.particle.baryon_lattice == "offset" ? 0.5 / double(baryon.Npart_1D) : 0.0;
@@ -763,7 +825,7 @@ void NBodySimulation<NDIM, T>::generate_initial_conditions_two_species(const FFT
                 sp.phi_1LPT_ini_fourier.add_memory_label("phi_1LPT(k,zini) baryons");
             }
             if (cola.phi_2LPT_ini_fourier) {
-                FML::COSMOLOGY::LPT::compute_2LPT_potential_fourier(delta_shifted, sp.phi_2LPT_ini_fourier);
+                compute_2LPT_potential_ic(delta_shifted, sp.phi_2LPT_ini_fourier);
                 sp.phi_2LPT_ini_fourier.add_memory_label("phi_2LPT(k,zini) baryons");
             }
             cola.shifted_species.push_back(std::move(sp));

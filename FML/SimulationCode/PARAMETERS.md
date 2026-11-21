@@ -174,6 +174,7 @@ Parameters marked *optional* take the default value if they are not in the param
 | `ic_reverse_phases` | bool | `false` | always | Reverse the phases (for paired simulations) |
 | `ic_random_field_type` | string | `"gaussian"` | always | Type of IC: gaussian, nongaussian, read_particles (read a GADGET file and use that, reconstructing the LPT fields if COLA) or read_phases (take the phases from a GADGET file). Options: `gaussian`, `nongaussian`, `read_particles`, `read_phases` |
 | `ic_LPT_order` | int | `2` | always | The LPT order used to make the IC |
+| `ic_LPT_dealiasing` | bool | `false` | always | Dealias the nonlinear 2LPT and 3LPT sources: compute them on a 3N/2 (2LPT) or 2N (3LPT) mesh so that the products of the modes do not alias onto the grid (LPT/Dealiasing.h). Costs (3/2)^3 or 8 times the memory of an IC grid while the IC are made |
 | `ic_sigma8_normalization` | bool | `false` | always | Normalize P(k) to a given sigma8 (otherwise use the input) |
 | `ic_sigma8_redshift` | double | `0` | ic_sigma8_normalization = true | The redshift of the sigma8 value |
 | `ic_sigma8` | double | `0.8` | ic_sigma8_normalization = true | The sigma8 value to normalize to |

@@ -116,8 +116,8 @@ the number of MPI tasks; the spectral remapping exchanges only retained coeffici
 replicates the grid. Only wave vectors with $2|n_i|<N_{\rm mesh}$ in every dimension are copied, so even-mesh
 Nyquist planes are zeroed (also in the returned 1LPT potential); there is no radial cutoff or smoothing of the
 sub-Nyquist modes. The cost is substantial: in 3D the work grids are $3.375\times$ (2LPT) and $8\times$ (3LPT) larger.
-The default is \code{Dealiasing::None}, which keeps the original calculation. SimulationCode, ALPT and the
-non-Gaussian generator do not enable it automatically.
+The default is \code{Dealiasing::None}, which keeps the original calculation. SimulationCode enables it with
+\param{ic_LPT_dealiasing}; ALPT and the non-Gaussian generator do not enable it.
 
 \section{Arbitrary order}\label{sec:lpt-arbitrary}
 

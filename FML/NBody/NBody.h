@@ -738,6 +738,20 @@ namespace FML {
                 std::cout << "[Kick] Max delta_vel : " << max_dvel << "\n";
         }
 
+        /// Options of the LPT fields of NBodyInitialConditions
+        struct LPTInitialConditionsOptions {
+            /// Dealiasing of the nonlinear (2LPT, 3LPT) sources: Padding computes them on a 3N/2 (2LPT) or 2N (3LPT)
+            /// work mesh, so the products of the modes do not alias back onto the grid (LPT/Dealiasing.h)
+            FML::COSMOLOGY::LPT::Dealiasing dealiasing{FML::COSMOLOGY::LPT::Dealiasing::None};
+            /// Optional factors, functions of \f$ kB \f$, that multiply the 2LPT, 3LPTa and 3LPTb potentials. The
+            /// potentials are made with the Einstein-de Sitter growth factors (D2 = -3/7 D1^2, D3a = -1/3 D1^3,
+            /// D3b = 5/21 D1^3); with these factors the displacements, the velocities and the returned potentials
+            /// have the growth factors of the model at zini instead (e.g. D2(k, zini) / (-3/7 D1(k, zini)^2))
+            std::function<double(double)> potential_norm_2LPT_of_kBox{nullptr};
+            std::function<double(double)> potential_norm_3LPTa_of_kBox{nullptr};
+            std::function<double(double)> potential_norm_3LPTb_of_kBox{nullptr};
+        };
+
         template <int N, class T, template <int> class Grid = FFTWGrid>
         void NBodyInitialConditions(MPIParticles<T> & part,
                                     int Npart_1D,
@@ -754,7 +768,8 @@ namespace FML {
                                     const FML::GRID::non_deduced_t<Grid<N>> * delta_fourier_2LPT_source = nullptr,
                                     const FML::GRID::non_deduced_t<Grid<N>> * delta_fourier_1LPT_stored = nullptr,
                                     const FML::GRID::non_deduced_t<Grid<N>> * mass_contrast_fourier = nullptr,
-                                    std::function<double(double)> velocity_norm_2LPT_of_kBox = nullptr);
+                                    std::function<double(double)> velocity_norm_2LPT_of_kBox = nullptr,
+                                    const LPTInitialConditionsOptions & lpt_options = {});
 
         //=====================================================================
         /// @brief Generate particles from a given power-spectrum using Lagrangian perturbation theory.
@@ -887,6 +902,8 @@ namespace FML {
         /// @param[in] velocity_norm_2LPT_of_kBox Optional. As velocity_norm_1LPT_of_kBox for the 2LPT velocity
         /// (instead of velocity_norms[1]): \f$ v_{\rm 2LPT}(k) = {\rm norm}(k) \Psi_{\rm 2LPT}(k) \f$ with \f$ k \f$
         /// the wavenumber of the 2LPT field
+        /// @param[in] lpt_options Optional. Dealiasing of the nonlinear LPT sources and factors that give the 2LPT and
+        /// 3LPT fields the growth factors of the model (see LPTInitialConditionsOptions)
         ///
         //=====================================================================
         template <int N, class T, template <int> class Grid>
@@ -905,7 +922,8 @@ namespace FML {
                                     const FML::GRID::non_deduced_t<Grid<N>> * delta_fourier_2LPT_source,
                                     const FML::GRID::non_deduced_t<Grid<N>> * delta_fourier_1LPT_stored,
                                     const FML::GRID::non_deduced_t<Grid<N>> * mass_contrast_fourier,
-                                    std::function<double(double)> velocity_norm_2LPT_of_kBox) {
+                                    std::function<double(double)> velocity_norm_2LPT_of_kBox,
+                                    const LPTInitialConditionsOptions & lpt_options) {
 
             T tmp{};
             if (FML::ThisTask == 0) {
@@ -1003,7 +1021,8 @@ namespace FML {
                 // Generate the 2LPT potential phi_2LPT = -1/2k^2 F[phi_ii phi_jj - phi_ij^2]
                 FML::COSMOLOGY::LPT::compute_2LPT_potential_fourier(
                     delta_fourier_2LPT_source ? *delta_fourier_2LPT_source : delta_fourier,
-                    phi_2LPT);
+                    phi_2LPT,
+                    lpt_options.dealiasing);
             } else if (LPT_order == 3) {
                 // Generate the 3LPT potentials phi_3LPTa, phi_3LPTb plus 3LPT curl term
                 // We ignore the curl term in this implementation for simplicity
@@ -1015,7 +1034,35 @@ namespace FML {
                                                                        phi_3LPTa,
                                                                        phi_3LPTb,
                                                                        phi_3LPT_Avec_fourier,
-                                                                       ignore_3LPT_curl_term);
+                                                                       ignore_3LPT_curl_term,
+                                                                       lpt_options.dealiasing);
+            }
+
+            // The growth factors of the model at zini instead of the Einstein-de Sitter ones (lpt_options)
+            auto scale_potential = [&](Grid<N> & phi, const std::function<double(double)> & norm_of_kBox) {
+                if (not norm_of_kBox or phi.get_nmesh() == 0)
+                    return;
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                for (FML::IndexIntType irow = 0; irow < phi.get_local_nrows_fourier(); irow++) {
+                    [[maybe_unused]] double kmag;
+                    [[maybe_unused]] std::array<double, N> kvec;
+                    for (auto && fourier_index : phi.get_fourier_range_of_rows(irow, irow + 1)) {
+                        phi.get_fourier_wavevector_and_norm_by_index(fourier_index, kvec, kmag);
+                        if (kmag == 0.0)
+                            continue;
+                        phi.set_fourier_from_index(fourier_index,
+                                                   phi.get_fourier_from_index(fourier_index) *
+                                                       FML::GRID::FloatType(norm_of_kBox(kmag)));
+                    }
+                }
+            };
+            if (LPT_order >= 2)
+                scale_potential(phi_2LPT, lpt_options.potential_norm_2LPT_of_kBox);
+            if (LPT_order >= 3) {
+                scale_potential(phi_3LPTa, lpt_options.potential_norm_3LPTa_of_kBox);
+                scale_potential(phi_3LPTb, lpt_options.potential_norm_3LPTb_of_kBox);
             }
 
             //================================================================
@@ -2001,7 +2048,8 @@ namespace FML {
                                                       long long int id_offset,
                                                       bool store_cb_LPT_fields = false,
                                                       std::function<double(double)> mass_contrast_of_kBox = nullptr,
-                                                      std::function<double(double)> velocity_norm_2LPT_of_kBox = nullptr) {
+                                                      std::function<double(double)> velocity_norm_2LPT_of_kBox = nullptr,
+                                                      const LPTInitialConditionsOptions & lpt_options = {}) {
             std::array<double, NDIM> shift_vec;
             shift_vec.fill(lattice_shift);
 
@@ -2042,7 +2090,8 @@ namespace FML {
                                                         LPT_order >= 2 ? &delta_total : nullptr,
                                                         store_cb_LPT_fields ? &delta_total : nullptr,
                                                         mass_contrast_of_kBox ? &mass_contrast : nullptr,
-                                                        velocity_norm_2LPT_of_kBox);
+                                                        velocity_norm_2LPT_of_kBox,
+                                                        lpt_options);
 
             for (auto & p : particles) {
                 auto * pos = FML::PARTICLE::GetPos(p);

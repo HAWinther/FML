@@ -58,6 +58,7 @@ BASE = dict(
     ic_nmesh=32,
     ic_use_gravity_model_GR=False,
     ic_LPT_order=2,
+    ic_LPT_dealiasing=False,
     ic_type_of_input="powerspectrum",
     ic_input_filename=INPUT + "/example_power_spectrum_cb_z0.000.txt",
     ic_input_redshift=0.0,

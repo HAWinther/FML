@@ -417,6 +417,9 @@ $$\frac{d\tilde{x}}{d\tilde{\tau}} = \tilde{v}_{\rm COLA} + \frac{d\tilde{x}_{\r
 $$\frac{d \tilde{v}_{\rm COLA}}{d\tilde{\tau}} = - \tilde{\nabla}\tilde{\Phi} - \frac{d^2\tilde{x}_{\rm LPT}}{d\tilde{\tau}^2}$$
 and we propagate $\tilde{x}$ and $\tilde{v}_{\rm COLA}$ instead. Note that in this frame the initial velocity is $\tilde{v}_{\rm COLA} = 0$ and this helps us keep in line with linear theory on the largest scales even with large time-steps. 
 </p>
+<p>
+<b>The LPT frame at high redshift.</b> The frame grows the stored 2LPT field as $D_2(k,a)/D_2(k,a_{\rm ini})$, so the initial conditions use the model's growth factors at $z_{\rm ini}$, not the Einstein&ndash;de Sitter $D_2 = -\tfrac37 D_1^2$. The two agree to 1% at $z = 20$ but differ by 20% at $z = 10^7$. With this, one scale-dependent COLA step from $z = 10^7$ to $z = 18$ (0.1 eV neutrinos) is as accurate as 2LPT at $z = 18$. With <tt>ic_LPT_dealiasing = true</tt> the 2LPT and 3LPT sources are computed on a 3N/2 or 2N mesh (3.4 or 8 times the memory of an IC grid while the initial conditions are made). This lowers the beyond-Zel'dovich error of both by 40%.
+</p>
 
 <p>
 </p>

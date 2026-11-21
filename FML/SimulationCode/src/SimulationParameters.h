@@ -466,6 +466,7 @@ namespace SIMCODE {
         RandomFieldBackend random_field_backend;
         RandomGeneratorType random_generator; // The generator: GSL or MT19937
         int LPT_order;                        // The LPT order to use to make IC (1,2,3)
+        bool LPT_dealiasing{false};           // Dealiased 2LPT/3LPT sources (padding)
 
         // Input file (power-spectrum / transfer functions)
         ICInputType type_of_input;  // powerspectrum, transferfunction, camb, class, internal or tables
@@ -659,6 +660,12 @@ namespace SIMCODE {
                       {"read_particles", ICRandomFieldType::ReadParticles},
                       {"read_phases", ICRandomFieldType::ReadPhases}});
             f.optional("ic_LPT_order", LPT_order, 2, "The LPT order used to make the IC");
+            f.optional("ic_LPT_dealiasing",
+                       LPT_dealiasing,
+                       false,
+                       "Dealias the nonlinear 2LPT and 3LPT sources: compute them on a 3N/2 (2LPT) or 2N (3LPT) mesh so "
+                       "that the products of the modes do not alias onto the grid (LPT/Dealiasing.h). Costs (3/2)^3 or "
+                       "8 times the memory of an IC grid while the IC are made");
             f.optional("ic_sigma8_normalization",
                        sigma8_normalization,
                        false,

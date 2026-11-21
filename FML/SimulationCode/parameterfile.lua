@@ -536,6 +536,9 @@ ic_lattice_offset = "fiducial"
 ic_use_gravity_model_GR = false
 -- The LPT order to use for the IC
 ic_LPT_order = 2
+-- Dealias the 2LPT/3LPT sources (computed on a 3N/2 or 2N mesh; (3/2)^3 or 8x the memory of an IC grid while
+-- the IC are made)
+ic_LPT_dealiasing = false
 -- The type of input: 
 -- powerspectrum    (file with [k (h/Mpc), P(k) (Mpc/h)^3])
 -- transferfunction (file with [k (h/Mpc), T(k) Mpc^2])

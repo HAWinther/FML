@@ -5,6 +5,18 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: 2LPT/3LPT initial conditions with the model's growth factors, and dealiasing
+- The 2LPT and 3LPT displacements and velocities of the initial conditions used the Einstein-de Sitter growth factors
+  (D2 = -3/7 D1^2, ...), while the time stepping and the COLA frame use the model's D2(k, zini). The potentials are now
+  multiplied by D_n(k, zini) / D_n^EdS (new `NBODY::LPTInitialConditionsOptions` argument of
+  `NBodyInitialConditions` and `generate_species_from_delta_cb`), also for the 2LPT field stored for COLA. This matters
+  for early starts: one scale-dependent COLA step from z = 1e7 to z = 18 (0.1 eV neutrinos) had error 0.375 in the
+  beyond-Zel'dovich displacement relative to 64 FastPM steps; it is now 0.236, that of 2LPT at z = 18. For starts at
+  z ~ 20 the outputs change by ~1e-4 relative (the factor is 1.008).
+- New `ic_LPT_dealiasing` (default false): the 2LPT/3LPT sources are computed on a 3N/2 or 2N mesh
+  (`LPT::Dealiasing::Padding`), which reduces the error above to 0.138 (and 2LPT at z = 18 from 0.236 to 0.139).
+- Initial conditions reconstructed from a snapshot keep the Einstein-de Sitter 2LPT.
+
 ### Cosmology: massive-neutrino perturbations with an exact quadrature of their metric source
 - The metric sources of the massive-neutrino distribution (the initial conditions and the Phi' and Psi terms of the
   right hand side) are scaled so that their momentum quadrature, sum_i w_i q_i^2 eps_i (-dlnf0_i), is the exact

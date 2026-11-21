@@ -291,6 +291,15 @@ prefactor) are computed in Fourier space, evaluated at the Lagrangian positions 
 is used when \param{simulation_use_scaledependent_cola} is true (default) and the growth is scale dependent; otherwise
 the cheaper scale-independent frame is used (they would agree but cost 4$\times$ the time).
 
+The frame grows the stored potentials as $D_n(k,a)/D_n(k,a_{\rm ini})$, so they must be those of the model at
+$a_{\rm ini}$: the initial conditions multiply the Einstein--de Sitter 2LPT and 3LPT potentials by
+$D_n(k,a_{\rm ini})/D_n^{\rm EdS}(k,a_{\rm ini})$, with $D_2^{\rm EdS}=-\tfrac37D_1^2$, $D_{3a}^{\rm EdS}=-\tfrac13D_1^3$
+and $D_{3b}^{\rm EdS}=\tfrac5{21}D_1^3$. The factor is 1.008 at $z=20$ in $\Lambda$CDM, but 0.79 at $z=10^7$ with 0.1\,eV
+neutrinos. With the Einstein--de Sitter field, one scale-dependent COLA step from $z=10^7$ to $z=18$ ($128^3$,
+100\,$h^{-1}$Mpc) had an error of 0.375 in the beyond-Zel'dovich displacement relative to 64 scale-dependent FastPM steps.
+With the model's field the error is 0.236, the same as 2LPT at $z=18$. With dealiased sources
+(\param{ic_LPT_dealiasing}, \cref{sec:lpt-dealiasing}) it is 0.138.
+
 \begin{caveat}[Using COLA]
 Use as large a force grid as you can afford if you care about haloes, whose properties depend on the small-scale
 force resolution; use a slightly smaller FoF linking length and calibrate halo masses and velocities against

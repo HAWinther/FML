@@ -308,6 +308,13 @@ f(R), the symmetron or a k-dependent mu). With scale-independent growth it would
 COLA at a much higher cost (4x the time and 40% more memory for 64^3 particles in GR), so standard COLA is used then
 and the parameter is set to false (a message says so).
 
+The COLA frame grows the stored 2LPT field as D2(a) / D2(zini), so it has to be the 2LPT field of the model at zini.
+The initial conditions are made with the model's 2LPT and 3LPT growth factors, not those of Einstein-de Sitter. In
+the radiation era the two differ by 20% (more at z = 1e7 with relativistic neutrinos). With the Einstein-de Sitter
+field, one scale-dependent COLA step from z = 1e7 to z = 18 had an error 0.375 in the beyond-Zel'dovich displacement.
+With the model's field the error is 0.236, the same as 2LPT at z = 18, and with `ic_LPT_dealiasing` it is 0.138 (see
+INITIAL_CONDITIONS.md).
+
 Some advice for COLA runs. Use as large a force grid as you can afford if you care about halos: their properties
 depend on the small-scale force resolution. For halos use a slightly smaller FoF linking length, and calibrate the
 masses and velocities against high-resolution simulations. For the matter power spectrum this matters much less;

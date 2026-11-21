@@ -368,6 +368,10 @@ class NBodySimulation {
     bool cola_frame_growth_differs() const;
     std::function<double(double)> ic_velocity_norm_1LPT_of_kBox(double fac);
     std::function<double(double)> ic_velocity_norm_2LPT_of_kBox(double fac) const;
+    /// The LPT options of the initial conditions: dealiasing (ic_LPT_dealiasing) and the growth factors of the model
+    FML::NBODY::LPTInitialConditionsOptions lpt_ic_options() const;
+    /// The 2LPT potential of delta (zini) with lpt_ic_options (for the COLA frame)
+    void compute_2LPT_potential_ic(const FFTWGrid<NDIM> & delta_fourier, FFTWGrid<NDIM> & phi_2LPT) const;
     void store_cola_potentials(const FFTWGrid<NDIM> & delta_cb_fourier, FFTWGrid<NDIM> * phi_2LPT_ini_fourier);
     void apply_lattice_offset();
     /// The offset of the initial particle lattice from the force grid nodes (units of the force cell)
