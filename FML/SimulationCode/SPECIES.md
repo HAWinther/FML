@@ -279,7 +279,8 @@ k = 0.001 / 0.01 / 0.04 h/Mpc:
 - Back-scaled initial conditions with massive neutrinos that are still relativistic at zini (<E/m> > 3, z > ~200 for
   0.033 eV): they are radiation then, as massless neutrinos in LCDM. The growth starts from the radiation-matter growing
   mode, the neutrinos do not cluster before the transfer tables begin, and the tables are only needed from where they
-  become non-relativistic. Use tables that start at z ~ 2000: the internal solver's tables started much earlier
-  (z = 1e7) are wrong at k < 1e-3 h/Mpc up to a ~ 0.01. Converged runs from z = 1000 and 1e7 then agree with a start at
+  become non-relativistic, so tables from z ~ 2000 are enough (the internal solver's tables from z = 1e7 are also fine
+  now: before 22 November 2026 they were wrong at k < 1e-3 h/Mpc up to a ~ 0.01, see CHANGELOG). Converged runs from
+  z = 1000 and 1e7 then agree with a start at
   z = 50 to 0.5% at z = 18. One BullFrog step from such a start is not accurate (the growth depends on k while the large
   modes cross the horizon): from z = 1e7 to 18 it is -18% at k = 0.008 and +5% at k > 0.1 h/Mpc; use many steps.

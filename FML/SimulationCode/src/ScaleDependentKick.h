@@ -106,10 +106,7 @@ namespace SIMCODE {
         /// The linear growth, its momentum a^3 E dD/da and its force (the right hand side of the growth equation)
         double D(double a, double k) const { return grav->get_D_1LPT(a, k / grav->H0_hmpc); }
         double Gp(double a, double k) const {
-            // dlogD/dloga from D (get_f_1LPT gave NaN at some a with scale-dependent growth)
-            const double h = 1e-4;
-            const double f = (std::log(D(a * std::exp(h), k)) - std::log(D(a * std::exp(-h), k))) / (2.0 * h);
-            return a * a * cosmo->HoverH0_of_a(a) * f * D(a, k);
+            return a * a * cosmo->HoverH0_of_a(a) * grav->get_f_1LPT(a, k / grav->H0_hmpc) * D(a, k);
         }
         double Gf(double a, double k) const {
             const double koverH0 = k / grav->H0_hmpc;

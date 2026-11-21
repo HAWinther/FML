@@ -614,8 +614,8 @@ class GravityModel {
         // While the neutrinos are relativistic at the start they are radiation (in the background, not clustering), as
         // massless neutrinos in LCDM: the growth starts from the radiation-matter growing mode, not from the growth
         // rate of the transfer functions (at early times and large scales they hold the synchronous-gauge
-        // super-horizon mode, and with the internal solver not even that before a ~ 1e-3: the rate was ~0 there and
-        // D1 decreased at first, so BullFrog refused to start at z > 1e5 and one step from z = 1e3 was +37% off)
+        // super-horizon mode; with the rate of the tables D1 decreased at first, so BullFrog refused to start at
+        // z > 1e5, and one step from z = 1e3 was +37% off)
         const bool nu_relativistic_at_start =
             nu_growth and cosmo->get_neutrino_mean_energy_factor(alow) > SIMCODE::neutrino_relativistic_energy_factor;
         const bool use_neutrino_transfer = transfers and nu_growth and not nu_relativistic_at_start;

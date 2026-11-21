@@ -5,6 +5,22 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Cosmology: massive-neutrino perturbations with an exact quadrature of their metric source
+- The metric sources of the massive-neutrino distribution (the initial conditions and the Phi' and Psi terms of the
+  right hand side) are scaled so that their momentum quadrature, sum_i w_i q_i^2 eps_i (-dlnf0_i), is the exact
+  3 (I_rho + I_p) (`SpeciesPerturbation_MassiveNeutrinos::source_scale`). With the default 8 Gauss-Laguerre momenta the
+  sum was off by ~1e-5: the constraint equations saw a delta rho that did not follow the continuity equation, and the
+  mismatch stayed in delta_cdm as a k-independent offset (2e-5 at the start, growing to ~1e-6 of the late-time value).
+  The synchronous-gauge densities at early times and small k, ~(k tau)^2, were this offset: tables from z = 1e7 had
+  d_cb flat at 2e-5 and d_ncdm negative for k < 1e-3 h/Mpc until a ~ 1e-4 (0.1 eV). Now they follow the super-horizon
+  growth (d ~ a^2, d_ncdm/d_cb = 4/3) from a ~ 1e-5 at k = 1e-4 h/Mpc, as in LCDM (floor ~3e-9 before). The transfer
+  functions at late times change by <= 2.4e-5, the EBS regression values of the massive-neutrino models by up to
+  4e-5 (1e-4 for TE near a zero; reference updated for those two models). A converged SimulationCode run from z = 1e7
+  with such tables now agrees with a start at z = 50 (-0.68% / +0.09% at k = 0.008 / 0.03 h/Mpc against -0.66% /
+  +0.07%; with tables from z = 2000 it was +0.25% / +0.8%). Test: the initial delta_nu is 3 (1 + w) N_0 to 1e-16.
+- `ScaleDependentKick` uses `get_f_1LPT` again: the NaN that led to the finite difference came from the synchronizing
+  step not being recognized in a test build, not from the growth rate (backlog item 61).
+
 ### SimulationCode: FastPM with a scale-dependent kick (experimental)
 - `timestep_scaledependent_kick = true` (FastPM): the density of the force of each kick is multiplied by a factor R(k)
   so that every linear mode follows its own growth D(k, a) exactly for any step size (Zel'dovich-consistent at every k;

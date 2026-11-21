@@ -309,16 +309,41 @@ std::pair<double, double> compare(const std::string & model,
                 b.update_cache(bn, cb.data());
                 const auto ca = ref.numbers(ts + " cache");
                 err.add(P + "cache", elem_err(ca, std::vector<double>(cb.begin(), cb.begin() + ca.size())));
+                // The massive neutrinos scale their metric sources (initial conditions and rhs) so that the quadrature
+                // of the density source is exact (source_scale; the solver had 1): compare without it
+                double nu_scale = 1.0;
+                if (const auto * nu = dynamic_cast<const PT::SpeciesPerturbation_MassiveNeutrinos *>(&b)) {
+                    nu_scale = cb[PT::SpeciesPerturbation_MassiveNeutrinos::SCALE];
+                    cb[PT::SpeciesPerturbation_MassiveNeutrinos::SCALE] = 1.0;
+                    (void)nu;
+                }
+                auto unscaled = [&](std::vector<double> y) {
+                    for (double & v : y)
+                        v /= nu_scale;
+                    return y;
+                };
 
                 // Initial conditions (adiabatic and isocurvature)
                 std::vector<double> yb(b.n_vars(0));
                 b.initial_conditions(bn, ic_new, yb.data());
-                err.add(P + "initial conditions", vec_err(ref.numbers(ts + " initial conditions"), yb));
+                if (nu_scale != 1.0) {
+                    // The quadrature of the initial density is exact: delta_nu = 3 (1 + w) N_0, which the metric of
+                    // the initial conditions assumes (not off by ~1e-5 as with the unscaled 8-node quadrature)
+                    std::vector<double> cs = cb;
+                    cs[PT::SpeciesPerturbation_MassiveNeutrinos::SCALE] = nu_scale;
+                    const auto m = b.moments(bn, cs.data(), 0, yb.data());
+                    const double rho = cs[PT::SpeciesPerturbation_MassiveNeutrinos::RHO];
+                    const double w = cs[PT::SpeciesPerturbation_MassiveNeutrinos::W];
+                    const double N0 = PT::free_streaming_initial_conditions(ctx, bn, ic_new, 3)[0];
+                    err.add("massive neutrinos: initial delta = 3 (1 + w) N_0 (exact quadrature)",
+                            rel(3.0 * (1.0 + w) * N0, m.drho / rho));
+                }
+                err.add(P + "initial conditions", vec_err(ref.numbers(ts + " initial conditions"), unscaled(yb)));
                 PT::InitialData in = ic_new;
                 in.iso = &iso_new;
                 b.initial_conditions(bn, in, yb.data());
                 err.add(P + "initial conditions (isocurvature)",
-                        vec_err(ref.numbers(ts + " initial conditions (isocurvature)"), yb));
+                        vec_err(ref.numbers(ts + " initial conditions (isocurvature)"), unscaled(yb)));
 
                 const int n_modes = (b.name() == "massive neutrinos" or not b.switch_points(k).empty()) ? 2 : 1;
                 const size_t n_out = ebs_species[i].outputs.size();

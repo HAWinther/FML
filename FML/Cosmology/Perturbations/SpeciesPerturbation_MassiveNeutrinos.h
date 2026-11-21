@@ -117,7 +117,21 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
         /// ~200 variables: the dense linear algebra of an implicit solver makes it ~20x slower
         bool prefers_explicit(int mode) const override { return mode == 0; }
 
-        enum { M_, C_, RHO, P_, W, CA2, PSEUDO, N_CACHE };
+        /// The metric sources of the distribution, -dlnf0 (Phi' and Psi), scaled so that their quadrature
+        /// sum_i w_i q_i^2 eps_i (-dlnf0_i) is the exact 3 (I_rho + I_p) (by parts). With n_q_ncdm = 8 Gauss-Laguerre
+        /// momenta the sum is off by ~1e-5 relative; the constraint equations then see a delta rho that does not follow
+        /// the continuity equation of the background, and the mismatch builds up as a k-independent offset in
+        /// delta_cdm (~2e-5 at the start, then growing): the synchronous-gauge densities at early times and small k,
+        /// ~(k tau)^2, were this offset (d_cb flat at 2e-5 for k < 1e-3 h/Mpc until a ~ 1e-4 with 0.1 eV)
+        double source_scale(double M) const {
+            double sum = 0.0;
+            for (int i = 0; i < nq; i++)
+                sum += wq[i] * q[i] * q[i] * std::sqrt(q[i] * q[i] + M * M) * (-dlnf0[i]);
+            const auto & fd = BACKGROUND::FermiDiracIntegrals::get();
+            return sum != 0.0 ? 3.0 * (fd.I_rho(M) + fd.I_p(M)) / sum : 1.0;
+        }
+
+        enum { M_, C_, RHO, P_, W, CA2, PSEUDO, SCALE, N_CACHE };
         int cache_size() const override { return N_CACHE; }
         void update_cache(const ModeAtX & b, double * cc) const override {
             const double x = b.x;
@@ -129,15 +143,18 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
             cc[W] = p / rho;
             cc[PSEUDO] = species.pseudo_p(x) / p;
             cc[CA2] = cc[W] / (3.0 * (1.0 + cc[W])) * (5.0 - cc[PSEUDO]);
+            cc[SCALE] = source_scale(cc[M_]);
         }
 
         void initial_conditions(const ModeAtX & b, const InitialData & ic, double * y) const override {
             const auto N = free_streaming_initial_conditions(ctx, b, ic, L);
             const double M = species.M_of_x(b.x);
+            // Scaled as the metric sources (source_scale), so that delta_nu = 4 N_0 while relativistic
+            const double scale = source_scale(M);
             for (int i = 0; i < nq; i++) {
                 const double eps_q = std::sqrt(q[i] * q[i] + M * M) / q[i];
                 for (int ell = 0; ell <= L; ell++)
-                    y[i * (L + 1) + ell] = -dlnf0[i] * N[ell] * (ell == 1 ? eps_q : 1.0);
+                    y[i * (L + 1) + ell] = -dlnf0[i] * N[ell] * (ell == 1 ? eps_q : 1.0) * scale;
             }
         }
 
@@ -189,7 +206,7 @@ namespace FML::COSMOLOGY::PERTURBATIONS {
             const double M = cc[M_];
             for (int i = 0; i < nq; i++) {
                 const double qi = q[i], eps = std::sqrt(qi * qi + M * M);
-                const double kq = b.ckH * qi / eps, dlnf = dlnf0[i];
+                const double kq = b.ckH * qi / eps, dlnf = dlnf0[i] * cc[SCALE];
                 const double * Y = P + i * (L + 1);
                 double * dY = dP + i * (L + 1);
                 dY[0] = -kq * Y[1] + dPhi * dlnf;
