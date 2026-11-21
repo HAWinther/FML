@@ -82,7 +82,8 @@ template <int NDIM>
 double
 cola_kick_factor(const GravityModel<NDIM> & grav, int n, double aini, double aold, double norm, double koverH0 = 0.0) {
     if (n == 1)
-        return norm * grav.source_factor_1LPT(aold, koverH0) * grav.get_D_1LPT(aold, koverH0) /
+        return norm * grav.source_factor_1LPT(aold, koverH0) *
+               (koverH0 > 0.0 ? 1.0 : grav.large_scale_neutrino_source_factor(aold)) * grav.get_D_1LPT(aold, koverH0) /
                grav.get_D_1LPT(aini, koverH0);
     const double D1 = grav.get_D_1LPT(aold, koverH0);
     const double nonlinear = grav.nonlinear_source_factor_2LPT(aold, koverH0);

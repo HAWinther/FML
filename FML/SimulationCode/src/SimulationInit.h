@@ -72,6 +72,18 @@ void NBodySimulation<NDIM, T>::read_parameters(const ParameterMap & param, const
     cola.aini = params.ic.a_initial();
     cola.H0Box = grav->H0_hmpc * params.simulation.boxsize;
     cola.grav = grav;
+    // Scale-independent COLA uses the k = 0 growth for the frame. While massive neutrinos are relativistic it differs
+    // from that of the modes in the box by 5-10% (radiation era, horizon crossing, neutrino free streaming), and a
+    // few steps cannot correct it (one step from z = 1000 with 0.1 eV: +5% to +14% in P(k); converged with ~40)
+    const auto cosmo_cola = grav->get_cosmo();
+    if (FML::ThisTask == 0 and cola.enabled and not cola.scaledependent and grav->is_growth_scaledependent() and
+        cosmo_cola->get_fMNu() > 0.0 and
+        cosmo_cola->get_neutrino_mean_energy_factor(cola.aini) > SIMCODE::neutrino_relativistic_energy_factor)
+        std::cout << "WARNING: scale-independent COLA (simulation_use_scaledependent_cola = false) with massive "
+                     "neutrinos that are relativistic at zini (<E/m> = "
+                  << cosmo_cola->get_neutrino_mean_energy_factor(cola.aini)
+                  << "): the frame has the k = 0 growth, which differs from that of the modes in the box; it needs "
+                     "many steps. Use scale-dependent COLA or start later\n";
 }
 
 //=============================================================================

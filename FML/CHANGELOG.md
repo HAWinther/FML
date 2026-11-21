@@ -5,6 +5,18 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: scale-independent COLA with massive neutrinos relativistic at the start
+- The frame kick of scale-independent COLA used `source_factor_1LPT(a, 0)`, which is 1 at k = 0 (neutrinos fully
+  clustering), while the frame's growth factor D1(a) at k = 0 is grown with `large_scale_neutrino_source_factor(a)`
+  (0.80 at z = 1500, 0.92 at z = 1000 for 0.1 eV: relativistic neutrinos do not cluster). The kick removed 8-20% more
+  acceleration than the drift added, and the runs did not converge: -3% in P(k, z = 18) at all k from z = 1000 with
+  10, 40 or 200 steps (plain FastPM and scale-dependent COLA: exact), a blow-up from z = 1e7. The kick now uses the
+  large-scale factor; 40 steps from z = 1000 agree with FastPM. Unchanged from z <~ 200 (the factor is 1 there;
+  regression suite bit-identical).
+- A warning when scale-independent COLA is used with neutrinos that are relativistic at zini: the k = 0 growth of the
+  frame differs from that of the modes in the box by 5-10% then, so it needs many steps (one step from z = 1000:
+  +5% to +14% in P(k)). Use scale-dependent COLA (the default) or start later.
+
 ### SimulationCode: 2LPT/3LPT initial conditions with the model's growth factors, and dealiasing
 - The 2LPT and 3LPT displacements and velocities of the initial conditions used the Einstein-de Sitter growth factors
   (D2 = -3/7 D1^2, ...), while the time stepping and the COLA frame use the model's D2(k, zini). The potentials are now

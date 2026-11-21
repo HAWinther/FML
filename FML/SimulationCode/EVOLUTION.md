@@ -315,6 +315,11 @@ field, one scale-dependent COLA step from z = 1e7 to z = 18 had an error 0.375 i
 With the model's field the error is 0.236, the same as 2LPT at z = 18, and with `ic_LPT_dealiasing` it is 0.138 (see
 INITIAL_CONDITIONS.md).
 
+Scale-independent COLA uses the growth at k = 0 for the frame. While massive neutrinos are relativistic, this differs
+from the growth of the modes in the box by 5-10%. From z = 1000 to z = 18 with 0.1 eV, D1 grows by 46.8 at k = 0,
+50-53 at k = 0.001-0.01 h/Mpc and 44-45 at k >= 0.1 h/Mpc. One step is then off by +5% to +14% in P(k), and about 40
+steps are needed. The code warns about this; use scale-dependent COLA for such starts.
+
 Some advice for COLA runs. Use as large a force grid as you can afford if you care about halos: their properties
 depend on the small-scale force resolution. For halos use a slightly smaller FoF linking length, and calibrate the
 masses and velocities against high-resolution simulations. For the matter power spectrum this matters much less;
