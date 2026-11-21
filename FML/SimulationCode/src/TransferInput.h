@@ -87,6 +87,11 @@ namespace SIMCODE {
     /// for ic_input_filename (./nbody --write-solver-defaults; internal_solver_default.ini). See TransferInput.cpp
     void write_internal_solver_defaults(std::ostream & os);
 
+    /// <E/m> of the massive neutrinos above which they count as relativistic: they do not cluster then (the growth
+    /// factors start from the radiation-matter growing mode and back-scaled initial conditions need the transfer
+    /// tables only from where <E/m> falls below this; GravityModel::compute_growth_factors)
+    constexpr double neutrino_relativistic_energy_factor = 3.0;
+
     /// The request of the simulation from its parameters (ic_*, simulation_boxsize) and cosmology
     template <class CosmologyType>
     TransferInputRequest
@@ -131,9 +136,27 @@ namespace SIMCODE {
             const int nmesh = param.get<int>("ic_nmesh");
             const double aini = 1.0 / (1.0 + param.get<double>("ic_initial_redshift"));
             const double ainput = 1.0 / (1.0 + param.get<double>("ic_input_redshift"));
+            // Back-scaled initial conditions with massive neutrinos that are relativistic at aini: the tables are
+            // needed from where they become non-relativistic (before, they do not cluster in the simulation)
+            double aneeded = aini;
+            if (ainput > aini and not r.nbody_gauge and cosmo.get_OmegaMNu() > 0.0 and
+                cosmo.get_neutrino_mean_energy_factor(aini) > neutrino_relativistic_energy_factor) {
+                double lo = std::log(aini), hi = std::log(ainput);
+                if (cosmo.get_neutrino_mean_energy_factor(ainput) > neutrino_relativistic_energy_factor) {
+                    aneeded = ainput;
+                } else {
+                    for (int i = 0; i < 60; i++) {
+                        const double mid = 0.5 * (lo + hi);
+                        (cosmo.get_neutrino_mean_energy_factor(std::exp(mid)) > neutrino_relativistic_energy_factor ?
+                             lo :
+                             hi) = mid;
+                    }
+                    aneeded = std::exp(lo);
+                }
+            }
             r.required = {2.0 * M_PI / boxsize,
                           std::sqrt(double(ndim)) * M_PI * nmesh / boxsize,
-                          std::min(aini, ainput),
+                          std::min(aneeded, ainput),
                           std::max({1.0, aini, ainput})};
         }
         return r;

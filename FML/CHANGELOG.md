@@ -5,6 +5,20 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: massive neutrinos that are relativistic at the start
+Found by starting linear runs with massive neutrinos at z = 1e3 - 1e7 (1000 Mpc/h, 128^3, 0.1 eV linear neutrinos,
+P_cb at z = 18 against the internal Einstein-Boltzmann solver):
+- The growth factors took their initial growth rate from the transfer tables at the start and at k = 1e-4 h/Mpc. At
+  early times and large scales the tables hold the synchronous-gauge super-horizon mode, and the internal solver's not
+  even that before a ~ 1e-3 (rate ~ 0 or negative): D1 decreased at first, BullFrog refused to start at z >= 1e5 and
+  a converged run from z = 1000 was -9% at k = 0.008 h/Mpc (LCDM: -0.7%). Now, while the neutrinos are relativistic at
+  the start (<E/m> > 3), they are radiation as massless neutrinos in LCDM: the growth starts from the radiation-matter
+  growing mode, and before the tables begin they do not cluster (source factors 1 - f_nu(a), no linear neutrinos in the
+  force). Converged runs from z = 1000 and 1e7 now agree with LCDM and with a start at z = 50 (-0.65% at 0.008 h/Mpc).
+- Back-scaled initial conditions only need the tables from where <E/m> falls below 3, so a start at z = 1e7 can use
+  tables from z ~ 2000 (the internal solver's tables started at z = 1e7 are wrong at k < 1e-3 h/Mpc up to a ~ 0.01).
+- Unchanged for runs where the neutrinos are not relativistic at the start (the regression suite is bit-identical).
+
 ### Interpolation: interlacing with rank-1 lattices of shifts (any order below 64)
 - `generate_interlacing_shifts` has every order 3 <= M < 64 in 2D and 3D that the half-cell and sub-lattice schemes
   do not have (3, 5, 6, 7, 9, 10, ...): the rank-1 lattice s_j = (j g / M mod 1) dx with a tabulated generator

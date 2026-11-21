@@ -100,6 +100,8 @@ class GravityModel {
         if (not(scaledependent_growth and cosmo->get_fMNu() > 0.0 and transfers))
             return 1.0;
         const double fnu = f_nu_of_a(a);
+        if (a < transfers->range().amin)
+            return 1.0 - fnu;
         const double k = koverH0low * H0_hmpc;
         const double T_nu = transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::MassiveNeutrino, k, a);
         const double T_cb = transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, k, a);
@@ -419,7 +421,10 @@ class GravityModel {
         double factor = 1.0 + ide_mass_growth(a);
         const double fnu = f_nu_of_a(a);
         if (fnu > 0.0 and koverH0 > 0.0) {
-            if (transfers) {
+            if (transfers and a < transfers->range().amin) {
+                // Before the tables (only with relativistic neutrinos at the start): not clustering
+                factor *= 1.0 - fnu;
+            } else if (transfers) {
                 const double T_nu =
                     transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::MassiveNeutrino, koverH0 * H0_hmpc, a);
                 const double T_cb =
@@ -593,14 +598,27 @@ class GravityModel {
             const double astart = 1.0 / (1.0 + zstart);
             if (alow < astart)
                 alow = astart;
-            if (aini < astart)
+            // Earlier than the tables is fine while the neutrinos are relativistic there: they do not cluster before
+            // the tables (source_factor_1LPT, large_scale_neutrino_source_factor, linear neutrinos in the force)
+            const bool relativistic_before_tables =
+                cosmo->get_neutrino_mean_energy_factor(astart) > SIMCODE::neutrino_relativistic_energy_factor;
+            if (aini < astart and relativistic_before_tables)
+                alow = aini;
+            if (aini < astart and not relativistic_before_tables)
                 throw std::runtime_error(
                     "Transferdata provided are only up to z = " + std::to_string(zstart) +
                     ", but we want to start simulation at z = " + std::to_string(1.0 / aini - 1.0) +
                     " Provide the required data, put OmegaMNu = 0.0 or set it so that we don't use scaledependent "
                     "growth!");
         }
-        const bool use_neutrino_transfer = transfers and nu_growth;
+        // While the neutrinos are relativistic at the start they are radiation (in the background, not clustering), as
+        // massless neutrinos in LCDM: the growth starts from the radiation-matter growing mode, not from the growth
+        // rate of the transfer functions (at early times and large scales they hold the synchronous-gauge
+        // super-horizon mode, and with the internal solver not even that before a ~ 1e-3: the rate was ~0 there and
+        // D1 decreased at first, so BullFrog refused to start at z > 1e5 and one step from z = 1e3 was +37% off)
+        const bool nu_relativistic_at_start =
+            nu_growth and cosmo->get_neutrino_mean_energy_factor(alow) > SIMCODE::neutrino_relativistic_energy_factor;
+        const bool use_neutrino_transfer = transfers and nu_growth and not nu_relativistic_at_start;
 
         // f_nu(x) on a fine grid covering the integration (LPTGrowthFactors may start up to ~1e5 earlier than alow in
         // the radiation era; outside the range f_nu is evaluated directly)
@@ -637,7 +655,7 @@ class GravityModel {
         gs.n_a = npts_loga;
         gs.a_normalize = aini;
         // Deep in the radiation era (not possible when we need the transfer data for massive neutrinos)
-        gs.start_in_radiation_era = not nu_growth;
+        gs.start_in_radiation_era = not nu_growth or nu_relativistic_at_start;
         gs.scale_dependent = scaledependent_growth;
         gs.koverH0_min = koverH0low;
         gs.koverH0_max = koverH0high;

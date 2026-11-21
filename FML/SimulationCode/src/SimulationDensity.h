@@ -253,7 +253,9 @@ void NBodySimulation<NDIM, T>::add_linear_neutrinos(FFTWGrid<NDIM> & density_gri
     // force_neutrino_energy_density the neutrino term is f_nu <E/m>(a) delta_nu (delta_nu from the transfer functions
     // is the energy-density contrast)
     const double fMNu = cosmo->get_fMNu();
-    const double fMNu_source = fMNu * neutrino_energy_factor(a);
+    // Before the tables (a start where the neutrinos are relativistic, GravityModel::compute_growth_factors) they do
+    // not cluster, as in the growth factors
+    const double fMNu_source = a < transfers->range().amin ? 0.0 : fMNu * neutrino_energy_factor(a);
     const auto & delta_ini_grid = initial_density_in_particle_frame();
     FML::GRID::for_each_fourier_mode<NDIM>(density_grid_fourier, [&](size_t fourier_index, double kmag) {
         auto delta_ini = delta_ini_grid.get_fourier_from_index(fourier_index);
