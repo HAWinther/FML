@@ -93,6 +93,18 @@ class GravityModel {
     // Growth rates
     //========================================================================
     double get_f_1LPT(double a, double koverH0 = 0.0) const { return lpt_growth().f1(std::log(a), koverH0); }
+    /// The massive-neutrino source factor (1 - f_nu(a)) + f_nu(a) T_nu/T_cb of the large-scale growth get_D_1LPT(a)
+    /// (the solution at the smallest k of the grid), 1 without massive neutrinos from transfer functions. The time
+    /// stepping needs it for the force of the linear mode, Gf = a^3 E dGp/da
+    double large_scale_neutrino_source_factor(double a) const {
+        if (not(scaledependent_growth and cosmo->get_fMNu() > 0.0 and transfers))
+            return 1.0;
+        const double fnu = f_nu_of_a(a);
+        const double k = koverH0low * H0_hmpc;
+        const double T_nu = transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::MassiveNeutrino, k, a);
+        const double T_cb = transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, k, a);
+        return (1.0 - fnu) + fnu * T_nu / T_cb;
+    }
     double get_f_2LPT(double a, double koverH0 = 0.0) const { return lpt_growth().f2(std::log(a), koverH0); }
     double get_f_3LPTa(double a, double koverH0 = 0.0) const { return lpt_growth().f3a(std::log(a), koverH0); }
     double get_f_3LPTb(double a, double koverH0 = 0.0) const { return lpt_growth().f3b(std::log(a), koverH0); }

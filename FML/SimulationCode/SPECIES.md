@@ -242,3 +242,37 @@ with GR; the code checks that the table was made for the same cosmology and that
 For a start at z = 49 the effect on P(k) at z = 0 is about 2% at k = 1e-3 h/Mpc (radiation, without
 massive neutrinos) and much less than 0.1% for k > 0.01 h/Mpc. `tests/check_nbody_gauge.py` checks that the
 simulation follows the linear N-body gauge evolution from CLASS on the largest scales.
+
+### Starting at high redshift (forward initial conditions)
+
+The initial conditions are back-scaled by default (P(k) at `ic_input_redshift`, usually 0, scaled to zini with the
+code's growth factor), so a run reproduces the input linear P(k) at z = 0 by construction. Forward initial conditions
+(`ic_input_redshift = ic_initial_redshift`, the transfer functions at zini) test the evolution itself. A test from
+z = 1000 (8000 Mpc/h, 128^3, A_s x 1e-4 so that everything is linear, 1LPT, 100 logarithmic FastPM steps, PCS with the
+lattice-calibrated Green's function; internal Einstein-Boltzmann solver) gives P_cb(k, z = 0) relative to the solver at
+k = 0.001 / 0.01 / 0.04 h/Mpc:
+
+| Run (z = 1000)                                       | k = 0.001 | 0.01   | 0.04   |
+|------------------------------------------------------|-----------|--------|--------|
+| forward, N-body gauge (LCDM)                         | -0.08%    | +0.15% | -1.0%  |
+| forward, N-body gauge, 0.1 eV (FastPM)               | -0.07%    | +0.16% | -1.0%  |
+| forward, N-body gauge, 0.1 eV (BullFrog)             | -0.2%     | +1.4%  | -1.0%  |
+| back-scaled, Newtonian (LCDM)                        | -0.09%    | +0.15% | -0.9%  |
+| back-scaled, linear neutrinos, 0.1 eV, energy density | -0.07%   | +0.16% | -0.8%  |
+| forward, Newtonian (synchronous gauge IC, LCDM)      | -69%      | -55%   | -7%    |
+
+(-1% at 0.04 h/Mpc is the P(k) estimator near the Nyquist frequency, 0.05 h/Mpc.) So:
+- Forward initial conditions from a high redshift need the N-body gauge (`force_nbody_gauge = true`): at z = 1000 the
+  radiation is still 30% of the matter and k < 0.007 h/Mpc is outside the horizon. A Newtonian run from forward
+  (synchronous gauge) initial conditions is off by tens of per cent.
+- The N-body gauge needs forward initial conditions (back-scaled ones are refused: the source would add the growth from
+  radiation and GR on top of the back-scaling, +137% at k = 1e-3).
+- Use steps that are small while the source is large: 100 steps linear in a from z = 1000 gave +8% to +24%
+  (the code warns for steps with dlog(a) > 0.25 at z > 50); 40 logarithmic steps change P(k) by < 0.1% for
+  k <= 0.01 h/Mpc relative to 100 (0.3% at 0.04 h/Mpc).
+- With linear massive neutrinos use `force_neutrino_energy_density = true` when they are relativistic at zini (the code
+  warns): the growth factors use their energy density, and with the mass density back-scaled initial conditions from
+  z = 1000 were off by -12% at k = 1e-3 h/Mpc.
+- BullFrog follows the scale-independent growth: with massive neutrinos from z = 1000 it is 1.4% off at 0.01 h/Mpc
+  (FastPM 0.2%). It now works with the N-body gauge source and linear neutrinos (the initial field is stored from the
+  particles before its first half-step).

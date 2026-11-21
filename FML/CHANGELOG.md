@@ -5,6 +5,35 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: starting at high redshift (forward initial conditions, massive neutrinos)
+Found by starting linear runs at z = 1000 (8000 Mpc/h, 128^3) and comparing P_cb(k, z = 0) with the internal
+Einstein-Boltzmann solver (SPECIES.md, "Starting at high redshift"):
+- FastPM and BullFrog with massive neutrinos: the force of the linear mode in their kick factors (Gf) used OmegaM, while
+  the growth history they are built from uses rho_m(a) with the neutrino energy density and the neutrino source factor
+  of the large-scale growth. The two differ while the neutrinos are relativistic, and the steps did not converge to the
+  dynamics (+9% in P(k, z = 0) from z = 1000, the same with 400 steps). Gf now uses `Cosmology::Omega_m_a3(a)` times
+  `GravityModel::large_scale_neutrino_source_factor(a)`: -0.07% / +0.16% at k = 0.001 / 0.01 h/Mpc, as without
+  neutrinos.
+- The growth-factor ODE with massive neutrinos failed (`ODESolver::solve` ... failure) for transfer tables starting at
+  z ~ 2000: the power-law extrapolation of the transfer functions above k_max (`TabulatedTransferProvider`) had a pole
+  when the neutrino transfer function crossed zero at k_max - 0.1 dex. The slope is now limited to [-4, 2].
+- `LPTGrowthFactors`: a start that cannot be moved into the radiation era (massive neutrinos, a/a_eq ~ 1.7) used the
+  EdS rate dlnD1/dlna = 1; it now uses the exact rate (3y/2)/(1 + 3y/2) of D1 = 1 + 3y/2 for y < 10 (and the series of
+  the growing modes for y < 0.9 instead of 0.5).
+- Linear massive neutrinos with back-scaled initial conditions: delta_nu = delta_cb(zini) D(k,z)/D(k,zini)
+  T_nu(z)/T_cb(z) (the code's linear CDM+baryons, as in the growth equations used for the back-scaling) instead of
+  delta_cb(zini) T_nu(z)/T_cb(zini). Forward initial conditions are unchanged. The code warns when the neutrinos are
+  relativistic at zini without `force_neutrino_energy_density` (-12% at k = 1e-3 h/Mpc from z = 1000 without it, -0.07%
+  with it).
+- `force_nbody_gauge` with back-scaled initial conditions is refused for all inputs (it was only for camb): the source
+  added the growth from radiation and GR on top of the back-scaling (+137% at k = 1e-3 h/Mpc from z = 1000).
+- BullFrog with the N-body gauge source or linear neutrinos stopped on an assertion (its first force is in the middle of
+  the first step); the initial density field is now stored from the particles before the first step.
+- A warning for steps with dlog(a) > 0.25 at z > 50 with the N-body gauge source (100 steps linear in a from z = 1000:
+  +8% to +24%).
+- Regression: all cases without massive neutrinos are bit-identical; the six neutrino cases change by up to 1e-3 in P(k) (the Gf and growth
+  initial-rate fixes; the neutrino growth at k = 10 h/Mpc, beyond the tables, changes where it is ~1e-8).
+
 ### SimulationCode: the lattice-calibrated Green's function (experimental)
 - `force_lattice_greens_function = true` multiplies the Green's function by (1 - E)/(T - E), with T(k) the linear
   response of the PM force for particles on the initial lattice, computed in closed form from the assignment, kernels,

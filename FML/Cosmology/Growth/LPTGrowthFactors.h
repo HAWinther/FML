@@ -22,7 +22,8 @@
 //
 // Initial conditions at a_min: the growing mode of a matter + radiation universe, a power series in y = a/a_eq
 // (radiation_matter_growing_mode: D1 = 1 + 3y/2 and the higher orders that vanish for y -> 0), with
-// y = r/(1 - r), r = rho_m/E^2 at a_min; the EdS values for y >= 0.5 (or with eds_initial_conditions). With
+// y = r/(1 - r), r = rho_m/E^2 at a_min; the EdS values for y >= 0.9 (or with eds_initial_conditions), with the
+// exact rate (3y/2)/(1 + 3y/2) of D1 for y < 10. With
 // start_in_radiation_era, a_min is moved to a_eq/10 when 0.1 < a_min/a_eq < 1e4 (radiation matters but a_min is
 // not yet deep in its era). initial_rate_1(x_min, k), if given, replaces dlnD1/dx at a_min for k > 0 (e.g. the
 // CDM+baryon growth rate of transfer functions with massive neutrinos).
@@ -344,10 +345,18 @@ namespace FML::COSMOLOGY::GROWTH {
             };
 
             std::array<double, 8> ini;
-            if (not s.eds_initial_conditions and y_low < 0.5)
+            if (not s.eds_initial_conditions and y_low < 0.9) {
+                // The series converges for y < 1
                 ini = radiation_matter_growing_mode(y_low);
-            else
+            } else {
                 ini = {1.0, 1.0, -3.0 / 7.0, -6.0 / 7.0, -1.0 / 3.0, -1.0, 5.0 / 21.0, 5.0 / 7.0};
+                // Radiation still matters (a start that cannot be moved into the radiation era, e.g. massive
+                // neutrinos from transfer tables at z ~ 2000, y ~ 1.7): the exact growing-mode rate of D1 = 1 + 3y/2
+                // instead of the EdS 1 (which excites a decaying mode). D2, D3 keep the EdS values (only used for
+                // 2LPT/3LPT initial conditions, which matter little this early)
+                if (not s.eds_initial_conditions and y_low < 10.0)
+                    ini[1] = 1.5 * y_low / (1.0 + 1.5 * y_low);
+            }
             if (eq.initial_rate_1 and koverH0 > 0.0)
                 ini[1] = ini[0] * eq.initial_rate_1(xgrid.front(), koverH0);
 

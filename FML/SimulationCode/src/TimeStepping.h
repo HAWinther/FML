@@ -28,8 +28,16 @@ namespace SIMCODE {
             : FML::NBODY::TimeStepping(
                   {settings.method, settings.spacing, settings.cola_nLPT, settings.spacing_power},
                   [cosmo](double a) { return cosmo->HoverH0_of_a(a); },
+                  // The force of the linear mode of the growth history, Gf = a^3 E dGp/da: FastPM and BullFrog are
+                  // only consistent (converge to the true dynamics) when this is the source of the growth equations.
+                  // With massive neutrinos that is rho_m(a) a^3 with their energy density (Omega_m_a3), larger than
+                  // OmegaM while they are relativistic, times their source factor of the large-scale growth (with
+                  // OmegaM FastPM from z = 1000 gave +9% in P(k, z = 0))
                   [cosmo, grav](double a) {
-                      return 1.5 * cosmo->get_OmegaM() * cosmo->clustering_mass_factor(a) * grav->GeffOverG(a) * a;
+                      const double OmegaM = cosmo->get_fMNu() > 0.0 ?
+                                                cosmo->Omega_m_a3(a) * grav->large_scale_neutrino_source_factor(a) :
+                                                cosmo->get_OmegaM();
+                      return 1.5 * OmegaM * cosmo->clustering_mass_factor(a) * grav->GeffOverG(a) * a;
                   },
                   large_scale_growth_history(grav),
                   grav ? grav->velocity_friction_integral() : std::function<double(double)>{}) {

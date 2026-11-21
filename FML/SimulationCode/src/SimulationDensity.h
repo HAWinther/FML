@@ -228,13 +228,23 @@ void NBodySimulation<NDIM, T>::add_linear_neutrinos(FFTWGrid<NDIM> & density_gri
     const double kmax_grid = std::sqrt(double(NDIM)) * M_PI * density_grid_fourier.get_nmesh() * koverkBox;
     const double kmax =
         std::max(std::min(1.001 * kmax_grid, std::max(kmax_grid, transfers->range().kmax_hmpc)), 1.01 * kmin);
+    // Forward initial conditions (the transfer functions at zini): delta_nu = delta_cb(zini) T_nu(z) / T_cb(zini).
+    // Back-scaled ones (ic_input_redshift != ic_initial_redshift): delta_cb(zini) is the input scaled with the code's
+    // growth D(k, a), not the Boltzmann delta_cb(zini), so we use the linear CDM+baryons of the code times the
+    // Boltzmann ratio at the same time, delta_nu = delta_cb(zini) D(k,z)/D(k,zini) T_nu(z)/T_cb(z), as in the growth
+    // equations the back-scaling uses (else from z = 1000 P_cb(z = 0) was off by -10% at k = 1e-3 h/Mpc)
+    const bool back_scaled = std::fabs(params.ic.input_redshift - ic_initial_redshift) > 1e-6;
     const Spline ratio = SIMCODE::spline_of_logk(
         kmin,
         kmax,
         [&](double logk) {
             const double k = std::exp(logk);
-            return transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::MassiveNeutrino, k, a) /
-                   transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, k, aini);
+            const double T_nu = transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::MassiveNeutrino, k, a);
+            if (not back_scaled)
+                return T_nu / transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, k, aini);
+            const double koverH0 = k / grav->H0_hmpc;
+            return T_nu / transfers->density_over_k_mpc2(SIMCODE::TransferSpecies::CDMBaryon, k, a) *
+                   grav->get_D_1LPT(a, koverH0) / grav->get_D_1LPT(aini, koverH0);
         },
         "T_nu(k,z) / T_cb(k,zini)");
     auto norm = [&](double kBox) { return ratio(SIMCODE::clamped_logk(kBox * koverkBox, kmin, kmax)); };
@@ -269,11 +279,39 @@ void NBodySimulation<NDIM, T>::store_initial_density_field(const FFTWGrid<NDIM> 
     FML::assert_mpi(not particles_shifted(),
                     "The initial density field must be stored from the particles without the interlacing shift");
     // With the early-time force the late-time field is computed from the particles with the late-time settings
+    // Linear massive neutrinos: the growth equations (back-scaling, time stepping) use the energy density of the
+    // neutrinos; with their mass density in the force the two differ while the neutrinos are relativistic (from
+    // z = 1000 with 0.1 eV: -12% in P_cb(k = 1e-3 h/Mpc, z = 0) back-scaled, -0.1% with force_neutrino_energy_density)
+    if (not initial_density_field.stored(false) and not nbody_gauge and params.force.linear_massive_neutrinos and
+        cosmo->get_fMNu() > 0.0 and not params.force.neutrino_energy_density) {
+        const double EoverM = cosmo->get_neutrino_mean_energy_factor(a);
+        if (FML::ThisTask == 0 and EoverM > 1.01)
+            std::cout << "WARNING: the massive neutrinos have <E/m> = " << EoverM
+                      << " at the initial redshift: use force_neutrino_energy_density = true (the growth factors "
+                         "use their energy density)\n";
+    }
     const auto nleftright = FML::INTERPOLATION::get_extra_slices(params.force.density_assignment_method);
     initial_density_field.store(
         density_grid_fourier, early_force, params.force.nmesh, nleftright.first, nleftright.second, [&](auto & grid) {
             assign_cb_particles_to_grid(grid, a, params.force, false);
         });
+}
+
+/// Store delta_cb(k,zini) from the particles before the first step, for the linear sources (N-body gauge source,
+/// linear massive neutrinos), when the first force evaluation is not at zini (BullFrog). Nothing if not needed
+template <int NDIM, class T>
+void NBodySimulation<NDIM, T>::store_initial_density_field_from_particles(double a) {
+    const bool linear_neutrinos = not nbody_gauge and not has_neutrino_particles() and
+                                  params.force.linear_massive_neutrinos and cosmo->get_fMNu() > 0.0 and transfers;
+    if (not(nbody_gauge or linear_neutrinos))
+        return;
+    set_force_settings_for_step(a);
+    if (initial_density_field.stored(early_force))
+        return;
+    const auto nleftright = FML::INTERPOLATION::get_extra_slices(current_force.density_assignment_method);
+    FFTWGrid<NDIM> & grid = pm_density_workspace(current_force.nmesh, nleftright.first, nleftright.second);
+    assign_cb_particles_to_grid(grid, a, current_force);
+    store_initial_density_field(grid, a);
 }
 
 /// Bin up P(k) of a density field (deconvolving the window of the force density assignment), subtract the shot noise

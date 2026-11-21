@@ -86,6 +86,23 @@ void NBodySimulation<NDIM, T>::run() {
         for (auto & [species, species_stepper] : species_steppers)
             steps_of_species[species] = species_stepper.restep(steps);
 
+        // The N-body gauge source is evaluated at the time of the kick: while it is large (radiation era) large steps
+        // misrepresent it (100 steps linear in a from z = 1000: +8% to +24% in P(k, z = 0) at k < 0.04 h/Mpc;
+        // logarithmic steps are fine)
+        if (nbody_gauge and ioutput == 0 and FML::ThisTask == 0) {
+            for (const auto & st : steps) {
+                if (1.0 / st.apos - 1.0 > 50.0 and st.apos_new > st.apos and
+                    std::log(st.apos_new / st.apos) > max_dloga_nbody_gauge) {
+                    std::cout << "WARNING: force_nbody_gauge with a step from z = " << 1.0 / st.apos - 1.0
+                              << " to z = " << 1.0 / st.apos_new - 1.0 << " (dlog(a) = " << std::log(st.apos_new / st.apos)
+                              << " > " << max_dloga_nbody_gauge
+                              << "): the source is not followed accurately at early times with large steps; use "
+                                 "timestep_scalefactor_spacing = logarithmic or more steps\n";
+                    break;
+                }
+            }
+        }
+
         if (nsteps[ioutput] > 0) {
             for (int istep = 0; istep <= nsteps[ioutput]; istep++) {
                 // The last step is just a sync step so don't count towards the total
@@ -115,6 +132,11 @@ void NBodySimulation<NDIM, T>::run() {
                 species_steps.clear();
                 for (auto & [species, species_step_list] : steps_of_species)
                     species_steps[species] = species_step_list[istep];
+                // The linear sources (N-body gauge, linear neutrinos) need delta_cb(k,zini), stored from the first
+                // force evaluation. If the first step has no kick at zini (BullFrog: its first force is in the
+                // middle of the first step) store it from the particles now
+                if (ioutput == 0 and istep == 0 and steps[istep].delta_time_kick == 0.0)
+                    store_initial_density_field_from_particles(steps[istep].apos);
                 step(steps[istep]);
 
                 // Most plans are made by now (initial conditions and the first step): save them already so that

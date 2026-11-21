@@ -1763,10 +1763,12 @@ namespace SIMCODE {
                     fail("force_nbody_gauge = true needs ic_type_of_input = internal or tables (the N-body gauge "
                          "from the Einstein-Boltzmann solver) or camb (the N-body gauge transfer functions made by "
                          "scripts/make_nbody_gauge_transfer.py)");
-                if (ic.type_of_input == ICInputType::CambFiles and
-                    std::fabs(ic.input_redshift - ic.initial_redshift) > 1e-6)
+                // Back-scaling uses the Newtonian growth factor, and the source then adds the growth from radiation
+                // and GR on top (+137% at k = 1e-3 h/Mpc from z = 1000 in a test)
+                if (std::fabs(ic.input_redshift - ic.initial_redshift) > 1e-6)
                     fail("force_nbody_gauge = true needs ic_input_redshift = ic_initial_redshift (scaling the "
-                         "transfer functions with the growth factor would not be in the N-body gauge)");
+                         "transfer functions with the growth factor would not be in the N-body gauge, and the source "
+                         "would add the growth from radiation and GR twice)");
                 if (force.linear_massive_neutrinos) {
                     force.linear_massive_neutrinos = false;
                     if (FML::ThisTask == 0)

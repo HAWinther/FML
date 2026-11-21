@@ -403,6 +403,9 @@ class NBodySimulation {
                                      const SIMCODE::ForceSettings & force,
                                      bool bin_pofk = true);
     void store_initial_density_field(const FFTWGrid<NDIM> & density_grid_fourier, double a);
+    void store_initial_density_field_from_particles(double a);
+    /// The largest dlog(a) of a step at z > 50 with the N-body gauge source before the code warns
+    static constexpr double max_dloga_nbody_gauge = 0.25;
     void add_nbody_gauge_source(FFTWGrid<NDIM> & density_grid_fourier, double a);
     void add_neutrino_particles(FFTWGrid<NDIM> & density_grid_fourier, double a);
     void add_linear_neutrinos(FFTWGrid<NDIM> & density_grid_fourier, double a);

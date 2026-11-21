@@ -22,7 +22,8 @@
 //     tables around a (fewer on one side at the ends). The derivative of the bicubic interpolation is poor at the
 //     ends of the table (f_cb 8% too large at the highest redshift).
 //   - RangePolicy::Reject: queries outside the tables are errors. RangePolicy::SourceExtrapolation: above k_max a power
-//     law in k through the last 0.1 in log k (as the old CAMBUtils reader did for CAMB tables), below k_min and
+//     law in k through the last 0.1 in log k (as the old CAMBUtils reader did for CAMB tables; the slope limited to
+//     [-4, 2], the steepest decay when the two values have opposite signs), below k_min and
 //     outside the redshifts of the tables the value at the end (growth rates: the value at the end of the redshift
 //     range).
 //=====================================================================================================================
@@ -75,16 +76,26 @@ namespace FML::INITIALCONDITIONS {
         Spline2D nbody_source;
         bool have_nbody_source{false};
 
-        /// The spline at (log a, log k), with the power-law extrapolation above k_max (SourceExtrapolation)
+        /// The spline at (log a, log k), with the power-law extrapolation above k_max (SourceExtrapolation). The
+        /// slope is limited to [min_extrapolation_slope, max_extrapolation_slope]: a transfer function that
+        /// oscillates in k near k_max (the massive neutrinos while they are relativistic) has T(k_max - dy) -> 0 at
+        /// some times, and the unlimited slope log(T/T1)/dy then made a pole in time (the growth-factor ODE with
+        /// neutrinos failed for tables starting at z ~ 2000). With opposite signs the steepest decay is used
         double eval(const Spline2D & spline, double x, double y) const {
             if (y <= logk_max or policy != RangePolicy::SourceExtrapolation)
                 return spline(x, y);
             const double dy = 0.1;
             const double T = spline(x, logk_max), T1 = spline(x, logk_max - dy);
-            if (not(T / T1 > 0.0))
-                return T;
-            return T * std::exp(std::log(T / T1) / dy * (y - logk_max));
+            double slope = T / T1 > 0.0 ? std::log(T / T1) / dy : min_extrapolation_slope;
+            if (not std::isfinite(slope))
+                slope = min_extrapolation_slope;
+            slope = std::clamp(slope, min_extrapolation_slope, max_extrapolation_slope);
+            return T * std::exp(slope * (y - logk_max));
         }
+        /// The limits of the power-law slope dlog T/dlog k above k_max (the CDM+baryon density grows ~ log k, the
+        /// free-streaming neutrinos fall ~ k^-2 relative to it)
+        static constexpr double min_extrapolation_slope = -4.0;
+        static constexpr double max_extrapolation_slope = 2.0;
 
       protected:
         TabulatedTransferProvider() = default;
