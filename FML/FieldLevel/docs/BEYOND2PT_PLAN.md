@@ -21,7 +21,11 @@ still does not supply those files. Do not substitute a random realization or a
 field reconstructed from the catalog. The [application entry point](../example/beyond2pt/README.md)
 emits an explicit missing-input contract.
 
-The most recent [donor experiment](validation/studies/donor_jumps/RESULTS.md)
+On 22 November 2026 [b1*sigma8 reparametrization and exact analytic bias
+marginalization](validation/studies/reparametrization/RESULTS.md) were tested on the
+joint-pilot target: all gates fail because chains lock into separate posterior modes
+(field/b_delta sign and same-sign field configurations), not because of a b1-sigma8
+ridge; marginalization improves within-mode mixing. The most recent [donor experiment](validation/studies/donor_jumps/RESULTS.md)
 improves physical-field ESS provisionally, but all eighteen coordinate checks
 and transport still fail. Marginalized-IC inference remains a focused algorithm
 redesign task after the fixed-IC dependency is resolved, not another incremental

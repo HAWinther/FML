@@ -78,3 +78,9 @@ The [frozen nonlinear metric probe](galaxy/gauss_newton/README.md) and [actual-c
 [Exact initial-support interweaving](galaxy/support_interweave/README.md) tests the model-defined global-rank move, distributed kernel ownership and a separately frozen serial actual-chain comparison.
 
 [Frozen-donor jumps](galaxy/donor_jumps/README.md): joint field/scalar translation, immutable pool, native controls and a fixed serial four-chain comparison.
+
+[Reparametrization and analytic bias marginalization](galaxy/reparametrization/README.md):
+joint vs (b_delta*sigma8, sigma8) vs bias-marginalized HMC on the joint-pilot target with
+Gaussian bias priors. [Results](../docs/validation/studies/reparametrization/RESULTS.md):
+all gates **FAIL**; chains lock into separate posterior modes; marginalization speeds
+within-mode mixing.

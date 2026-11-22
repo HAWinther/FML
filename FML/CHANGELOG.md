@@ -5,6 +5,16 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### FieldLevel: analytic bias marginalization and a free-IC sampler comparison
+- `MarginalizedBias.h`: `BiasMarginalizedPosterior` integrates the four Eulerian bias coefficients out exactly
+  (unbounded Gaussian priors, fixed noise), with gradients through the new
+  `DistributedEulerianLPTModelT::pullback_columns`, exact conditional bias draws and the HMC driver
+  `sample_bias_marginalized`. `FixedNoiseLinearBiasLikelihood` exposes `gram()` and `reference()`.
+  Test `test_marginalized_bias` (finite differences, Gaussian identities, slab/pencil MPI).
+- `validation/galaxy/reparametrization`: joint vs (b_delta*sigma8, sigma8) vs bias-marginalized HMC on the
+  joint-pilot target. All gates fail: chains lock into separate posterior modes. Marginalization improves
+  within-mode mixing (b1*sigma8 single-chain ESS ~10x on two of four datasets); the reparametrization does not.
+
 ### FieldLevel: one LPT implementation, separable assignment sums, survey/catalog fixes
 - The serial `Model` is a single-rank front end over the distributed linear/LPT models (`SerialModel.h`;
   `Framework.h` = `FrameworkCore.h` + distributed models + `Model`). Its former FieldLevelBAO-engine backend is
