@@ -1,5 +1,10 @@
 #ifndef SIMULATIONPARAMETERS_HEADER
 #define SIMULATIONPARAMETERS_HEADER
+// The number of space dimensions (set by the SimulationCode Makefile; 3 when the header is used elsewhere, e.g. by
+// the library tests that include ParameterSchema.h)
+#ifndef NDIM_SPACE
+#define NDIM_SPACE 3
+#endif
 #include <FML/NBody/TimeStepTypes.h>
 
 #include "BaryonificationParameters.h"
