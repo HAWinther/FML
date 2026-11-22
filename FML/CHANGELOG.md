@@ -7,8 +7,10 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ### FieldLevel: audit fixes (faster assignment, posterior metric, checkpoint pruning)
 - Particle assignment (`DistributedAssignment.h`, used by LPT and PM) accumulates owned mesh nodes densely and
-  exchanges only nodes owned by other ranks; slab/serial ownership is a key-range test. Outputs are bitwise
-  unchanged; a 2LPT posterior evaluation is 2.3-2.4x faster.
+  exchanges only nodes owned by other ranks; slab/serial ownership is a key-range test. The LPT model deposits
+  and reverses whole z-rows (`add.row`, `row()`), with register accumulators and one exp/sqrt per kernel tap.
+  Outputs are bitwise unchanged on 1, 2 and 4 ranks; a 2LPT posterior evaluation is 3.4-3.7x faster
+  (64^3 particles, 128^3 mesh: 2.30 -> 0.62 s).
 - `map(posterior, white, p, MAPOptions)` uses the posterior's field metric. It previously failed to compile for
   `DistributedEulerianLPTModelT` and ignored the posterior noise policy.
 - The linear, LPT and serial models' field metric (HMC mass, MAP preconditioner) uses the posterior's actual

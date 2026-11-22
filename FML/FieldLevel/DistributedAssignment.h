@@ -27,7 +27,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL {
         std::unordered_map<std::uint64_t, size_t> slot;
         std::vector<double> local;
         size_t owned{};
-        bool contiguous{false};
+        bool contiguous{false}, full_rows{false};
         std::uint64_t first_key{};
         int mesh, tasks, rank;
         bool ready{false};
@@ -70,6 +70,53 @@ namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL {
                 return std::numeric_limits<size_t>::max();
             return (size_t(x) * size_t(local_count[1]) + size_t(y)) * size_t(local_count[2]) + size_t(z);
         }
+        // Compact offset of the start of the owned z-row (x, y), or SIZE_MAX if not owned here.
+        // The supported grids never split z, so a row is owned entirely by one rank.
+        size_t owned_row(int x, int y) const {
+            const int ix = x - local_start[0], iy = y - local_start[1];
+            if (!full_rows || ix < 0 || ix >= local_count[0] || iy < 0 || iy >= local_count[1])
+                return std::numeric_limits<size_t>::max();
+            return (size_t(ix) * size_t(local_count[1]) + size_t(iy)) * size_t(mesh);
+        }
+        // Passed to deposit's visitor. add(key, value) adds one node; add.row(x, y, z, v, n) adds
+        // v[c] at the nodes (x, y, z[c]), c = 0..n-1, in that order (the same per-node sequence).
+        class Adder {
+            DistributedAssignmentT & owner_;
+            std::unordered_map<std::uint64_t, double> & remote_;
+            const std::uint64_t nodes_;
+
+          public:
+            Adder(DistributedAssignmentT & owner, std::unordered_map<std::uint64_t, double> & remote,
+                  std::uint64_t nodes)
+                : owner_(owner), remote_(remote), nodes_(nodes) {}
+            void operator()(std::uint64_t key, double value) const {
+                if (key >= nodes_)
+                    throw std::invalid_argument("[Distributed assignment] Node outside mesh");
+                const size_t q = owner_.owned_index(key);
+                if (q != std::numeric_limits<size_t>::max())
+                    owner_.local[q] += value;
+                else
+                    remote_[key] += value;
+            }
+            void row(int x, int y, const int * z, const double * values, int n) const {
+                const int m = owner_.mesh;
+                if (x < 0 || x >= m || y < 0 || y >= m)
+                    throw std::invalid_argument("[Distributed assignment] Node outside mesh");
+                const size_t base = owner_.owned_row(x, y);
+                if (base != std::numeric_limits<size_t>::max()) {
+                    double * row = owner_.local.data() + base;
+                    for (int c = 0; c < n; ++c) {
+                        if (z[c] < 0 || z[c] >= m)
+                            throw std::invalid_argument("[Distributed assignment] Node outside mesh");
+                        row[z[c]] += values[c];
+                    }
+                    return;
+                }
+                const std::uint64_t key = (std::uint64_t(x) * std::uint64_t(m) + std::uint64_t(y)) * std::uint64_t(m);
+                for (int c = 0; c < n; ++c)
+                    (*this)(key + std::uint64_t(z[c]), values[c]);
+            }
+        };
         ptrdiff_t local_index(std::uint64_t node, const Grid & grid) const {
             const auto row = node / mesh;
             const auto x = row / mesh;
@@ -90,6 +137,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL {
             }
             contiguous = local_start[1] == 0 && local_start[2] == 0 && local_count[1] == mesh && local_count[2] == mesh;
             first_key = std::uint64_t(local_start[0]) * std::uint64_t(mesh) * std::uint64_t(mesh);
+            full_rows = local_start[2] == 0 && local_count[2] == mesh;
         }
         // Each node's total is accumulated in visit order, and owners add the per-rank totals in
         // ascending source-rank order: the same floating-point sequence as a full exchange.
@@ -104,15 +152,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL {
                     std::unordered_map<std::uint64_t, double> remote;
                     local.assign(owned, 0.);
                     const std::uint64_t nodes = std::uint64_t(mesh) * mesh * mesh;
-                    visit([&](std::uint64_t key, double value) {
-                        if (key >= nodes)
-                            throw std::invalid_argument("[Distributed assignment] Node outside mesh");
-                        const size_t q = owned_index(key);
-                        if (q != std::numeric_limits<size_t>::max())
-                            local[q] += value;
-                        else
-                            remote[key] += value;
-                    });
+                    Adder add{*this, remote, nodes};
+                    visit(add);
                     sent.clear();
                     slot.clear();
                     sent.reserve(remote.size());
@@ -230,6 +271,12 @@ namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL {
             std::copy(outgoing.begin(), outgoing.end(), result.begin() + owned);
 #endif
             return result;
+        }
+        // Owned z-row (x, y) of a reverse() result, indexed by z; nullptr if the row is remote
+        // (then use at() per node).
+        const double * row(const std::vector<double> & reversed, int x, int y) const {
+            const size_t base = owned_row(x, y);
+            return base == std::numeric_limits<size_t>::max() ? nullptr : reversed.data() + base;
         }
         double at(const std::vector<double> & reversed, std::uint64_t node) const {
             const size_t q = owned_index(node);

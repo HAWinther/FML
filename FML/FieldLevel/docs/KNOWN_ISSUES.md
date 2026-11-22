@@ -141,9 +141,14 @@ The relevant code is [FieldLevelBAO.h](../FieldLevelBAO.h),
   exchanged, and slab/serial ownership is a key-range test. Predictions and
   gradients are bitwise unchanged (A/B on 1/2/4 slab ranks); one 2LPT
   posterior evaluation is 2.3-2.4x faster (32^3/64^3: 0.25 -> 0.11 s; 64^3/128^3:
-  2.16 -> 0.90 s, serial). The 343-point smooth-kernel stencil arithmetic now
-  dominates; a separable row-wise deposition is the next step. Per-call workspace
-  allocation is unchanged. Full serial and MPI (1/2/4 ranks, slab and pencil) test
+  2.16 -> 0.90 s, serial). A row-wise (z-contiguous) deposition and reverse for
+  the LPT model, register accumulators and one shared exp/sqrt per kernel tap then
+  bring the total to 3.4-3.7x (32^3/64^3: 0.25 -> 0.075 s; 48^3/96^3: 0.89 -> 0.29 s;
+  64^3/128^3: 2.30 -> 0.62 s), still bitwise unchanged on 1/2/4 ranks. What remains
+  is the 343-point stencil arithmetic in a fixed summation order; regrouping the
+  products would save more but changes results at round-off. The PM model still
+  uses per-node assignment (8/27-point stencils). Per-call workspace allocation is
+  unchanged. Full serial and MPI (1/2/4 ranks, slab and pencil) test
   suites pass.
 
 ## Resolved diagnostics issue

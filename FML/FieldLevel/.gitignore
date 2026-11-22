@@ -54,6 +54,7 @@ tests/bao_validation.tsv
 tests/test_eulerian_bias
 tests/test_eulerian_lpt
 tests/test_fixed_ic
+tests/test_metric_noise_policy
 validation/galaxy/fixed_ic/galaxy_fixed_ic
 tests/test_periodic_catalog
 example/catalog_to_modes

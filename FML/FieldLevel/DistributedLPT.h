@@ -110,12 +110,21 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             }
             const double h = .5 * config_.kernel_width;
             const int start = int(std::floor(u - h)) + 1;
+            const double width = config_.kernel_width;
             for (int j = 0; j <= config_.kernel_width; ++j) {
                 const int node = start + j;
                 const double z = (node - u) / h;
                 t.node[j] = ((node % n) + n) % n;
-                t.w[j] = kernel(z);
-                t.dw[j] = derivatives ? -kernel_derivative(z) / h : 0.;
+                // kernel()/kernel_derivative() with one shared sqrt/exp (identical values).
+                const double r = 1 - z * z;
+                if (r <= 0) {
+                    t.w[j] = 0;
+                    t.dw[j] = derivatives ? -0. / h : 0.;
+                    continue;
+                }
+                const double root = std::sqrt(r), e = std::exp(2.3 * width * (root - 1));
+                t.w[j] = r * e;
+                t.dw[j] = derivatives ? -(-z * e * (2 + 2.3 * width * root)) / h : 0.;
             }
         }
 
@@ -164,22 +173,6 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 taps((double(pos[c]) / n + shift) * config_.density_mesh, t[c], derivatives);
             }
         }
-        template <class Visit>
-        void stencil(size_t q, const Workspace & w, Visit visit, bool derivatives = false) const {
-            Taps t[3];
-            particle_taps(q, w, t, derivatives);
-            const size_t n = config_.density_mesh;
-            for (int a = 0; a < stencil_width(); ++a)
-                for (int b = 0; b < stencil_width(); ++b)
-                    for (int c = 0; c < stencil_width(); ++c) {
-                        const std::uint64_t node = (std::uint64_t(t[0].node[a]) * n + t[1].node[b]) * n + t[2].node[c];
-                        visit(node,
-                              t[0].w[a] * t[1].w[b] * t[2].w[c],
-                              t[0].dw[a] * t[1].w[b] * t[2].w[c],
-                              t[0].w[a] * t[1].dw[b] * t[2].w[c],
-                              t[0].w[a] * t[1].w[b] * t[2].dw[c]);
-                    }
-        }
         template <class Kernel>
         Field field(const Modes & modes, Workspace & w, Kernel kernel) const {
             Modes coeff(modes.size());
@@ -223,11 +216,22 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         }
         void deposit(Workspace & w, Modes & result, bool observed) const {
             const double fill = std::pow(double(config_.density_mesh), 3) / layout().global_cells;
-            w.assignment.deposit(w.density, [&](auto add) {
-                for (size_t q = 0; q < cells(); ++q)
-                    stencil(q, w, [&](auto node, double weight, double, double, double) {
-                        add(node, fill * w.weight[q] * weight);
-                    });
+            // Row-wise over z; the per-node products and visit order equal stencil()'s.
+            w.assignment.deposit(w.density, [&](auto & add) {
+                const int width = stencil_width();
+                Taps t[3];
+                double values[16];
+                for (size_t q = 0; q < cells(); ++q) {
+                    particle_taps(q, w, t, false);
+                    const double mass = fill * w.weight[q];
+                    for (int a = 0; a < width; ++a)
+                        for (int b = 0; b < width; ++b) {
+                            const double wab = t[0].w[a] * t[1].w[b];
+                            for (int c = 0; c < width; ++c)
+                                values[c] = mass * (wab * t[2].w[c]);
+                            add.row(t[0].node[a], t[1].node[b], t[2].node, values, width);
+                        }
+                }
             });
             w.density.fftw_r2c();
             w.down.apply(w.density, w.base.grid);
@@ -472,15 +476,42 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             for (auto & v : xbar)
                 v.assign(cells(), 0);
             Field wbar(cells(), 0);
-            for (size_t q = 0; q < cells(); ++q)
-                stencil(q, w, [&](auto node, double weight, double dx, double dy, double dz) {
-                    const double bar = fill * w.assignment.at(reversed, node);
-                    wbar[q] += bar * weight;
-                    const double factor = bar * w.weight[q] * config_.density_mesh;
-                    xbar[0][q] += factor * dx;
-                    xbar[1][q] += factor * dy;
-                    xbar[2][q] += factor * dz;
-                }, true);
+            {
+                const int width = stencil_width();
+                const std::uint64_t n = config_.density_mesh;
+                Taps t[3];
+                const double scale = config_.density_mesh;
+                for (size_t q = 0; q < cells(); ++q) {
+                    particle_taps(q, w, t, true);
+                    // Register accumulators: the same additions, in order, as into the zeroed outputs.
+                    double sum_w = 0, sum_x = 0, sum_y = 0, sum_z = 0;
+                    const double particle_weight = w.weight[q];
+                    for (int a = 0; a < width; ++a)
+                        for (int b = 0; b < width; ++b) {
+                            const double * row = w.assignment.row(reversed, t[0].node[a], t[1].node[b]);
+                            const std::uint64_t key = (std::uint64_t(t[0].node[a]) * n + t[1].node[b]) * n;
+                            for (int c = 0; c < width; ++c) {
+                                const double value =
+                                    row ? row[t[2].node[c]] : w.assignment.at(reversed, key + t[2].node[c]);
+                                // Same expressions and order as stencil(): bitwise-identical gradients.
+                                const double weight = t[0].w[a] * t[1].w[b] * t[2].w[c];
+                                const double dx = t[0].dw[a] * t[1].w[b] * t[2].w[c];
+                                const double dy = t[0].w[a] * t[1].dw[b] * t[2].w[c];
+                                const double dz = t[0].w[a] * t[1].w[b] * t[2].dw[c];
+                                const double bar = fill * value;
+                                sum_w += bar * weight;
+                                const double factor = bar * particle_weight * scale;
+                                sum_x += factor * dx;
+                                sum_y += factor * dy;
+                                sum_z += factor * dz;
+                            }
+                        }
+                    wbar[q] = sum_w;
+                    xbar[0][q] = sum_x;
+                    xbar[1][q] = sum_y;
+                    xbar[2][q] = sum_z;
+                }
+            }
             Modes Q(modes().size(), 0);
             for (int c = 0; c < 3; ++c)
                 add_adjoint(xbar[c], w, Q, [&](const auto & m) {
