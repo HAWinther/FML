@@ -5,6 +5,19 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### FieldLevel: one LPT implementation, separable assignment sums, survey/catalog fixes
+- The serial `Model` is a single-rank front end over the distributed linear/LPT models (`SerialModel.h`;
+  `Framework.h` = `FrameworkCore.h` + distributed models + `Model`). Its former FieldLevelBAO-engine backend is
+  the test-only independent reference `tests/ReferenceModel.h`. Nested `Model::Layout`, `Reconstruction`
+  and `LinearConditional` are namespace-scope `FieldLayout`, `Reconstruction`, `LinearConditional` (aliases
+  kept). Shared `DETAIL::DistributedExecution` replaces four copies of the Execution controls/HMC code.
+- LPT deposition and reverse use separable tensor-product sums: a 2LPT posterior evaluation is 4.2x faster
+  than before the audit (64^3/128^3: 2.23 -> 0.53 s); results change at round-off, and LPT, Eulerian and
+  serial-Model checkpoint identities are versioned.
+- Survey observations round-trip-check Hermitian symmetry on the first prediction only
+  (`validate_every_prediction(true)` for every call). `PeriodicCatalog` adds `weighted_rows`;
+  `number_density` counts positive-weight rows.
+
 ### FieldLevel: audit fixes (faster assignment, posterior metric, checkpoint pruning)
 - Particle assignment (`DistributedAssignment.h`, used by LPT and PM) accumulates owned mesh nodes densely and
   exchanges only nodes owned by other ranks; slab/serial ownership is a key-range test. The LPT model deposits

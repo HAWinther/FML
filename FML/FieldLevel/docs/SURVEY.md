@@ -54,7 +54,10 @@ remain absent from the signal. The finite-box tracer mean is fixed by the
 forward model; survey-mean/integral-constraint marginalization is not automatic.
 
 `CartesianSurveyObservation` exposes `synthesize` and `adjoint` for custom
-likelihoods. Hermitian inputs are checked through its own reusable FFT plan.
+likelihoods. Hermitian symmetry is checked by an FFT round trip on its own plan for
+the first prediction, which catches a malformed forward; call
+`validate_every_prediction(true)` to check every one (two extra FFTs per evaluation,
+the behaviour before 22 November 2026).
 Constructor metadata, dimensions, finite values and geometry callback errors
 are checked collectively. All ranks must make the same calls in the same order.
 A rank may have no observed cells or no retained Fourier modes. Nonfinite

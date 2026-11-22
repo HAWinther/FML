@@ -148,7 +148,16 @@ The relevant code is [FieldLevelBAO.h](../FieldLevelBAO.h),
   is the 343-point stencil arithmetic in a fixed summation order; regrouping the
   products would save more but changes results at round-off. The PM model still
   uses per-node assignment (8/27-point stencils). Per-call workspace allocation is
-  unchanged. Full serial and MPI (1/2/4 ranks, slab and pencil) test
+  unchanged.
+  Further (22 November 2026, later): the LPT deposition and reverse now use
+  separable tensor-product sums (two products per node). Results change at
+  round-off (field gradient 2e-16 of its scale, scalars <4e-14 relative), so LPT,
+  Eulerian and serial-Model checkpoint identities are versioned. 64^3/128^3:
+  0.62 -> 0.53 s; 4.2x against the start of the audit. What remains is the reverse
+  pass's memory reads, the 3x(width+1) exponentials per particle and pass, and the
+  row scatter; caching taps between passes would need ~400 bytes per particle.
+  Workspace allocation was measured by disabling glibc's mmap path: no resolvable
+  difference at 32^3 or 64^3 (run-to-run noise ~10%), so no reuse rework was done. Full serial and MPI (1/2/4 ranks, slab and pencil) test
   suites pass.
 
 ## Resolved diagnostics issue
@@ -482,8 +491,16 @@ Open, not changed here:
 - FL-11: with fixed noise (and for the Poisson survey likelihood) the linear/LPT models
   still carry `log_noise_power` as a sampled, prior-only scalar. Removing it changes
   parameter layouts and checkpoint identities.
-- FL-12: the serial `Model` (via the `FieldLevelBAO` engine) and `DistributedLPT` implement
-  2LPT, bias weights and assignment taps separately; fixes must be applied twice.
-- FL-13: `CartesianSurveyObservation::synthesize` does an extra c2r/r2c round trip on every
-  evaluation for a Hermitian check; `PeriodicCatalog` statistics count zero-weight rows in
-  `rows`/`number_density`.
+
+Resolved later on 22 November 2026:
+
+- [x] FL-12: the serial `Model` now wraps `DistributedLinearModel`/`DistributedLPTModel`
+  (`SerialModel.h`); the FieldLevelBAO-engine version moved to the test-only
+  `tests/ReferenceModel.h`, which the serial/distributed agreement tests now use as an
+  independent reference. The copied `Execution<>` controls and HMC momentum code of four
+  forwards share `DETAIL::DistributedExecution`. The BAO prototype (`FieldLevelBAO.h`)
+  keeps its own engine for its own sampler, tests and examples.
+- [x] FL-13: the survey round-trip Hermitian check runs on the first prediction
+  (`validate_every_prediction(true)` restores every call); `PeriodicCatalog` reports
+  `weighted_rows` and bases `number_density` on positive weights; the misleading
+  indentation in `test_particle_mesh_observation.cpp` is fixed.

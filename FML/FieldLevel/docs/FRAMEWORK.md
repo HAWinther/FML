@@ -149,7 +149,12 @@ noise correction. Initial Cartesian survey/count observations are available in [
 
 ## Composition and workspaces
 
-`Model` is the built-in periodic forward implementation. `BasicPosterior<Forward,
+`Model` is the built-in serial periodic forward. Since 22 November 2026 it is a
+single-rank front end (`SerialModel.h`) over `DistributedLinearModel` and
+`DistributedLPTModel`, so linear/1LPT/2LPT, bias and assignment exist once in the
+library; it previously ran on the BAO prototype's engine, which is kept as the
+independent test reference `tests/ReferenceModel.h`. `Framework.h` includes the core
+(`FrameworkCore.h`), the distributed models and `Model`. `BasicPosterior<Forward,
 Likelihood>` composes a forward implementation and likelihood without depending on
 the internal LPT algorithm; `Posterior` is its default alias. MAP and HMC are generic
 over that posterior. A replacement forward must provide:
@@ -169,12 +174,12 @@ outlive posteriors and workspaces; rvalue-model posterior construction is reject
 Pullbacks require the matching successful forward evaluation and parameter state.
 Reacquire returned prediction views after another prediction. Construct FFT
 workspaces outside concurrent regions; no concurrent-chain thread-safety claim is
-made in this initial release. The shared kernel still allocates some intermediates;
-FL-6's profiling/reuse work remains open. No allocation/time speedup is claimed.
+made in this initial release. The forward still allocates intermediates per call;
+measured on 32^3-64^3 LPT this costs no resolvable time (see FL-6).
 
 Current layout metadata explicitly identifies global mesh/cells and owned start,
-width/cells. `Model` owns a full grid and supports one FML rank only; multi-rank
-construction still rejects before allocation. For distributed linear inference,
+width/cells. `Model` supports one FML rank only; multi-rank construction is
+rejected before allocation. For distributed linear inference,
 use `DistributedLinearModel` below; `DistributedLPTModel` supplies the particle
 exchange and nonlinear adjoints in stages 4b–4c.
 

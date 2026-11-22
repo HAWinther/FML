@@ -20,7 +20,9 @@ The zero mode and every Nyquist plane are set to exactly zero. No shot noise is
 subtracted from the observed field. `poisson_power` is an independent-object
 Poisson **reference**, not an estimate of the actual stochastic covariance of
 clustered galaxies. For unit weights, C=1/N and P=L^3/N. Zero weights are allowed;
-`rows` still counts those entries, while effective count/variance use their weights.
+`rows` still counts those entries; `weighted_rows` and `number_density` count only
+positive weights (before 22 November 2026 `number_density` used `rows`), and effective
+count/variance use the weights.
 Negative/nonfinite weights and nonfinite coordinates are rejected collectively.
 At least one positive weight is required globally. Physical length units of
 positions, origin and boxsize must agree; no cosmology/redshift conversion is
