@@ -66,6 +66,10 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
   by fractions of a cell (`generate_interlacing_shifts`, as SimulationCode's `force_interlacing_order`). Sheet with
   PCS on a 2x grid goes from 5.2e-4 to 2.1e-4 (one step 0.0512). Plain PM barely changes: its near-lattice error is
   the lattice's discreteness, not aliasing.
+- Fixed: `make_force_pm` with `deconvolve` divided out only the assignment window, not the interpolation window.
+  PCS on a 1x grid is now within 1.3e-3 of the exact force (4.4e-4 with `interlacing_order = 2`; one step 0.0517
+  against 0.0509 exact), as good as the sheet. On a grid finer than the particles the deconvolution amplifies the
+  lattice's discreteness at the grid Nyquist frequency (force 50% too large near the lattice); documented.
 - Fixed: `make_force_pm` and `make_force_sheet` interpolated the force without `communicate_boundaries()`, so the
   ghost slices at the periodic boundary were stale. The sheet force with PCS seemed 5-7% off and plain PM 9-17%.
 - Tests (64^3, exact force; errors in the beyond-Zel'dovich displacement against 64 BullFrog steps, smooth field,

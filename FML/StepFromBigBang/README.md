@@ -71,16 +71,19 @@ field, 64³):
 | `make_force_sheet`, R = 2, NUFFT density and interpolation (default) | 1.6×10⁻⁶ | 0.0509 |
 | `make_force_sheet`, R = 2, PCS with deconvolution, 1× / 2× grid | 4.4×10⁻⁴ / 5.2×10⁻⁴ | 0.0518 / 0.0520 |
 | the same on the 2× grid, `interlacing_order = 2` (4 gives the same) | 2.1×10⁻⁴ | 0.0512 |
-| `make_force_pm`, CIC 1× / PCS 1× (interlaced density, deconvolved) | 4.9% / – | 1.03 / 0.49 |
-| `make_force_pm` on a 2× grid (CIC; PCS deconvolved, also with `interlacing_order = 2`) | 8-17% | 1.6-3.4 |
+| `make_force_pm`, PCS 1×, deconvolved / also `interlacing_order = 2` | 1.3×10⁻³ / 4.4×10⁻⁴ | 0.0517 |
+| `make_force_pm`, CIC 1× (no deconvolution) | 4.9% | 1.03 |
+| `make_force_pm` on a 2× grid: CIC / PCS deconvolved | 17% / 100% | 3.4 / 21 |
 
 - **Sheet interpolation** works from the displacement field x − q, so the lattice's discreteness does not enter the
   density. With NUFFT it is the exact force. With PCS and deconvolution it is within 0.05% (0.02% interlaced), so it is
   a cheaper alternative on large grids. The particle type needs `get_q`; `NBodyInitialConditions` fills it, and
   `make_start_particles` shifts it with the lattice.
-- **Plain PM** near the lattice has the assignment window, and on a finer grid the lattice's discreteness above the
-  particle Nyquist frequency. Interlacing does not remove the discreteness. Its mean force is right (projection
-  0.99-1.01).
+- **Plain PM** on a grid with one cell per particle, PCS and deconvolution (both windows) is as good as the sheet
+  near the lattice. Without deconvolution the assignment window costs 5% (CIC). On a finer grid the lattice's
+  discreteness sits at the grid's Nyquist frequency, where the window is smallest. Deconvolution amplifies it (by
+  ~1/W² ≈ 40 per dimension for PCS), and interpolating back to the particles folds it into every k. So do not
+  deconvolve plain PM on a grid finer than the particles near the lattice; use the sheet there.
 - **Interlacing** (`interlacing_order` in `make_force_pm` and `make_force_sheet`) averages the force over copies of
   the particles shifted by fractions of a cell, as SimulationCode's `force_interlacing_order`. It cancels the leading
   aliasing of the assignment and the interpolation. In `make_force_pm`, `interlacing` (two shifted grids for the

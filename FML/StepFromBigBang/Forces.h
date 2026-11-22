@@ -139,7 +139,10 @@ namespace FML::STEPFROMBIGBANG {
     /// Particle-mesh force on an nmesh^NDIM grid with the given mass assignment (interpolation with the same kernel).
     /// interlacing: the density from two grids shifted by half a cell (alias-corrected density only).
     /// interlacing_order > 1: the force averaged over that many shifted copies of the particles (density and
-    /// interpolation, as SimulationCode's force_interlacing_order). deconvolve: divide out the windows.
+    /// interpolation, as SimulationCode's force_interlacing_order). deconvolve: divide out both windows in the force
+    /// (the assignment and the interpolation). Near the lattice, deconvolve only with nmesh = Npart_1D: on a finer grid
+    /// the lattice's discreteness sits at the grid's Nyquist frequency and the deconvolution amplifies it (PCS on a 2x
+    /// grid: the force 50% too large). Use make_force_sheet there.
     template <int NDIM, class P>
     typename StepFromBigBang<NDIM, P>::ForceFunction
     make_force_pm(int nmesh,
@@ -161,8 +164,6 @@ namespace FML::STEPFROMBIGBANG {
                                                                       density,
                                                                       assignment,
                                                                       interlacing);
-                if (deconvolve)
-                    FML::INTERPOLATION::deconvolve_window_function_fourier<NDIM>(density, assignment);
                 if (filter or mu_of_a_kBox) {
                     FML::GRID::for_each_fourier_mode<NDIM>(density, [&](size_t i, double kBox) {
                         double r = mu_of_a_kBox ? mu_of_a_kBox(a, kBox) : 1.0;
@@ -172,8 +173,12 @@ namespace FML::STEPFROMBIGBANG {
                                                        density.get_fourier_from_index(i) * FML::GRID::FloatType(r));
                     });
                 }
+                // Deconvolution divides out both windows in the force: the assignment and the interpolation
+                FML::NBODY::ForceOptions options;
+                options.deconvolve = deconvolve;
+                options.deconvolve_window_power = 2;
                 std::array<FML::GRID::FFTWGrid<NDIM>, NDIM> force_real;
-                FML::NBODY::compute_force_from_density_fourier<NDIM>(density, force_real, assignment, 1.0);
+                FML::NBODY::compute_force_from_density_fourier<NDIM>(density, force_real, assignment, 1.0, options);
                 F.assign(NDIM, {});
                 for (int d = 0; d < NDIM; d++) {
                     force_real[d].communicate_boundaries();

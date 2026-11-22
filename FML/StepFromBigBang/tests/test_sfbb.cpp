@@ -164,6 +164,113 @@ int main(int argc, char ** argv) {
     if (const char * e = std::getenv("NUFFT_EPS"))
         NUFFT_EPS = std::stod(e);
 
+    if (mode == "dump") {
+        // Data for the accuracy figure. test_sfbb dump N kcut sigma outdir job...  (EdS, D = 1 at the end)
+        //   ref: 64 BullFrog and 32 lpt3 steps; ic: Zel'dovich, 2LPT, 3LPT (dealiased, no curl); bf: 1..16 BullFrog;
+        //   l3: 1..8 lpt3; fv: one BullFrog step with each force; forces: the force of each method at the Zel'dovich
+        //   configuration at D = 1/2 (the exact one first); forces_late: the same after 16 BullFrog steps (D = 1).
+        //   Displacements x - q (or forces) as doubles by id.
+        const double kcut = std::stod(argv[3]), sigma = std::stod(argv[4]);
+        const std::string out = argv[5];
+        auto g = growth_EdS();
+        auto kappa0 = [](double a) { return 1.5 * std::sqrt(a); };
+        auto delta = make_delta(kcut, sigma);
+        Settings s;
+        s.a_start = 1e-7;
+        s.a_end = 1.0;
+        s.verbose = false;
+        auto save = [&](const std::string & name, const std::vector<std::array<double, 3>> & d) {
+            FILE * fp = fopen((out + "/" + name + ".bin").c_str(), "wb");
+            fwrite(d.data(), sizeof(double), 3 * d.size(), fp);
+            fclose(fp);
+            std::cout << "wrote " << name << "\n" << std::flush;
+        };
+        auto exists = [&](const std::string & name) {
+            FILE * fp = fopen((out + "/" + name + ".bin").c_str(), "rb");
+            if (fp)
+                fclose(fp);
+            return fp != nullptr;
+        };
+        auto run = [&](const std::string & name, const std::string & scheme, int n, SFBB::ForceFunction f) {
+            if (exists(name))
+                return;
+            auto ss = s;
+            ss.scheme = scheme;
+            ss.nsteps = n;
+            Particles part;
+            generate_particles_from_big_bang<NDIM, Part>(part, NP, 1.5, delta, 1.0, g, f, ss);
+            save(name, state_of(part).d);
+        };
+        auto exact = make_force_nufft<NDIM, Part>(NP, kappa0);
+        std::vector<std::pair<std::string, SFBB::ForceFunction>> variants{
+            {"sheet_nufft", make_force_sheet<NDIM, Part>(NP, NP, kappa0, nullptr, 2, "NUFFT", "NUFFT")},
+            {"sheet_PCS_1x", make_force_sheet<NDIM, Part>(NP, NP, kappa0, nullptr, 2, "PCS", "PCS", true)},
+            {"sheet_PCS_2x", make_force_sheet<NDIM, Part>(2 * NP, NP, kappa0, nullptr, 2, "PCS", "PCS", true)},
+            {"sheet_PCS_2x_il2", make_force_sheet<NDIM, Part>(2 * NP, NP, kappa0, nullptr, 2, "PCS", "PCS", true, 2)},
+            {"pm_CIC_1x", make_force_pm<NDIM, Part>(NP, kappa0, nullptr, "CIC", false, false)},
+            {"pm_PCS_1x_dc", make_force_pm<NDIM, Part>(NP, kappa0, nullptr, "PCS", false, true)},
+            {"pm_PCS_1x_dc_il2", make_force_pm<NDIM, Part>(NP, kappa0, nullptr, "PCS", false, true, 2)},
+            {"pm_CIC_2x", make_force_pm<NDIM, Part>(2 * NP, kappa0, nullptr, "CIC", false, false)},
+            {"pm_PCS_2x_dc", make_force_pm<NDIM, Part>(2 * NP, kappa0, nullptr, "PCS", false, true)},
+            {"pm_PCS_2x_dc_il2", make_force_pm<NDIM, Part>(2 * NP, kappa0, nullptr, "PCS", false, true, 2)}};
+        for (int i = 6; i < argc; i++) {
+            const std::string job = argv[i];
+            if (job == "ref") {
+                run("bf64", "bullfrog", 64, exact);
+                run("l3_32", "lpt3", 32, exact);
+            } else if (job == "ic") {
+                if (not exists("za"))
+                    save("za", lpt_state(delta, 1).d);
+                if (not exists("lpt2"))
+                    save("lpt2", lpt_state(delta, 2).d);
+                if (not exists("lpt3"))
+                    save("lpt3", lpt_state(delta, 3).d);
+            } else if (job == "bf") {
+                for (int n : {1, 2, 4, 8, 16})
+                    run("bf" + std::to_string(n), "bullfrog", n, exact);
+            } else if (job == "l3") {
+                for (int n : {1, 2, 4, 8})
+                    run("l3_" + std::to_string(n), "lpt3", n, exact);
+            } else if (job == "fv") {
+                for (auto & [name, f] : variants)
+                    run("bf1_" + name, "bullfrog", 1, f);
+            } else if (job == "forces" or job == "forces_late") {
+                // forces: at the Zel'dovich configuration at D = 1/2 (near the lattice); forces_late: at the end of 16
+                // BullFrog steps (D = 1, far from the lattice for sigma ~ 1)
+                const bool late = job == "forces_late";
+                const std::string prefix = late ? "lateforce_" : "force_";
+                const double a = late ? 1.0 : 0.5;
+                Particles part;
+                if (late) {
+                    auto ss = s;
+                    ss.nsteps = 16;
+                    generate_particles_from_big_bang<NDIM, Part>(part, NP, 1.5, delta, 1.0, g, exact, ss);
+                } else {
+                    auto ss = s;
+                    ss.a_start = 0.5;
+                    SFBB sfbb(g, exact, ss);
+                    sfbb.make_start_particles(part, NP, 1.5, delta, 1.0);
+                }
+                auto get = [&](const std::string & name, SFBB::ForceFunction f) {
+                    if (exists(prefix + name))
+                        return;
+                    for (auto & p : part)
+                        for (int d = 0; d < 3; d++)
+                            p.scr[d] = 0;
+                    f(part, a, nullptr, {{Target::Scratch, 1.0}});
+                    std::vector<std::array<double, 3>> F(part.get_npart_total());
+                    for (auto & p : part)
+                        F[p.get_id()] = {p.scr[0], p.scr[1], p.scr[2]};
+                    save(prefix + name, F);
+                };
+                get("exact", exact);
+                for (auto & [name, f] : variants)
+                    get(name, f);
+            }
+        }
+        return 0;
+    }
+
     if (mode == "forcecmp") {
         auto g = growth_EdS();
         auto kappa0 = [](double a) { return 1.0 + 0 * a; };
@@ -189,6 +296,8 @@ int main(int argc, char ** argv) {
         std::vector<std::pair<std::string, SFBB::ForceFunction>> forces{
             {"CIC 1x", make_force_pm<NDIM, Part>(NP, kappa0, nullptr, "CIC", false, false)},
             {"CIC 2x", make_force_pm<NDIM, Part>(2 * NP, kappa0, nullptr, "CIC", false, false)},
+            {"PCS 1x dc", make_force_pm<NDIM, Part>(NP, kappa0, nullptr, "PCS", false, true)},
+            {"PCS 1x dc interlaced 2", make_force_pm<NDIM, Part>(NP, kappa0, nullptr, "PCS", false, true, 2)},
             {"PCS 2x il+dc", make_force_pm<NDIM, Part>(2 * NP, kappa0, nullptr, "PCS", true, true)},
             {"sheet R=2 nufft 1x", make_force_sheet<NDIM, Part>(NP, NP, kappa0, nullptr, 2, "NUFFT", "NUFFT")},
             {"sheet R=4 nufft 1x", make_force_sheet<NDIM, Part>(NP, NP, kappa0, nullptr, 4, "NUFFT", "NUFFT")},
