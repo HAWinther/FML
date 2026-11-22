@@ -96,8 +96,8 @@ unchanged. There were no supported PM checkpoints before this adapter.
 
 Checksummed rank shards are written to a new generation. `CURRENT` is published
 only after all shards finish; a failed write leaves the previous generation usable.
-Older and failed/orphaned generations are retained; there is no automatic garbage
-collection. Normal shared-filesystem and existing checkpoint durability assumptions
+Superseded and failed/orphaned generations are deleted after each successful save,
+except the generation just replaced; `keep_previous_generations` retains them all. Normal shared-filesystem and existing checkpoint durability assumptions
 apply. This does not add PM survey/tracer/RSD likelihoods or cosmological derivatives.
 
 ## Build and run

@@ -217,7 +217,7 @@ invocation; acceptance/divergence statistics and iteration counts are cumulative
 The rank count, ownership, build/precision/thread configuration and full schedule
 must match. The same shared-filesystem, atomic-generation publication and
 one-writer contracts as [periodic checkpoints](FRAMEWORK.md#checkpointrestart-stage-4e-13-november-2026)
-apply; old/incomplete generations remain for caller cleanup, with no fsync or
+apply; older/incomplete generations are pruned as described there, with no fsync or
 transactional output-sink guarantee.
 
 Identity checking includes the likelihood family/law version, mask, selection,

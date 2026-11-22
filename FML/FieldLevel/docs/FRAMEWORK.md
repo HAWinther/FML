@@ -791,8 +791,11 @@ FNV-1a checksums detect accidental corruption and are not authentication.
 
 Use a dedicated directory for **one writer job**, on a shared filesystem supporting
 POSIX-style atomic rename. A checkpoint set may be copied to another shared path.
-Older and incomplete generations are intentionally retained; storage cleanup is
-caller-managed. No fsync/power-loss durability or automatic fallback from a damaged
+After each successful publication rank zero deletes every generation except the
+new one and the one it replaced, including incomplete ones from failed writes, so a
+reader that resolved `CURRENT` just before a save keeps its files for one more
+checkpoint interval. Set `CheckpointOptions::keep_previous_generations = true` to keep
+the full history (the behaviour before 22 November 2026). No fsync/power-loss durability or automatic fallback from a damaged
 manifest is claimed. The tested failure case injects a one-rank write error before
 manifest publication; fresh-process restarts exercise normal process termination.
 

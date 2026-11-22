@@ -4,6 +4,7 @@
 #include <FML/FieldLevel/ForwardGrid.h>
 #include <FML/MCMC/HMCCheckpoint.h>
 #include <filesystem>
+#include <iostream>
 #include <chrono>
 #include <typeinfo>
 #include <type_traits>
@@ -16,6 +17,10 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         bool resume = false;
         int every = 0;                // Trajectories including warmup; final boundary always saved.
         int max_iterations = INT_MAX; // Per-call budget, not a new warmup/sample schedule.
+        // Every save writes a complete new generation. By default, once CURRENT points at the new
+        // generation, all generations except it and the one it replaced are deleted (a reader that
+        // resolved CURRENT just before the save keeps its files). Set true to retain the full history.
+        bool keep_previous_generations = false;
     };
     namespace CHECKPOINT {
         namespace Codec = FML::MCMC::CHECKPOINT;
@@ -208,13 +213,47 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 "Checkpoint manifest read");
             return broadcast_string(gen);
         }
-        inline void save(const FS::path & directory, const State & state) {
+        inline bool is_generation_name(const std::string & name) {
+            return name.rfind("g-", 0) == 0 && name.size() > 2 &&
+                   name.find_first_not_of("g-0123456789") == std::string::npos;
+        }
+        // Rank 0 only, after CURRENT names `current`. Failures are reported, never fatal:
+        // a leftover generation costs disk space but cannot be loaded by mistake.
+        inline void prune_generations(const FS::path & directory, const std::string & current,
+                                      const std::string & previous) {
+            std::error_code error;
+            std::vector<FS::path> stale;
+            for (FS::directory_iterator it(directory, error), end; !error && it != end; it.increment(error)) {
+                const auto name = it->path().filename().string();
+                if (name != current && name != previous && is_generation_name(name) && it->is_directory(error))
+                    stale.push_back(it->path());
+            }
+            for (const auto & path : stale) {
+                std::error_code removal;
+                FS::remove_all(path, removal);
+                if (removal)
+                    std::cerr << "[Field checkpoint] Could not remove superseded generation " << path << ": "
+                              << removal.message() << '\n';
+            }
+        }
+        inline void save(const FS::path & directory, const State & state, bool keep_previous = true) {
             replicas(state);
-            std::string generation;
+            std::string generation, previous;
             FML::COMMUNICATION::collective_try(
                 [&] {
                     if (FML::ThisTask == 0) {
                         FS::create_directories(directory);
+                        // The generation being superseded is retained by pruning (best effort).
+                        try {
+                            const auto bytes = Codec::read_file((directory / "CURRENT").string(), 4096);
+                            Codec::Decoder d{bytes};
+                            if (d.text(64) == "FML field manifest 1") {
+                                d.size(INT_MAX);
+                                previous = d.text(128);
+                            }
+                        } catch (...) {
+                            previous.clear();
+                        }
                         const auto tick =
                             std::uint64_t(std::chrono::high_resolution_clock::now().time_since_epoch().count());
                         for (unsigned attempt = 0; attempt < 1000; ++attempt) {
@@ -267,6 +306,9 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                     }
                 },
                 "Checkpoint manifest publication");
+            // Every rank has finished its shard (the collective above), and loads only read CURRENT.
+            if (!keep_previous && FML::ThisTask == 0)
+                prune_generations(directory, generation, previous);
         }
         inline State load(const FS::path & directory,
                           const std::string & expected_identity,
@@ -356,7 +398,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         control.checkpoint_every = io.every;
         int last_saved = -1;
         control.checkpoint = [&](const auto &) {
-            save(directory, state);
+            save(directory, state, io.keep_previous_generations);
             last_saved = state.sampler.next_iteration;
         };
         auto result = DETAIL::sample_run(posterior,
@@ -368,7 +410,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                                          state.frozen,
                                          control);
         if (last_saved != state.sampler.next_iteration)
-            save(directory, state);
+            save(directory, state, io.keep_previous_generations);
         return result;
     }
 } // namespace FML::FIELDLEVEL::FRAMEWORK

@@ -116,6 +116,32 @@ static void exercise(const FS::path & root, const std::string & phase, FF::Confi
                         fixed.potential == fixed_full.potential && fixed.acceptance == fixed_full.acceptance &&
                         fixed.step_size == fixed_full.step_size,
                     name + " fixed-parameter disk restart preserves field trajectory exactly");
+        auto count_generations = [&](const std::string & directory) {
+            int generations = 0;
+            FML::COMMUNICATION::collective_try(
+                [&] {
+                    if (FML::ThisTask == 0)
+                        for (const auto & entry : FS::directory_iterator(directory))
+                            generations += CP::is_generation_name(entry.path().filename().string());
+                },
+                "Checkpoint generation count");
+            FML::MaxOverTasks(&generations);
+            return generations;
+        };
+        auto pruned_io = fixed_io;
+        pruned_io.directory = (root / (name + "-pruned")).string();
+        pruned_io.resume = false;
+        pruned_io.every = 4;
+        pruned_io.max_iterations = INT_MAX;
+        const auto pruned = FF::sample_checkpointed(posterior, model.white_noise(13), p, fixed_options, pruned_io, false);
+        check_local(count_generations(pruned_io.directory) == 2 && pruned.recorded == fixed_full.recorded,
+                    name + " only the current and superseded generations are retained");
+        auto kept_io = pruned_io;
+        kept_io.directory = (root / (name + "-kept")).string();
+        kept_io.keep_previous_generations = true;
+        FF::sample_checkpointed(posterior, model.white_noise(13), p, fixed_options, kept_io, false);
+        const int generations = count_generations(kept_io.directory);
+        check_local(generations > 2, name + " keep_previous_generations retains the history");
     }
     if (phase == "resume" || phase == "all") {
         FML::MCMC::HMCResult expected;
@@ -144,6 +170,7 @@ static void exercise(const FS::path & root, const std::string & phase, FF::Confi
                         suffix.completed_iterations == 150 && suffix.completed_samples == 30,
                     name + " cumulative adaptation/acceptance/divergence results preserved exactly");
         io.max_iterations = 0;
+        io.keep_previous_generations = true; // The fixtures below reuse this older generation.
         const auto generation = CP::current_generation(io.directory);
         if (FML::ThisTask == 0)
             CP::fail_shard_write_once = true;

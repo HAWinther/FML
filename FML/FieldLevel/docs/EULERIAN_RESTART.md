@@ -65,8 +65,9 @@ Each checkpoint generation has one checksummed rank shard. `CURRENT` is publishe
 only after all ranks have written and closed their complete shards. An interrupted
 or failed write leaves the previous complete generation available. A corrupt or
 missing shard fails collectively. This is process-failure/atomic-publication
-protection; no machine-power-loss/fsync durability test is claimed. Keep generation
-files while a reader may still reference them.
+protection; no machine-power-loss/fsync durability test is claimed. Each save keeps the new
+and the superseded generation and deletes older ones; set `keep_previous_generations`
+if a reader may hold an older generation for longer.
 
 The generic driver does not transactionally manage application chain files.
 `example/EulerianCheckpoint.cpp` demonstrates indexed output records: each draw is
