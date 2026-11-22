@@ -346,7 +346,7 @@ Three schemes:
 <li><tt>hybrid</tt>: scale-dependent FastPM steps (each mode follows its own $D(k, a)$), then BullFrog. For massive neutrinos and $G_{\rm eff}(k,a)$.</li>
 </ul>
 <p>
-With $64^3$ particles and the exact force, at 4 force evaluations the error in the beyond-Zel'dovich displacement is $3.3\times10^{-3}$ for <tt>lpt3</tt> against $1.1\times10^{-2}$ for BullFrog (smooth field, $\sigma = 0.3$). That holds in EdS and in $\Lambda$CDM with radiation from $z = 10^6$. The force must be accurate near the lattice: a particle-mesh force there differs from the exact one by 9-17%, so the NUFFT force is the default.
+With $64^3$ particles and the exact force, at 4 force evaluations the error in the beyond-Zel'dovich displacement is $3.3\times10^{-3}$ for <tt>lpt3</tt> against $1.1\times10^{-2}$ for BullFrog (smooth field, $\sigma = 0.3$). That holds in EdS and in $\Lambda$CDM with radiation from $z = 10^6$. The force must be accurate near the lattice: a particle-mesh force there differs from the exact one by 9-17%, so the NUFFT force is the default. Sheet interpolation of the displacement field (<tt>make_force_sheet</tt>, with NUFFT for the density and the interpolation) gives the same force to $2\times10^{-6}$.
 </p>
 <div style="text-align: center">
   <div style="width:600px;display: inline-block;text-align: left">

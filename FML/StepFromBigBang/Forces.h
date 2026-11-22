@@ -12,11 +12,16 @@
 //   make_force_nufft : the exact force of the particles up to the mesh's Nyquist frequency (NUFFT): no assignment
 //                      window, no aliasing, no lattice artefacts. The right choice near the lattice (early times).
 //   make_force_pm    : particle-mesh with a mass assignment (NGP .. PQS), optional interlacing and deconvolution.
+//   make_force_sheet : the density from sheet interpolation of the displacement field x - q (refined R times;
+//                      Interpolation/SheetInterpolation.h), so the lattice's discreteness does not enter the density.
+//                      Needs particles with a Lagrangian position (get_q) that started on the lattice.
 // =====================================================================================================================
 
 #include <FML/Cosmology/Background/Background.h>
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
+#include <FML/Interpolation/SheetInterpolation.h>
+#include <FML/NBody/ForceOptions.h>
 #include <FML/NBody/NBody.h>
 #include <FML/NUFFT/NUFFT.h>
 #include <FML/StepFromBigBang/StepFromBigBang.h>
@@ -118,6 +123,78 @@ namespace FML::STEPFROMBIGBANG {
                 double f[NDIM];
                 for (int d = 0; d < NDIM; d++)
                     f[d] = -k0 * F[d][i]; // as the NUFFT: norm 1 gives +grad laplace^-1 delta
+                add_to_targets<NDIM>(p[i], f, targets);
+            }
+        };
+    }
+
+    /// Force from sheet interpolation: the density of the sheet spanned by the particles' displacement field (on the
+    /// Npart_1D lattice, refined `refinement` times), then the force on an nmesh grid.
+    ///   density_assignment: how the sheet tracers are put on the grid: "NUFFT" (exact Fourier modes, no window) or
+    ///                       NGP .. PQS (with that window);
+    ///   interpolation:      "NUFFT" (the force's Fourier series evaluated exactly at the particles) or NGP .. PQS;
+    ///   deconvolve:         divide out the windows of the assignment and the interpolation that were used.
+    /// "NUFFT" for both is SimulationCode's force_density_method = sheet_nufft with nufft interpolation.
+    template <int NDIM, class P>
+    typename StepFromBigBang<NDIM, P>::ForceFunction
+    make_force_sheet(int nmesh,
+                     int Npart_1D,
+                     std::function<double(double)> kappa0,
+                     std::function<double(double, double)> mu_of_a_kBox = nullptr,
+                     int refinement = 2,
+                     std::string density_assignment = "NUFFT",
+                     std::string interpolation = "NUFFT",
+                     bool deconvolve = true,
+                     double nufft_epsilon = 1e-10) {
+        static_assert(FML::PARTICLE::has_get_q<P>(), "make_force_sheet needs particles with get_q");
+        using Particles = typename StepFromBigBang<NDIM, P>::Particles;
+        using Filter = typename StepFromBigBang<NDIM, P>::Filter;
+        const bool interp_nufft = (interpolation == "NUFFT" or interpolation == "nufft");
+        const bool dens_nufft = (density_assignment == "NUFFT" or density_assignment == "nufft");
+        return [=](Particles & part, double a, const Filter & filter, const std::vector<Target> & targets) {
+            const auto nextra = FML::INTERPOLATION::get_extra_slices(interp_nufft ? std::string("CIC") : interpolation);
+            FML::GRID::FFTWGrid<NDIM> density(nmesh, nextra.first, nextra.second);
+            FML::INTERPOLATION::particles_to_fourier_grid_sheet<NDIM, P>(part.get_particles_ptr(),
+                                                                          part.get_npart(),
+                                                                          Npart_1D,
+                                                                          refinement,
+                                                                          density,
+                                                                          dens_nufft ? std::string("NUFFT")
+                                                                                     : density_assignment,
+                                                                          nufft_epsilon);
+            if (filter or mu_of_a_kBox) {
+                FML::GRID::for_each_fourier_mode<NDIM>(density, [&](size_t i, double kBox) {
+                    double r = mu_of_a_kBox ? mu_of_a_kBox(a, kBox) : 1.0;
+                    if (filter)
+                        r *= filter(kBox);
+                    density.set_fourier_from_index(i, density.get_fourier_from_index(i) * FML::GRID::FloatType(r));
+                });
+            }
+            // The windows in the force: the assignment of the tracers and the interpolation (none for NUFFT)
+            FML::NBODY::ForceOptions options;
+            options.deconvolve_window_power = int(not dens_nufft) + int(not interp_nufft);
+            options.deconvolve = deconvolve and options.deconvolve_window_power > 0;
+            const std::string window = not dens_nufft ? density_assignment : (interp_nufft ? "CIC" : interpolation);
+            std::array<FML::GRID::FFTWGrid<NDIM>, NDIM> force_real;
+            FML::NBODY::compute_force_from_density_fourier<NDIM>(density, force_real, window, 1.0, options);
+            std::vector<std::vector<FML::GRID::FloatType>> F(NDIM);
+            auto * p = part.get_particles_ptr();
+            if (interp_nufft) {
+                FML::NUFFT::ESKernel kernel(nufft_epsilon);
+                for (int d = 0; d < NDIM; d++) {
+                    force_real[d].fftw_r2c();
+                    FML::NUFFT::nufft_type2<NDIM>(force_real[d], p, part.get_npart(), F[d], kernel);
+                }
+            } else {
+                for (int d = 0; d < NDIM; d++)
+                    FML::INTERPOLATION::interpolate_grid_to_particle_positions<NDIM, P>(
+                        force_real[d], p, part.get_npart(), F[d], interpolation);
+            }
+            const double k0 = kappa0(a);
+            for (size_t i = 0; i < part.get_npart(); i++) {
+                double f[NDIM];
+                for (int d = 0; d < NDIM; d++)
+                    f[d] = -k0 * F[d][i];
                 add_to_targets<NDIM>(p[i], f, targets);
             }
         };

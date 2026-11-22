@@ -20,8 +20,8 @@ not continuous LPT. Near the particle Nyquist frequency these differ: a referenc
 Header only:
 - `StepFromBigBang.h`: the schemes;
 - `Growth.h`: the growth history;
-- `Forces.h`: ready-made force functions, the growth model of a `Background`, and the one-call
-  `generate_particles_from_big_bang`.
+- `Forces.h`: ready-made force functions (exact NUFFT, sheet interpolation, PM), the growth model of a `Background`,
+  and the one-call `generate_particles_from_big_bang`.
 
 Tests are in `tests/`. The derivations are in the note `lpt3step.pdf` (Documentation).
 
@@ -62,11 +62,24 @@ auto force = [&](MPIParticles<P> & part, double a, const std::function<double(do
 **Step by step.** `StepFromBigBang<NDIM, P> sfbb(growth, force, settings)`, then
 `sfbb.make_start_particles(part, Npart_1D, buffer, delta_fourier, a_ref, lattice_shift)`, then `sfbb.run(part)`.
 
-**Which force.** Use `make_force_nufft`, the exact force band-limited at the mesh's Nyquist frequency. Near the
-lattice a particle-mesh force (`make_force_pm`) differs from it by 9-17% rms in a Zel'dovich configuration at half the
-final growth. The causes are the assignment window, and on a finer grid the lattice's discreteness above the particle
-Nyquist frequency. Over one step that is ~2× the beyond-Zel'dovich displacement; the mean force is right (projection
-0.98-1.005). `make_force_pm` is for later times or for comparisons.
+**Which force.** Three ready-made forces, compared in a Zel'dovich configuration at half the final growth (smooth
+field, 64³):
+
+| Force | rms difference from the exact force | One BullFrog step, error / beyond-Zel'dovich |
+|---|---|---|
+| `make_force_nufft` (exact, band-limited at the mesh's Nyquist frequency) | 0 | 0.051 |
+| `make_force_sheet`, R = 2, NUFFT density and interpolation | 1.6×10⁻⁶ | 0.051 |
+| `make_force_sheet`, R = 2, PCS with deconvolution, 1× / 2× grid | 7% / 5% | 1.5 / 1.1 |
+| `make_force_pm`, CIC or PCS (interlaced, deconvolved), 1× or 2× grid | 9-17% | 1.6-3.6 |
+
+- `make_force_nufft`: the exact force of the particles.
+- `make_force_sheet` with `"NUFFT"` for both the density and the interpolation (the default) gives the same result. It
+  works from the displacement field x − q, so the lattice's discreteness does not enter the density. The particle type
+  then needs `get_q`; `NBodyInitialConditions` fills it, and `make_start_particles` shifts it with the lattice.
+- With a mass assignment instead, the windows and aliasing leave 5-7% in the force.
+- A particle-mesh force near the lattice has the assignment window, and on a finer grid the lattice's discreteness
+  above the particle Nyquist frequency. Its mean force is right (projection 0.98-1.005).
+- Use the NUFFT or the sheet force with NUFFT for the IC phase; `make_force_pm` is for later times or comparisons.
 
 ## Conventions
 
@@ -77,7 +90,8 @@ Nyquist frequency. Over one step that is ~2× the beyond-Zel'dovich displacement
 - **Growth factors:** `GrowthModel` uses EdS-normalised higher orders, r₂ = −7/3 D₂, r₃a = −3 D₃a, r₃b = 21/5 D₃b, and
   the transverse r₃c, which the module integrates. In EdS they are D₁² and D₁³.
 - **Particle type:** needs `get_pos()` and `get_vel()`. `lpt3` also needs `get_sfbb_scratch()`: one more vector per
-  particle, which moves with the particle under MPI. `set_id()` is used if present.
+  particle, which moves with the particle under MPI. `make_force_sheet` needs `get_q()`. `set_id()` is used if
+  present.
 
 ## The force decomposition used by `lpt3`
 

@@ -202,6 +202,14 @@ namespace FML::STEPFROMBIGBANG {
                     auto * x = p.get_pos();
                     for (int d = 0; d < NDIM; d++)
                         x[d] += lattice_shift;
+                    // The Lagrangian position moves with the lattice (sheet interpolation uses x - q)
+                    if constexpr (FML::PARTICLE::has_get_q<P>()) {
+                        auto * q = FML::PARTICLE::GetLagrangianPos(p);
+                        for (int d = 0; d < NDIM; d++) {
+                            q[d] += lattice_shift;
+                            q[d] -= std::floor(q[d]);
+                        }
+                    }
                 }
                 wrap_and_communicate(part);
             }

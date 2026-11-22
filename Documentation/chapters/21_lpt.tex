@@ -275,7 +275,9 @@ crossing it is worse than BullFrog.
 
 The force must be accurate near the lattice. A particle-mesh force differs from the exact one by 9--17\% rms there,
 which over a step is $\sim2\times$ the beyond-Zel'dovich displacement. \code{make\_force\_nufft} is therefore the
-default. The module is not yet used by SimulationCode.
+default. \code{make\_force\_sheet} gives the same force (to $2\times10^{-6}$) with the density from sheet
+interpolation of $\vx-\vq$ (\cref{ch:mass-assignment}) and NUFFT for the density and the interpolation. With a mass
+assignment instead the windows leave 5--7\%. The module is not yet used by SimulationCode.
 
 \section{Redshift-space reconstruction}\label{sec:lpt-reconstruction}
 

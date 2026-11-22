@@ -29,12 +29,15 @@ struct Part {
     double pos[3];
     double vel[3];
     double scr[3];
+    double q[3];
     long long id;
     double * get_pos() { return pos; }
     const double * get_pos() const { return pos; }
     double * get_vel() { return vel; }
     const double * get_vel() const { return vel; }
     double * get_sfbb_scratch() { return scr; }
+    double * get_q() { return q; }
+    const double * get_q() const { return q; }
     void set_id(long long i) { id = i; }
     long long get_id() const { return id; }
     constexpr int get_ndim() const { return 3; }
@@ -183,10 +186,16 @@ int main(int argc, char ** argv) {
             return F;
         };
         auto Fn = get(make_force_nufft<NDIM, Part>(NP, kappa0));
-        for (auto [name, nm, asg, il, dc] : std::vector<std::tuple<std::string, int, std::string, bool, bool>>{
-                 {"CIC 1x", NP, "CIC", false, false}, {"CIC 2x", 2 * NP, "CIC", false, false},
-                 {"PCS 2x il+dc", 2 * NP, "PCS", true, true}}) {
-            auto Fp = get(make_force_pm<NDIM, Part>(nm, kappa0, nullptr, asg, il, dc));
+        std::vector<std::pair<std::string, SFBB::ForceFunction>> forces{
+            {"CIC 1x", make_force_pm<NDIM, Part>(NP, kappa0, nullptr, "CIC", false, false)},
+            {"CIC 2x", make_force_pm<NDIM, Part>(2 * NP, kappa0, nullptr, "CIC", false, false)},
+            {"PCS 2x il+dc", make_force_pm<NDIM, Part>(2 * NP, kappa0, nullptr, "PCS", true, true)},
+            {"sheet R=2 nufft 1x", make_force_sheet<NDIM, Part>(NP, NP, kappa0, nullptr, 2, "NUFFT", "NUFFT")},
+            {"sheet R=4 nufft 1x", make_force_sheet<NDIM, Part>(NP, NP, kappa0, nullptr, 4, "NUFFT", "NUFFT")},
+            {"sheet R=2 PCS 1x dc", make_force_sheet<NDIM, Part>(NP, NP, kappa0, nullptr, 2, "PCS", "PCS", true)},
+            {"sheet R=2 PCS 2x dc", make_force_sheet<NDIM, Part>(2 * NP, NP, kappa0, nullptr, 2, "PCS", "PCS", true)}};
+        for (auto & [name, force_fn] : forces) {
+            auto Fp = get(force_fn);
             double ab = 0, bb = 0, aa = 0;
             for (size_t i = 0; i < Fn.size(); i++)
                 for (int d = 0; d < 3; d++) {
@@ -236,9 +245,17 @@ int main(int argc, char ** argv) {
                  {"PCS 2x il+dc", 2 * NP, "PCS", true, true}})
         {
             report("1 step, " + name, 1, one_call(make_force_pm<NDIM, Part>(nm, kappa0, nullptr, asg, il, dc), 1), ref, za);
-            report("  + half-cell shift", 1,
-                   one_call(make_force_pm<NDIM, Part>(nm, kappa0, nullptr, asg, il, dc), 1, 0.5 / nm), ref, za);
         }
+        for (auto [name, nm, R, asg] : std::vector<std::tuple<std::string, int, int, std::string>>{
+                 {"sheet R=2 nufft", NP, 2, "NUFFT"}, {"sheet R=2 PCS 1x", NP, 2, "PCS"}, {"sheet R=2 PCS 2x", 2 * NP, 2, "PCS"}}) {
+            report("1 step, " + name, 1, one_call(make_force_sheet<NDIM, Part>(nm, NP, kappa0, nullptr, R, asg, asg), 1), ref, za);
+            report("  + half-cell shift", 1,
+                   one_call(make_force_sheet<NDIM, Part>(nm, NP, kappa0, nullptr, R, asg, asg), 1, 0.5 / nm), ref, za);
+        }
+        // Several steps with the sheet force against the NUFFT reference
+        for (int n : {4, 16})
+            report("bullfrog " + std::to_string(n) + " sheet nufft", n,
+                   one_call(make_force_sheet<NDIM, Part>(NP, NP, kappa0, nullptr, 2, "NUFFT", "NUFFT"), n), ref, za);
         return 0;
     }
 

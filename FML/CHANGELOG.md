@@ -56,8 +56,12 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 - The third-order force splits as F3[Psi1^3] = 6 Psi3a + 21/5 Psi3b + 7 Psi3c and 2 F2[Psi1, Psi2] = 9/5 Psi3b
   (measured with the exact particle force; it is the split implied by the D3b equation of `LPTGrowthFactors`). This
   makes `lpt3` work for any GR-like growth history, including a start in the radiation era.
-- `Forces.h`: exact NUFFT and PM force callbacks, the growth model of a `Background`, and the one-call
-  `generate_particles_from_big_bang`.
+- `Forces.h`: exact NUFFT, sheet-interpolation and PM force callbacks, the growth model of a `Background`, and the
+  one-call `generate_particles_from_big_bang`.
+- `make_force_sheet`: the density from sheet interpolation of x − q (`particles_to_fourier_grid_sheet`), then the
+  force by NUFFT or by a mass-assignment kernel. With NUFFT for both it equals the exact force to 1.6e-6 and gives
+  the same steps. With PCS and deconvolution the force is 5-7% off near the lattice, against 9-17% for plain PM.
+  `make_start_particles` now shifts q with the lattice.
 - Tests (64^3, exact force; errors in the beyond-Zel'dovich displacement against 64 BullFrog steps, smooth field,
   sigma = 0.3):
   - `lpt3` 2.4e-2, 3.3e-3, 1.3e-3 against BullFrog 2.9e-2, 1.1e-2, 3.7e-3 at 2, 4, 8 forces, in EdS and for LCDM
