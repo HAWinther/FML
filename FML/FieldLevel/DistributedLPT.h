@@ -546,6 +546,13 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             require(in_support(p), "[Distributed LPT] Invalid metric parameters");
             return linear_.apply_field_metric(s, base_parameters(p), w.base, exponent);
         }
+        Field apply_field_metric(const Field & s, const std::vector<double> & p, Workspace & w, double exponent,
+                                 double log_noise_power) const {
+            validate_state(s, p);
+            check(w);
+            require(in_support(p), "[Distributed LPT] Invalid metric parameters");
+            return linear_.apply_field_metric(s, base_parameters(p), w.base, exponent, log_noise_power);
+        }
         // Physical real-space outputs, independent of tracer bias, observation response and RSD.
         // velocity_factor=a H f L; Lagrangian displacement samples are in box units.
         Model::Reconstruction
@@ -647,6 +654,11 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         }
         static FML::MCMC::HMCExecution hmc(const DistributedLPTModelT & m) { return m.hmc_execution(); }
     };
+    template <class Grid>
+    struct NoiseAwareFieldMetric<DistributedLPTModelT<Grid>> : std::true_type {};
+    template <class Grid>
+    struct PosteriorFieldMetric<DistributedLPTModelT<Grid>, GaussianFieldLikelihood>
+        : DETAIL::ExplicitNoiseFieldMetric<DistributedLPTModelT<Grid>> {};
     template <class Grid>
     using DistributedLPTPosteriorT = BasicPosterior<DistributedLPTModelT<Grid>>;
     using DistributedLPTPosterior = DistributedLPTPosteriorT<FML::GRID::FFTWGrid<3>>;

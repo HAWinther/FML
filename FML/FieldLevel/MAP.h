@@ -86,7 +86,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         auto work=model.workspace();
         auto base_metric=[&](const Vector & q) {
             Vector v;allocate([&]{v.scalar=q.scalar;});
-            v.field=model.apply_field_metric(q.field,p,work,-1);
+            // Posterior dispatch: uses the posterior's noise policy and model-specific metrics.
+            v.field=posterior.apply_field_metric(q.field,p,work,-1);
             return v;
         };
         MAPOptimizationResult result;

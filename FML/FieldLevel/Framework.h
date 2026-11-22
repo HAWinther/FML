@@ -375,7 +375,14 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         }
         Field
         apply_field_metric(const Field & input, const std::vector<double> & p, Workspace & w, double exponent) const {
+            return apply_field_metric(input, p, w, exponent, p.back());
+        }
+        // Same metric with the noise log-power the posterior actually uses.
+        Field apply_field_metric(const Field & input, const std::vector<double> & p, Workspace & w, double exponent,
+                                 double log_noise_power) const {
             dimensions(input, p);
+            if (!std::isfinite(log_noise_power))
+                throw std::invalid_argument("[FieldFramework] Nonfinite metric noise");
             check_workspace(w);
             auto & b = *w.backend;
             auto & e = *b.engine_;
@@ -384,7 +391,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             Modes coeff(modes_.size());
             const size_t offset = spectrum_.parameters.size();
             std::vector<double> theta(p.begin(), p.begin() + offset);
-            const double noise = std::exp(p.back());
+            const double noise = std::exp(log_noise_power);
             for (size_t i = 0; i < coeff.size(); ++i) {
                 double metric = 1;
                 if (modes_[i].k < config_.initial_cutoff && modes_[i].k < config_.likelihood_cutoff) {
@@ -646,6 +653,28 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             return model.apply_field_metric(input, parameters, work, exponent);
         }
     };
+    // True for forwards whose generic linear-response metric takes the posterior's
+    // Gaussian noise explicitly (checkpoint identities version this behaviour).
+    template <class Forward>
+    struct NoiseAwareFieldMetric : std::false_type {};
+    namespace DETAIL {
+        // The historical metric read the noise from the last scalar, which is wrong for
+        // fixed or non-last noise and for a likelihood volume differing from the model's.
+        // The default policy keeps the exact original call (and arithmetic).
+        template <class Forward>
+        struct ExplicitNoiseFieldMetric {
+            template <class Likelihood, class Work>
+            static Field apply(const Forward & model, const Likelihood & likelihood, const GaussianNoise & noise,
+                               const Field & input, const std::vector<double> & parameters,
+                               Work & work, double exponent) {
+                if (noise.mode == GaussianNoise::Mode::LastParameter && likelihood.volume() == model.volume())
+                    return model.apply_field_metric(input, parameters, work, exponent);
+                const double log_noise = noise.log_power(parameters) + std::log(model.volume()) -
+                                         std::log(likelihood.volume());
+                return model.apply_field_metric(input, parameters, work, exponent, log_noise);
+            }
+        };
+    } // namespace DETAIL
     template <class Forward, class Likelihood = GaussianFieldLikelihood>
     class BasicPosterior {
         const Forward & model_;
@@ -806,6 +835,10 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         }
     };
     using Posterior = BasicPosterior<Model>;
+    template <>
+    struct NoiseAwareFieldMetric<Model> : std::true_type {};
+    template <>
+    struct PosteriorFieldMetric<Model, GaussianFieldLikelihood> : DETAIL::ExplicitNoiseFieldMetric<Model> {};
     enum class MAPStatus { Converged, MaximumIterations, LineSearchFailed };
     struct MAPResult {
         Field white;

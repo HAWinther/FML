@@ -169,6 +169,10 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 e.integer(noise.parameter_index);
                 e.real(noise.fixed_log_power);
                 e.integer(int(posterior.field_prior()));
+                // The generic field metric now uses this noise policy (previously the last scalar).
+                if constexpr (NoiseAwareFieldMetric<Forward>::value && std::is_same_v<Likelihood, GaussianFieldLikelihood>)
+                    if (noise.mode != GaussianNoise::Mode::LastParameter)
+                        e.text("posterior-noise generic field metric 1");
             }
             return std::to_string(Codec::checksum(e.bytes));
         }

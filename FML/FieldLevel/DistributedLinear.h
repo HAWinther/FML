@@ -388,7 +388,22 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             }
             gs = from_modes(coeff, w); // Parameter derivatives are LOCAL; posterior reduces once.
         }
+        // Linear-response Fourier metric. This overload reads the noise from the last scalar
+        // (the historical LastParameter convention), unchanged.
         Field apply_field_metric(const Field & s, const std::vector<double> & p, Workspace & w, double exponent) const {
+            return field_metric(s, p, w, exponent, p.back());
+        }
+        // Same metric with the noise log-power the posterior actually uses (fixed or any scalar).
+        Field apply_field_metric(const Field & s, const std::vector<double> & p, Workspace & w, double exponent,
+                                 double log_noise_power) const {
+            require(std::isfinite(log_noise_power), "[DistributedField] Nonfinite metric noise");
+            controls({log_noise_power});
+            return field_metric(s, p, w, exponent, log_noise_power);
+        }
+
+      private:
+        Field field_metric(const Field & s, const std::vector<double> & p, Workspace & w, double exponent,
+                           double log_noise_power) const {
             validate_state(s, p);
             check(w);
             require(in_support(p), "[DistributedField] Metric parameters outside support");
@@ -398,7 +413,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             Modes correction(modes_.size());
             for (size_t i = 0; i < modes_.size(); ++i) {
                 const double precision = modes_[i].k < config_.likelihood_cutoff ?
-                                             1 + std::pow(factor(i, p), 2) * power[i].value / std::exp(p.back()) :
+                                             1 + std::pow(factor(i, p), 2) * power[i].value / std::exp(log_noise_power) :
                                              1;
                 correction[i] = Complex(w.grid.get_fourier_from_index(modes_[i].fourier_index)) *
                                 (std::pow(precision, exponent) - 1);
@@ -408,6 +423,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 result[q] += s[q];
             return result;
         }
+
+      public:
         Model::LinearConditional
         linear_conditional(const Modes & data, const std::vector<double> & p, Workspace & w) const {
             check(w);
@@ -529,6 +546,11 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                     [&m](bool valid) { return m.maximum(valid ? 0 : 1) == 0; }};
         }
     };
+    template <class Grid>
+    struct NoiseAwareFieldMetric<DistributedLinearModelT<Grid>> : std::true_type {};
+    template <class Grid>
+    struct PosteriorFieldMetric<DistributedLinearModelT<Grid>, GaussianFieldLikelihood>
+        : DETAIL::ExplicitNoiseFieldMetric<DistributedLinearModelT<Grid>> {};
     template <class Grid>
     using DistributedLinearPosteriorT = BasicPosterior<DistributedLinearModelT<Grid>>;
     using DistributedLinearPosterior = DistributedLinearPosteriorT<FML::GRID::FFTWGrid<3>>;

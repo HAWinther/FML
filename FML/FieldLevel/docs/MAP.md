@@ -38,8 +38,11 @@ The optimizer works in white-field coordinates and scaled scalar coordinates
 `p_j / Parameter::scale()`. Fields and their dot products are distributed; scalar
 coordinates/gradients are replicated and added after field reductions, exactly
 once. When parameters are fixed they never enter the search direction or history
-updates. The field base inverse Hessian uses the model's existing metric with
-exponent -1; the scalar base metric is identity in scaled coordinates. L-BFGS scales
+updates. The field base inverse Hessian uses the posterior's field metric with
+exponent -1 (the same dispatch as the legacy `map()` and HMC, so model-specific
+metrics such as the Eulerian one and the posterior's noise policy apply; before
+22 November 2026 this overload called the model's metric directly and did not
+compile for `DistributedEulerianLPTModelT`); the scalar base metric is identity in scaled coordinates. L-BFGS scales
 the base metric using `s.y / (y.H_base.y)`.
 
 Built-in slab/pencil models collectively validate all options. Custom distributed
