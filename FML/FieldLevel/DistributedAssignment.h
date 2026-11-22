@@ -4,6 +4,8 @@
 #include <FML/FFTWGrid/GridInterface.h>
 #include <FML/Global/MPICounts.h>
 #include <unordered_map>
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <climits>
 #include <numeric>
@@ -20,13 +22,14 @@ namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL {
         FML::GRID::CellOwners<3> owners;
         std::array<int, 3> local_start{}, local_count{};
         std::vector<int> send_count, recv_count, send_offset, recv_offset;
+        // Only nodes owned by OTHER ranks are routed; owned nodes accumulate densely in `local`.
         std::vector<std::uint64_t> sent, received;
         std::unordered_map<std::uint64_t, size_t> slot;
+        std::vector<double> local;
+        size_t owned{};
+        bool contiguous{false};
+        std::uint64_t first_key{};
         int mesh, tasks, rank;
-        // Small global meshes fit in bounded dense scratch. Preserve visit and
-        // sorted packet order, including zero-weight keys; only the lookup changes.
-        bool dense_small{false};
-        std::vector<size_t> dense_slot;
         bool ready{false};
         void check(const Grid & grid) const {
             FML::COMMUNICATION::require_count(
@@ -55,6 +58,18 @@ namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL {
                 throw std::invalid_argument("[Distributed assignment] Node outside mesh");
             return task;
         }
+        // Compact owned index in real-range order (x, then y, then z), or SIZE_MAX if not owned here.
+        size_t owned_index(std::uint64_t node) const {
+            // Slabs (and one rank) own a contiguous key range: no division needed.
+            if (contiguous)
+                return node - first_key < owned ? size_t(node - first_key) : std::numeric_limits<size_t>::max();
+            const std::uint64_t m = std::uint64_t(mesh), row = node / m;
+            const long long x = (long long)(row / m) - local_start[0], y = (long long)(row % m) - local_start[1],
+                            z = (long long)(node % m) - local_start[2];
+            if (x < 0 || x >= local_count[0] || y < 0 || y >= local_count[1] || z < 0 || z >= local_count[2])
+                return std::numeric_limits<size_t>::max();
+            return (size_t(x) * size_t(local_count[1]) + size_t(y)) * size_t(local_count[2]) + size_t(z);
+        }
         ptrdiff_t local_index(std::uint64_t node, const Grid & grid) const {
             const auto row = node / mesh;
             const auto x = row / mesh;
@@ -67,12 +82,17 @@ namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL {
             : owners(grid), mesh(grid.get_nmesh()), tasks(FML::NTasks), rank(FML::ThisTask) {
             FML::COMMUNICATION::require_count(mesh > 0 && tasks > 0 && rank >= 0 && rank < tasks,
                                               "[Distributed assignment] Unallocated grid or invalid task metadata");
-            dense_small = mesh <= 16;
+            owned = 1;
             for (int d = 0; d < 3; d++) {
                 local_start[d] = int(grid.get_local_range(d)[0]);
                 local_count[d] = int(grid.get_local_range(d)[1]);
+                owned *= size_t(std::max(0, local_count[d]));
             }
+            contiguous = local_start[1] == 0 && local_start[2] == 0 && local_count[1] == mesh && local_count[2] == mesh;
+            first_key = std::uint64_t(local_start[0]) * std::uint64_t(mesh) * std::uint64_t(mesh);
         }
+        // Each node's total is accumulated in visit order, and owners add the per-rank totals in
+        // ascending source-rank order: the same floating-point sequence as a full exchange.
         template <class Visit>
         void deposit(Grid & grid, Visit visit) {
             check(grid);
@@ -81,41 +101,48 @@ namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL {
             std::vector<double> values, incoming;
             collective_try(
                 [&] {
-                    std::unordered_map<std::uint64_t, double> sum;
-                    std::vector<double> dense_sum;
-                    std::vector<unsigned char> seen;
+                    std::unordered_map<std::uint64_t, double> remote;
+                    local.assign(owned, 0.);
+                    const std::uint64_t nodes = std::uint64_t(mesh) * mesh * mesh;
+                    visit([&](std::uint64_t key, double value) {
+                        if (key >= nodes)
+                            throw std::invalid_argument("[Distributed assignment] Node outside mesh");
+                        const size_t q = owned_index(key);
+                        if (q != std::numeric_limits<size_t>::max())
+                            local[q] += value;
+                        else
+                            remote[key] += value;
+                    });
                     sent.clear();
                     slot.clear();
-                    if (dense_small) {
-                        const size_t nodes = size_t(mesh) * mesh * mesh;
-                        dense_sum.assign(nodes, 0.);
-                        seen.assign(nodes, 0);
-                        dense_slot.assign(nodes, std::numeric_limits<size_t>::max());
-                        visit([&](std::uint64_t key, double value) {
-                            if (key >= nodes) throw std::invalid_argument("[Distributed assignment] Node outside mesh");
-                            if (!seen[key]) { seen[key] = 1; sent.push_back(key); }
-                            dense_sum[key] += value;
-                        });
-                    } else {
-                        visit([&](std::uint64_t key, double value) { sum[key] += value; });
-                        for (const auto & entry : sum) sent.push_back(entry.first);
+                    sent.reserve(remote.size());
+                    for (const auto & entry : remote)
+                        sent.push_back(entry.first);
+                    std::vector<int> peer(sent.size());
+                    std::vector<size_t> order(sent.size());
+                    for (size_t j = 0; j < sent.size(); ++j) {
+                        peer[j] = owner(sent[j]);
+                        order[j] = j;
                     }
-                    std::sort(sent.begin(), sent.end(), [&](auto a, auto b) {
-                        const int pa = owner(a), pb = owner(b);
-                        return pa == pb ? a < b : pa < pb;
+                    std::sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+                        return peer[a] == peer[b] ? sent[a] < sent[b] : peer[a] < peer[b];
                     });
+                    std::vector<std::uint64_t> keys(sent.size());
                     send_count.assign(tasks, 0);
                     recv_count.assign(tasks, 0);
                     values.resize(sent.size());
-                    for (size_t j = 0; j < sent.size(); ++j) {
-                        const int peer = owner(sent[j]);
-                        if (send_count[peer] == INT_MAX)
+                    for (size_t j = 0; j < order.size(); ++j) {
+                        const int p = peer[order[j]];
+                        if (p == rank)
+                            throw std::logic_error("[Distributed assignment] Owned node routed remotely");
+                        if (send_count[p] == INT_MAX)
                             throw std::overflow_error("[Distributed assignment] MPI count overflow");
-                        ++send_count[peer];
-                        values[j] = dense_small ? dense_sum[sent[j]] : sum.at(sent[j]);
-                        if (dense_small) dense_slot[sent[j]] = j;
-                        else slot.emplace(sent[j], j);
+                        ++send_count[p];
+                        keys[j] = sent[order[j]];
+                        values[j] = remote.at(keys[j]);
+                        slot.emplace(keys[j], j);
                     }
+                    sent.swap(keys);
                     offsets(send_count, send_offset);
                 },
                 "Assignment local scatter");
@@ -155,12 +182,25 @@ namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL {
             incoming = values;
 #endif
             grid.fill_real_grid(FML::GRID::FloatType(0));
-            for (size_t j = 0; j < received.size(); ++j) {
-                const auto index = local_index(received[j], grid);
-                grid.set_real_from_index(index, grid.get_real_from_index(index) + incoming[j]);
+            for (int source = 0; source < tasks; ++source) {
+                if (source == rank) {
+                    size_t q = 0;
+                    for (auto i : grid.get_real_range()) {
+                        if (local[q] != 0 || std::signbit(local[q]))
+                            grid.set_real_from_index(i, grid.get_real_from_index(i) + local[q]);
+                        ++q;
+                    }
+                    continue;
+                }
+                const size_t begin = size_t(recv_offset[source]), end = begin + size_t(recv_count[source]);
+                for (size_t j = begin; j < end; ++j) {
+                    const auto index = local_index(received[j], grid);
+                    grid.set_real_from_index(index, grid.get_real_from_index(index) + incoming[j]);
+                }
             }
             ready = true;
         }
+        // Owned node values (compact real-range order) followed by remote values in sent order.
         std::vector<double> reverse(const Grid & grid) const {
             check(grid);
             FML::COMMUNICATION::require_count(ready, "[Distributed assignment] Reverse requires successful deposit");
@@ -168,9 +208,12 @@ namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL {
             FML::COMMUNICATION::collective_try(
                 [&] {
                     outgoing.resize(received.size());
-                    result.resize(sent.size());
+                    result.resize(owned + sent.size());
                     for (size_t j = 0; j < received.size(); ++j)
                         outgoing[j] = grid.get_real_from_index(local_index(received[j], grid));
+                    size_t q = 0;
+                    for (auto i : grid.get_real_range())
+                        result[q++] = grid.get_real_from_index(i);
                 },
                 "Assignment reverse storage");
 #ifdef USE_MPI
@@ -178,23 +221,24 @@ namespace FML::FIELDLEVEL::FRAMEWORK::DETAIL {
                           recv_count.data(),
                           recv_offset.data(),
                           MPI_DOUBLE,
-                          result.data(),
+                          result.data() + owned,
                           send_count.data(),
                           send_offset.data(),
                           MPI_DOUBLE,
                           FML::communicator);
 #else
-            result = outgoing;
+            std::copy(outgoing.begin(), outgoing.end(), result.begin() + owned);
 #endif
             return result;
         }
         double at(const std::vector<double> & reversed, std::uint64_t node) const {
-            if (dense_small) {
-                if (node >= dense_slot.size() || dense_slot[node] == std::numeric_limits<size_t>::max())
-                    throw std::out_of_range("[Distributed assignment] Node was not deposited");
-                return reversed[dense_slot[node]];
-            }
-            return reversed[slot.at(node)];
+            const size_t q = owned_index(node);
+            if (q != std::numeric_limits<size_t>::max())
+                return reversed[q];
+            const auto it = slot.find(node);
+            if (it == slot.end())
+                throw std::out_of_range("[Distributed assignment] Node was not deposited");
+            return reversed[owned + it->second];
         }
     };
     using DistributedAssignment = DistributedAssignmentT<>;
