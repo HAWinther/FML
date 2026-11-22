@@ -346,8 +346,23 @@ Three schemes:
 <li><tt>hybrid</tt>: scale-dependent FastPM steps (each mode follows its own $D(k, a)$), then BullFrog. For massive neutrinos and $G_{\rm eff}(k,a)$.</li>
 </ul>
 <p>
-With $64^3$ particles and the exact force, at 4 force evaluations the error in the beyond-Zel'dovich displacement is $3.3\times10^{-3}$ for <tt>lpt3</tt> against $1.1\times10^{-2}$ for BullFrog (smooth field, $\sigma = 0.3$). That holds in EdS and in $\Lambda$CDM with radiation from $z = 10^6$. The force must be accurate near the lattice: a particle-mesh force there differs from the exact one by 5-17%, so the NUFFT force is the default. Sheet interpolation of the displacement field (<tt>make_force_sheet</tt>) gives the same force to $2\times10^{-6}$ with NUFFT for the density and the interpolation. With PCS and deconvolution it is within $5\times10^{-4}$, and $2\times10^{-4}$ with interlacing (<tt>interlacing_order = 2</tt>).
+With $64^3$ particles and the exact force, at 4 force evaluations the error in the beyond-Zel'dovich displacement is $3.3\times10^{-3}$ for <tt>lpt3</tt> against $1.1\times10^{-2}$ for BullFrog (smooth field, $\sigma = 0.3$). That holds in EdS and in $\Lambda$CDM with radiation from $z = 10^6$. On the full band a single BullFrog step is already more accurate than 2LPT or 3LPT initial conditions at the same redshift, because it follows the growing mode of the particle system near the particle Nyquist frequency.
 </p>
+<figure class="science-figure">
+  <img src="images/sfbb_convergence.png" loading="lazy" decoding="async" alt="Six panels of position error against the number of force evaluations for BullFrog and lpt3, for smooth and full-band fields with sigma 0.1, 0.3 and 1; both converge, lpt3 faster on smooth fields before shell crossing, and both beat 2LPT and 3LPT initial conditions">
+  <figcaption>Position error in units of the beyond-Zel'dovich displacement against the number of force evaluations, from $D = 0$ ($64^3$ particles, EdS, exact force). Top: a smooth field ($k &lt; k_{\rm Ny}/4$); bottom: the full band. The reference is 64 BullFrog steps (grey: its uncertainty); horizontal lines are 2LPT and 3LPT initial conditions.</figcaption>
+</figure>
+<figure class="science-figure">
+  <img src="images/sfbb_order.png" loading="lazy" decoding="async" alt="Error of one step against the final sigma: BullFrog scales as sigma, lpt3 as sigma squared, both reaching order one at shell crossing">
+  <figcaption>One step from $D = 0$ for a smooth field: the error of BullFrog scales as $\sigma_\delta$, that of <tt>lpt3</tt> as $\sigma_\delta^2$.</figcaption>
+</figure>
+<p>
+The force must be accurate near the lattice. The NUFFT force is the default. Sheet interpolation of the displacement field (<tt>make_force_sheet</tt>) gives the same force to $2\times10^{-6}$ with NUFFT for the density and the interpolation. With PCS and deconvolution it is within $5\times10^{-4}$, and $2\times10^{-4}$ with interlacing (<tt>interlacing_order = 2</tt>). Plain PM with PCS, one cell per particle and both windows deconvolved is as good ($1.3\times10^{-3}$); without deconvolution CIC is off by 5%, about the size of the beyond-Zel'dovich displacement over a step. On a finer grid the deconvolution amplifies the lattice's discreteness at the grid Nyquist frequency (PCS on a 2&times; grid: the force 50% too large), so use the sheet there.
+</p>
+<figure class="science-figure">
+  <img src="images/sfbb_scale_dependence.png" loading="lazy" decoding="async" alt="Six panels: error per k of the methods and of one step with each force; the force transfer error and decorrelation of sheet and particle-mesh forces near the lattice and late, against a 1 percent band and the size of the nonlinear force">
+  <figcaption>Top: error per $k$ for the methods and for one BullFrog step with each force. Middle: $|T(k) - 1|$ of each force against the exact one, near the lattice (Zel'dovich at $D = 1/2$) and late (16 steps to $D = 1$, past shell crossing); grey is 1% of the force, black the nonlinear part of the exact force. Bottom: the decorrelation $1 - r(k)$.</figcaption>
+</figure>
 <div style="text-align: center">
   <div style="width:600px;display: inline-block;text-align: left">
     <pre class="prettyprint">

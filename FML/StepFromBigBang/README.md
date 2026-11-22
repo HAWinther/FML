@@ -90,6 +90,11 @@ field, 64³):
   density only) is the older, density-only variant.
 - Use the NUFFT or the sheet force for the IC phase; `make_force_pm` is for later times or comparisons.
 
+**Accuracy figures.** `tests/plot_sfbb.py` makes the figures in the book (section "Initial conditions from the Big
+Bang"). The data come from `./test_sfbb dump 64 <kcut> <sigma> <plotdata>/k<kcut>_s<sigma> <job>...` with kcut 0.25
+(smooth) or 1.0 (full band), sigma 0.03, 0.1, 0.3, 1.0, and the jobs `ref ic bf l3 fv forces forces_late`; then
+`python3 tests/plot_sfbb.py <plotdata> <outdir>`.
+
 ## Conventions
 
 - **Positions** are in box units [0, 1).
