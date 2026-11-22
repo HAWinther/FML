@@ -15,6 +15,7 @@ validation is bounded; consult the current limitations before interpreting resul
 - [Particle-mesh evolution](docs/PARTICLE_MESH.md), [adjoint](docs/PM_ADJOINT.md),
   [posterior](docs/PM_POSTERIOR.md), [checkpoint/restart](docs/PM_CHECKPOINT.md)
 - [Survey likelihoods](docs/SURVEY.md)
+- [Analytic bias marginalization](docs/MARGINALIZED_BIAS.md) for the Eulerian model
 - [Known issues](docs/KNOWN_ISSUES.md) and [development plan](docs/FRAMEWORK_PLAN.md)
 - [BAO prototype and historical development notes](docs/BAO.md)
 

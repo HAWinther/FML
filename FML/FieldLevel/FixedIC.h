@@ -257,6 +257,9 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             }
             return FixedICGaussianProposal<N>::from_scaled_quadratic(reference_, gradient, precision, scales);
         }
+        // Replicated Gram matrix sum_k w_k Re(conj(C_a) C_b) / v (row-major) and the reference point.
+        const std::array<double, N * N> & gram() const { return gram_; }
+        const std::array<double, N> & reference() const { return reference_; }
         std::array<double, N> gradient(const std::array<double, N> & bias) const {
             auto result = gradient_;
             for (size_t a = 0; a < N; ++a)

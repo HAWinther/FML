@@ -380,15 +380,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             check(w);
             require(w.valid && w.parameters == p, "[EulerianLPT] Pullback needs matching forward");
             finite_modes(g, modes_.size());
-            const double n3 = double(matter_.layout().global_cells);
-            auto & observation = compact_ ? w.compact_grid : w.grid;
-            observation.fill_fourier_grid(FML::GRID::ComplexType(0));
-            for (size_t j = 0; j < g.size(); ++j)
-                observation.set_fourier_from_index(modes_[j].fourier_index, FML::GRID::ComplexType(g[j] / n3));
-            observation.set_grid_status_real(false);
-            if (compact_) w.lift_plan->apply(observation, w.grid);
-            w.grid.fftw_c2r();
-            const Field tracer_bar = real_field(w.grid);
+            const Field tracer_bar = tracer_cotangent(g, w);
             const auto & columns = bias_.columns(w.bias);
             typename Bias::Columns cb;
             local([&] {
@@ -401,6 +393,45 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                     }
                 }
             });
+            operator_pullback(cb, p, w, gs, gp);
+        }
+        // Reverse of the four Fourier bias columns (bias_modes) with one cotangent per column, in the
+        // same weighted convention: d U = sum_a sum_k w_k Re(conj(g_a,k) dC_a,k). Gives the white-field
+        // and spectrum-parameter derivatives (local scalars, reduce once); the bias entries of gp are
+        // zero, since the columns do not depend on the bias coefficients. Needs a matching forward.
+        void pullback_columns(const std::vector<double> & p,
+                              const std::array<Modes, 4> & g,
+                              Workspace & w,
+                              Field & gs,
+                              std::vector<double> & gp) const {
+            check(w);
+            require(w.valid && w.parameters == p, "[EulerianLPT] Column pullback needs matching forward");
+            for (const auto & column : g)
+                finite_modes(column, modes_.size());
+            typename Bias::Columns cb;
+            for (size_t a = 0; a < 4; ++a)
+                cb[a] = tracer_cotangent(g[a], w);
+            local([&] { gp.assign(p.size(), 0.); });
+            operator_pullback(cb, p, w, gs, gp);
+        }
+
+      private:
+        // Real-cell cotangent of the tracer on the product mesh for an observed-mode cotangent.
+        Field tracer_cotangent(const Modes & g, Workspace & w) const {
+            const double n3 = double(matter_.layout().global_cells);
+            auto & observation = compact_ ? w.compact_grid : w.grid;
+            observation.fill_fourier_grid(FML::GRID::ComplexType(0));
+            for (size_t j = 0; j < g.size(); ++j)
+                observation.set_fourier_from_index(modes_[j].fourier_index, FML::GRID::ComplexType(g[j] / n3));
+            observation.set_grid_status_real(false);
+            if (compact_) w.lift_plan->apply(observation, w.grid);
+            w.grid.fftw_c2r();
+            return real_field(w.grid);
+        }
+        // Operator columns -> evolved matter -> LPT -> white field (and spectrum parameters).
+        void operator_pullback(const typename Bias::Columns & cb, const std::vector<double> & p, Workspace & w,
+                               Field & gs, std::vector<double> & gp) const {
+            const double n3 = double(matter_.layout().global_cells);
             const auto matter_bar = bias_.pullback(cb, w.bias);
             to_grid(matter_bar, w.grid);
             w.grid.fftw_r2c();
@@ -420,6 +451,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             }
             std::copy(pm.begin(), pm.begin() + spectrum_size_, gp.begin());
         }
+
+      public:
         // Diagonal precision of the zero-field Gaussian linearization. Quadratic bias
         // has no linear contribution. The operator acts on the sampled mesh and uses
         // the posterior's noise; parameters/noise are frozen by the HMC driver.

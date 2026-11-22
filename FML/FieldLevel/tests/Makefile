@@ -7,7 +7,7 @@ ifeq ($(USE_MPI),true)
 TARGETS += test_framework_linear_grid_mpi test_framework_lpt_grid_mpi test_survey_grid_mpi test_checkpoint_grid_mpi
 endif
 EXTRA_CLEAN += test_framework_linear_grid_mpi test_framework_lpt_grid_mpi test_survey_grid_mpi test_checkpoint_grid_mpi
-TARGETS += test_eulerian_metric test_eulerian_checkpoint test_compact_eulerian_lpt test_eulerian_bias test_eulerian_lpt test_fixed_ic test_periodic_catalog test_metric_noise_policy
+TARGETS += test_eulerian_metric test_eulerian_checkpoint test_compact_eulerian_lpt test_eulerian_bias test_eulerian_lpt test_fixed_ic test_periodic_catalog test_metric_noise_policy test_marginalized_bias
 include ../../Makefile.config
 FML_MODULES := Global
 ifeq ($(USE_MPI),true)
@@ -271,3 +271,10 @@ test_metric_noise_policy: test_metric_noise_policy.o Global.o
 	$(LINK_EXE)
 metric-noise-policy: test_metric_noise_policy
 	@set -e; for np in $(NP_LIST); do $(SAFETY_RUN) ./test_metric_noise_policy; done
+
+run: marginalized-bias
+.PHONY: marginalized-bias
+test_marginalized_bias: test_marginalized_bias.o Global.o $(PM_GRID_OBJECT)
+	$(LINK_EXE)
+marginalized-bias: test_marginalized_bias
+	@set -e; for np in $(NP_LIST); do $(SAFETY_RUN) ./test_marginalized_bias; done

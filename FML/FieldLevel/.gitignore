@@ -55,6 +55,7 @@ tests/test_eulerian_bias
 tests/test_eulerian_lpt
 tests/test_fixed_ic
 tests/test_metric_noise_policy
+tests/test_marginalized_bias
 validation/galaxy/fixed_ic/galaxy_fixed_ic
 tests/test_periodic_catalog
 example/catalog_to_modes
@@ -121,3 +122,4 @@ example/catalog_to_modes
 /validation/galaxy/donor_jumps/donor_pilot
 
 /validation/galaxy/donor_jumps/DonorMain.cpp
+validation/galaxy/reparametrization/reparam_study
