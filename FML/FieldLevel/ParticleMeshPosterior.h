@@ -235,19 +235,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         // response() would omit PM physics and is deliberately not exposed.
     };
     template <class Grid>
-    struct Execution<PeriodicPMModelT<Grid>> {
+    struct Execution<PeriodicPMModelT<Grid>> : DETAIL::DistributedExecution<PeriodicPMModelT<Grid>> {
         using Forward = PeriodicPMModelT<Grid>;
-        static void validate(const Forward & m, const Field & s, const std::vector<double> & p) { m.validate_state(s, p); }
-        static void map_controls(const Forward & m, bool vary, int steps, double tolerance) {
-            m.controls({double(vary), double(steps), tolerance});
-        }
-        static void hmc_controls(const Forward & m, bool vary, const FML::MCMC::HMCOptions & o) {
-            m.controls({double(vary), double(o.warmup), double(o.samples), double(o.n_leapfrog), double(o.jitter),
-                o.step_size, double(o.adapt_step_size), o.target_acceptance, double(o.adapt_mass),
-                o.divergence_threshold, double(o.seed >> 32), double(o.seed & 0xffffffffu), double(o.verbose_every)});
-        }
-        static double sum(const Forward & m, double x) { return m.sum(x); }
-        static double maximum(const Forward & m, double x) { return m.maximum(x); }
         template <class Likelihood>
         static Likelihood likelihood(const Forward & m, Modes data) {
             static_assert(std::is_same_v<Likelihood, GaussianFieldLikelihood>, "Periodic PM adapter requires Fourier Gaussian likelihood");
@@ -255,14 +244,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                     [&](const Modes & values) { m.validate_modes(values); }};
         }
         static FML::MCMC::HMCExecution hmc(const Forward & m) {
-            return {[&m](double x) { return m.sum(x); },
-                    [&m](Field & x, std::uint64_t seed, std::uint64_t iteration) {
-                        for (size_t q = 0; q < x.size(); ++q) {
-                            FML::RANDOM::COUNTER_BASED::Stream rng(seed, m.layout().global_cell_id(q), 0x484d434du);
-                            FML::RANDOM::COUNTER_BASED::Stream step(rng.next64(), iteration, 0x53544550u);
-                            x[q] = step.normal();
-                        }
-                    }, [&m](bool valid) { return m.maximum(valid ? 0 : 1) == 0; }};
+            return DETAIL::DistributedExecution<Forward>::counter_based_hmc(m);
         }
     };
     // Cartesian survey adapters assume one mesh for both input cells and observed

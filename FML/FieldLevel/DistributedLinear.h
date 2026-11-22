@@ -1,6 +1,6 @@
 #ifndef FML_FIELD_LEVEL_DISTRIBUTED_LINEAR_H
 #define FML_FIELD_LEVEL_DISTRIBUTED_LINEAR_H
-#include <FML/FieldLevel/Framework.h>
+#include <FML/FieldLevel/FrameworkCore.h>
 #include <type_traits>
 #include <FML/FFTWGrid/GridInterface.h>
 
@@ -29,7 +29,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         std::vector<Parameter> parameters_;
         std::vector<FieldLevelBAO::Mode> modes_;
         std::vector<double> response_;
-        Model::Layout layout_{};
+        FieldLayout layout_{};
         double volume_{};
         static double reduce(double x, bool maximum = false) {
 #ifdef USE_MPI
@@ -425,13 +425,13 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         }
 
       public:
-        Model::LinearConditional
+        LinearConditional
         linear_conditional(const Modes & data, const std::vector<double> & p, Workspace & w) const {
             check(w);
             validate_modes(data);
             require(in_support(p), "[DistributedField] Invalid conditional parameters");
             const auto power = powers(p);
-            Model::LinearConditional result;
+            LinearConditional result;
             result.covariance.assign(data.size(), 1);
             Modes mean(data.size(), 0);
             for (size_t i = 0; i < data.size(); ++i)
@@ -449,11 +449,11 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         }
         // Owning local fields; displacements in box units, velocities at Lagrangian q.
         // velocity_factor=a H f L for compatible H/length units. Invalidates the pullback cache.
-        Model::Reconstruction
+        Reconstruction
         reconstruct(const Field & s, const std::vector<double> & p, Workspace & w, double velocity_factor) const {
             require(std::isfinite(velocity_factor), "[DistributedField] Invalid velocity factor");
             controls({velocity_factor});
-            Model::Reconstruction result;
+            Reconstruction result;
             result.tracer = predict(s, p, w);
             w.valid = false;
             Modes dk(modes_.size());
@@ -496,33 +496,10 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
     };
     using DistributedLinearModel = DistributedLinearModelT<>;
     template <class Grid>
-    struct Execution<DistributedLinearModelT<Grid>> {
-        using DistributedLinearModelT = FRAMEWORK::DistributedLinearModelT<Grid>;
-        static void validate(const DistributedLinearModelT & m, const Field & s, const std::vector<double> & p) {
-            m.validate_state(s, p);
-        }
-        static void map_controls(const DistributedLinearModelT & m, bool vary, int iterations, double tolerance) {
-            m.controls({double(vary), double(iterations), tolerance});
-        }
-        static void hmc_controls(const DistributedLinearModelT & m, bool vary, const FML::MCMC::HMCOptions & o) {
-            m.controls({double(vary),
-                        double(o.warmup),
-                        double(o.samples),
-                        double(o.n_leapfrog),
-                        double(o.jitter),
-                        o.step_size,
-                        double(o.adapt_step_size),
-                        o.target_acceptance,
-                        double(o.adapt_mass),
-                        o.divergence_threshold,
-                        double(o.seed >> 32),
-                        double(o.seed & 0xffffffffu),
-                        double(o.verbose_every)});
-        }
-        static double sum(const DistributedLinearModelT & m, double x) { return m.sum(x); }
-        static double maximum(const DistributedLinearModelT & m, double x) { return m.maximum(x); }
+    struct Execution<DistributedLinearModelT<Grid>> : DETAIL::DistributedExecution<DistributedLinearModelT<Grid>> {
+        using Forward = DistributedLinearModelT<Grid>;
         template <class Likelihood>
-        static Likelihood likelihood(const DistributedLinearModelT & m, Modes data) {
+        static Likelihood likelihood(const Forward & m, Modes data) {
             if constexpr (std::is_same_v<Likelihood, GaussianFieldLikelihood>)
                 return {m.modes(),
                         m.configuration().likelihood_cutoff,
@@ -532,18 +509,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             else
                 return {m.modes(), m.configuration().likelihood_cutoff, m.volume(), std::move(data)};
         }
-        static FML::MCMC::HMCExecution hmc(const DistributedLinearModelT & m) {
-            return {[&m](double x) { return m.sum(x); },
-                    [&m](Field & x, std::uint64_t seed, std::uint64_t iteration) {
-                        // Distinct purpose from IC/mock draws; global cell + iteration, independent of rank count.
-                        for (size_t q = 0; q < x.size(); ++q) {
-                            FML::RANDOM::COUNTER_BASED::Stream rng(seed, m.layout().global_cell_id(q), 0x484d434du);
-                            // Incorporate all 64 iteration bits in the key/object mapping.
-                            FML::RANDOM::COUNTER_BASED::Stream step(rng.next64(), iteration, 0x53544550u);
-                            x[q] = step.normal();
-                        }
-                    },
-                    [&m](bool valid) { return m.maximum(valid ? 0 : 1) == 0; }};
+        static FML::MCMC::HMCExecution hmc(const Forward & m) {
+            return DETAIL::DistributedExecution<Forward>::counter_based_hmc(m);
         }
     };
     template <class Grid>
@@ -555,4 +522,6 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
     using DistributedLinearPosteriorT = BasicPosterior<DistributedLinearModelT<Grid>>;
     using DistributedLinearPosterior = DistributedLinearPosteriorT<FML::GRID::FFTWGrid<3>>;
 } // namespace FML::FIELDLEVEL::FRAMEWORK
+// Compatibility: this header historically provided the whole framework, including Model.
+#include <FML/FieldLevel/DistributedLPT.h>
 #endif

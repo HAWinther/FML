@@ -22,10 +22,10 @@
 #include <stdexcept>
 #include <vector>
 
-namespace FML::FIELDLEVEL::FRAMEWORK {
+namespace FML::FIELDLEVEL::FRAMEWORK::TESTING {
     class PeriodicBackend;
-    class Model;
-} // namespace FML::FIELDLEVEL::FRAMEWORK
+    class ReferenceModel;
+} // namespace FML::FIELDLEVEL::FRAMEWORK::TESTING
 
 namespace FML::FIELDLEVEL {
     using Complex = std::complex<double>;
@@ -120,8 +120,9 @@ namespace FML::FIELDLEVEL {
     /// with sigma^2 = P_eps / V; the sum over the full (Hermitian) set of modes is the exact Gaussian likelihood of a
     /// real field. Every Field argument below is the sampled field x unless the name says white.
     class FieldLevelBAO {
-        friend class FRAMEWORK::PeriodicBackend;
-        friend class FRAMEWORK::Model;
+        // The test-only reference model (tests/ReferenceModel.h) reuses the engine internals.
+        friend class FRAMEWORK::TESTING::PeriodicBackend;
+        friend class FRAMEWORK::TESTING::ReferenceModel;
 
       public:
         struct Mode {

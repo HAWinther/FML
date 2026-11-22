@@ -163,6 +163,22 @@ void exercise(const FML::Domain & domain, const std::string & label) {
     check(unit.rows == all.size() && FML::TESTS::near(unit.poisson_power, 1e6 / all.size(), 2e-14),
           label + " unweighted variance 1/N and power V/N");
     stream.reset();
+    local.clear();
+    size_t positive = 0;
+    for (size_t i = 0; i < all.size(); ++i) {
+        positive += i % 3 != 0;
+        if (int(i % FML::NTasks) == FML::ThisTask) {
+            auto e = all[i];
+            e.weight = i % 3 == 0 ? 0. : 1.;
+            local.push_back(e);
+        }
+    }
+    stream.add_batch(local);
+    auto partial = stream.finish();
+    check(partial.rows == all.size() && partial.weighted_rows == positive &&
+              FML::TESTS::near(partial.number_density, double(positive) / 1e6, 2e-14),
+          label + " zero-weight rows are counted in rows but not in number_density");
+    stream.reset();
     check(FML::TESTS::throws([&] { stream.finish(); }), label + " empty global catalog rejected");
     check(FML::TESTS::throws([&] { stream.add_batch({}); }), label + " failed stream requires reset");
     stream.reset();

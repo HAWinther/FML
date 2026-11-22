@@ -1,6 +1,6 @@
 #ifndef FML_FIELD_LEVEL_CHECKPOINT_H
 #define FML_FIELD_LEVEL_CHECKPOINT_H
-#include <FML/FieldLevel/DistributedLPT.h>
+#include <FML/FieldLevel/Framework.h>
 #include <FML/FieldLevel/ForwardGrid.h>
 #include <FML/MCMC/HMCCheckpoint.h>
 #include <filesystem>
@@ -100,6 +100,18 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             }
             static void append(Codec::Encoder & e, const Forward & model) {
                 e.vector(model.response());
+            }
+        };
+        // The serial Model runs on the distributed linear/LPT models since 22 November 2026
+        // (numerically equivalent to ~1e-12, not bitwise): version its identity.
+        template <>
+        struct ForwardIdentity<Model> {
+            static void describe_grid(Codec::Encoder & e, const Model & model) {
+                DETAIL::ForwardGrid<Model>::describe(e, model);
+            }
+            static void append(Codec::Encoder & e, const Model & model) {
+                e.vector(model.response());
+                e.text("FML serial Model on distributed linear/LPT 1");
             }
         };
         // Local-only numerical configuration codec. Specializations can describe a

@@ -1,3 +1,4 @@
+#include "ReferenceModel.h"
 #include <FML/FieldLevel/DistributedLPT.h>
 #include <FML/tests/TestHelpers.h>
 #include <iostream>
@@ -87,9 +88,9 @@ static void run_case(int argc, char ** argv, FF::Evolution evolution) {
                 label + " forward/reverse dot product through both MPI communication operators");
     const auto prediction = model.predict(s, p, w);
     if (FML::NTasks == 1) {
-        FF::Model serial(c, spectrum, response);
+        FF::TESTING::ReferenceModel serial(c, spectrum, response);
         auto sw = serial.workspace();
-        FF::Posterior sp(serial, data);
+        FF::BasicPosterior<FF::TESTING::ReferenceModel> sp(serial, data);
         Field sg;
         std::vector<double> spg;
         const auto ref = serial.predict(s, p, sw);

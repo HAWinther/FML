@@ -361,7 +361,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         const auto & parameters() const { return parameters_; }
         const std::vector<FieldLevelBAO::Mode> & modes() const { return linear_.modes(); }
         const auto & response() const { return linear_.response(); }
-        Model::Layout layout() const { return linear_.layout(); }
+        FieldLayout layout() const { return linear_.layout(); }
         size_t cells() const { return linear_.cells(); }
         double volume() const { return linear_.volume(); }
         double sum(double x) const { return linear_.sum(x); }
@@ -586,11 +586,11 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         }
         // Physical real-space outputs, independent of tracer bias, observation response and RSD.
         // velocity_factor=a H f L; Lagrangian displacement samples are in box units.
-        Model::Reconstruction
+        Reconstruction
         reconstruct(const Field & s, const std::vector<double> & p, Workspace & w, double velocity_factor) const {
             require(std::isfinite(velocity_factor), "[Distributed LPT] Invalid velocity factor");
             controls({velocity_factor});
-            Model::Reconstruction result;
+            Reconstruction result;
             result.tracer = predict(s, p, w);
             w.valid = false; // Subsequent scratch/deposition uses real-space, unbiased particles.
             Modes dk(modes().size());
@@ -647,33 +647,10 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
     };
     using DistributedLPTModel = DistributedLPTModelT<>;
     template <class Grid>
-    struct Execution<DistributedLPTModelT<Grid>> {
-        using DistributedLPTModelT = FRAMEWORK::DistributedLPTModelT<Grid>;
-        static void validate(const DistributedLPTModelT & m, const Field & s, const std::vector<double> & p) {
-            m.validate_state(s, p);
-        }
-        static double sum(const DistributedLPTModelT & m, double x) { return m.sum(x); }
-        static double maximum(const DistributedLPTModelT & m, double x) { return m.maximum(x); }
-        static void map_controls(const DistributedLPTModelT & m, bool vary, int iterations, double tolerance) {
-            m.controls({double(vary), double(iterations), tolerance});
-        }
-        static void hmc_controls(const DistributedLPTModelT & m, bool vary, const FML::MCMC::HMCOptions & o) {
-            m.controls({double(vary),
-                        double(o.warmup),
-                        double(o.samples),
-                        double(o.n_leapfrog),
-                        double(o.jitter),
-                        o.step_size,
-                        double(o.adapt_step_size),
-                        o.target_acceptance,
-                        double(o.adapt_mass),
-                        o.divergence_threshold,
-                        double(o.seed >> 32),
-                        double(o.seed & 0xffffffffu),
-                        double(o.verbose_every)});
-        }
+    struct Execution<DistributedLPTModelT<Grid>> : DETAIL::DistributedExecution<DistributedLPTModelT<Grid>> {
+        using Forward = DistributedLPTModelT<Grid>;
         template <class Likelihood>
-        static Likelihood likelihood(const DistributedLPTModelT & m, Modes data) {
+        static Likelihood likelihood(const Forward & m, Modes data) {
             if constexpr (std::is_same_v<Likelihood, GaussianFieldLikelihood>)
                 return {m.modes(),
                         m.configuration().likelihood_cutoff,
@@ -683,7 +660,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             else
                 return {m.modes(), m.configuration().likelihood_cutoff, m.volume(), std::move(data)};
         }
-        static FML::MCMC::HMCExecution hmc(const DistributedLPTModelT & m) { return m.hmc_execution(); }
+        static FML::MCMC::HMCExecution hmc(const Forward & m) { return m.hmc_execution(); }
     };
     template <class Grid>
     struct NoiseAwareFieldMetric<DistributedLPTModelT<Grid>> : std::true_type {};
@@ -694,4 +671,6 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
     using DistributedLPTPosteriorT = BasicPosterior<DistributedLPTModelT<Grid>>;
     using DistributedLPTPosterior = DistributedLPTPosteriorT<FML::GRID::FFTWGrid<3>>;
 } // namespace FML::FIELDLEVEL::FRAMEWORK
+// The serial Model front end needs the complete distributed models above.
+#include <FML/FieldLevel/SerialModel.h>
 #endif

@@ -56,6 +56,11 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         SurveyWindow window_;
         using Backend = DETAIL::ForwardGrid<Forward>;
         mutable typename Backend::Grid grid_;
+        // The Hermitian round-trip check costs two extra FFTs. It runs on the first prediction
+        // (catching a malformed forward) and on every one only if requested. Collective: every
+        // rank makes the same calls, so the flag is replicated.
+        bool validate_every_prediction_{false};
+        mutable bool validated_{false};
 
       public:
         CartesianSurveyObservation(const Forward & model, SurveyWindow window)
@@ -85,6 +90,10 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         CartesianSurveyObservation(const CartesianSurveyObservation &) = delete;
         const Forward & model() const { return *model_; }
         const SurveyWindow & window() const { return window_; }
+        void validate_every_prediction(bool every) {
+            model_->controls({double(every)});
+            validate_every_prediction_ = every;
+        }
         double cell_volume() const { return model_->volume() / model_->layout().global_cells; }
         void require(bool ok, const char * message) const {
             if (model_->maximum(ok ? 0 : 1) != 0)
@@ -105,6 +114,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             representable(valid);
             // Validate Hermitian planes using this observation's existing FFT plan.
             // Do not allocate a second forward-model workspace on every evaluation.
+            if (validated_ && !validate_every_prediction_)
+                return synthesize_band(prediction);
             grid_.fill_fourier_grid(FML::GRID::ComplexType(0));
             for (size_t i = 0; i < prediction.size(); ++i)
                 grid_.set_fourier_from_index(model_->modes()[i].fourier_index, FML::GRID::ComplexType(prediction[i]));
@@ -126,6 +137,12 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             }
             representable(finite_roundtrip);
             require(valid, "[Survey observation] Prediction must preserve Hermitian symmetry");
+            validated_ = true;
+            return synthesize_band(prediction);
+        }
+
+      private:
+        Field synthesize_band(const Modes & prediction) const {
             grid_.fill_fourier_grid(FML::GRID::ComplexType(0));
             for (size_t i = 0; i < prediction.size(); ++i)
                 if (model_->modes()[i].k < model_->configuration().likelihood_cutoff)
@@ -148,6 +165,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             representable(ok);
             return result;
         }
+
+      public:
         Modes adjoint(const Field & cotangent) const {
             require(cotangent.size() == model_->cells(), "[Survey observation] Cotangent dimension mismatch");
             bool ok = true;

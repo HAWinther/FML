@@ -107,6 +107,21 @@ static void reference_tests(const FML::Domain & domain = FML::domain) {
     for (size_t q = 0; q < large_image.size(); ++q)
         large_error = std::max(large_error, std::abs(large_image[q] / 1e12 - delta(coordinate(global(m, q), N), N)));
     check_local(m.maximum(large_error) < 1e-12, "large valid Hermitian input tolerates FFT roundoff in zero modes");
+    {
+        // By default only the first prediction is round-trip checked; it must catch a malformed one.
+        FF::CartesianSurveyObservation fresh(m, window);
+        check_local(FML::TESTS::throws([&] {
+                        auto malformed = prediction;
+                        for (size_t i = 0; i < malformed.size(); ++i) {
+                            const auto & k = m.modes()[i];
+                            if (k.n[0] == 1 && k.n[1] == 0 && k.n[2] == 0)
+                                malformed[i] += Complex(0, .2);
+                        }
+                        fresh.synthesize(malformed);
+                    }),
+                    "first non-Hermitian prediction fails collectively with default validation");
+    }
+    obs.validate_every_prediction(true); // The checks below exercise later predictions.
     check_local(FML::TESTS::throws([&] {
                     auto malformed = large;
                     for (size_t i = 0; i < malformed.size(); ++i) {

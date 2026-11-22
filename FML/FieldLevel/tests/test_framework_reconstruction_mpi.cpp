@@ -1,3 +1,4 @@
+#include "ReferenceModel.h"
 #include <FML/FieldLevel/DistributedLPT.h>
 #include <FML/tests/TestHelpers.h>
 #include <fstream>
@@ -6,7 +7,7 @@
 namespace FF = FML::FIELDLEVEL::FRAMEWORK;
 using FML::FIELDLEVEL::Complex;
 using FML::FIELDLEVEL::Field;
-using Reconstruction = FF::Model::Reconstruction;
+using Reconstruction = FF::Reconstruction;
 using FML::TESTS::check_local;
 template <class V>
 static double error(const V & a, const V & b) {
@@ -81,7 +82,7 @@ static void run_case(FF::Configuration c, const FF::Spectrum & spectrum, int arg
     check_local(std::abs(model.sum(initial_mean)) < 1e-10 && std::abs(model.sum(matter_mean)) < 1e-10,
                 name + " initial/matter outputs are zero-mean contrasts");
     if (FML::NTasks == 1) {
-        FF::Model serial(c, spectrum, response);
+        FF::TESTING::ReferenceModel serial(c, spectrum, response);
         auto sw = serial.workspace();
         const auto reference = serial.reconstruct(s, p, sw, vf);
         check_local(physical_error(out, reference) < 1e-11 && error(out.tracer, reference.tracer) < 1e-12,

@@ -119,7 +119,8 @@ template<class Grid> static Snapshot exercise(const FML::Domain & domain,const s
         }
         for(size_t j=0;j<g.size();++j)global[2*8*8*5+model.layout().global_cell_id(j)]=g[j];
         FML::SumArrayOverTasks(global.data(),global.size());
-        for(size_t j=0;j<gp.size();++j)global[2*8*8*5+512+j]=gp[j];global.back()=u;
+        for(size_t j=0;j<gp.size();++j)global[2*8*8*5+512+j]=gp[j];
+        global.back()=u;
         result.values.insert(result.values.end(),global.begin(),global.end());
         // Size, nonfinite and cross-rank Hermitian errors are collective configuration failures.
         if(kind==1) {

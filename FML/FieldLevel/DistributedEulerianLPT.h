@@ -573,31 +573,9 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         }
     };
     template <class Grid>
-    struct Execution<DistributedEulerianLPTModelT<Grid>> {
+    struct Execution<DistributedEulerianLPTModelT<Grid>>
+        : DETAIL::DistributedExecution<DistributedEulerianLPTModelT<Grid>> {
         using Forward = DistributedEulerianLPTModelT<Grid>;
-        static void validate(const Forward & m, const Field & s, const std::vector<double> & p) {
-            m.validate_state(s, p);
-        }
-        static double sum(const Forward & m, double x) { return m.sum(x); }
-        static double maximum(const Forward & m, double x) { return m.maximum(x); }
-        static void map_controls(const Forward & m, bool vary, int n, double tol) {
-            m.controls({double(vary), double(n), tol});
-        }
-        static void hmc_controls(const Forward & m, bool vary, const FML::MCMC::HMCOptions & o) {
-            m.controls({double(vary),
-                        double(o.warmup),
-                        double(o.samples),
-                        double(o.n_leapfrog),
-                        double(o.jitter),
-                        o.step_size,
-                        double(o.adapt_step_size),
-                        o.target_acceptance,
-                        double(o.adapt_mass),
-                        o.divergence_threshold,
-                        double(o.seed >> 32),
-                        double(o.seed & 0xffffffffu),
-                        double(o.verbose_every)});
-        }
         template <class Likelihood>
         static Likelihood likelihood(const Forward & m, Modes data) {
             if constexpr (std::is_same_v<Likelihood, GaussianFieldLikelihood>)

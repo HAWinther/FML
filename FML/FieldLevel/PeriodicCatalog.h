@@ -15,7 +15,8 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         size_t max_input_rows{262144}, max_received_rows{1048576}, message_bytes{8 * 1024 * 1024};
     };
     struct PeriodicCatalogStatistics {
-        FML::COMMUNICATION::Count rows{};
+        FML::COMMUNICATION::Count rows{};          // All rows supplied, including zero-weight rows.
+        FML::COMMUNICATION::Count weighted_rows{}; // Rows with positive weight; number_density uses these.
         double weight_scale{}, effective_count{}, number_density{}, poisson_power{}, mode_variance{};
         long double sum_scaled_weights{}, sum_squared_scaled_weights{};
     };
@@ -40,7 +41,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         Grid output_, fine_;
         FML::GRID::CellOwners<3> owners_;
         std::vector<double> accumulated_, inverse_kernel_;
-        Count local_rows_{};
+        Count local_rows_{}, local_weighted_rows_{};
         long double local_sum_{}, local_square_{};
         double scale_{};
         bool finished_{false}, failed_{false};
@@ -179,8 +180,12 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         void add(const std::vector<CatalogEntry> & entries) {
             require(entries.size() <= config_.max_input_rows,
                     "[PeriodicCatalog] Input batch exceeds configured capacity");
-            Count new_rows = local_rows_;
-            require(FML::COMMUNICATION::add_count(new_rows, entries.size()),
+            Count new_rows = local_rows_, new_weighted = local_weighted_rows_;
+            Count positive = 0;
+            for (const auto & e : entries)
+                positive += e.weight > 0;
+            require(FML::COMMUNICATION::add_count(new_rows, entries.size()) &&
+                        FML::COMMUNICATION::add_count(new_weighted, positive),
                     "[PeriodicCatalog] Local row count overflow");
             double maximum = 0;
             bool valid = true;
@@ -194,6 +199,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             FML::MaxOverTasks(&maximum);
             if (maximum == 0) {
                 local_rows_ = new_rows;
+                local_weighted_rows_ = new_weighted;
                 return;
             }
             const double next_scale = std::max(scale_, maximum);
@@ -248,6 +254,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             local_square_ = local_square_ * (long double)ratio * ratio + square;
             scale_ = next_scale;
             local_rows_ = new_rows;
+            local_weighted_rows_ = new_weighted;
         }
 
       public:
@@ -282,7 +289,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             output_.set_grid_status_real(false);
             fine_.fill_real_grid(0.);
             fine_.set_grid_status_real(true);
-            local_rows_ = 0;
+            local_rows_ = local_weighted_rows_ = 0;
             local_sum_ = local_square_ = 0;
             scale_ = 0;
             statistics_ = {};
@@ -310,21 +317,24 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
 #else
                 std::copy(local_values, local_values + 2, values);
 #endif
-                Count count = 0;
+                Count count = 0, weighted = 0;
                 bool valid = true;
                 for (auto n : FML::GatherFromTasks(&local_rows_))
                     valid &= FML::COMMUNICATION::add_count(count, n);
+                for (auto n : FML::GatherFromTasks(&local_weighted_rows_))
+                    valid &= FML::COMMUNICATION::add_count(weighted, n);
                 require(valid && count > 0 && values[0] > 0 && values[1] > 0 && std::isfinite(values[0]) &&
                             std::isfinite(values[1]),
                         "[PeriodicCatalog] Empty, zero-weight or unrepresentable catalog");
                 statistics_.rows = count;
+                statistics_.weighted_rows = weighted;
                 statistics_.weight_scale = scale_;
                 statistics_.sum_scaled_weights = values[0];
                 statistics_.sum_squared_scaled_weights = values[1];
                 statistics_.mode_variance = double(values[1] / values[0] / values[0]);
                 statistics_.effective_count = 1. / statistics_.mode_variance;
                 statistics_.poisson_power = std::pow(config_.boxsize, 3) * statistics_.mode_variance;
-                statistics_.number_density = double(count) / std::pow(config_.boxsize, 3);
+                statistics_.number_density = double(weighted) / std::pow(config_.boxsize, 3);
                 require(statistics_.mode_variance > 0 && std::isfinite(statistics_.mode_variance) &&
                             statistics_.poisson_power > 0 && std::isfinite(statistics_.poisson_power) &&
                             statistics_.number_density > 0 && std::isfinite(statistics_.number_density) &&

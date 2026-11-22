@@ -73,7 +73,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         using Grid = GridType;
         using Linear = DistributedLinearModelT<Grid>;
         struct Result {
-            Model::Layout particle_layout, density_layout;
+            FieldLayout particle_layout, density_layout;
             Field initial_density, matter_density;
             std::array<Field, 3> displacement, momentum;
             std::vector<PMDiagnostic> diagnostics;

@@ -1,3 +1,4 @@
+#include "ReferenceModel.h"
 #include <FML/FieldLevel/DistributedLinear.h>
 #include <FML/tests/TestHelpers.h>
 #include <iomanip>
@@ -100,9 +101,9 @@ int main(int argc, char ** argv) {
     check_local(fit.status == FF::MAPStatus::Converged && model.maximum(error) < 1e-10,
                 "distributed MAP equals exact linear conditional mean");
     if (FML::NTasks == 1) {
-        FF::Model serial(c, spectrum);
+        FF::TESTING::ReferenceModel serial(c, spectrum);
         auto sw = serial.workspace();
-        FF::Posterior sp(serial, data);
+        FF::BasicPosterior<FF::TESTING::ReferenceModel> sp(serial, data);
         Field ref;
         std::vector<double> rg;
         const double su = sp.evaluate(s, p, sw, ref, rg);
