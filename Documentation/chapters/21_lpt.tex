@@ -273,11 +273,13 @@ first BullFrog step must treat the start as the Zel'dovich state, because $D_1'$
 second-order velocity is not negligible. Before shell crossing \code{lpt3} converges one order faster; after shell
 crossing it is worse than BullFrog.
 
-The force must be accurate near the lattice. A particle-mesh force differs from the exact one by 9--17\% rms there,
-which over a step is $\sim2\times$ the beyond-Zel'dovich displacement. \code{make\_force\_nufft} is therefore the
+The force must be accurate near the lattice. A particle-mesh force differs from the exact one by 5--17\% rms there,
+which over a step is 0.5--3.4 times the beyond-Zel'dovich displacement. Interlacing does not help, since the error is
+the lattice's discreteness. \code{make\_force\_nufft} is therefore the
 default. \code{make\_force\_sheet} gives the same force (to $2\times10^{-6}$) with the density from sheet
-interpolation of $\vx-\vq$ (\cref{ch:mass-assignment}) and NUFFT for the density and the interpolation. With a mass
-assignment instead the windows leave 5--7\%. The module is not yet used by SimulationCode.
+interpolation of $\vx-\vq$ (\cref{ch:mass-assignment}) and NUFFT for the density and the interpolation. With PCS
+and deconvolution it is within $5\times10^{-4}$, and $2\times10^{-4}$ with interlacing (the force averaged over copies of
+the particles shifted by fractions of a cell). The module is not yet used by SimulationCode.
 
 \section{Redshift-space reconstruction}\label{sec:lpt-reconstruction}
 

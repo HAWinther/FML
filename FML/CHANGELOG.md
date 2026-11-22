@@ -60,8 +60,14 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
   one-call `generate_particles_from_big_bang`.
 - `make_force_sheet`: the density from sheet interpolation of x − q (`particles_to_fourier_grid_sheet`), then the
   force by NUFFT or by a mass-assignment kernel. With NUFFT for both it equals the exact force to 1.6e-6 and gives
-  the same steps. With PCS and deconvolution the force is 5-7% off near the lattice, against 9-17% for plain PM.
+  the same steps. With PCS and deconvolution it is within 5e-4 (one step: 0.0518 against 0.0509 exact).
   `make_start_particles` now shifts q with the lattice.
+- `interlacing_order` in `make_force_pm` and `make_force_sheet`: the force averaged over copies of the particles shifted
+  by fractions of a cell (`generate_interlacing_shifts`, as SimulationCode's `force_interlacing_order`). Sheet with
+  PCS on a 2x grid goes from 5.2e-4 to 2.1e-4 (one step 0.0512). Plain PM barely changes: its near-lattice error is
+  the lattice's discreteness, not aliasing.
+- Fixed: `make_force_pm` and `make_force_sheet` interpolated the force without `communicate_boundaries()`, so the
+  ghost slices at the periodic boundary were stale. The sheet force with PCS seemed 5-7% off and plain PM 9-17%.
 - Tests (64^3, exact force; errors in the beyond-Zel'dovich displacement against 64 BullFrog steps, smooth field,
   sigma = 0.3):
   - `lpt3` 2.4e-2, 3.3e-3, 1.3e-3 against BullFrog 2.9e-2, 1.1e-2, 3.7e-3 at 2, 4, 8 forces, in EdS and for LCDM
@@ -71,8 +77,8 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 - Found on the way:
   - In the radiation era the first BullFrog step must treat the start as the Zel'dovich state (D1' is small, so the
     growing mode's second-order velocity is not negligible); otherwise the convergence is first order.
-  - A PM force near the lattice differs from the exact force by 9-17% rms. That is ~2x the beyond-Zel'dovich
-    displacement over a step, so the IC phase should use the exact force.
+  - A PM force near the lattice differs from the exact force by 5-17% rms (0.5-3.4x the beyond-Zel'dovich
+    displacement over a step), so the IC phase should use the exact or the sheet force.
 - Not yet wired into SimulationCode.
 
 ### SimulationCode: scale-independent COLA with massive neutrinos relativistic at the start

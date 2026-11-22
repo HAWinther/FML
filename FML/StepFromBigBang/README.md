@@ -62,24 +62,30 @@ auto force = [&](MPIParticles<P> & part, double a, const std::function<double(do
 **Step by step.** `StepFromBigBang<NDIM, P> sfbb(growth, force, settings)`, then
 `sfbb.make_start_particles(part, Npart_1D, buffer, delta_fourier, a_ref, lattice_shift)`, then `sfbb.run(part)`.
 
-**Which force.** Three ready-made forces, compared in a Zel'dovich configuration at half the final growth (smooth
+**Which force.** The ready-made forces, compared in a Zel'dovich configuration at half the final growth (smooth
 field, 64³):
 
 | Force | rms difference from the exact force | One BullFrog step, error / beyond-Zel'dovich |
 |---|---|---|
-| `make_force_nufft` (exact, band-limited at the mesh's Nyquist frequency) | 0 | 0.051 |
-| `make_force_sheet`, R = 2, NUFFT density and interpolation | 1.6×10⁻⁶ | 0.051 |
-| `make_force_sheet`, R = 2, PCS with deconvolution, 1× / 2× grid | 7% / 5% | 1.5 / 1.1 |
-| `make_force_pm`, CIC or PCS (interlaced, deconvolved), 1× or 2× grid | 9-17% | 1.6-3.6 |
+| `make_force_nufft` (exact, band-limited at the mesh's Nyquist frequency) | 0 | 0.0509 |
+| `make_force_sheet`, R = 2, NUFFT density and interpolation (default) | 1.6×10⁻⁶ | 0.0509 |
+| `make_force_sheet`, R = 2, PCS with deconvolution, 1× / 2× grid | 4.4×10⁻⁴ / 5.2×10⁻⁴ | 0.0518 / 0.0520 |
+| the same on the 2× grid, `interlacing_order = 2` (4 gives the same) | 2.1×10⁻⁴ | 0.0512 |
+| `make_force_pm`, CIC 1× / PCS 1× (interlaced density, deconvolved) | 4.9% / – | 1.03 / 0.49 |
+| `make_force_pm` on a 2× grid (CIC; PCS deconvolved, also with `interlacing_order = 2`) | 8-17% | 1.6-3.4 |
 
-- `make_force_nufft`: the exact force of the particles.
-- `make_force_sheet` with `"NUFFT"` for both the density and the interpolation (the default) gives the same result. It
-  works from the displacement field x − q, so the lattice's discreteness does not enter the density. The particle type
-  then needs `get_q`; `NBodyInitialConditions` fills it, and `make_start_particles` shifts it with the lattice.
-- With a mass assignment instead, the windows and aliasing leave 5-7% in the force.
-- A particle-mesh force near the lattice has the assignment window, and on a finer grid the lattice's discreteness
-  above the particle Nyquist frequency. Its mean force is right (projection 0.98-1.005).
-- Use the NUFFT or the sheet force with NUFFT for the IC phase; `make_force_pm` is for later times or comparisons.
+- **Sheet interpolation** works from the displacement field x − q, so the lattice's discreteness does not enter the
+  density. With NUFFT it is the exact force. With PCS and deconvolution it is within 0.05% (0.02% interlaced), so it is
+  a cheaper alternative on large grids. The particle type needs `get_q`; `NBodyInitialConditions` fills it, and
+  `make_start_particles` shifts it with the lattice.
+- **Plain PM** near the lattice has the assignment window, and on a finer grid the lattice's discreteness above the
+  particle Nyquist frequency. Interlacing does not remove the discreteness. Its mean force is right (projection
+  0.99-1.01).
+- **Interlacing** (`interlacing_order` in `make_force_pm` and `make_force_sheet`) averages the force over copies of
+  the particles shifted by fractions of a cell, as SimulationCode's `force_interlacing_order`. It cancels the leading
+  aliasing of the assignment and the interpolation. In `make_force_pm`, `interlacing` (two shifted grids for the
+  density only) is the older, density-only variant.
+- Use the NUFFT or the sheet force for the IC phase; `make_force_pm` is for later times or comparisons.
 
 ## Conventions
 

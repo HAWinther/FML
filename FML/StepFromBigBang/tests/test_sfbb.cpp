@@ -193,7 +193,16 @@ int main(int argc, char ** argv) {
             {"sheet R=2 nufft 1x", make_force_sheet<NDIM, Part>(NP, NP, kappa0, nullptr, 2, "NUFFT", "NUFFT")},
             {"sheet R=4 nufft 1x", make_force_sheet<NDIM, Part>(NP, NP, kappa0, nullptr, 4, "NUFFT", "NUFFT")},
             {"sheet R=2 PCS 1x dc", make_force_sheet<NDIM, Part>(NP, NP, kappa0, nullptr, 2, "PCS", "PCS", true)},
-            {"sheet R=2 PCS 2x dc", make_force_sheet<NDIM, Part>(2 * NP, NP, kappa0, nullptr, 2, "PCS", "PCS", true)}};
+            {"sheet R=2 PCS 2x dc", make_force_sheet<NDIM, Part>(2 * NP, NP, kappa0, nullptr, 2, "PCS", "PCS", true)},
+            {"PCS 2x dc interlaced 2", make_force_pm<NDIM, Part>(2 * NP, kappa0, nullptr, "PCS", false, true, 2)},
+            {"PCS 2x dc interlaced 4", make_force_pm<NDIM, Part>(2 * NP, kappa0, nullptr, "PCS", false, true, 4)},
+            {"sheet PCS 1x dc interlaced 2", make_force_sheet<NDIM, Part>(NP, NP, kappa0, nullptr, 2, "PCS", "PCS", true, 2)},
+            {"sheet PCS 2x dc interlaced 2",
+             make_force_sheet<NDIM, Part>(2 * NP, NP, kappa0, nullptr, 2, "PCS", "PCS", true, 2)},
+            {"sheet PCS 2x dc interlaced 4",
+             make_force_sheet<NDIM, Part>(2 * NP, NP, kappa0, nullptr, 2, "PCS", "PCS", true, 4)},
+            {"sheet nufft interlaced 2 (check)",
+             make_force_sheet<NDIM, Part>(NP, NP, kappa0, nullptr, 2, "NUFFT", "NUFFT", true, 2)}};
         for (auto & [name, force_fn] : forces) {
             auto Fp = get(force_fn);
             double ab = 0, bb = 0, aa = 0;
@@ -252,6 +261,12 @@ int main(int argc, char ** argv) {
             report("  + half-cell shift", 1,
                    one_call(make_force_sheet<NDIM, Part>(nm, NP, kappa0, nullptr, R, asg, asg), 1, 0.5 / nm), ref, za);
         }
+        report("1 step, PCS 2x dc interlaced 2", 1,
+               one_call(make_force_pm<NDIM, Part>(2 * NP, kappa0, nullptr, "PCS", false, true, 2), 1), ref, za);
+        report("1 step, sheet PCS 2x dc interlaced 2", 1,
+               one_call(make_force_sheet<NDIM, Part>(2 * NP, NP, kappa0, nullptr, 2, "PCS", "PCS", true, 2), 1), ref, za);
+        report("1 step, sheet PCS 2x dc interlaced 4", 1,
+               one_call(make_force_sheet<NDIM, Part>(2 * NP, NP, kappa0, nullptr, 2, "PCS", "PCS", true, 4), 1), ref, za);
         // Several steps with the sheet force against the NUFFT reference
         for (int n : {4, 16})
             report("bullfrog " + std::to_string(n) + " sheet nufft", n,
