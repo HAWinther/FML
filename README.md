@@ -73,7 +73,9 @@ cosmological model you add.
   more computed on the fly.
 - The pieces to build your own: Gaussian and non-Gaussian initial conditions (N-GenIC compatible), 1LPT–3LPT and
   arbitrary-order LPT, PM forces and time stepping (COLA, FastPM, also with a scale-dependent kick, and BullFrog,
-  which can start from the Big Bang), short-range forces for P3M/TreePM, and
+  which can start from the Big Bang), initial conditions made by stepping from the Big Bang
+  ([StepFromBigBang](FML/StepFromBigBang/README.md): BullFrog, a new step exact to third-order LPT, and a
+  scale-dependent hybrid for massive neutrinos and modified gravity), short-range forces for P3M/TreePM, and
   modified-gravity solvers.
 - Smaller, newer codes: an [AMR N-body code](FML/AMRCode/README.md), [wave dark matter](FML/WaveDarkMatter/README.md)
   (Schrödinger–Poisson), and gas dynamics with [finite volumes](FML/Hydrodynamics/README.md) and

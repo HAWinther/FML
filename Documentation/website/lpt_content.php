@@ -13,6 +13,7 @@
 <a href="#Growth">4. Growth factors</a><br>
 <a href="#Recon">5. Reconstruction</a><br>
 <a href="#Dealias">6. Dealiasing the 2LPT and 3LPT sources</a><br>
+<a href="#BigBang">7. Initial conditions from the Big Bang (StepFromBigBang)</a><br>
 <a href="#SixthOrder">Sixth-order checks and plane-wave cancellation</a><br>
 </p>
 
@@ -325,3 +326,37 @@ compute_3LPT_displacement_field&lt;3&gt;(delta, psi, velocity, dlogDdt, false, D
 <p>
 <tt>LPT/GrowthHistory.h</tt> exposes $D_1$, $D_2$ and their growth rates for the shared <a href="nbody.php#ForceOptions" style="display: inline">time-stepping coefficients</a>.
 </p>
+
+<header class="entry-header text-center">
+  <h1 class="entry-title" id="BigBang">Initial conditions from the Big Bang</h1>
+</header>
+<hr/>
+
+<p>
+<tt>StepFromBigBang</tt> makes initial conditions by time stepping instead of displacing the particles with $n$LPT (<a href="https://arxiv.org/abs/2309.10865" style="display: inline">List, Hahn &amp; Rampf 2024</a>). The particles start on the lattice with the Zel'dovich displacement and velocity at $a \simeq 0$. A few steps that are exact for the LPT growing mode, for any step size, move them to the initial redshift. In growth time with $s = \ln D$ and $\boldsymbol u = d\boldsymbol x/ds$ the equations of motion are $\boldsymbol x' = \boldsymbol u$, $\boldsymbol u' = -\tfrac12\boldsymbol u + \tfrac32\boldsymbol G$. On the growing mode the force at the particle is
+$$\boldsymbol G = \sum_n c_n D^n \boldsymbol\Psi_n,\qquad c_n = \frac{n(2n+1)}{3}\quad(1,\ 10/3,\ 7,\ \ldots).$$
+This holds for the particle system with whatever force is used. The steps therefore follow the growing mode of the discrete system, which near the particle Nyquist frequency is not continuous LPT, and there is no aliasing from products on a grid.
+</p>
+<p>
+Three schemes:
+</p>
+<ul>
+<li><tt>bullfrog</tt>: exact for 2LPT (BullFrog), one force per step.</li>
+<li><tt>lpt3</tt>: exact for 3LPT. It uses that the third-order force splits as $\mathcal F_3[\boldsymbol\Psi_1^3] = 6\boldsymbol\Psi_{3a} + \tfrac{21}{5}\boldsymbol\Psi_{3b} + 7\boldsymbol\Psi_{3c}$ and $2\mathcal F_2[\boldsymbol\Psi_1,\boldsymbol\Psi_2] = \tfrac95\boldsymbol\Psi_{3b}$. The first step takes forces at the Zel'dovich configuration at $s_1 = \tfrac{7}{54}D_1$ and at a corrected 2LPT configuration at $s_2 = \tfrac{7}{18}D_1$ (EdS; a small root solve in general), which makes the positions exact including the transverse term. Two forces per step.</li>
+<li><tt>hybrid</tt>: scale-dependent FastPM steps (each mode follows its own $D(k, a)$), then BullFrog. For massive neutrinos and $G_{\rm eff}(k,a)$.</li>
+</ul>
+<p>
+With $64^3$ particles and the exact force, at 4 force evaluations the error in the beyond-Zel'dovich displacement is $3.3\times10^{-3}$ for <tt>lpt3</tt> against $1.1\times10^{-2}$ for BullFrog (smooth field, $\sigma = 0.3$). That holds in EdS and in $\Lambda$CDM with radiation from $z = 10^6$. The force must be accurate near the lattice: a particle-mesh force there differs from the exact one by 9-17%, so the NUFFT force is the default.
+</p>
+<div style="text-align: center">
+  <div style="width:600px;display: inline-block;text-align: left">
+    <pre class="prettyprint">
+using namespace FML::STEPFROMBIGBANG;
+GrowthModel growth = growth_from_background(bg, growth_settings);
+auto force = make_force_nufft&lt;3, Particle&gt;(Npart_1D, kappa0_from_background(bg));
+Settings s;
+s.scheme = "lpt3";  s.a_start = 1e-7;  s.a_end = 1.0 / 20.0;  s.nsteps = 2;  s.boxsize = 500.0;
+generate_particles_from_big_bang&lt;3, Particle&gt;(part, Npart_1D, 1.5, delta_fourier, a_ref, growth, force, s);
+</pre>
+</div>
+</div>

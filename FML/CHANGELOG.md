@@ -5,6 +5,34 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### StepFromBigBang: initial conditions by stepping from the Big Bang (new module)
+- `FML/StepFromBigBang` (header only): particles start on the lattice with the Zel'dovich displacement and velocity
+  at a ~ 0 and are moved to the initial redshift with steps that are exact for the LPT growing mode for any step size.
+  The steps use only the force identity of the growing mode (G = sum c_n D^n Psi_n, c_n = n(2n+1)/3 in EdS), so they
+  follow the growing mode of the particle system with the force used, not continuous LPT, and there is no aliasing.
+  Schemes:
+  - `bullfrog`: 2LPT-exact, one force per step.
+  - `lpt3` (new): 3LPT-exact including the transverse term in the first step (forces at s1 = 7/54 D1 and
+    s2 = 7/18 D1 in EdS, a 4x4 root solve in general), two forces per step.
+  - `hybrid`: scale-dependent FastPM steps, then BullFrog at a reference k.
+- The third-order force splits as F3[Psi1^3] = 6 Psi3a + 21/5 Psi3b + 7 Psi3c and 2 F2[Psi1, Psi2] = 9/5 Psi3b
+  (measured with the exact particle force; it is the split implied by the D3b equation of `LPTGrowthFactors`). This
+  makes `lpt3` work for any GR-like growth history, including a start in the radiation era.
+- `Forces.h`: exact NUFFT and PM force callbacks, the growth model of a `Background`, and the one-call
+  `generate_particles_from_big_bang`.
+- Tests (64^3, exact force; errors in the beyond-Zel'dovich displacement against 64 BullFrog steps, smooth field,
+  sigma = 0.3):
+  - `lpt3` 2.4e-2, 3.3e-3, 1.3e-3 against BullFrog 2.9e-2, 1.1e-2, 3.7e-3 at 2, 4, 8 forces, in EdS and for LCDM
+    with radiation from z = 1e6;
+  - linear-exact in LCDM;
+  - the scale-dependent steps are linear-exact per k in a toy f(R) model.
+- Found on the way:
+  - In the radiation era the first BullFrog step must treat the start as the Zel'dovich state (D1' is small, so the
+    growing mode's second-order velocity is not negligible); otherwise the convergence is first order.
+  - A PM force near the lattice differs from the exact force by 9-17% rms. That is ~2x the beyond-Zel'dovich
+    displacement over a step, so the IC phase should use the exact force.
+- Not yet wired into SimulationCode.
+
 ### SimulationCode: scale-independent COLA with massive neutrinos relativistic at the start
 - The frame kick of scale-independent COLA used `source_factor_1LPT(a, 0)`, which is 1 at k = 0 (neutrinos fully
   clustering), while the frame's growth factor D1(a) at k = 0 is grown with `large_scale_neutrino_source_factor(a)`
