@@ -41,6 +41,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK::CHECKPOINT {
             e.text("FML Eulerian density,centered-delta2,centered-K2,physical-laplacian 1");
             e.text("FML isometric compact-white lift and Euclidean transpose 1");
             e.text("FML Eulerian posterior-noise linear-response field metric 1");
+            e.text("FML separable LPT assignment sums 1");
             // Spectrum callbacks and external physics must be versioned by problem_id.
         }
     };

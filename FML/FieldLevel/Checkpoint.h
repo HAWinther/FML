@@ -112,6 +112,20 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             static void append(Codec::Encoder & e, const Model & model) {
                 e.vector(model.response());
                 e.text("FML serial Model on distributed linear/LPT 1");
+                if (model.configuration().evolution != Evolution::Linear)
+                    e.text("FML separable LPT assignment sums 1");
+            }
+        };
+        // LPT assignment sums are factored (separable) since 22 November 2026: equal to
+        // round-off, not bitwise, so restarts of earlier LPT checkpoints are rejected.
+        template <class Grid>
+        struct ForwardIdentity<DistributedLPTModelT<Grid>> {
+            static void describe_grid(Codec::Encoder & e, const DistributedLPTModelT<Grid> & model) {
+                DETAIL::ForwardGrid<DistributedLPTModelT<Grid>>::describe(e, model);
+            }
+            static void append(Codec::Encoder & e, const DistributedLPTModelT<Grid> & model) {
+                e.vector(model.response());
+                e.text("FML separable LPT assignment sums 1");
             }
         };
         // Local-only numerical configuration codec. Specializations can describe a

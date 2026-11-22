@@ -216,7 +216,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         }
         void deposit(Workspace & w, Modes & result, bool observed) const {
             const double fill = std::pow(double(config_.density_mesh), 3) / layout().global_cells;
-            // Row-wise over z; the per-node products and visit order equal stencil()'s.
+            // Row-wise over z with the tensor-product weight factored: one product per node.
             w.assignment.deposit(w.density, [&](auto & add) {
                 const int width = stencil_width();
                 Taps t[3];
@@ -224,13 +224,15 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 for (size_t q = 0; q < cells(); ++q) {
                     particle_taps(q, w, t, false);
                     const double mass = fill * w.weight[q];
-                    for (int a = 0; a < width; ++a)
+                    for (int a = 0; a < width; ++a) {
+                        const double wa = mass * t[0].w[a];
                         for (int b = 0; b < width; ++b) {
-                            const double wab = t[0].w[a] * t[1].w[b];
+                            const double wab = wa * t[1].w[b];
                             for (int c = 0; c < width; ++c)
-                                values[c] = mass * (wab * t[2].w[c]);
+                                values[c] = wab * t[2].w[c];
                             add.row(t[0].node[a], t[1].node[b], t[2].node, values, width);
                         }
+                    }
                 }
             });
             w.density.fftw_r2c();
@@ -483,33 +485,35 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                 const double scale = config_.density_mesh;
                 for (size_t q = 0; q < cells(); ++q) {
                     particle_taps(q, w, t, true);
-                    // Register accumulators: the same additions, in order, as into the zeroed outputs.
-                    double sum_w = 0, sum_x = 0, sum_y = 0, sum_z = 0;
-                    const double particle_weight = w.weight[q];
-                    for (int a = 0; a < width; ++a)
+                    // Separable sums of the tensor-product stencil: W = sum v w0 w1 w2 and the
+                    // three gradients (one axis differentiated each), two products per node.
+                    double W = 0, X = 0, Y = 0, Z = 0;
+                    for (int a = 0; a < width; ++a) {
+                        double b00 = 0, b10 = 0, b01 = 0;
                         for (int b = 0; b < width; ++b) {
                             const double * row = w.assignment.row(reversed, t[0].node[a], t[1].node[b]);
                             const std::uint64_t key = (std::uint64_t(t[0].node[a]) * n + t[1].node[b]) * n;
+                            double r0 = 0, r1 = 0;
                             for (int c = 0; c < width; ++c) {
                                 const double value =
                                     row ? row[t[2].node[c]] : w.assignment.at(reversed, key + t[2].node[c]);
-                                // Same expressions and order as stencil(): bitwise-identical gradients.
-                                const double weight = t[0].w[a] * t[1].w[b] * t[2].w[c];
-                                const double dx = t[0].dw[a] * t[1].w[b] * t[2].w[c];
-                                const double dy = t[0].w[a] * t[1].dw[b] * t[2].w[c];
-                                const double dz = t[0].w[a] * t[1].w[b] * t[2].dw[c];
-                                const double bar = fill * value;
-                                sum_w += bar * weight;
-                                const double factor = bar * particle_weight * scale;
-                                sum_x += factor * dx;
-                                sum_y += factor * dy;
-                                sum_z += factor * dz;
+                                r0 += value * t[2].w[c];
+                                r1 += value * t[2].dw[c];
                             }
+                            b00 += t[1].w[b] * r0;
+                            b10 += t[1].dw[b] * r0;
+                            b01 += t[1].w[b] * r1;
                         }
-                    wbar[q] = sum_w;
-                    xbar[0][q] = sum_x;
-                    xbar[1][q] = sum_y;
-                    xbar[2][q] = sum_z;
+                        W += t[0].w[a] * b00;
+                        X += t[0].dw[a] * b00;
+                        Y += t[0].w[a] * b10;
+                        Z += t[0].w[a] * b01;
+                    }
+                    const double factor = fill * w.weight[q] * scale;
+                    wbar[q] = fill * W;
+                    xbar[0][q] = factor * X;
+                    xbar[1][q] = factor * Y;
+                    xbar[2][q] = factor * Z;
                 }
             }
             Modes Q(modes().size(), 0);
