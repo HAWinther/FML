@@ -5,6 +5,19 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### FieldLevel: audit fixes (faster assignment, posterior metric, checkpoint pruning)
+- Particle assignment (`DistributedAssignment.h`, used by LPT and PM) accumulates owned mesh nodes densely and
+  exchanges only nodes owned by other ranks; slab/serial ownership is a key-range test. Outputs are bitwise
+  unchanged; a 2LPT posterior evaluation is 2.3-2.4x faster.
+- `map(posterior, white, p, MAPOptions)` uses the posterior's field metric. It previously failed to compile for
+  `DistributedEulerianLPTModelT` and ignored the posterior noise policy.
+- The linear, LPT and serial models' field metric (HMC mass, MAP preconditioner) uses the posterior's actual
+  Gaussian noise (fixed, indexed or volume-rescaled) instead of the last scalar. Default policy unchanged;
+  checkpoints of non-default policies on these models get a new identity.
+- Checkpoint saves delete superseded generations except the one just replaced
+  (`CheckpointOptions::keep_previous_generations` keeps all). Previously every generation was kept.
+- New `tests/test_metric_noise_policy.cpp`; pruning checks in `test_framework_checkpoint_mpi.cpp`.
+
 ### StepFromBigBang: initial conditions by stepping from the Big Bang (new module)
 - `FML/StepFromBigBang` (header only): particles start on the lattice with the Zel'dovich displacement and velocity
   at a ~ 0 and are moved to the initial redshift with steps that are exact for the LPT growing mode for any step size.

@@ -136,6 +136,15 @@ The relevant code is [FieldLevelBAO.h](../FieldLevelBAO.h),
   and measure allocation, time and peak RSS before claiming improvements.
   One model instance contains mutable FFT scratch: concurrent chains need
   separate instances/workspaces. No speedup was measured in the review.
+  Progress (22 November 2026): particle assignment no longer routes owned mesh
+  nodes through a hash map and a sort; only nodes owned by other ranks are
+  exchanged, and slab/serial ownership is a key-range test. Predictions and
+  gradients are bitwise unchanged (A/B on 1/2/4 slab ranks); one 2LPT
+  posterior evaluation is 2.3-2.4x faster (32^3/64^3: 0.25 -> 0.11 s; 64^3/128^3:
+  2.16 -> 0.90 s, serial). The 343-point smooth-kernel stencil arithmetic now
+  dominates; a separable row-wise deposition is the next step. Per-call workspace
+  allocation is unchanged. Full serial and MPI (1/2/4 ranks, slab and pencil) test
+  suites pass.
 
 ## Resolved diagnostics issue
 
@@ -440,3 +449,36 @@ divergences. Corrected maximum Rhat is 1.023: this short probe does not pass eve
 production mixing gate or establish marginal-sigma8/full-field calibration.
 No extra draws or retuning were used. Next: a declared longer joint field/scalar
 pilot and numerical/scientific posterior validation.
+
+
+## Code audit (22 November 2026)
+
+Library headers were reviewed; physics conventions, adjoints, normalizations
+and samplers checked by reading were found correct. Resolved in this change:
+
+- [x] **FL-8: Options MAP bypassed the posterior metric.** `map(posterior, ..., MAPOptions)`
+  called `model.apply_field_metric`, which `DistributedEulerianLPTModelT` lacks (compile
+  error) and which ignores the posterior noise policy. It now uses
+  `posterior.apply_field_metric`, like the legacy `map()` and HMC. Default-policy
+  models are numerically unchanged.
+- [x] **FL-9: Generic field metric ignored the posterior noise.** Linear, LPT and the serial
+  `Model` read the noise from the last scalar even with `GaussianNoise::fixed_power`, a
+  non-last noise index or a different likelihood volume (the FL-7 defect, there fixed
+  only for the Eulerian model). Those posteriors now pass the actual noise. Sampling was
+  valid before; only the mass/preconditioner was wrong. The default policy keeps the
+  exact historical call; checkpoint identities of non-default policies on these models
+  are versioned, so their older checkpoints are rejected on restart.
+- [x] **FL-10: Checkpoint generations were never removed.** Each save wrote a full new
+  generation and kept all old ones. Saves now keep the current and the superseded
+  generation (`keep_previous_generations` keeps all).
+
+Open, not changed here:
+
+- FL-11: with fixed noise (and for the Poisson survey likelihood) the linear/LPT models
+  still carry `log_noise_power` as a sampled, prior-only scalar. Removing it changes
+  parameter layouts and checkpoint identities.
+- FL-12: the serial `Model` (via the `FieldLevelBAO` engine) and `DistributedLPT` implement
+  2LPT, bias weights and assignment taps separately; fixes must be applied twice.
+- FL-13: `CartesianSurveyObservation::synthesize` does an extra c2r/r2c round trip on every
+  evaluation for a Hermitian check; `PeriodicCatalog` statistics count zero-weight rows in
+  `rows`/`number_density`.
