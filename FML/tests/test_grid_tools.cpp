@@ -503,8 +503,10 @@ int main(int argc, char ** argv) {
                         err[4] < 0.1 * err[3],
                     "Interlacing of order 1, 2, 4, 8, 64 reduces aliasing as expected");
         // The rank-1 lattices also cancel the even images: 3 grids beat 8 half-cell grids, 7 beat 64 quarter cells.
-        // 16 (diagonal refinement) leaves (4,0,0) like 64
-        check_local(err[5] < 0.5 * err[3] and err[6] < 0.2 * err[4] and err[7] < 0.2 * err[6] and
+        // 16 (diagonal refinement) leaves (4,0,0) like 64. With float grids 13 reaches the round-off floor (~2e-7
+        // here, 5e-8 in double), so there it is only required to be clearly below 7
+        check_local(err[5] < 0.5 * err[3] and err[6] < 0.2 * err[4] and
+                        err[7] < FML::TESTS::grid_tol(0.2, 0.5) * err[6] and
                         std::abs(err[8] / err[4] - 1.0) < 0.1,
                     "Interlacing with the rank-1 lattices of order 3, 7, 13 reduces aliasing as expected");
     }
