@@ -1040,7 +1040,7 @@ namespace FML {
                                            std::vector<std::string> * names = nullptr,
                                            std::vector<std::array<int, 2>> * pairs = nullptr) {
                 const int nout = int(aout.size());
-                if (nout == 0 or kvalues.empty())
+                if (nout == 0 or (kvalues.empty() and not options.mpi_parallel))
                     return std::vector<std::vector<std::vector<double>>>(nout);
                 const auto tab = mg_loop_tables(model, aout, pofk, W_operators, W_displacement, options, settings);
                 std::vector<std::vector<std::vector<double>>> result(nout);

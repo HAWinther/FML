@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <complex>
 #include <iostream>
@@ -17,6 +18,7 @@
 #endif
 
 #include <FML/ComputePowerSpectra/HybridBiasOperators.h>
+#include <FML/Global/Global.h>
 
 namespace FML {
     namespace CORRELATIONFUNCTIONS {
@@ -75,6 +77,10 @@ namespace FML {
                 /// How many of the operators (1, delta, delta2, s2, nabla2delta) to use
                 int noperators{5};
                 bool verbose{false};
+                /// All MPI tasks call the function together (with their own k-values): one q-grid for the k-range
+                /// of all tasks, and the radial integrals R_l(q) shared out over the tasks (instead of every task
+                /// doing all of them on a q-grid for its own k-values)
+                bool mpi_parallel{false};
             };
 
             namespace detail {
@@ -308,6 +314,8 @@ namespace FML {
 #pragma omp parallel for schedule(dynamic, 16)
 #endif
                 for (int iq = 0; iq <= nq; iq++) {
+                    if (options.mpi_parallel and iq % FML::NTasks != FML::ThisTask)
+                        continue;
                     const double q = iq * dq;
                     std::vector<std::array<double, 5>> jl(nkint);
                     for (size_t i = 0; i < nkint; i++)
@@ -325,6 +333,10 @@ namespace FML {
                         }
                     }
                 }
+                if (options.mpi_parallel)
+                    for (auto & c : corr)
+                        for (auto & R : c.R)
+                            FML::SumArrayOverTasks(R.data(), R.size());
 
                 // The correlation tensor of correlator c at q (index iq), with q-hat = z
                 auto tensor = [&](const Correlator & c, int iq) {
@@ -674,11 +686,17 @@ namespace FML {
                 if (std::abs(nu) > 1.0)
                     throw std::runtime_error("[zeldovich_hybrid_bias_pkmu] |nu| > 1");
                 const int nop = options.noperators;
-                if (kvalues.empty())
+                if (kvalues.empty() and not options.mpi_parallel)
                     return {};
                 double kout_min, kout_max;
                 kout_range(kvalues, kout_min, kout_max);
+                if (options.mpi_parallel) {
+                    FML::MinOverTasks(&kout_min);
+                    FML::MaxOverTasks(&kout_max);
+                }
+                const auto tstart = std::chrono::steady_clock::now();
                 const auto S = zeldovich_qsetup(W_operators, W_displacement, pofk, kout_min, kout_max, options);
+                const double tsetup = std::chrono::duration<double>(std::chrono::steady_clock::now() - tstart).count();
 
                 std::vector<int> index;
                 const auto pairlist = zeldovich_pairs(nop, index);
@@ -702,9 +720,12 @@ namespace FML {
                     for (int i = 0; i < npairs; i++)
                         result[i][ik] = r[i];
                 }
-                if (options.verbose)
+                if (options.verbose and FML::ThisTask == 0)
                     std::cout << "[zeldovich_hybrid_bias_spectra] nq = " << S.nq << " dq = " << S.dq
-                              << " qmax = " << S.qmax << " sigma^2 = X_inf / 2 = " << 0.5 * S.Xinf << "\n";
+                              << " qmax = " << S.qmax << " sigma^2 = X_inf / 2 = " << 0.5 * S.Xinf
+                              << " (q-functions " << tsetup << " sec, then " << kvalues.size() << " k-values on task 0 "
+                              << std::chrono::duration<double>(std::chrono::steady_clock::now() - tstart).count() - tsetup
+                              << " sec)\n";
                 return result;
             }
 
@@ -741,10 +762,14 @@ namespace FML {
                 if (ellmax < 0 or ellmax % 2 != 0)
                     throw std::runtime_error("[zeldovich_hybrid_bias_multipoles] ellmax must be even");
                 const int nop = options.noperators;
-                if (kvalues.empty())
+                if (kvalues.empty() and not options.mpi_parallel)
                     return {};
                 double kout_min, kout_max;
                 kout_range(kvalues, kout_min, kout_max);
+                if (options.mpi_parallel) {
+                    FML::MinOverTasks(&kout_min);
+                    FML::MaxOverTasks(&kout_max);
+                }
                 const auto S = zeldovich_qsetup(W_operators, W_displacement, pofk, kout_min, kout_max, options);
                 std::vector<int> index;
                 const auto pairlist = zeldovich_pairs(nop, index);

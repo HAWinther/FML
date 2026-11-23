@@ -11,7 +11,7 @@ USE_FFTW            ?= true
 USE_GSL             ?= true
 USE_LUA             ?= true
 
-TARGETS := test_core test_mpi_counts test_grid_tools test_fof test_so test_so_multislab test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_hybridbias_rsd test_sphericalcollapse test_screened_collapse test_halomodel test_halomodel_reaction test_gadget test_ramses test_camb test_numcore test_fftlog test_emulator test_utils test_interpolation test_grids test_particles test_domain test_lpt test_nbody
+TARGETS := test_core test_mpi_counts test_grid_tools test_fof test_so test_so_multislab test_fnl test_kdtree test_paircount test_survey test_pofk test_reconstruction test_multigrid test_hybridbias test_hybridbias_rsd test_hybridbias_mpi test_sphericalcollapse test_screened_collapse test_halomodel test_halomodel_reaction test_gadget test_ramses test_camb test_numcore test_fftlog test_emulator test_utils test_interpolation test_grids test_particles test_domain test_lpt test_nbody
 TARGETS += test_baryonification test_numericalmethods test_interlacing_offset test_streamed_kick test_lightcone test_random_fields test_timestepping test_transfers
 TARGETS += test_fourier_resampling test_testhelpers test_review_fixes
 TARGETS += test_four_point
@@ -215,6 +215,10 @@ test_hybridbias: test_hybridbias.o Global.o Spline.o
 test_hybridbias_rsd: test_hybridbias_rsd.o Global.o Spline.o
 	$(LINK_EXE)
 
+# The LPT predictions of the hybrid bias spectra with the k-values shared out over the MPI tasks
+test_hybridbias_mpi: test_hybridbias_mpi.o Global.o Spline.o
+	$(LINK_EXE)
+
 # GadgetUtils (binary GADGET format; the HDF5 part only with USE_HDF5=true)
 test_gadget: test_gadget.o Global.o GadgetUtils.o
 	$(LINK_EXE)
@@ -399,6 +403,8 @@ run: $(TARGETS)
 	  OMP_NUM_THREADS=2 $(RUN) ./test_baryonification; \
 	  echo "== Running test_hybridbias_rsd with $$np task(s)"; \
 	  OMP_NUM_THREADS=2 $(RUN) ./test_hybridbias_rsd; \
+	  echo "== Running test_hybridbias_mpi with $$np task(s)"; \
+	  OMP_NUM_THREADS=2 $(RUN) ./test_hybridbias_mpi; \
 	done
 	@echo "== Running test_hybridbias"
 	@OMP_NUM_THREADS=2 $(RUN1) ./test_hybridbias

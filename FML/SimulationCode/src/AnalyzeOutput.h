@@ -702,6 +702,9 @@ void write_hybrid_bias_predictions(
     ZeldovichOptions zoptions;
     zoptions.noperators = settings.noperators;
     zoptions.kmin_integration = settings.lpt_kmin > 0.0 ? settings.lpt_kmin : std::max(1e-5, krange.first);
+    // All tasks compute the predictions together: one q-grid for the k-values of all tasks (a grid from a task's own
+    // k-values is too short for the smallest k of the others) and the radial integrals shared out over the tasks
+    zoptions.mpi_parallel = true;
     if (settings.zeldovich) {
         zoptions.kmax_integration = std::min(std::max(kcut, kcut_displacement), krange.second);
         auto zeldovich =
@@ -893,14 +896,13 @@ void compute_hybrid_bias_rsd(NBodySimulation<NDIM, T> & sim,
     zoptions.noperators = settings.noperators;
     zoptions.kmin_integration = settings.lpt_kmin > 0.0 ? settings.lpt_kmin : std::max(1e-5, krange.first);
     zoptions.kmax_integration = std::min(std::max(kcut, kcutd), krange.second);
+    zoptions.mpi_parallel = true; // As in real space (all tasks call it, see write_hybrid_bias_predictions)
     const std::string note = " (linear P_cb(k,z), operators cut at k = " + std::to_string(kcut) +
                              " h/Mpc, displacement at " + std::to_string(kcutd) + " h/Mpc, f = " + std::to_string(f) +
                              "; for k < 16 k_fundamental averaged over |k| of the modes in each bin, not over their mu)\n";
     if (settings.zeldovich) {
-        std::vector<std::vector<std::vector<double>>> pred;
-        if (not grid.klocal.empty())
-            pred = zeldovich_hybrid_bias_multipoles(
-                pofk_linear_of_k, W_operators, W_displacement, grid.klocal, f, ellmax, zoptions);
+        const auto pred = zeldovich_hybrid_bias_multipoles(
+            pofk_linear_of_k, W_operators, W_displacement, grid.klocal, f, ellmax, zoptions);
         const auto zprediction = to_multipoles(pred);
         zprediction.write(snapshot_folder + "/hybridbias_rsd_zeldovich_z" + zs + ".txt",
                           "# Zel'dovich prediction (exact) of the hybrid bias multipoles in redshift space" + note +
