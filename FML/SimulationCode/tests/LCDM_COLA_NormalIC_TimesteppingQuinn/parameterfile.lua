@@ -242,6 +242,8 @@ ic_nmesh = particle_Npart_1D
 ic_use_gravity_model_GR = true
 -- The LPT order to use for the IC
 ic_LPT_order = 2
+-- Dealias the 2LPT/3LPT sources (off, as in MG-PICOLA)
+ic_LPT_dealiasing = false
 -- The type of input: 
 -- powerspectrum    (file with [k (h/Mph) , P(k) (Mpc/h)^3)])
 -- transferfunction (file with [k (h/Mph) , T(k)  Mpc^2)]

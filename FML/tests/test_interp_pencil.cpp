@@ -129,13 +129,15 @@ int main(int argc, char ** argv) {
                 }
                 diff_shift = std::max(diff_shift, max_rel_diff(b, a));
             }
-            check(diff_shift < 1e-12,
+            // (float grids: the two depositions sum the particles in a different order)
+            check(diff_shift < FML::TESTS::grid_tol(1e-12, 1e-5),
                   "pencils " + std::to_string(p0) + "x" + std::to_string(FML::NTasks / p0) +
                       ": particles shifted beyond the right edge (not wrapped) = deposition at the offset (rel. diff " +
                       num(diff_shift, 2) + ")");
         }
         const double diff = max_rel_diff(res, ref);
-        check(diff < 1e-12,
+        // (float grids: round-off of the FFTs, amplified by the deconvolution of the higher-order kernels)
+        check(diff < FML::TESTS::grid_tol(1e-12, 1e-4),
               "pencils " + std::to_string(p0) + "x" + std::to_string(FML::NTasks / p0) +
                   ": CIC/TSC/PCS with and without interlacing (orders 2, 4, 8) and deconvolved: the modes of the "
                   "slabs (rel. diff " +
