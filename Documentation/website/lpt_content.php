@@ -348,6 +348,17 @@ Three schemes:
 <p>
 With $64^3$ particles and the exact force, at 4 force evaluations the error in the beyond-Zel'dovich displacement is $3.3\times10^{-3}$ for <tt>lpt3</tt> against $1.1\times10^{-2}$ for BullFrog (smooth field, $\sigma = 0.3$). That holds in EdS and in $\Lambda$CDM with radiation from $z = 10^6$. On the full band a single BullFrog step is already more accurate than 2LPT or 3LPT initial conditions at the same redshift, because it follows the growing mode of the particle system near the particle Nyquist frequency.
 </p>
+<p>
+<b>Steps from the Big Bang against $n$LPT initial conditions.</b> List, Hahn &amp; Rampf found that one step from $a = 0$ to $z = 18$ is more accurate than 2LPT at $z = 18$. With their cosmology ($\Omega_m = 0.3$, $\sigma_8 = 0.8$, Eisenstein-Hu spectrum) and particle spacing ($0.195$ Mpc/$h$), the exact force and a converged N-body reference, the errors in units of the beyond-Zel'dovich displacement are:
+</p>
+<table class="table table-striped table-condensed">
+<tr><th>scales</th><th>2LPT IC</th><th>3LPT IC</th><th>1 BullFrog step</th><th>1 <tt>lpt3</tt> step (3 forces)</th></tr>
+<tr><td>all</td><td>0.34</td><td>0.32</td><td>0.13</td><td>0.059</td></tr>
+<tr><td>$k &lt; k_{\rm Ny}$</td><td>0.23</td><td>0.19</td><td>0.069</td><td>0.028</td></tr>
+<tr><td>$k &lt; k_{\rm Ny}/2$</td><td>0.14</td><td>0.036</td><td>0.035</td><td>0.012</td></tr>
+</table>
+<p>
+The claim holds, and one <tt>lpt3</tt> step also beats 3LPT (3&times; on large scales, 5-7&times; over the full band). A step exact to order $n$ evaluates the force at configurations containing higher orders, so it carries part of the next order; and it follows the particle system, which near the particle Nyquist frequency is not continuous LPT, an error $n$LPT initial conditions have at every order. The residual <i>to 3LPT</i> is therefore only meaningful well below $k_{\rm Ny}$. After shell crossing <tt>lpt3</tt> is worse than both. One or two <tt>lpt3</tt> steps give initial conditions more accurate than 3LPT for three or four force evaluations; one BullFrog step is the cheaper option and already beats 2LPT and 3LPT over the full band.
 <figure class="science-figure">
   <img src="images/sfbb_convergence.png" loading="lazy" decoding="async" alt="Six panels of position error against the number of force evaluations for BullFrog and lpt3, for smooth and full-band fields with sigma 0.1, 0.3 and 1; both converge, lpt3 faster on smooth fields before shell crossing, and both beat 2LPT and 3LPT initial conditions">
   <figcaption>Position error in units of the beyond-Zel'dovich displacement against the number of force evaluations, from $D = 0$ ($64^3$ particles, EdS, exact force). Top: a smooth field ($k &lt; k_{\rm Ny}/4$); bottom: the full band. The reference is 64 BullFrog steps (grey: its uncertainty); horizontal lines are 2LPT and 3LPT initial conditions.</figcaption>

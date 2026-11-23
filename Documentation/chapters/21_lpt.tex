@@ -250,21 +250,22 @@ the positions changes the force only by $\bm e_L$.
       Later steps predict the exact 2LPT configuration from $\bm u_0$ and the previous force,
       $\tilde\vx = \vx_0 + \alpha\bm u_0 + \beta\bm C_0$ ($\alpha = p-\tfrac34p^2$, $\beta=\tfrac34p^2$ in EdS). They take
       one force there, and $\vx_1$, $\bm u_1$ follow from a $3\times3$ system. That is two forces per step (one is reused
-      as the next step's $\bm C_0$) and one extra vector per particle.
+      as the next step's $\bm C_0$) and one extra vector per particle. The first step needs a third force at its end
+      for the velocity, so $n$ steps cost 3 forces for $n=1$ and $2n$ for $n>1$.
 \item \code{hybrid}: scale-dependent FastPM steps (the kick has a factor per $k$ so each mode follows its own
       $D(k,a)$; the start velocity is the effective velocity of the first drift, so no force is taken at the lattice),
       then BullFrog at a reference $k$. For massive neutrinos and $G_{\rm eff}(k,a)$.
 \end{itemize}
 
 \paragraph*{Accuracy.} The tests use $64^3$ particles, the exact NUFFT force, a smooth field with $\sigma=0.3$, and the
-error in the beyond-Zel'dovich displacement against 64 BullFrog steps:
+error in the beyond-Zel'dovich displacement against 64 BullFrog steps (one \code{lpt3} step takes 3 forces):
 \begin{center}
 \begin{tabular}{lcccc}
 \toprule
 forces & 2 & 4 & 8 & 16\\
 \midrule
 \code{bullfrog} & $2.9\times10^{-2}$ & $1.1\times10^{-2}$ & $3.7\times10^{-3}$ & $1.1\times10^{-3}$\\
-\code{lpt3} & $2.4\times10^{-2}$ & $3.3\times10^{-3}$ & $1.3\times10^{-3}$ & $3.6\times10^{-4}$\\
+\code{lpt3} & $2.4\times10^{-2}$\,(3) & $3.3\times10^{-3}$ & $1.3\times10^{-3}$ & $3.6\times10^{-4}$\\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -278,6 +279,37 @@ fields from the linear to the shell-crossing regime, and \cref{fig:lpt-sfbb-orde
 error of one BullFrog step falls as $\sigma_\delta$, that of one \code{lpt3} step as $\sigma_\delta^2$. On the full
 band a single BullFrog step is already more accurate than 2LPT or 3LPT initial conditions at the same redshift,
 because it follows the growing mode of the particle system near the particle Nyquist frequency.
+
+\paragraph*{Steps from the Big Bang against $n$LPT initial conditions.} List, Hahn \& Rampf \cite{ListBigBang2024}
+found that a single LPT-informed step from $a=0$ to $z=18$ is more accurate than 2LPT at $z=18$. We repeated the
+test with their cosmology ($\Omega_m=0.3$, $h=0.6711$, $n_s=0.9624$, $\sigma_8=0.8$, Eisenstein--Hu spectrum, no
+cutoff) and particle spacing ($0.195\Mpch$: $64^3$ particles in $12.5\Mpch$), the exact force, and a converged
+N-body reference (64 BullFrog steps, which agree with 32 \code{lpt3} steps to $6\times10^{-4}$). The errors in units
+of the beyond-Zel'dovich displacement are
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+scales & 2LPT IC & 3LPT IC & 1 BullFrog step & 1 \code{lpt3} step (3 forces)\\
+\midrule
+all & 0.34 & 0.32 & 0.13 & 0.059\\
+$k<k_{\rm Ny}$ & 0.23 & 0.19 & 0.069 & 0.028\\
+$k<k_{\rm Ny}/2$ & 0.14 & 0.036 & 0.035 & 0.012\\
+\bottomrule
+\end{tabular}
+\end{center}
+(relative to the whole displacement: 1.1\% for 2LPT, 0.43\% for one BullFrog step). The claim holds: one BullFrog
+step beats 2LPT on every scale and equals 3LPT on large scales, and one \code{lpt3} step beats 3LPT by a factor
+3 on large scales and 5--7 over the full band. The gain has two sources. A step that is exact to order $n$ evaluates
+the force at configurations that contain higher orders, so it also carries part of the order-$(n+1)$ displacement.
+And it follows the particle system, which near the particle Nyquist frequency is not continuous LPT: $n$LPT
+initial conditions carry this discreteness error at every order, which is why 3LPT barely improves on 2LPT over the
+full band. For the same reason the residual \emph{to 3LPT} is a meaningful measure only well below $k_{\rm Ny}$
+(there one BullFrog step is 0.042 from 3LPT and 2LPT 0.134); over the full band the step is further from 3LPT than
+2LPT is, while closer to the true particle solution. The same ordering holds in the EdS tests
+(\cref{fig:lpt-sfbb-convergence}; smooth field, $\sigma_\delta = 0.1$: 3LPT 0.008, one \code{lpt3} step 0.0016) until
+shell crossing, after which \code{lpt3} is worse than both. With one or two \code{lpt3} steps the initial conditions
+are therefore more accurate than 3LPT at a cost of three or four force evaluations; one BullFrog step is the cheaper
+option and already beats 2LPT and 3LPT over the full band.
 
 \begin{figure}[t]
 \centering

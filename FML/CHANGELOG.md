@@ -51,7 +51,8 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
   Schemes:
   - `bullfrog`: 2LPT-exact, one force per step.
   - `lpt3` (new): 3LPT-exact including the transverse term in the first step (forces at s1 = 7/54 D1 and
-    s2 = 7/18 D1 in EdS, a 4x4 root solve in general), two forces per step.
+    s2 = 7/18 D1 in EdS, a 4x4 root solve in general), two forces per step; the first step needs a third at its end for the
+    velocity (3 forces for one step, 2n for n > 1).
   - `hybrid`: scale-dependent FastPM steps, then BullFrog at a reference k.
 - The third-order force splits as F3[Psi1^3] = 6 Psi3a + 21/5 Psi3b + 7 Psi3c and 2 F2[Psi1, Psi2] = 9/5 Psi3b
   (measured with the exact particle force; it is the split implied by the D3b equation of `LPTGrowthFactors`). This
@@ -66,6 +67,10 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
   by fractions of a cell (`generate_interlacing_shifts`, as SimulationCode's `force_interlacing_order`). Sheet with
   PCS on a 2x grid goes from 5.2e-4 to 2.1e-4 (one step 0.0512). Plain PM barely changes: its near-lattice error is
   the lattice's discreteness, not aliasing.
+- Steps from the Big Bang against nLPT initial conditions (LCDM, z = 18, the particle spacing of List, Hahn & Rampf
+  2023): one BullFrog step beats 2LPT and 3LPT over the full band (0.13 against 0.34 / 0.32 of the beyond-Zel'dovich
+  displacement), one `lpt3` step beats 3LPT by 3x on large scales and 5-7x over the full band. `test_sfbb dump` takes
+  `PK_LCDM="L,z"` for an Eisenstein-Hu LCDM field. In the book, the README and on the website.
 - Fixed: `make_force_pm` with `deconvolve` divided out only the assignment window, not the interpolation window.
   PCS on a 1x grid is now within 1.3e-3 of the exact force (4.4e-4 with `interlacing_order = 2`; one step 0.0517
   against 0.0509 exact), as good as the sheet. On a grid finer than the particles the deconvolution amplifies the

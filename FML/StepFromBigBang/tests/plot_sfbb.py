@@ -51,8 +51,8 @@ for ax, (kc_, s) in zip(axs.ravel(), cases):
     summary[case] = dict(bullfrog=eb, lpt3=el, ic_2lpt=e2, ic_3lpt=e3, ref_floor=floor)
     ax.axhspan(1e-9, floor, color=GRID, alpha=0.7, lw=0)
     ax.plot(BF, eb, '-o', color=C['blue'], lw=2, ms=6, mec=SURF, mew=1.2, label='BullFrog (1 force / step)')
-    ax.plot([2 * n for n in L3], el, '-s', color=C['orange'], lw=2, ms=6, mec=SURF, mew=1.2,
-            label='lpt3 (2 forces / step)')
+    ax.plot([3 if n == 1 else 2 * n for n in L3], el, '-s', color=C['orange'], lw=2, ms=6, mec=SURF, mew=1.2,
+            label='lpt3 (3 forces for 1 step, 2n for n steps)')
     if abs(np.log10(e2 / e3)) < 0.12:   # the two IC lines nearly coincide: one label
         ax.axhline(e2, color=INK2, lw=1, ls='--')
         ax.text(17.5, max(e2, e3), '2LPT and 3LPT IC', color=INK2, fontsize=8, va='bottom', ha='right')
@@ -81,7 +81,7 @@ fig, axs = plt.subplots(3, 2, figsize=(11, 11.4))
 ax = axs[0, 0]
 for (name, lab, col, mk, ls) in [('lpt2', '2LPT IC', C['magenta'], 'v', '--'), ('lpt3', '3LPT IC', C['green'], '^', ':'),
                                  ('bf1', 'BullFrog, 1 step', C['blue'], 'o', '-'), ('bf2', 'BullFrog, 2 steps', C['aqua'], 'D', '-'),
-                                 ('l3_1', 'lpt3, 1 step (2 forces)', C['orange'], 's', '-'),
+                                 ('l3_1', 'lpt3, 1 step (3 forces)', C['orange'], 's', '-'),
                                  ('l3_2', 'lpt3, 2 steps (4 forces)', C['yellow'], 'P', '-')]:
     ax.loglog(kc, ek(name), ls=ls, marker=mk, color=col, lw=1.8, ms=5, mec=SURF, mew=1, label=lab)
 ax.set_title('error per k: methods (full band, $\\sigma_\\delta$ = 0.3)', fontsize=9.5)

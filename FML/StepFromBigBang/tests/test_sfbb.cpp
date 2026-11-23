@@ -14,7 +14,9 @@
 #include <FML/RandomGenerator/RandomGenerator.h>
 #include <FML/StepFromBigBang/Forces.h>
 #include <FML/StepFromBigBang/StepFromBigBang.h>
+#include <FML/Cosmology/Spectra/EisensteinHu.h>
 
+#include <chrono>
 #include <cmath>
 #include <iomanip>
 #include <iostream>
@@ -69,6 +71,51 @@ FML::GRID::FFTWGrid<NDIM> make_delta(double kcut, double sigma, int seed = 1) {
     FML::GRID::for_each_fourier_mode<NDIM>(delta, [&](size_t i, double) {
         delta.set_fourier_from_index(i, delta.get_fourier_from_index(i) * FML::GRID::FloatType(norm));
     });
+    return delta;
+}
+
+// A realistic linear delta: Eisenstein-Hu LCDM (Omega_m = 0.3, h = 0.6711, n_s = 0.9624, sigma8 = 0.8, as List, Hahn
+// & Rampf 2023) in a box of L Mpc/h at redshift z, no cutoff. Growth D(z)/D(0) of LCDM without radiation.
+FML::GRID::FFTWGrid<NDIM> make_delta_lcdm(double L, double z, int seed = 1) {
+    FML::COSMOLOGY::EisensteinHuParameters eh;
+    eh.Omega_m = 0.3;
+    eh.h = 0.6711;
+    const double ns = 0.9624, sigma8 = 0.8, Om = 0.3;
+    auto Pshape = [&](double k) { return std::pow(k, ns) * std::pow(FML::COSMOLOGY::eisenstein_hu_transfer(k, eh), 2); };
+    // sigma8 of the shape (top hat R = 8 Mpc/h), log-k trapezoid
+    double s2 = 0;
+    const int nk = 20000;
+    const double lk0 = std::log(1e-5), lk1 = std::log(1e3), dlk = (lk1 - lk0) / nk;
+    for (int i = 0; i <= nk; i++) {
+        const double k = std::exp(lk0 + i * dlk), x = 8 * k;
+        const double W = 3 * (std::sin(x) - x * std::cos(x)) / (x * x * x);
+        s2 += (i == 0 or i == nk ? 0.5 : 1.0) * Pshape(k) * W * W * k * k * k / (2 * M_PI * M_PI) * dlk;
+    }
+    // LCDM growth D(a) ~ H(a) int_0^a da' / (a' H)^3
+    auto Dgrowth = [&](double a) {
+        auto H = [&](double x) { return std::sqrt(Om / (x * x * x) + 1 - Om); };
+        double I = 0;
+        const int n = 20000;
+        for (int i = 1; i <= n; i++) {
+            const double x = a * (i - 0.5) / n;
+            I += 1 / std::pow(x * H(x), 3) * a / n;
+        }
+        return 2.5 * Om * H(a) * I;
+    };
+    const double D = Dgrowth(1 / (1 + z)) / Dgrowth(1.0);
+    const double A = sigma8 * sigma8 / s2 * D * D;
+    std::cout << "LCDM delta: L = " << L << " Mpc/h, z = " << z << ", D(z)/D(0) = " << D << "\n";
+    FML::GRID::FFTWGrid<NDIM> delta(NP, 1, 1);
+    FML::RANDOM::RandomGenerator rng;
+    rng.set_seed(seed);
+    FML::RANDOM::GAUSSIAN::generate_gaussian_random_field_fourier<NDIM>(
+        delta, &rng, [&](double kB) { return kB > 0 ? A * Pshape(kB / L) / (L * L * L) : 0.0; }, false);
+    auto tmp = delta;
+    tmp.fftw_c2r();
+    double v = 0;
+    for (auto && ri : tmp.get_real_range())
+        v += std::pow(tmp.get_real_from_index(ri), 2);
+    std::cout << "  rms of the linear delta on the lattice: " << std::sqrt(v / std::pow(NP, NDIM)) << "\n";
     return delta;
 }
 
@@ -164,6 +211,65 @@ int main(int argc, char ** argv) {
     if (const char * e = std::getenv("NUFFT_EPS"))
         NUFFT_EPS = std::stod(e);
 
+    if (mode == "cost") {
+        // Wall time of nLPT initial conditions against 1 and 2 steps from the Big Bang with several forces
+        // (EdS, the Eisenstein-Hu LCDM field at z = 18 in a box with the spacing 0.195 Mpc/h). test_sfbb cost N
+        auto delta = make_delta_lcdm(0.1953125 * NP, 18.0);
+        auto g = growth_EdS();
+        auto kappa0 = [](double a) { return 1.5 * std::sqrt(a); };
+        Settings s;
+        s.a_start = 1e-7;
+        s.a_end = 1.0;
+        s.verbose = false;
+        auto timeit = [](auto && f) {
+            auto t0 = std::chrono::steady_clock::now();
+            f();
+            return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        };
+        std::vector<std::pair<std::string, double>> res;
+        // the particle creation alone (the lattice, ids, q; Zel'dovich) for reference
+        for (int order : {1, 2, 3}) {
+            Particles part;
+            std::vector<FML::GRID::FFTWGrid<NDIM>> phi;
+            FML::NBODY::LPTInitialConditionsOptions opt;
+            opt.dealiasing = FML::COSMOLOGY::LPT::Dealiasing::Padding;
+            res.push_back({std::to_string(order) + "LPT (dealiased)", timeit([&] {
+                               FML::NBODY::NBodyInitialConditions<NDIM, Part>(
+                                   part, NP, 1.5, delta, phi, order, 1.0, 0.0, std::vector<double>{1.0, 2.0, 3.0, 3.0},
+                                   nullptr, nullptr, nullptr, nullptr, nullptr, opt);
+                           })});
+        }
+        std::vector<std::pair<std::string, SFBB::ForceFunction>> forces{
+            {"exact NUFFT", make_force_nufft<NDIM, Part>(NP, kappa0)},
+            {"NUFFT eps 1e-6", make_force_nufft<NDIM, Part>(NP, kappa0, nullptr, 1e-6)},
+            {"sheet PCS 1x", make_force_sheet<NDIM, Part>(NP, NP, kappa0, nullptr, 2, "PCS", "PCS", true)},
+            {"PM PCS 1x dc", make_force_pm<NDIM, Part>(NP, kappa0, nullptr, "PCS", false, true)},
+            {"PM CIC 1x", make_force_pm<NDIM, Part>(NP, kappa0, nullptr, "CIC", false, false)}};
+        for (auto & [fname, f] : forces) {
+            for (auto [scheme, n] : std::vector<std::pair<std::string, int>>{{"bullfrog", 1}, {"bullfrog", 2},
+                                                                            {"lpt3", 1}, {"lpt3", 2}}) {
+                auto ss = s;
+                ss.scheme = scheme;
+                ss.nsteps = n;
+                Particles part;
+                res.push_back({scheme + " x" + std::to_string(n) + ", " + fname, timeit([&] {
+                                   generate_particles_from_big_bang<NDIM, Part>(part, NP, 1.5, delta, 1.0, g, f, ss);
+                               })});
+            }
+            // one force evaluation alone
+            auto ss = s;
+            ss.a_start = 0.5;
+            SFBB sfbb(g, f, ss);
+            Particles part;
+            sfbb.make_start_particles(part, NP, 1.5, delta, 1.0);
+            res.push_back({"  one force, " + fname, timeit([&] { f(part, 0.5, nullptr, {{Target::Scratch, 1.0}}); })});
+        }
+        std::cout << "\nCOST N = " << NP << "\n";
+        for (auto & [n, t] : res)
+            std::cout << "COST " << std::left << std::setw(32) << n << std::right << std::fixed << std::setprecision(3)
+                      << t << " s\n";
+        return 0;
+    }
     if (mode == "dump") {
         // Data for the accuracy figure. test_sfbb dump N kcut sigma outdir job...  (EdS, D = 1 at the end)
         //   ref: 64 BullFrog and 32 lpt3 steps; ic: Zel'dovich, 2LPT, 3LPT (dealiased, no curl); bf: 1..16 BullFrog;
@@ -174,7 +280,15 @@ int main(int argc, char ** argv) {
         const std::string out = argv[5];
         auto g = growth_EdS();
         auto kappa0 = [](double a) { return 1.5 * std::sqrt(a); };
-        auto delta = make_delta(kcut, sigma);
+        // PK_LCDM="L,z": the Eisenstein-Hu LCDM field instead (kcut and sigma ignored)
+        auto delta = [&]() {
+            if (const char * e = std::getenv("PK_LCDM")) {
+                const std::string str(e);
+                const auto c = str.find(',');
+                return make_delta_lcdm(std::stod(str.substr(0, c)), std::stod(str.substr(c + 1)));
+            }
+            return make_delta(kcut, sigma);
+        }();
         Settings s;
         s.a_start = 1e-7;
         s.a_end = 1.0;
@@ -203,6 +317,7 @@ int main(int argc, char ** argv) {
         };
         auto exact = make_force_nufft<NDIM, Part>(NP, kappa0);
         std::vector<std::pair<std::string, SFBB::ForceFunction>> variants{
+            {"nufft_1e-6", make_force_nufft<NDIM, Part>(NP, kappa0, nullptr, 1e-6)},
             {"sheet_nufft", make_force_sheet<NDIM, Part>(NP, NP, kappa0, nullptr, 2, "NUFFT", "NUFFT")},
             {"sheet_PCS_1x", make_force_sheet<NDIM, Part>(NP, NP, kappa0, nullptr, 2, "PCS", "PCS", true)},
             {"sheet_PCS_2x", make_force_sheet<NDIM, Part>(2 * NP, NP, kappa0, nullptr, 2, "PCS", "PCS", true)},

@@ -62,6 +62,23 @@ auto force = [&](MPIParticles<P> & part, double a, const std::function<double(do
 **Step by step.** `StepFromBigBang<NDIM, P> sfbb(growth, force, settings)`, then
 `sfbb.make_start_particles(part, Npart_1D, buffer, delta_fourier, a_ref, lattice_shift)`, then `sfbb.run(part)`.
 
+**Against nLPT initial conditions.** One step from the Big Bang beats nLPT generated at the target redshift (List,
+Hahn & Rampf 2023 found this for one step to z = 18 against 2LPT). Their cosmology (Eisenstein-Hu, sigma8 = 0.8)
+and particle spacing (0.195 Mpc/h; 64³ in 12.5 Mpc/h), the exact force, z = 18, against a converged N-body reference;
+errors in units of the beyond-Zel'dovich displacement:
+
+| Scales | 2LPT IC | 3LPT IC | 1 BullFrog step | 1 `lpt3` step (3 forces) |
+|---|---|---|---|---|
+| all | 0.34 | 0.32 | 0.13 | 0.059 |
+| k < k_Ny | 0.23 | 0.19 | 0.069 | 0.028 |
+| k < k_Ny/2 | 0.14 | 0.036 | 0.035 | 0.012 |
+
+A step exact to order n carries part of order n+1 (its forces are taken at configurations with higher orders), and
+it follows the particle system, which near the particle Nyquist frequency is not continuous LPT. nLPT initial
+conditions have that discreteness error at every order, so 3LPT barely improves on 2LPT over the full band, and the
+residual to 3LPT is a fair measure only well below k_Ny. After shell crossing `lpt3` is worse than both. Reproduce
+with `PK_LCDM=12.5,18 ./test_sfbb dump 64 1 1 <dir> ic bf l3 ref`.
+
 **Which force.** The ready-made forces, compared in a Zel'dovich configuration at half the final growth (smooth
 field, 64³):
 
