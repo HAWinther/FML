@@ -382,7 +382,7 @@ namespace FML {
                 const int nop = options.noperators;
                 if (nop < 1 or nop > 5)
                     throw std::runtime_error("[oneloop_hybrid_bias_spectra] noperators must be 1, ..., 5");
-                if (kvalues.empty())
+                if (kvalues.empty() and not options.mpi_parallel)
                     return {};
 
                 // The operator nabla^2 delta_L is F(k) delta_L(k) with F = -k^2
@@ -518,7 +518,7 @@ namespace FML {
                                                 std::vector<std::array<int, 2>> * pairs) {
                 using namespace detail;
                 const int nop = options.noperators;
-                if (kvalues.empty())
+                if (kvalues.empty() and not options.mpi_parallel)
                     return {};
 
                 // The Zel'dovich part of the spectra with nabla^2 delta (the loop corrections are added below)
@@ -540,6 +540,10 @@ namespace FML {
                     if (k > 0.0)
                         kout_min = std::min(kout_min, k);
                     kout_max = std::max(kout_max, k);
+                }
+                if (options.mpi_parallel) { // One q-grid for the k-values of all tasks
+                    FML::MinOverTasks(&kout_min);
+                    FML::MaxOverTasks(&kout_max);
                 }
 
                 // The q-grid (as for the Zel'dovich prediction; the loop terms extend to 2 kcut)
