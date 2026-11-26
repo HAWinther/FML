@@ -198,12 +198,11 @@ an independent particle kick and collective model validation. Run in serial and
 with 1/2/4 MPI ranks; see [../SHORT_RANGE.md](../SHORT_RANGE.md) for end-to-end runs.
 
 
-`benchmark_clustered_force` is an optional longer static GR experiment, outside
-`make run` and CTest. Build it explicitly and run
-`python3 regression/clustered_force.py --binary ./benchmark_clustered_force --output /tmp/fml-clustered`.
-Add `--mpi` for 1/2/4-rank comparisons and `--plot` for matplotlib PNG/PDF figures.
-See [../CLUSTERED_FORCE.md](../CLUSTERED_FORCE.md) for fixtures, independent
-softened Ewald references, diagnostics and limits.
+The longer static clustered-force experiment (`benchmark_clustered_force`) and the
+Ewald references used by these tests (`PairwiseEwaldReference.h`,
+`ClusteredForceReference.h`; `ShortRangeReference.h` and `ClusteredForceReference.h`
+here only forward to them) are in the library tests,
+[../../ShortRangeGravity/tests](../../ShortRangeGravity/tests/CLUSTERED_FORCE.md).
 
 
 `benchmark_short_range_dynamics` is an optional longer trajectory experiment.

@@ -134,7 +134,7 @@ Everything goes to `output_folder`, labelled with `simulation_name`:
 | [EVOLUTION.md](EVOLUTION.md) | PM forces, the force grid, accurate forces on a coarse grid, the lattice-calibrated Green's function, time stepping (also FastPM with a scale-dependent kick), starting from the Big Bang, COLA |
 | [SPECIES.md](SPECIES.md) | Separate CDM and baryons, neutrino masses, neutrino particles, the N-body gauge, starting at high redshift |
 | [ANALYSIS.md](ANALYSIS.md) | P(k), multipoles, halos, bispectra, hybrid-bias spectra (real and redshift space), baryonification, snapshots and lightcones |
-| [SHORT_RANGE.md](SHORT_RANGE.md), [COLA_SHORT_RANGE.md](COLA_SHORT_RANGE.md) | Short-range forces with PM and with COLA ([results](SHORT_RANGE_RESULTS.md), [clustered force](CLUSTERED_FORCE.md), [dynamics](DYNAMICS.md)) |
+| [SHORT_RANGE.md](SHORT_RANGE.md), [COLA_SHORT_RANGE.md](COLA_SHORT_RANGE.md) | Short-range forces with PM and with COLA ([results](SHORT_RANGE_RESULTS.md), [clustered force](../ShortRangeGravity/tests/CLUSTERED_FORCE.md), [dynamics](DYNAMICS.md)) |
 | [DEVELOPING.md](DEVELOPING.md) | The code layout, adding parameters, particle types and models |
 | [tests/README.md](tests/README.md) | The tests: comparisons with MG-PICOLA, accuracy checks and regression tests |
 

@@ -15,8 +15,8 @@ Namespace \nsp{FML::SHORT_RANGE_GRAVITY}, header-only: \file{ShortRangeGravity.h
 \file{LongRangePM.h} (\code{apply_long_range_filter}), \file{SlabGhosts.h} (\code{exchange_slab_ghosts}).\par
 SimulationCode: \file{src/ShortRangeForce.h}, \file{src/ShortRangeInteraction.h}, \file{src/ShortRangeSettings.h}.\par
 Documentation: \file{ShortRangeGravity/README.md}, \file{ShortRangeGravity/tests/RESULTS.md},
-\file{SimulationCode/SHORT_RANGE.md}, \file{COLA_SHORT_RANGE.md}, \file{SHORT_RANGE_RESULTS.md},
-\file{CLUSTERED_FORCE.md}, \file{DYNAMICS.md}.
+\file{ShortRangeGravity/tests/CLUSTERED_FORCE.md}, \file{SimulationCode/SHORT_RANGE.md}, \file{COLA_SHORT_RANGE.md},
+\file{SHORT_RANGE_RESULTS.md}, \file{DYNAMICS.md}.
 \end{modulebox}
 
 \section{The force split}\label{sec:sr-split}
@@ -163,7 +163,7 @@ timestep_method                     = "Quinn"
 \item Dynamics: two-body orbits and 16-particle clusters through the real simulation step against adaptive direct
       Ewald evolution: errors $\sim10^{-3}$ of the initial radius and velocity dispersion with 256--1024 steps,
       converging at second order (\file{DYNAMICS.md}); clustered static-force error distributions
-      (\file{CLUSTERED_FORCE.md}).
+      (\file{ShortRangeGravity/tests/CLUSTERED_FORCE.md}).
 \end{itemize}
 These are controlled verification cases, not a calibration of nonlinear cosmological statistics.
 \end{validation}

@@ -1,20 +1,45 @@
-// Standalone accuracy experiment, deliberately outside the fast default test suite.
-#include "../src/GravityModel_GR.h"
-#include "../src/Particles.h"
+// Standalone accuracy experiment, deliberately outside the fast default test suite: the combined (PM + short-range)
+// GR force of four clustered fixtures against an independent Ewald reference (CLUSTERED_FORCE.md).
+// The force is assembled from the library only: PCS deposit, the Gaussian long-range filter (LongRangePM.h),
+// the continuous Fourier PM force with window deconvolution (NBody.h), and the short-range sum (CellList / Octree)
+// with the slab or pencil ghosts (SlabGhosts.h). Moved from SimulationCode/tests (Nov 2026).
 #include "ClusteredForceReference.h"
-#include "ShortRangeReference.h"
+#include "PairwiseEwaldReference.h"
+#include <FML/Global/Global.h>
+#include <FML/Interpolation/ParticleGridInterpolation.h>
+#include <FML/MPIParticles/MPIParticles.h>
+#include <FML/NBody/NBody.h>
+#include <FML/ShortRangeGravity/LongRangePM.h>
+#include <FML/ShortRangeGravity/Octree.h>
+#include <FML/ShortRangeGravity/ShortRangeGravity.h>
+#include <FML/ShortRangeGravity/SlabGhosts.h>
 #include <FML/tests/TestHelpers.h>
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <iomanip>
 #include <numeric>
-namespace R = SIMCODE::CLUSTER_REFERENCE;
+namespace R = FML::SHORT_RANGE_GRAVITY::TESTS::CLUSTER;
+namespace SR = FML::SHORT_RANGE_GRAVITY;
 using Vector = R::Vector;
-using P = ParticleWithMass<ParticleBasic<3>>;
+struct P {
+    double pos[3];
+    double vel[3];
+    double mass{1};
+    long long int id{0};
+    double * get_pos() { return pos; }
+    double * get_vel() { return vel; }
+    double get_mass() const { return mass; }
+    void set_mass(double m) { mass = m; }
+    long long int get_id() const { return id; }
+    void set_id(long long int i) { id = i; }
+    constexpr int get_ndim() const { return 3; }
+};
 using Container = FML::PARTICLE::MPIParticles<P>;
 using Grid = FML::GRID::FFTWGrid<3>;
 using FML::TESTS::check;
-constexpr double box = 100., epoch = .8;
+// LCDM with OmegaM = 0.3 at a = 0.8: the Poisson prefactor C = 1.5 OmegaM a (box units)
+constexpr double box = 100., epoch = .8, OmegaM = .3;
 double uniform(std::uint64_t key) {
     key += 0x9e3779b97f4a7c15ULL;
     key = (key ^ (key >> 30)) * 0xbf58476d1ce4e5b9ULL;
@@ -47,26 +72,6 @@ std::vector<P> catalogue(int n, const std::string & fixture) {
     }
     return all;
 }
-std::shared_ptr<Cosmology> cosmology() {
-    auto c = std::make_shared<Cosmology>();
-    FML::UTILS::ParameterMap p;
-    p["cosmology_OmegaCDM"] = .25;
-    p["cosmology_Omegab"] = .05;
-    p["cosmology_OmegaMNu"] = 0.;
-    p["cosmology_neutrino_masses_eV"] = std::vector<double>{};
-    p["cosmology_OmegaK"] = 0.;
-    p["cosmology_h"] = .7;
-    p["cosmology_As"] = 2.1e-9;
-    p["cosmology_ns"] = .96;
-    p["cosmology_kpivot_mpc"] = .05;
-    p["cosmology_Neffective"] = 3.046;
-    p["cosmology_TCMB_kelvin"] = 2.7255;
-    FML::TESTS::quietly([&] {
-        c->read_parameters(p);
-        c->init();
-    });
-    return c;
-}
 struct Case {
     std::string name;
     int mesh, interlace;
@@ -76,9 +81,40 @@ struct Case {
     bool enabled;
     int table{0};
 };
-std::vector<Vector> combined(Container & p, GravityModelGR<3> & model, const Case & test) {
-    SIMCODE::ShortRangeSettings
-        settings{test.enabled, test.backend, test.split, test.softening, 1e-8, test.theta, test.table};
+// The short-range kernel in box units (split and softening in Mpc/h); coupling as SimulationCode's GR model
+SR::Kernel make_kernel(const Case & test, double coupling, std::size_t table_points) {
+    SR::Options o;
+    o.boxsize = 1;
+    o.split_scale = test.split / box;
+    o.softening_support = test.softening / box;
+    o.cutoff_tolerance = 1e-8;
+    o.coupling = coupling;
+    o.table_points = table_points;
+    return SR::Kernel(o);
+}
+// The short-range acceleration (-grad Phi_short) of the local particles from all particles
+std::vector<Vector> short_range_acceleration(Container & p, const Case & test) {
+    std::vector<SR::Particle> owned(p.get_npart());
+    auto * a = p.get_particles_ptr();
+    double total_mass = 0;
+    for (size_t i = 0; i < owned.size(); ++i) {
+        for (int d = 0; d < 3; ++d)
+            owned[i].position[d] = a[i].pos[d];
+        owned[i].mass = a[i].mass;
+        owned[i].id = std::uint64_t(a[i].id);
+        total_mass += a[i].mass;
+    }
+    FML::SumOverTasks(&total_mass);
+    const auto kernel =
+        make_kernel(test, SR::fml_acceleration_coupling(1.5 * OmegaM * epoch, total_mass, 1), size_t(test.table));
+    auto sources = SR::exchange_domain_ghosts(owned, FML::domain, kernel);
+    if (test.backend == "cell")
+        return SR::CellList(sources.particles, kernel).compute(owned).acceleration;
+    SR::TreeOptions tree;
+    tree.opening_angle = test.theta;
+    return SR::Octree(sources.particles, kernel, tree).compute(owned).acceleration;
+}
+std::vector<Vector> combined(Container & p, const Case & test) {
     FML::NBODY::ForceOptions options;
     options.deconvolve = true;
     const auto halo = FML::INTERPOLATION::get_extra_slices("PCS");
@@ -100,7 +136,9 @@ std::vector<Vector> combined(Container & p, GravityModelGR<3> & model, const Cas
         FML::INTERPOLATION::particles_to_grid(a, p.get_npart(), p.get_npart_total(), density, "PCS");
         density.fftw_r2c();
         std::array<Grid, 3> force;
-        model.compute_force_for_step(epoch, model.H0_hmpc * box, density, "PCS", force, options, settings);
+        if (test.enabled)
+            SR::apply_long_range_filter(density, make_kernel(test, 1, 0));
+        FML::NBODY::compute_force_from_density_fourier<3>(density, force, "PCS", 1.5 * OmegaM * epoch, options);
         for (auto & f : force)
             f.communicate_boundaries();
         FML::INTERPOLATION::interpolate_grid_vector_to_particle_positions_apply<3, P>(force,
@@ -117,15 +155,13 @@ std::vector<Vector> combined(Container & p, GravityModelGR<3> & model, const Cas
             for (int d = 0; d < 3; ++d)
                 a[i].pos[d] = saved[i][d];
     }
-    // Exercise the actual model-owned kick. Each benchmark case starts from zero velocity.
-    for (size_t i = 0; i < p.get_npart(); ++i)
-        for (int d = 0; d < 3; ++d)
-            a[i].vel[d] = 0;
-    model.kick_short_range(p, settings, epoch, box, 1.);
+    std::vector<Vector> shortrange(p.get_npart(), Vector{});
+    if (test.enabled)
+        shortrange = short_range_acceleration(p, test);
     std::vector<double> global(3 * p.get_npart_total(), 0.);
     for (size_t i = 0; i < p.get_npart(); ++i)
         for (int d = 0; d < 3; ++d)
-            global[3 * (a[i].id - 1) + d] = out[i][d] + a[i].vel[d];
+            global[3 * (a[i].id - 1) + d] = out[i][d] + shortrange[i][d];
     FML::SumArrayOverTasks(global.data(), global.size());
     std::vector<Vector> result(p.get_npart_total());
     for (size_t i = 0; i < result.size(); ++i)
@@ -162,8 +198,6 @@ int main(int argc, char ** argv) {
         const size_t low = size_t(i) * n / ntarget, high = size_t(i + 1) * n / ntarget;
         targets.push_back(low + size_t(uniform(700000 + i) * (high - low)));
     }
-    auto c = cosmology();
-    GravityModelGR<3> model(c);
     std::ofstream summary, details;
     if (FML::ThisTask == 0) {
         summary.open(std::string(argv[1]) + "-summary.csv");
@@ -201,7 +235,7 @@ int main(int argc, char ** argv) {
             sources.push_back({{p.pos[0], p.pos[1], p.pos[2]}, p.mass});
             mass += p.mass;
         }
-        const double normalization = 1.5 * c->get_OmegaM() * epoch / (4 * std::acos(-1.) * mass);
+        const double normalization = 1.5 * OmegaM * epoch / (4 * std::acos(-1.) * mass);
         Container p;
         p.create(all, n + 32, FML::PARTICLE::Input::Replicated);
         // Small replicated catalogues/references are intentional test-only O(N^2) work.
@@ -227,7 +261,7 @@ int main(int argc, char ** argv) {
             if (j != ti) {
                 const auto dx = R::displacement(sources[ti].x, sources[j].x);
                 const double r = R::norm(dx);
-                auto f = SIMCODE::TEST_REFERENCE::ewald(dx);
+                auto f = FML::SHORT_RANGE_GRAVITY::TESTS::PAIRWISE::ewald(dx);
                 const double correction = r < .25 / box ? R::softened_coefficient(r, .25 / box) - 1 / (r * r * r) : 0;
                 for (int d = 0; d < 3; ++d)
                     pairwise[d] += normalization * all[j].mass * (f[d] - correction * dx[d]);
@@ -239,7 +273,7 @@ int main(int argc, char ** argv) {
         double coarse = 0, finer = 0, pm = 0;
         for (const auto & test : cases) {
             const auto start = std::chrono::steady_clock::now();
-            auto force = combined(p, model, test);
+            auto force = combined(p, test);
             double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
             FML::MaxOverTasks(&seconds);
             const auto & expected = test.name == "soft05" ? soft : fine;

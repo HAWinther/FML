@@ -184,7 +184,8 @@ An optional larger experiment now covers concentrated and overlapping halos, a
 periodic-boundary halo, and mesh-relative translations. It uses independent
 softened Ewald references, samples error distributions and radial dependence,
 and measures exact/finite-tree momentum balance in serial and MPI. See
-[CLUSTERED_FORCE.md](CLUSTERED_FORCE.md) for scope, results and reproduction.
+[ShortRangeGravity/tests/CLUSTERED_FORCE.md](../ShortRangeGravity/tests/CLUSTERED_FORCE.md) for scope, results and
+reproduction (the experiment uses the library force path, the same as this code's).
 It does not yet validate time evolution of these clustered fixtures.
 
 ## Controlled orbit and cluster evolution

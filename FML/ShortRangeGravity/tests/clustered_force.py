@@ -21,6 +21,14 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def git(arguments, repo):
+    # 'unknown' outside a git checkout (e.g. a source tarball)
+    try:
+        return subprocess.check_output(['git'] + arguments, cwd=repo, text=True, stderr=subprocess.DEVNULL)
+    except (OSError, subprocess.CalledProcessError):
+        return 'unknown'
+
+
 def read_rows(path):
     with path.open() as stream:
         return list(csv.DictReader(stream))
@@ -77,18 +85,15 @@ def main():
     if not (128 <= args.particles <= 16384 and 16 <= args.targets <= args.particles):
         parser.error('Require 128..16384 particles and 16..N targets')
     output.mkdir(parents=True, exist_ok=True)
-    repo = Path(__file__).resolve().parents[4]
-    sources = [Path(__file__).resolve(), repo / 'FML/SimulationCode/tests/benchmark_clustered_force.cpp',
-               repo / 'FML/SimulationCode/tests/ClusteredForceReference.h', repo / 'FML/SimulationCode/tests/ShortRangeReference.h',
-               repo / 'FML/SimulationCode/src/GravityModel.h', repo / 'FML/SimulationCode/src/GravityModel_GR.h',
-               repo / 'FML/SimulationCode/src/ShortRangeInteraction.h', repo / 'FML/SimulationCode/src/ShortRangeForce.h',
-               repo / 'FML/SimulationCode/src/ShortRangeSettings.h', repo / 'FML/NBody/NBody.h',
+    repo = Path(__file__).resolve().parents[3]
+    sources = [Path(__file__).resolve(), repo / 'FML/ShortRangeGravity/tests/benchmark_clustered_force.cpp',
+               repo / 'FML/ShortRangeGravity/tests/ClusteredForceReference.h',
+               repo / 'FML/ShortRangeGravity/tests/PairwiseEwaldReference.h', repo / 'FML/NBody/NBody.h',
                repo / 'FML/ShortRangeGravity/ShortRangeGravity.h', repo / 'FML/ShortRangeGravity/Octree.h',
-               repo / 'FML/ShortRangeGravity/SlabGhosts.h']
+               repo / 'FML/ShortRangeGravity/LongRangePM.h', repo / 'FML/ShortRangeGravity/SlabGhosts.h']
     provenance = dict(binary=str(binary), binary_sha256=digest(binary), platform=platform.platform(),
                       particles=args.particles, targets=args.targets, omp_num_threads=1,
-                      git_head=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=repo, text=True).strip(),
-                      git_status=subprocess.check_output(['git', 'status', '--short'], cwd=repo, text=True),
+                      git_head=git(['rev-parse', 'HEAD'], repo).strip(), git_status=git(['status', '--short'], repo),
                       sources={str(p.relative_to(repo)): digest(p) for p in sources}, commands=[])
     prefixes = []
     try:

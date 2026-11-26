@@ -1,10 +1,15 @@
-# Clustered short-range force validation (item 47)
+# Clustered PM + short-range force validation
 
-This is a controlled **static GR force** experiment. It exercises the model-owned
-mesh solve and particle kick with mass-weighted PCS deposition/interpolation,
-window deconvolution and continuous Fourier derivatives. It does not evolve halo
-orbits, establish equilibrium, calibrate modified gravity, or complete item 47.
-No production solver behavior changes in this milestone.
+This is a controlled **static GR force** experiment of the library's TreePM/P3M force:
+mass-weighted PCS deposition/interpolation, the Gaussian long-range filter
+(`LongRangePM.h`), window deconvolution and continuous Fourier derivatives
+(`NBody.h`), and the short-range sum (`CellList` or `Octree`) with the slab/pencil
+ghosts (`SlabGhosts.h`). It does not evolve halo orbits or establish equilibrium.
+
+It was written for SimulationCode's short-range force (backlog item 47) and moved
+here in November 2026, with the force assembled from the library directly instead of
+through SimulationCode's GR model (the same calls). It is meant to be reused by
+the codes built on this force (TreePMCode).
 
 ## Fixtures and independent reference
 
@@ -30,8 +35,8 @@ included in that cross-check. The simulation split is unrelated to these choices
 
 Box size is 100 comoving Mpc/h and epoch a=0.8 in LCDM with OmegaM=0.3. The force
 normalization is C/(4*pi*M), C=3*OmegaM*a/2, with M the global source-mass sum.
-The benchmark reads the short acceleration through a unit model-owned kick;
-it does not interpret that unit kick as a physical trajectory.
+The short acceleration is the library's `Result::acceleration` with the coupling
+`fml_acceleration_coupling(C, M, 1)`.
 
 ## Measured quantities and regression gates
 
@@ -70,21 +75,20 @@ reference construction and are diagnostic only.
 The experiment is optional, outside the default fast tests and CTest suite:
 
 ```sh
-cd FML/SimulationCode/tests
+cd FML/ShortRangeGravity/tests
 make benchmark_clustered_force USE_MPI=false
-python3 regression/clustered_force.py --binary ./benchmark_clustered_force \
+python3 clustered_force.py --binary ./benchmark_clustered_force \
     --output /tmp/fml-clustered-serial --plot
 
 # Clean/rebuild before changing compiler, MPI or precision options.
 make clean
 make benchmark_clustered_force USE_MPI=true
-python3 regression/clustered_force.py --binary ./benchmark_clustered_force \
+python3 clustered_force.py --binary ./benchmark_clustered_force \
     --output /tmp/fml-clustered-mpi --mpi --launcher mpirun
 ```
 
 `--plot` needs matplotlib; all other runner functions use the Python standard
-library. The MPI command runs 1/2/4 ranks. CMake users explicitly build target
-`benchmark_clustered_force` and use `build/tests/benchmark_clustered_force`.
+library. The MPI command runs 1/2/4 ranks.
 For a short plumbing check use `--particles 128 --targets 16`; small fixtures do
 not necessarily exercise tree approximation or close softening. Supported ranges
 are 128..16,384 particles and 16..N targets; large reference runs can be expensive.
@@ -94,7 +98,10 @@ and relevant source hashes, Git revision/status and MPI comparisons. Optional
 PNG/PDF figures show mesh convergence, error CDFs and radial tree errors. The
 saved Git revision alone does not identify uncommitted source; use the hashes too.
 
-## Initial serial results (double FFT grids)
+## Initial serial results (double FFT grids, through SimulationCode's GR model)
+
+The library force path used since the move (November 2026) reproduces this table in every
+digit shown, with the same 190 passing checks; 1/2/4 MPI ranks agree to 2e-15.
 
 | Fixture | Cell RMS, 16³ | Cell RMS, 64³ | Tree RMS, theta=0.6 | Tree momentum imbalance |
 |---|---:|---:|---:|---:|
@@ -118,6 +125,6 @@ It is not a measurement of accumulated center-of-mass drift over an orbit.
 The 64³ cell 99th-percentile errors are below 1e-5 on these fixtures.
 
 Controlled small-N orbit/cluster evolution against a converged direct-reference
-integrator is now covered in [DYNAMICS.md](DYNAMICS.md). Production halo evolution,
+integrator is covered in [SimulationCode/DYNAMICS.md](../../SimulationCode/DYNAMICS.md). Production halo evolution,
 finite-opening dynamical drift, broader force-error distributions and tree/ghost
 performance calibration remain follow-ups.
