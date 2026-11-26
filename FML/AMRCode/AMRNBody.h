@@ -35,6 +35,12 @@
 // coupled quintessence and the CDM+baryon particles (one fluid) feel (3/2) OmegaM P(a) / (a E) in place of
 // (3/2) OmegaM / (a E), P = G_eff/G rho_m(a) a^3 / OmegaM, and the friction dv/dtau = -Gamma(a) v (see Cosmology)
 //
+// CDM and baryons as two sets of particles (AMRNBodyParameters::baryons; AMRParticle::species 0 = CDM, 1 = baryons, the
+// same number of each): the density is that of all the CDM+baryons, each species weighted by its fraction f_c(a), f_b(a)
+// (the refinement counts a CDM-baryon pair as one particle). The baryons are collisionless (no hydrodynamics). With
+// coupled quintessence the CDM also feels the fifth force 2 beta^2 f_c(a) of the CDM density (a second Poisson solve,
+// full and partial as the first) and the friction -beta dphi/dlna, the baryons neither
+//
 //==========================================================================================
 
 #include <FML/AdaptiveMPIGrid/AdaptiveMPIGrid.h>
@@ -74,6 +80,7 @@ namespace FML {
                 double Acc[NDIM];
                 long long int id;
                 int bin;
+                int species{0};         // 0: CDM+baryons (one fluid) or CDM (particle_baryons), 1: baryons
                 long long int leaf{-1}; // Cached index of the local leaf the particle was last found in (a hint only)
 
                 constexpr int get_ndim() const { return NDIM; }
@@ -95,8 +102,14 @@ namespace FML {
             ///      Poisson: G_eff/G = (1 + 2 beta^2 f_c^2) and the source rho_m(a) a^3 / OmegaM (the varying CDM mass)
             ///      friction: dv/dtau = -Gamma v + force, Gamma = -f_c beta dphi/dlna
             ///    with f_c(a) = rho_c(a) / (rho_c(a) + rho_b(a)) (momentum-weighted: only the CDM couples)
+            ///    With CDM and baryons as two sets of particles (Fluid::CDM, Fluid::Baryon) both feel gravity
+            ///    (P = rho_m(a) a^3 / OmegaM), the CDM also the fifth force 2 beta^2 f_c of the CDM density (a second
+            ///    Poisson solve, in AMRNBodySimulation) and the friction Gamma_c = -beta dphi/dlna; the baryons none
             /// For beta = lambda = 0 it is LCDM (with OmegaR = 0: the same background)
             //======================================================================================
+            /// The fluid a particle belongs to: CDM+baryons as one set of particles (CB), or CDM and baryons as two
+            enum class Fluid { CB, CDM, Baryon };
+
             class Cosmology {
               public:
                 double OmegaM{0.3};
@@ -171,20 +184,30 @@ namespace FML {
                 }
                 /// The factor of (3/2) OmegaM / a in the Poisson equation of the one-fluid particles: G_eff/G times
                 /// rho_m(a) a^3 / OmegaM (1 for LCDM)
-                double poisson_factor(double a) const {
+                /// (CDM, Baryon: the gravity of all the CDM+baryons, rho_m(a) a^3 / OmegaM; the fifth force of the CDM is
+                /// cdm_fifth_force(a) times the force of the CDM density)
+                double poisson_factor(double a, Fluid fluid = Fluid::CB) const {
                     if (not cq)
                         return 1.0;
                     const double fc = cdm_fraction(a);
                     const double mass = ((OmegaM - OmegaB) * cdm_mass_factor(a) + OmegaB) / OmegaM;
-                    return mass * (1.0 + 2.0 * cq_beta * cq_beta * fc * fc);
+                    return fluid == Fluid::CB ? mass * (1.0 + 2.0 * cq_beta * cq_beta * fc * fc) : mass;
                 }
-                /// The friction Gamma of dv/dtau = -Gamma v + force (0 for LCDM)
-                double friction(double a) const {
-                    if (not cq)
+                /// CDM and baryons as two fluids: the CDM feels -D(phi + cdm_fifth_force phi_c) with D^2 phi = delta_cb,
+                /// D^2 phi_c = delta_c (the same factor poisson_factor(a, CDM) in front): 2 beta^2 f_c(a)
+                double cdm_fifth_force(double a) const { return cq ? 2.0 * cq_beta * cq_beta * cdm_fraction(a) : 0.0; }
+                bool has_cdm_fifth_force() const { return cq != nullptr and cq_beta != 0.0; }
+                /// The friction Gamma of dv/dtau = -Gamma v + force (0 for LCDM). CB: -f_c beta dphi/dlna (one fluid),
+                /// CDM: -beta dphi/dlna, Baryon: 0
+                double friction(double a, Fluid fluid = Fluid::CB) const {
+                    if (not cq or fluid == Fluid::Baryon)
                         return 0.0;
-                    return -cdm_fraction(a) * cq_beta * cq->dphidx(std::log(a));
+                    const double g = -cq_beta * cq->dphidx(std::log(a));
+                    return fluid == Fluid::CB ? cdm_fraction(a) * g : g;
                 }
-                bool has_friction() const { return cq != nullptr and cq_beta != 0.0; }
+                bool has_friction(Fluid fluid = Fluid::CB) const {
+                    return cq != nullptr and cq_beta != 0.0 and fluid != Fluid::Baryon;
+                }
                 /// dphi/dlna of the field (0 for LCDM)
                 double dphidlna(double a) const { return cq ? cq->dphidx(std::log(a)) : 0.0; }
                 const FML::COSMOLOGY::BACKGROUND::ComponentBackground * background() const { return bg.get(); }
@@ -197,17 +220,18 @@ namespace FML {
 
                 /// The kick from a1 to a2: v(a2) = friction_factor(a1, a2) v(a1) + kick_factor(a1, a2) (-D phi) for a
                 /// constant force. kick_factor = (3/2) OmegaM int dtau poisson_factor / (a E) exp(-int_tau^tau2 Gamma)
-                double kick_factor(double a1, double a2) const {
-                    const double I2 = friction_integral(a2);
+                double kick_factor(double a1, double a2, Fluid fluid = Fluid::CB) const {
+                    const double I2 = friction_integral(a2, fluid);
+                    const bool fr = has_friction(fluid);
                     return 1.5 * OmegaM *
                            integrate([&](double a) {
-                               const double fr = has_friction() ? std::exp(friction_integral(a) - I2) : 1.0;
-                               return poisson_factor(a) * fr / (a * E(a));
+                               const double w = fr ? std::exp(friction_integral(a, fluid) - I2) : 1.0;
+                               return poisson_factor(a, fluid) * w / (a * E(a));
                            }, a1, a2);
                 }
                 /// exp(-int_tau1^tau2 Gamma dtau) (1 without friction)
-                double friction_factor(double a1, double a2) const {
-                    return has_friction() ? std::exp(friction_integral(a1) - friction_integral(a2)) : 1.0;
+                double friction_factor(double a1, double a2, Fluid fluid = Fluid::CB) const {
+                    return has_friction(fluid) ? std::exp(friction_integral(a1, fluid) - friction_integral(a2, fluid)) : 1.0;
                 }
                 /// Drift integral int dtau / (a^2 E) from a1 to a2 (multiplies v)
                 double drift_factor(double a1, double a2) const {
@@ -218,12 +242,14 @@ namespace FML {
                 std::shared_ptr<const FML::COSMOLOGY::BACKGROUND::ComponentBackground> bg;
                 const FML::COSMOLOGY::BACKGROUND::CoupledDarkSector * cq{nullptr};
 
-                // Table in x = log(a) of D1, dD1/dx, D2, dD2/dx and int_xmin^x Gamma dx
+                // Table in x = log(a) of D1, dD1/dx, D2, dD2/dx and int_xmin^x Gamma dx of the one fluid and of the CDM
                 static constexpr double xmin = -11.0, xmax = 1.0;
                 static constexpr int ntab = 4801;
-                std::vector<std::array<double, 5>> table;
+                std::vector<std::array<double, 6>> table;
 
-                double friction_integral(double a) const { return has_friction() ? interp(a, 4) : 0.0; }
+                double friction_integral(double a, Fluid fluid) const {
+                    return has_friction(fluid) ? interp(a, fluid == Fluid::CB ? 4 : 5) : 0.0;
+                }
 
                 template <class F>
                 static double integrate(F && f, double a1, double a2) {
@@ -251,16 +277,17 @@ namespace FML {
                     // D'' + (2 + dlogE/dx + Gamma) D' = 3/2 OmegaM(a) P(a) D, D2'' + (...) D2' = 3/2 OmegaM(a) P(a) (D2 - D1^2)
                     // (P = poisson_factor) with growing-mode initial conditions deep in matter domination (RK4 in x = log a),
                     // and the integral of the friction Gamma
-                    using Y = std::array<double, 5>;
+                    using Y = std::array<double, 6>;
                     auto rhs = [&](double x, const Y & y) {
                         const double a = std::exp(x);
                         const double G = friction(a);
                         const double fr = 2.0 + dlogEdloga(a) + G, om = 1.5 * OmegaM_of_a(a) * poisson_factor(a);
-                        return Y{y[1], -fr * y[1] + om * y[0], y[3], -fr * y[3] + om * (y[2] - y[0] * y[0]), G};
+                        return Y{y[1], -fr * y[1] + om * y[0], y[3], -fr * y[3] + om * (y[2] - y[0] * y[0]), G,
+                                 friction(a, Fluid::CDM)};
                     };
                     table.resize(ntab);
                     const double a0 = std::exp(xmin);
-                    Y y{a0, a0, -3.0 / 7.0 * a0 * a0, -6.0 / 7.0 * a0 * a0, 0.0};
+                    Y y{a0, a0, -3.0 / 7.0 * a0 * a0, -6.0 / 7.0 * a0 * a0, 0.0, 0.0};
                     const double dx = (xmax - xmin) / (ntab - 1);
                     table[0] = y;
                     for (int i = 1; i < ntab; i++) {
@@ -270,7 +297,7 @@ namespace FML {
                             const double x = xmin + (i - 1) * dx + s * h;
                             auto add = [](const Y & p, const Y & q, double c) {
                                 Y r;
-                                for (int k = 0; k < 5; k++)
+                                for (int k = 0; k < 6; k++)
                                     r[k] = p[k] + c * q[k];
                                 return r;
                             };
@@ -278,7 +305,7 @@ namespace FML {
                             auto k2 = rhs(x + 0.5 * h, add(y, k1, 0.5 * h));
                             auto k3 = rhs(x + 0.5 * h, add(y, k2, 0.5 * h));
                             auto k4 = rhs(x + h, add(y, k3, h));
-                            for (int k = 0; k < 5; k++)
+                            for (int k = 0; k < 6; k++)
                                 y[k] += h / 6.0 * (k1[k] + 2 * k2[k] + 2 * k3[k] + k4[k]);
                         }
                         table[i] = y;
@@ -420,7 +447,24 @@ namespace FML {
             };
 
             //======================================================================================
-            /// Mass in every local leaf. Each particle (mass mpart) is spread with cloud-in-cell over the
+            /// Weights of the particle species (CDM and baryons as two sets of particles): a particle with a member
+            /// species gets the mass mpart * weight[species]. Without weights (nullptr) every particle has mass mpart
+            //======================================================================================
+            using SpeciesWeights = std::array<double, 2>;
+            template <class P, class = void>
+            struct has_species : std::false_type {};
+            template <class P>
+            struct has_species<P, std::void_t<decltype(std::declval<P &>().species)>> : std::true_type {};
+            template <class P>
+            double species_weight(const P & pt, const SpeciesWeights * w) {
+                if constexpr (has_species<P>::value)
+                    return w ? (*w)[pt.species] : 1.0;
+                else
+                    return 1.0;
+            }
+
+            //======================================================================================
+            /// Mass in every local leaf. Each particle (mass mpart, times its species weight) is spread with cloud-in-cell over the
             /// 8 cells at the level of its leaf (or put in its leaf with NGP). A stencil cell that exists
             /// as a leaf (or lies inside a coarser leaf) gets the mass directly; a stencil cell that is
             /// refined has its mass split equally among its children (recursively). Mass that falls in a
@@ -432,7 +476,8 @@ namespace FML {
                                                       FML::PARTICLE::MPIParticles<P> & part,
                                                       double mpart,
                                                       bool cic,
-                                                      const std::function<bool(IndexInt)> & use_particle_in_leaf = nullptr) {
+                                                      const std::function<bool(IndexInt)> & use_particle_in_leaf = nullptr,
+                                                      const SpeciesWeights * weights = nullptr) {
                 using Coord = typename Grid::Coord;
                 struct Item {
                     Coord anchor;
@@ -479,15 +524,18 @@ namespace FML {
                     assert_mpi(ref.is_local(), "assign_mass_to_leaves: a particle is not in a local leaf");
                     if (use_particle_in_leaf and not use_particle_in_leaf(ref.index))
                         continue;
+                    const double m = weights ? mpart * species_weight(part[ip], weights) : mpart;
+                    if (m == 0.0)
+                        continue;
                     const int level = grid.get_cell(ref.index).level;
                     if (not cic) {
-                        mass[ref.index] += mpart;
+                        mass[ref.index] += m;
                         continue;
                     }
                     CICStencil<Grid> st(pos, level);
                     for (int c = 0; c < 8; c++)
                         if (st.weight[c] > 0.0)
-                            process(Item{st.anchor[c], level, mpart * st.weight[c]}, ref.index);
+                            process(Item{st.anchor[c], level, m * st.weight[c]}, ref.index);
                 }
 
                 // Send the mass of remote cells to their owners (a refined remote cell can be split over several
@@ -635,15 +683,17 @@ namespace FML {
             }
 
             //======================================================================================
-            /// Number of particles in every local leaf (NGP)
+            /// Number of particles in every local leaf (NGP; with weights: weighted by species)
             //======================================================================================
             template <class Grid, class P>
-            std::vector<double> count_particles_in_leaves(const Grid & grid, FML::PARTICLE::MPIParticles<P> & part) {
+            std::vector<double> count_particles_in_leaves(const Grid & grid,
+                                                          FML::PARTICLE::MPIParticles<P> & part,
+                                                          const SpeciesWeights * weights = nullptr) {
                 std::vector<double> count(grid.get_n_local(), 0.0);
                 for (size_t ip = 0; ip < part.get_npart(); ip++) {
                     const auto ref = particle_leaf(grid, part[ip]);
                     assert_mpi(ref.is_local(), "count_particles_in_leaves: a particle is not in a local leaf");
-                    count[ref.index] += 1.0;
+                    count[ref.index] += weights ? species_weight(part[ip], weights) : 1.0;
                 }
                 return count;
             }
@@ -659,7 +709,9 @@ namespace FML {
             /// load_balance = false the caller balances. prolong/restrict are passed to adapt (cell data).
             /// The number of particles in a leaf is counted with the same assignment as the density (cic: the
             /// cloud-in-cell mass in units of the particle mass, as RAMSES; otherwise NGP). CIC is smoother and
-            /// does not depend on which side of a cell face a particle exactly on the face is counted
+            /// does not depend on which side of a cell face a particle exactly on the face is counted.
+            /// weights: the particles are counted with their species weights (CDM and baryons as two sets of
+            /// particles: f_c and f_b, so that a CDM-baryon pair counts as one particle of a one-fluid run)
             //======================================================================================
             template <class Grid, class P>
             int refine_on_particle_count(Grid & grid,
@@ -670,9 +722,11 @@ namespace FML {
                                          std::vector<double> * final_counts = nullptr,
                                          bool load_balance = true,
                                          typename Grid::ProlongFunction prolong = nullptr,
-                                         typename Grid::RestrictFunction restrict_func = nullptr) {
+                                         typename Grid::RestrictFunction restrict_func = nullptr,
+                                         const SpeciesWeights * weights = nullptr) {
                 auto counts = [&]() {
-                    return cic ? assign_mass_to_leaves(grid, part, 1.0, true) : count_particles_in_leaves(grid, part);
+                    return cic ? assign_mass_to_leaves(grid, part, 1.0, true, nullptr, weights)
+                               : count_particles_in_leaves(grid, part, weights);
                 };
                 const int maxpass = 2 * (grid.get_levelmax() - grid.get_levelmin()) + 2;
                 int pass = 0, nadapt = 0;
@@ -778,6 +832,10 @@ namespace FML {
                 double cq_beta{0.05};
                 double fds_c{-0.85};
                 double fds_cprime{0.05};
+                // CDM and baryons as two sets of particles (the same number of each; species 0 and 1) instead of one
+                // set of CDM+baryon particles. Both feel the gravity of all the CDM+baryons (collisionless baryons);
+                // with coupled quintessence the CDM also feels the fifth force of the CDM and the friction
+                bool baryons{false};
                 double boxsize{100.0};
                 bool symmetron() const { return gravity_model == "Symmetron"; }
                 bool dilaton() const { return gravity_model == "Dilaton"; }
@@ -792,7 +850,9 @@ namespace FML {
                     return Cosmology::coupled_quintessence(p.OmegaM, p.OmegaB, p.fds_c, p.fds_cprime, p.OmegaR);
                 if (p.gravity_model == "CoupledQuintessence")
                     return Cosmology::coupled_quintessence(p.OmegaM, p.OmegaB, p.cq_lambda, p.cq_beta, p.OmegaR);
-                return Cosmology(p.OmegaM, p.OmegaR);
+                Cosmology c(p.OmegaM, p.OmegaR);
+                c.OmegaB = p.OmegaB;
+                return c;
             }
 
             //======================================================================================
@@ -815,6 +875,10 @@ namespace FML {
                 long long scalar_vcycles{0};
                 double time_scalar{0};
                 double scalar_min{0}, scalar_mean{0}, scalar_max{0}, scalar_background{0};
+                // The CDM potential of the fifth force (coupled quintessence with CDM and baryon particles)
+                int ncdm_full{0}, ncdm_partial{0}, ncdm_fallback{0};
+                long long cdm_vcycles{0};
+                double time_cdm{0};
             };
 
             //======================================================================================
@@ -831,6 +895,7 @@ namespace FML {
                     double phi;
                     double count;
                     double scalar; // The scalar field (gravity_model = Symmetron: chi, Dilaton: w = phi / phi_bar)
+                    double phi_c;  // The potential of the CDM density (coupled quintessence with CDM and baryon particles)
                 };
                 using Grid = FML::GRID::AdaptiveMPIGrid<NDIM, CellData>;
                 using Solver = FML::SOLVERS::AMRMULTIGRIDSOLVER::AMRMultiGridSolver<NDIM>;
@@ -841,8 +906,9 @@ namespace FML {
                 Grid grid;
                 Particles & part;
                 double a{0.0};           // Current scale factor (positions and velocities synchronized)
-                double mpart{0.0};       // Particle mass (total mass 1)
-                long long npart_total{0};
+                double mpart{0.0};       // Particle mass (total mass 1; with baryons the mass of a CDM-baryon pair)
+                long long npart_total{0};     // All the particles (with baryons: CDM + baryons)
+                long long npart_species{0};   // Particles per species (npart_total / 2 with baryons)
                 StepStats last;
 
                 AMRNBodySimulation(const AMRNBodyParameters & params, Particles & particles, double aini)
@@ -870,7 +936,17 @@ namespace FML {
                                    "AMRNBody: gravity_model must be LCDM, Symmetron, Dilaton, CoupledQuintessence or "
                                    "FadingDarkSector");
                     npart_total = (long long)part.get_npart_total();
-                    mpart = 1.0 / double(npart_total);
+                    npart_species = p.baryons ? npart_total / 2 : npart_total;
+                    if (p.baryons) {
+                        long long nb = 0;
+                        for (size_t i = 0; i < part.get_npart(); i++)
+                            nb += part[i].species == 1;
+                        FML::SumOverTasks(&nb);
+                        assert_mpi(2 * nb == npart_total, "AMRNBody: baryons = true needs as many baryon (species 1) as CDM "
+                                                          "(species 0) particles");
+                    }
+                    mpart = 1.0 / double(npart_species);
+                    cdm_fifth = p.baryons and cosmo.has_cdm_fifth_force();
                     // Wrap and move the particles to the grid's decomposition, refine, and compute the forces
                     for (size_t i = 0; i < part.get_npart(); i++)
                         for (int d = 0; d < NDIM; d++)
@@ -899,6 +975,13 @@ namespace FML {
                 std::unique_ptr<Dilaton> dilaton;
                 std::unique_ptr<Solver> solver_scalar;
                 int ext_id_scalar{-1};
+                // Coupled quintessence with CDM and baryon particles: the potential of the CDM density (D^2 phi_c =
+                // delta_c), whose force (times cosmo.cdm_fifth_force) the CDM particles feel in addition
+                bool cdm_fifth{false};
+                std::unique_ptr<Solver> solver_cdm;
+                int ext_id_cdm{-1};
+                std::vector<std::array<double, NDIM>> force_cdm;
+                SpeciesWeights weights_now{1.0, 1.0};
                 bool scalar_started{false}; // The field has been solved for (after symmetry breaking / the start redshift)
                 std::vector<char> touches_finer;              // Per local leaf (see leaves_touching_finer)
                 std::vector<double> mass_from_regrid;         // CIC mass per leaf from the refinement (if usable)
@@ -956,6 +1039,20 @@ namespace FML {
                                      : add_dilaton_force(delta, min_level, full, a_now);
                 }
                 int wanted_bin(AMRParticle & pt, double a_now, double dtau_coarse) const;
+                // The species weights of the density at a (CDM and baryon particles: f_c(a), f_b(a)); nullptr for one
+                // set of CDM+baryon particles (all the particles have the mass mpart)
+                const SpeciesWeights * weights(double a_now) {
+                    if (not p.baryons)
+                        return nullptr;
+                    const double fc = cosmo.cdm_fraction(a_now);
+                    weights_now = {fc, 1.0 - fc};
+                    return &weights_now;
+                }
+                Fluid fluid_of(const AMRParticle & pt) const {
+                    return p.baryons ? (pt.species == 1 ? Fluid::Baryon : Fluid::CDM) : Fluid::CB;
+                }
+                // Solve D^2 phi_c = delta_c (full, or partial on the leaves at levels >= min_level) and set force_cdm
+                void compute_cdm_force(int min_level, bool full);
             };
 
             inline void AMRNBodySimulation::regrid() {
@@ -973,27 +1070,36 @@ namespace FML {
                     for (IndexInt i = 0; i < grid.get_n_local(); i++)
                         grid.get_data(i).scalar = field[i];
                 }
+                const bool have_phi_c = bool(solver_cdm);
+                if (have_phi_c) {
+                    const auto & phic = solver_cdm->get_solution();
+                    for (IndexInt i = 0; i < grid.get_n_local(); i++)
+                        grid.get_data(i).phi_c = phic[i];
+                }
                 typename Grid::ProlongFunction prolong = [](const CellData & parent, const auto &, const auto &) {
-                    return CellData{parent.phi, 0.0, parent.scalar};
+                    return CellData{parent.phi, 0.0, parent.scalar, parent.phi_c};
                 };
                 typename Grid::RestrictFunction restrict_func = [](const std::vector<CellData> & kids, const auto &, const auto &) {
-                    double phi = 0.0, scalar = 0.0;
+                    double phi = 0.0, scalar = 0.0, phi_c = 0.0;
                     for (auto & k : kids) {
                         phi += k.phi / double(kids.size());
                         scalar += k.scalar / double(kids.size());
+                        phi_c += k.phi_c / double(kids.size());
                     }
-                    return CellData{phi, 0.0, scalar};
+                    return CellData{phi, 0.0, scalar, phi_c};
                 };
                 std::vector<double> counts;
-                const int nadapt =
-                    refine_on_particle_count(grid, part, p.n_refine, p.levelmax, p.cic, &counts, false, prolong, restrict_func);
+                // With baryons the counts are weighted by species (a CDM-baryon pair counts as one particle)
+                const auto * w = weights(a);
+                const int nadapt = refine_on_particle_count(
+                    grid, part, p.n_refine, p.levelmax, p.cic, &counts, false, prolong, restrict_func, w);
                 // The counts of the last pass (on the final grid) are the particles in the leaves (CIC or NGP, the
                 // same assignment as the density): they go along with the leaves in the load balance and are the
                 // density of the next full solve
                 const bool have_counts = IndexInt(counts.size()) == grid.get_n_local();
                 if (nadapt > 0) {
                     if (not have_counts)
-                        counts = count_particles_in_leaves(grid, part);
+                        counts = count_particles_in_leaves(grid, part, w);
                     for (IndexInt i = 0; i < grid.get_n_local(); i++)
                         grid.get_data(i).count = counts[i];
                     grid.load_balance([&](IndexInt i) { return 1.0 + grid.get_data(i).count; });
@@ -1027,6 +1133,7 @@ namespace FML {
                 // were saved in the cell data above)
                 solver.reset();
                 solver_scalar.reset();
+                solver_cdm.reset();
                 solver = std::make_unique<Solver>(grid, -1, false);
                 solver->set_convergence_criterion_residual(true);
                 solver->set_maxsteps(p.mg_maxsteps);
@@ -1051,6 +1158,19 @@ namespace FML {
                         for (IndexInt i = 0; i < grid.get_n_local(); i++)
                             guess[i] = grid.get_data(i).scalar;
                         solver_scalar->set_initial_guess(guess);
+                    }
+                }
+                if (cdm_fifth) {
+                    // The same multigrid for the potential of the CDM density, started from its last solution
+                    solver_cdm = std::make_unique<Solver>(grid, -1, false);
+                    solver_cdm->set_convergence_criterion_residual(true);
+                    solver_cdm->set_maxsteps(p.mg_maxsteps);
+                    ext_id_cdm = solver_cdm->add_external_field(std::vector<double>(grid.get_n_local(), 0.0));
+                    if (have_phi_c) {
+                        std::vector<double> guess(grid.get_n_local());
+                        for (IndexInt i = 0; i < grid.get_n_local(); i++)
+                            guess[i] = grid.get_data(i).phi_c;
+                        solver_cdm->set_initial_guess(guess);
                     }
                 }
                 touches_finer = leaves_touching_finer(grid);
@@ -1090,8 +1210,9 @@ namespace FML {
                     std::function<bool(IndexInt)> use = nullptr;
                     if (not full)
                         use = [&](IndexInt i) { return grid.get_cell(i).level >= min_level or touches_finer[i]; };
-                    const auto mass = (full and not mass_from_regrid.empty()) ? mass_from_regrid
-                                                                               : assign_mass_to_leaves(grid, part, mpart, p.cic, use);
+                    const auto mass = (full and not mass_from_regrid.empty())
+                                          ? mass_from_regrid
+                                          : assign_mass_to_leaves(grid, part, mpart, p.cic, use, weights(a_now));
                     mass_from_regrid.clear();
                     delta.assign(grid.get_n_local(), 0.0);
                     double norm2 = 0.0, mean = 0.0;
@@ -1159,7 +1280,7 @@ namespace FML {
                         // The partial solve of the field did not converge: a full solve, which needs the full density and
                         // the force of every leaf
                         last.nscalar_fallback++;
-                        const auto mass = assign_mass_to_leaves(grid, part, mpart, p.cic);
+                        const auto mass = assign_mass_to_leaves(grid, part, mpart, p.cic, nullptr, weights(a_now));
                         double mean = 0.0;
                         for (IndexInt i = 0; i < grid.get_n_local(); i++) {
                             const double vol = std::ldexp(1.0, -NDIM * grid.get_cell(i).level);
@@ -1176,6 +1297,17 @@ namespace FML {
                     last.time_scalar += now() - ts;
                     t0 = now();
                 }
+                // CDM and baryon particles with coupled quintessence: the potential of the CDM density (the fifth force)
+                std::vector<std::array<double, NDIM>> force_cdm_ghost;
+                double fifth = 0.0;
+                if (cdm_fifth) {
+                    const double tc = now();
+                    compute_cdm_force(min_level, full);
+                    grid.communicate_ghosts(force_cdm, force_cdm_ghost);
+                    fifth = cosmo.cdm_fifth_force(a_now);
+                    last.time_cdm += now() - tc;
+                    t0 = now();
+                }
                 std::vector<std::array<double, NDIM>> force_ghost;
                 grid.communicate_ghosts(force, force_ghost);
                 for (size_t ip = 0; ip < part.get_npart(); ip++) {
@@ -1185,8 +1317,65 @@ namespace FML {
                     const auto f = interpolate_to_particle(grid, force, force_ghost, pt, p.cic);
                     for (int d = 0; d < NDIM; d++)
                         pt.Acc[d] = f[d];
+                    if (cdm_fifth and pt.species == 0) {
+                        const auto fc = interpolate_to_particle(grid, force_cdm, force_cdm_ghost, pt, p.cic);
+                        for (int d = 0; d < NDIM; d++)
+                            pt.Acc[d] += fifth * fc[d];
+                    }
                 }
                 last.time_force += now() - t0;
+            }
+
+            inline void AMRNBodySimulation::compute_cdm_force(int min_level, bool full) {
+                // The CDM density contrast: the CDM particles with mass mpart (total CDM mass 1), the baryons none
+                const SpeciesWeights cdm_only{1.0, 0.0};
+                std::vector<double> delta;
+                for (int attempt = 0; attempt < 2; attempt++) {
+                    if (full)
+                        min_level = grid.get_levelmin();
+                    std::function<bool(IndexInt)> use = nullptr;
+                    if (not full)
+                        use = [&](IndexInt i) { return grid.get_cell(i).level >= min_level or touches_finer[i]; };
+                    const auto mass = assign_mass_to_leaves(grid, part, mpart, p.cic, use, &cdm_only);
+                    delta.assign(grid.get_n_local(), 0.0);
+                    double norm2 = 0.0, mean = 0.0;
+                    for (IndexInt i = 0; i < grid.get_n_local(); i++) {
+                        const auto & c = grid.get_cell(i);
+                        const double vol = std::ldexp(1.0, -NDIM * c.level);
+                        delta[i] = mass[i] / vol - 1.0;
+                        mean += delta[i] * vol;
+                        if (c.level >= min_level)
+                            norm2 += delta[i] * delta[i] * vol;
+                    }
+                    FML::SumOverTasks(&mean);
+                    FML::SumOverTasks(&norm2);
+                    if (full)
+                        for (auto & d : delta)
+                            d -= mean;
+                    solver_cdm->set_external_field(ext_id_cdm, delta);
+                    solver_cdm->set_epsilon(p.mg_epsilon * std::max(std::sqrt(norm2), 1e-10));
+                    const int id = ext_id_cdm;
+                    FML::SOLVERS::AMRMULTIGRIDSOLVER::AMREquation<NDIM> eq = [id](const Solver & sol, int level, IndexInt i) {
+                        auto [lap, dlap] = sol.get_laplacian(level, i);
+                        return std::pair<double, double>{lap - sol.get_external_field(id, level, i), dlap};
+                    };
+                    solver_cdm->set_subtract_mean_residual(false);
+                    auto res = full ? solver_cdm->solve(eq) : solver_cdm->solve(eq, min_level);
+                    last.cdm_vcycles += res.iterations;
+                    (full ? last.ncdm_full : last.ncdm_partial)++;
+                    if (res.converged())
+                        break;
+                    if (not full) {
+                        last.ncdm_fallback++;
+                        full = true;
+                        continue;
+                    }
+                    if (FML::ThisTask == 0)
+                        std::cout << "AMRNBody: warning, the Poisson solve of the CDM density did not converge (residual "
+                                  << res.residual << " after " << res.iterations << " V-cycles)\n";
+                    break;
+                }
+                compute_force_field(*solver_cdm, min_level, p.gradient_order, force_cdm);
             }
 
             inline bool AMRNBodySimulation::add_symmetron_force(const std::vector<double> & delta,
@@ -1467,17 +1656,30 @@ namespace FML {
                 auto ticks_of_bin = [&](int b) { return 1LL << (B - b); };
 
                 // Kick factors only depend on the bin: from tick t - half a step of the bin to t, and from t to t + half
-                // With friction (coupled quintessence) a kick is v -> F v + K Acc (F = 1 without)
-                std::vector<double> Kclose(B + 1), Kopen(B + 1), Fclose(B + 1, 1.0), Fopen(B + 1, 1.0);
+                // With friction (coupled quintessence) a kick is v -> F v + K Acc (F = 1 without). Per fluid: CB (one
+                // set of CDM+baryon particles), or CDM and Baryon
+                constexpr int NF = 3;
+                std::array<std::vector<double>, NF> Kclose, Kopen, Fclose, Fopen;
+                for (int f = 0; f < NF; f++) {
+                    Kclose[f].assign(B + 1, 0.0);
+                    Kopen[f].assign(B + 1, 0.0);
+                    Fclose[f].assign(B + 1, 1.0);
+                    Fopen[f].assign(B + 1, 1.0);
+                }
+                const std::vector<Fluid> fluids = p.baryons ? std::vector<Fluid>{Fluid::CDM, Fluid::Baryon}
+                                                            : std::vector<Fluid>{Fluid::CB};
                 auto set_kick_factors = [&](long long t) {
                     for (int b = 0; b <= B; b++) {
                         const double nt = double(ticks_of_bin(b));
                         const double am = std::exp(tau_of_tick(t - 0.5 * nt)), ac = std::exp(tau_of_tick(double(t))),
                                      ap = std::exp(tau_of_tick(t + 0.5 * nt));
-                        Kclose[b] = cosmo.kick_factor(am, ac);
-                        Kopen[b] = cosmo.kick_factor(ac, ap);
-                        Fclose[b] = cosmo.friction_factor(am, ac);
-                        Fopen[b] = cosmo.friction_factor(ac, ap);
+                        for (auto fl : fluids) {
+                            const int f = int(fl);
+                            Kclose[f][b] = cosmo.kick_factor(am, ac, fl);
+                            Kopen[f][b] = cosmo.kick_factor(ac, ap, fl);
+                            Fclose[f][b] = cosmo.friction_factor(am, ac, fl);
+                            Fopen[f][b] = cosmo.friction_factor(ac, ap, fl);
+                        }
                     }
                 };
 
@@ -1487,7 +1689,8 @@ namespace FML {
                 for (size_t ip = 0; ip < part.get_npart(); ip++) {
                     auto & pt = part[ip];
                     pt.bin = wanted_bin(pt, a, dtau);
-                    const double K = Kopen[pt.bin], F = Fopen[pt.bin];
+                    const int f = int(fluid_of(pt));
+                    const double K = Kopen[f][pt.bin], F = Fopen[f][pt.bin];
                     for (int d = 0; d < NDIM; d++)
                         pt.Vel[d] = F * pt.Vel[d] + pt.Acc[d] * K;
                 }
@@ -1537,7 +1740,8 @@ namespace FML {
                         auto & pt = part[ip];
                         if (not full and pt.bin < min_bin)
                             continue;
-                        const double K = Kclose[pt.bin], F = Fclose[pt.bin];
+                        const int f = int(fluid_of(pt));
+                        const double K = Kclose[f][pt.bin], F = Fclose[f][pt.bin];
                         for (int d = 0; d < NDIM; d++)
                             pt.Vel[d] = F * pt.Vel[d] + pt.Acc[d] * K;
                         last.nkicks++;
@@ -1548,7 +1752,7 @@ namespace FML {
                         while (t % ticks_of_bin(b) != 0)
                             b++;
                         pt.bin = b;
-                        const double K2 = Kopen[b], F2 = Fopen[b];
+                        const double K2 = Kopen[f][b], F2 = Fopen[f][b];
                         for (int d = 0; d < NDIM; d++)
                             pt.Vel[d] = F2 * pt.Vel[d] + pt.Acc[d] * K2;
                     }
@@ -1598,7 +1802,13 @@ namespace FML {
                 const std::string model = symmetron ? "symmetron" : "dilaton";
                 if (symmetron or dilaton)
                     os << "  " << model << " " << last.time_scalar;
+                if (cdm_fifth)
+                    os << "  CDM fifth force " << last.time_cdm;
                 os << "\n" << std::defaultfloat;
+                if (cdm_fifth)
+                    os << "  CDM potential (fifth force): " << last.ncdm_full << " full + " << last.ncdm_partial
+                       << " partial solves (" << last.ncdm_fallback << " redone as full; " << last.cdm_vcycles
+                       << " V-cycles)\n";
                 if ((symmetron or dilaton) and (last.nscalar_full + last.nscalar_partial) > 0) {
                     os << "  " << model << ": " << last.nscalar_full << " full + " << last.nscalar_partial << " partial solves ("
                        << last.nscalar_fallback << " redone as full, " << last.nscalar_notconverged << " not converged; "

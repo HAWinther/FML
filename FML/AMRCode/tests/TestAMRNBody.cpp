@@ -13,8 +13,12 @@
 //             the periodic Poisson equation; the image terms vanish to second order by symmetry)
 //  zeldovich  A plane wave evolved from z = 49 to just before shell crossing, against the exact
 //             Zel'dovich solution, with and without subcycling (refining on the pancake)
+//  cq         Coupled quintessence / Fading Dark Sector: LCDM limit, plane wave with the model's growth
+//  twofluid   CDM and baryons as two sets of particles: an LCDM plane wave (both species on the Zel'dovich
+//             solution), and with coupled quintessence (beta = 0.3) the split of CDM and baryons against the linear
+//             two-fluid growth
 //
-// Run: mpirun -np N ./testamrnbody [deposit|blob|zeldovich|all]
+// Run: mpirun -np N ./testamrnbody [deposit|blob|zeldovich|cq|twofluid|all]
 //==========================================================================================
 
 using namespace FML::NBODY::AMR;
@@ -331,6 +335,138 @@ void test_coupled_quintessence() {
     check(wrong.errx > 3.0 * cq.errx, "coupled quintessence: the LCDM growth does not fit (the test sees the model)");
 }
 
+//==========================================================================================
+// CDM and baryons as two sets of particles (species 0, 1) on the same lattice, both on a small plane wave along x
+// with the growing mode of one fluid at aini. The linear two-fluid growth (x = log a)
+//   D_c'' + (2 + dlogE/dx + Gamma_c) D_c' = (3/2) Omega_m(a) P(a) [(1 + 2 beta^2) f_c D_c + f_b D_b]
+//   D_b'' + (2 + dlogE/dx) D_b'          = (3/2) Omega_m(a) P(a) [f_c D_c + f_b D_b]
+// (P = rho_m(a) a^3 / OmegaM, Gamma_c = -beta dphi/dlna) is the expected displacement of each species (exact in one
+// dimension for one fluid; for two fluids to first order, so the amplitude is small: D b = 0.15 at the end)
+//==========================================================================================
+struct TwoFluidResult {
+    double amp[2];     // Measured displacement amplitudes (CDM, baryons) relative to the one-fluid D b
+    double lin[2];     // Linear two-fluid prediction (the same normalization)
+    double errx[2];    // rms deviation from the linear two-fluid solution, relative to the amplitude
+};
+
+TwoFluidResult run_twofluid_wave(const std::string & model, double lambda, double beta, int level, int nsteps) {
+    const double OmegaM = 0.3, OmegaB = 0.05;
+    AMRNBodyParameters par;
+    par.OmegaM = OmegaM;
+    par.OmegaB = OmegaB;
+    par.gravity_model = model;
+    par.cq_lambda = lambda;
+    par.cq_beta = beta;
+    par.baryons = true;
+    par.levelmin = level;
+    par.levelmax = level;
+    par.subcycling = false;
+    par.mg_epsilon = 1e-8;
+    const Cosmology cosmo = make_cosmology(par);
+    const double aini = 0.02, aend = 0.8;
+    const double b = 0.15 / cosmo.D1(aend);
+
+    // Linear two-fluid growth from aini (RK4 in log a): y = {D_c, D_c', D_b, D_b'}
+    auto rhs = [&](double x, const std::array<double, 4> & y) {
+        const double a = std::exp(x);
+        const double fc = cosmo.cdm_fraction(a);
+        const double om = 1.5 * cosmo.OmegaM_of_a(a) * cosmo.poisson_factor(a, Fluid::CDM);
+        const double h = 2.0 + cosmo.dlogEdloga(a);
+        const double src_b = om * (fc * y[0] + (1.0 - fc) * y[2]);
+        const double src_c = src_b + om * cosmo.cdm_fifth_force(a) * y[0];
+        return std::array<double, 4>{y[1], -(h + cosmo.friction(a, Fluid::CDM)) * y[1] + src_c, y[3], -h * y[3] + src_b};
+    };
+    auto grow = [&](double a1, double a2, std::array<double, 4> y) {
+        const int n = 2000;
+        const double x1 = std::log(a1), dx = (std::log(a2) - x1) / n;
+        for (int i = 0; i < n; i++) {
+            const double x = x1 + i * dx;
+            auto add = [](const std::array<double, 4> & p, const std::array<double, 4> & q, double c) {
+                std::array<double, 4> r;
+                for (int k = 0; k < 4; k++)
+                    r[k] = p[k] + c * q[k];
+                return r;
+            };
+            auto k1 = rhs(x, y), k2 = rhs(x + 0.5 * dx, add(y, k1, 0.5 * dx)), k3 = rhs(x + 0.5 * dx, add(y, k2, 0.5 * dx)),
+                 k4 = rhs(x + dx, add(y, k3, dx));
+            for (int k = 0; k < 4; k++)
+                y[k] += dx / 6.0 * (k1[k] + 2 * k2[k] + 2 * k3[k] + k4[k]);
+        }
+        return y;
+    };
+    const double D0 = cosmo.D1(aini), f0 = cosmo.f1(aini);
+    const std::array<double, 4> y0{D0, f0 * D0, D0, f0 * D0};
+    const auto y1 = grow(aini, aend, y0);
+
+    const int n1 = 1 << level;
+    const long long N = (long long)n1 * n1 * n1;
+    Particles part;
+    make_particles(part, 2 * N, [&](long long i, AMRParticle & p) {
+        const long long j = i % N;
+        p.species = int(i / N);
+        const double q[3] = {double(j % n1) / n1, double((j / n1) % n1) / n1, double(j / (n1 * n1)) / n1};
+        for (int d = 0; d < 3; d++)
+            p.Pos[d] = q[d];
+        const double s = std::sin(2 * M_PI * q[0]) / (2 * M_PI);
+        p.Pos[0] = q[0] - D0 * b * s;
+        p.Vel[0] = -aini * aini * cosmo.E(aini) * f0 * D0 * b * s;
+    });
+    AMRNBodySimulation sim(par, part, aini);
+    for (int st = 1; st <= nsteps; st++)
+        sim.step(aini * std::pow(aend / aini, double(st) / nsteps));
+
+    // Amplitude A of x - q = -A b sin(2 pi q) / (2 pi) per species, and the rms deviation from the linear solution
+    double num[2] = {0, 0}, den[2] = {0, 0}, e2[2] = {0, 0};
+    const double Dlin[2] = {y1[0], y1[2]};
+    for (size_t i = 0; i < part.get_npart(); i++) {
+        const int sp = part[i].species;
+        const long long j = part[i].id % N;
+        const double q0 = double(j % n1) / n1;
+        double dx = part[i].Pos[0] - q0;
+        dx -= std::round(dx);
+        const double s = -b * std::sin(2 * M_PI * q0) / (2 * M_PI);
+        num[sp] += dx * s;
+        den[sp] += s * s;
+        e2[sp] += (dx - Dlin[sp] * s) * (dx - Dlin[sp] * s);
+    }
+    for (int sp = 0; sp < 2; sp++) {
+        FML::SumOverTasks(&num[sp]);
+        FML::SumOverTasks(&den[sp]);
+        FML::SumOverTasks(&e2[sp]);
+    }
+    TwoFluidResult r;
+    const double D1end = cosmo.D1(aend);
+    for (int sp = 0; sp < 2; sp++) {
+        r.amp[sp] = num[sp] / den[sp] / D1end;
+        r.lin[sp] = Dlin[sp] / D1end;
+        r.errx[sp] = std::sqrt(e2[sp] / den[sp]) / Dlin[sp];
+    }
+    if (FML::ThisTask == 0)
+        std::cout << "  " << model << (model == "LCDM" ? "" : " (beta " + std::to_string(beta) + ")") << ", " << n1
+                  << "^3 of each species: D_c / D = " << r.amp[0] << " (linear two-fluid " << r.lin[0]
+                  << "), D_b / D = " << r.amp[1] << " (" << r.lin[1] << "); rms deviation " << r.errx[0] << " (CDM), "
+                  << r.errx[1] << " (baryons)\n";
+    return r;
+}
+
+void test_two_fluid() {
+    if (FML::ThisTask == 0)
+        std::cout << "\nCDM and baryons as two sets of particles (plane wave, D b = 0.15 at a = 0.8)\n";
+    auto l = run_twofluid_wave("LCDM", 0.0, 0.0, 5, 40);
+    // The force of the 32^3 grid on the wave is ~1% low (as for one fluid), so the model is compared relative to LCDM
+    check(std::abs(l.amp[0] - 1.0) < 0.02 and std::abs(l.amp[1] / l.amp[0] - 1.0) < 1e-6,
+          "LCDM: both species follow the one-fluid Zel'dovich solution together");
+    auto c = run_twofluid_wave("CoupledQuintessence", 0.5, 0.3, 5, 40);
+    const double split_sim = c.amp[1] / c.amp[0], split_lin = c.lin[1] / c.lin[0];
+    if (FML::ThisTask == 0)
+        std::cout << "  D_b / D_c = " << split_sim << " (linear two-fluid " << split_lin << "); relative to LCDM: D_c "
+                  << c.amp[0] / l.amp[0] << " (" << c.lin[0] << "), D_b " << c.amp[1] / l.amp[1] << " (" << c.lin[1] << ")\n";
+    check(std::abs(c.amp[0] / l.amp[0] / c.lin[0] - 1.0) < 3e-3 and std::abs(c.amp[1] / l.amp[1] / c.lin[1] - 1.0) < 3e-3,
+          "coupled quintessence: each species follows the linear two-fluid growth (relative to LCDM)");
+    check(std::abs(split_sim / split_lin - 1.0) < 1e-3 and split_lin < 0.9,
+          "coupled quintessence: the baryon-CDM split D_b / D_c agrees with linear theory");
+}
+
 int main(int argc, char ** argv) {
     const std::string which = argc > 1 ? argv[1] : "all";
     if (which == "deposit" or which == "all")
@@ -341,6 +477,8 @@ int main(int argc, char ** argv) {
         test_zeldovich();
     if (which == "cq" or which == "all")
         test_coupled_quintessence();
+    if (which == "twofluid" or which == "all")
+        test_two_fluid();
     if (FML::ThisTask == 0)
         std::cout << "\n" << (nfail ? std::to_string(nfail) + " tests FAILED" : "All tests passed") << "\n";
     return nfail ? 1 : 0;

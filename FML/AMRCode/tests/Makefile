@@ -20,12 +20,12 @@ NP_LIST = 1
 RUN =
 endif
 
-# make run: deposit, blob and coupled quintessence (seconds) and the partial solves. The Zel'dovich test takes ~4 min per task count:
+# make run: deposit, blob, coupled quintessence and two fluids (seconds) and the partial solves. The Zel'dovich test takes ~4 min per task count:
 # make run-zeldovich runs it on 4 tasks (nightly)
 .PHONY: run run-zeldovich
 run: $(TARGETS)
 	@set -e; for np in $(NP_LIST); do \
-	  for t in deposit blob cq; do echo "== Running testamrnbody $$t with $$np task(s)"; $(RUN) ./testamrnbody $$t; done; \
+	  for t in deposit blob cq twofluid; do echo "== Running testamrnbody $$t with $$np task(s)"; $(RUN) ./testamrnbody $$t; done; \
 	  echo "== Running testpartial with $$np task(s)"; $(RUN) ./testpartial; \
 	done
 

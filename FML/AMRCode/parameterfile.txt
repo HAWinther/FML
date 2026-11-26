@@ -57,3 +57,14 @@ gravity_model    = LCDM
 # cq_beta          = 0.05  # m_DM ~ exp(-beta phi)
 # ic_growth        = model # FDS/CQ: pk_file is the model's P(k, z = 0) (model) or LCDM's (LCDM: the same initial
 #                          # amplitude as an LCDM run)
+
+# CDM and baryons as two sets of particles (Npart_1D^3 of each), IC from the CDM and baryon transfer functions at
+# zini. transfer_file also works with one set of particles (the CDM+baryon P(k, zini) of the transfer functions
+# instead of pk_file / sigma8). Tables: SimulationCode's ./nbody --write-transfers parameterfile.lua file
+# particle_baryons = true
+# transfer_source  = tables # tables, camb (the transfer info file) or class (the root of a run)
+# transfer_file    = tables.txt
+# baryon_lattice   = same   # same (as the CDM) or offset (half a particle spacing)
+# A_s              = 2.1e-9 # camb, class: the primordial amplitude (tables have their own); also k_pivot_mpc
+# class_gauge      = synchronous # class: synchronous or newtonian
+# OmegaR           = 0      # Background radiation (default 0, or that of the tables with transfer_source = tables)

@@ -12,6 +12,17 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
   `ic_growth = model | LCDM` for the input P(k). `LCDM` in `AMRNBody.h` is now `Cosmology` (alias kept).
 - Test `testamrnbody cq` (in `make run`); AMRCode and its tests now link Spline, ODESolver and NumericalMethods.
 
+### AMRCode: CDM and baryons as two sets of particles
+- `particle_baryons = true`: CDM and baryon particles (`AMRParticle::species`) with IC from the CDM and baryon transfer
+  functions (`transfer_source = tables | camb | class`, `transfer_file`, `baryon_lattice = same | offset`), as
+  SimulationCode's `particle_baryons`. Species-weighted density and refinement (`SpeciesWeights` in
+  `assign_mass_to_leaves`, `count_particles_in_leaves`, `refine_on_particle_count`); per-fluid kick factors
+  (`Fluid::CB | CDM | Baryon` in `Cosmology`). Coupled quintessence / FDS: the CDM fifth force from a second Poisson
+  solve of the CDM density and the CDM friction; the baryons gravity only.
+- `transfer_file` also for one set of particles; `OmegaR` parameter (default from the tables). P(k) of CDM, baryons
+  and CDM+baryons; GADGET files per species.
+- Test `testamrnbody twofluid` (in `make run`). One-species output unchanged (bitwise).
+
 ### NBody: the `discrete_4pt` Green's function is the 5-point Laplacian stencil
 - `force_greens_function_kernel = discrete_4pt` was -1/D4^2 with the 4-point gradient D4, which vanishes at the
   Nyquist frequency: the potential of the modes near it was up to ~6000 times too large and simulations with this

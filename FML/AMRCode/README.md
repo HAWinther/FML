@@ -100,6 +100,36 @@ Units: positions in [0,1), velocities `v = a^2 dx/dt / (H0 B)` (FML's convention
    (1.0121, 0.9948); at z = 0 0.983 at k = 0.5, 0.996 at 1 and 1.009 at 3 h/Mpc. No extra cost (3m45s against 3m41s
    on 2 cores).
 
+8. **CDM and baryons as two sets of particles** (`particle_baryons = true`, `transfer_source`, `transfer_file`,
+   `baryon_lattice`): `Npart_1D^3` CDM (`species = 0`) and baryon (`species = 1`) particles on the same lattice
+   (`baryon_lattice = offset`: the baryons half a spacing off), with the initial conditions of SimulationCode's
+   `particle_baryons` (relative mode in the displacements): one Gaussian field delta_cb(k, zini) with the CDM+baryon
+   P(k) of the transfer functions, delta_i = (T_i / T_cb) delta_cb, the 2LPT term of delta_cb, and the velocities
+   f_i = f_cb + dlog(T_i/T_cb)/dlna (`InitialConditions/SpeciesIC.h`, `NBody::generate_species_from_delta_cb`). The
+   transfer functions are FML transfer tables (`transfer_source = tables`, e.g. from SimulationCode's
+   `nbody --write-transfers` with the Einstein-Boltzmann solver, checked against OmegaB, OmegaM, h and the model; the
+   background radiation `OmegaR` is then taken from the tables), a CAMB info file (`camb`) or a CLASS run (`class`,
+   `class_gauge`), with their amplitude (`A_s`; `pk_file` / `sigma8` are not used). `transfer_file` also works with one
+   set of particles (the same delta_cb field: the same seed gives the same phases).
+   The density is that of all the CDM+baryons, each species weighted by f_c(a), f_b(a); the refinement counts a
+   CDM-baryon pair as one particle, so the grid is that of a one-fluid run. The baryons are collisionless (no
+   hydrodynamics). With coupled quintessence / FDS the CDM also feels the fifth force 2 beta^2 f_c(a) of the CDM
+   density (a second Poisson solve on the same leaves, full and partial like the first: `compute_cdm_force`) and the
+   friction -beta dphi/dlna; the baryons only gravity. Outputs: `pofk_cdm_`, `pofk_baryon_` and `pofk_` (CDM+baryons,
+   mass-weighted), with linear theory from the transfer functions; GADGET `gadget_cdm_` and `gadget_baryon_`.
+   Checks (EBS tables, 64^3 of each species, z = 49 -> 0):
+   - LCDM in 128 Mpc/h: P_cb with two species / one species = 1.0000 +- 5e-4 for k < 0.5 h/Mpc (the same field);
+     FDS (best fit) / LCDM per species follows linear theory to < 0.6% for k <= 0.3.
+   - 1024 Mpc/h (linear): sqrt(P_b / P_c) at z = 0 is 0.9346 for coupled quintessence (lambda = 0.5, beta = 0.15;
+     EBS 0.9342; SimulationCode's PM 0.9386) and 0.9981 for LCDM (0.9980); the CQ / LCDM growth of each species
+     within 0.6% of linear theory.
+   - 128 Mpc/h, coupled quintessence: the baryon-CDM split on large scales is smaller than linear (0.951 against
+     0.932 at k = 0.06, z = 0; PM 0.964): the nonlinear evolution of the relative mode, independent of levelmax (7 or
+     10). On small scales (k > 1) the split depends on the lattice set-up (0.907 same, 0.920 offset at k = 2.5):
+     discreteness of the CDM-baryon pairs.
+   - Cost (2 cores, CQ): 5m07s against 2m10s with one species (twice the particles and the second Poisson solve);
+     LCDM 2m06s against 1m20s.
+
 Outputs: `pofk_<label>_z<z>.txt` (k, P(k) without shot-noise subtraction, linear P(k)) and optionally GADGET
 snapshots and a PNG of the particles in a slab through the middle of the box (`output_images`, `images_npix`,
 `images_slab_thickness`), at `output_redshifts`. The parameter file can `include = file` another (shared
@@ -113,7 +143,7 @@ breakdown.
 | `AMRNBody.h` | The code: `AMRParticle`, `Cosmology` (LCDM or coupled quintessence/FDS), `assign_mass_to_leaves`, `interpolate_to_particle`, `compute_force_field`, `refine_on_particle_count`, `AMRNBodySimulation` |
 | `Main.cpp` | Parameter file, power spectrum, initial conditions, time loop and outputs |
 | `parameterfile.txt` | Example (64^3 or 32^3 in a 100 Mpc/h box) |
-| `tests/TestAMRNBody.cpp` | Deposit, Gaussian blob force, Zel'dovich plane wave (with/without refinement and subcycling) |
+| `tests/TestAMRNBody.cpp` | Deposit, Gaussian blob force, Zel'dovich plane wave (with/without refinement and subcycling), coupled quintessence, two fluids |
 | `tests/TestPartialSolve.cpp` | Partial solves of `AMRMultiGridSolver` against full solves |
 
 The library parts (partial solves in `MultigridSolver/AMRMultiGridSolver.h`, the faster `adapt` and lookups in
@@ -129,6 +159,10 @@ The library parts (partial solves in `MultigridSolver/AMRMultiGridSolver.h`, the
   32^3 particles on level 5 and 1.0% with 64^3 on level 6 (the force on a plane wave is 0.999 of the exact one at
   the fundamental mode); refined to level 7 on the pancake 0.8-0.9%. Subcycling vs. every particle on the finest
   step: 0.15% of the amplitude. The result does not depend on the time step (40 vs 160 steps: 0.2%).
+- **Two fluids** (`testamrnbody twofluid`, ~30 s): CDM and baryon particles on a plane wave (D b = 0.15 at a = 0.8):
+  LCDM: both species on the Zel'dovich solution together (D_b / D_c = 1 to 1e-6); coupled quintessence with
+  beta = 0.3: D_b / D_c = 0.784746 against 0.784771 from the linear two-fluid growth, each species within 8e-4 of it
+  (relative to the LCDM run, which removes the force resolution of the 32^3 grid); the same on 1-3 tasks.
 - **Coupled quintessence / FDS** (`testamrnbody cq`, seconds): lambda = beta = 0 is LCDM to 6e-16; the FDS best
   fit has G_eff/G of the one fluid in (1, 1 + 2 c'^2); the beta = 0.3 plane wave follows the model's Zel'dovich
   solution and not LCDM's.
