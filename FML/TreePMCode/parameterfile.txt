@@ -1,0 +1,54 @@
+# TreePMCode parameter file ("key = value", # comments; "include = file" reads another file)
+
+# Cosmology and the linear P(k) at z = 0 (pk_file: CAMB format k [h/Mpc], P [(Mpc/h)^3]; empty: Eisenstein & Hu
+# no-wiggle normalized to sigma8)
+OmegaM   = 0.3
+OmegaB   = 0.049
+h        = 0.67
+n_s      = 0.96
+sigma8   = 0.81
+pk_file  =
+box      = 100.0     # Mpc/h
+
+# Particles and initial conditions
+Npart_1D   = 32
+Nmesh_ic   = 32
+LPT_order  = 2
+seed       = 1234
+random_generator = GSL # GSL (ranlxd1, as N-GenIC/2LPTic/L-PICOLA) or MT19937
+fix_amplitude = false
+zini       = 49.0
+
+# The force
+Nmesh      = 64        # PM grid (default 2 Npart_1D; the number of tasks must divide it)
+assignment = CIC       # PM density assignment and force interpolation (NGP, CIC, TSC, PCS, PQS)
+deconvolve = true      # Divide out the window of the assignment and interpolation
+asmth      = 1.25      # The force split r_s in PM cells (GADGET-2's ASMTH)
+softening  = 0.0333    # Plummer-equivalent softening in units of the mean particle spacing (comoving)
+cutoff_tolerance = 1e-4 # Short-range pair force at the cutoff relative to Newton
+backend    = tree      # tree (monopole octree) or cell (cell list)
+opening_angle = 0.5    # Tree opening angle (0: exact)
+leaf_size  = 8
+
+# Steps and outputs
+timestep_method  = fixed # fixed (nsteps uniform in log a) or gadget (GADGET-2: PM step + individual short-range steps)
+nsteps           = 40  # Steps uniform in log(a) (fixed)
+# eta              = 0.025 # gadget: ErrTolIntAccuracy, dt_i = sqrt(2 eta eps / |a_i|)
+# max_rms_displacement = 0.25 # gadget: MaxRMSDisplacementFac (PM step)
+# max_dlna         = 0.025 # gadget: MaxSizeTimestep in log a (PM step)
+# max_bins         = 20    # gadget: at most 2^max_bins short-range steps per PM step
+output_redshifts = 1, 0
+output_folder    = .
+label            = test
+pofk_ngrid       = 64
+output_gadget    = false
+output_images    = false
+
+# Model: LCDM, FadingDarkSector (fds_c, fds_cprime), CoupledQuintessence (cq_lambda, cq_beta) or
+# CovariantDarkScattering (ds_w, cds_alpha)
+gravity_model    = LCDM
+
+# CDM and baryons as two sets of particles (IC from transfer functions), see the README
+# particle_baryons = true
+# transfer_source  = tables
+# transfer_file    = tables.txt

@@ -5,6 +5,14 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### TreePMCode: a GADGET-like TreePM N-body code
+- New `TreePMCode/` (`treepm`), separate from AMRCode: particles on a Peano-Hilbert domain (rebuilt every step), the
+  Gaussian force split of ShortRangeGravity (PM long range on a slab grid, monopole octree or cell list short range
+  with cubic-spline softening), the models, IC and outputs as AMRCode (LCDM, CQ/FDS, covariant dark scattering, CDM and
+  baryons as two sets of particles). `timestep_method = fixed` (common KDK steps) or `gadget` (GADGET-2: PM step from
+  MaxRMSDisplacementFac / MaxSizeTimestep, individual short-range steps sqrt(2 eta eps / |a|) in power-of-two bins,
+  forces of the active particles only). Tests: blob force, Zel'dovich plane wave, two fluids, GADGET steps.
+
 ### Interpolation: grids to particles on any domain
 - `DistributedDeposit.h`: `interpolate_from_partitioned_mesh` and `interpolate_grids_to_particles_any_domain`, the
   inverse of the any-domain deposit (each task gathers the cells its particles' stencils touch, in passes of
