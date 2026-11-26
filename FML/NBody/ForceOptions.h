@@ -13,7 +13,10 @@ namespace FML::NBODY {
         // (Feng et al. 2016, https://arxiv.org/abs/1603.00476) and GLAM. Compare the GADGET-2 force discussion:
         // https://arxiv.org/abs/astro-ph/0505010.
         DISCRETE_GREENS_FUNCTION_FROM_TWO_POINT,
-        // This kernel corresponds to using the symmetric 4-point formula for D to get D^2
+        // The 4th-order (5-point) stencil for D^2 in each direction,
+        // [-phi(i+2)+16phi(i+1)-30phi(i)+16phi(i-1)-phi(i-2)]/(12h^2), i.e. -(15-16cos(kh)+cos(2kh))/(6h^2).
+        // (Not the square of the 4-point gradient, which vanishes at the Nyquist frequency.) Equations for all the
+        // kernels: the FML book (Documentation/, section "The force kernels") and the N-body page of the website
         DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT,
     };
 

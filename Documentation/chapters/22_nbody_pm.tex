@@ -1,5 +1,5 @@
 \chapter{Particle--mesh gravity, time stepping and COLA}\label{ch:nbody-pm}
-\chapterstatus{written}{2026-11-20}
+\chapterstatus{written}{2026-11-26}
 
 This chapter describes how \fml{} moves particles under their own gravity: the comoving equations of motion and their
 units, the particle--mesh (PM) force with its choices of Green's function, gradient, assignment and anti-aliasing,
@@ -46,25 +46,7 @@ $W(\vk)=\prod_j[\mathrm{sinc}(k_j\Delta x/2)]^p$, used both to assign and to int
 and momentum is conserved \cite{HockneyEastwood1988}. In SimulationCode the kernel is \param{force_density_assignment_method}
 (CIC by default) and \param{force_interpolation_method} chooses how the force reaches the particles: with the same kernel
 (\code{assignment}), or by evaluating its Fourier series exactly at the particles (\code{nufft}; \code{fiducial}, the
-default, does this when the density is also a NUFFT, so that there is still no self-force). The kernels (\cls{ForceOptions}) are, with $\Delta x=1/N_{\rm mesh}$:
-\begin{center}\small
-\begin{tabularx}{\textwidth}{@{}lXX@{}}
-\toprule
-Kernel & Green's function $G=1/\nabla^2$ & Gradient $D_j$ ($\nabla\to iD$) \\
-\midrule
-continuous & $-1/k^2$ & $k_j$ \\
-two-point & $-\left[\frac{4}{\Delta x^2}\sum_j\sin^2\frac{k_j\Delta x}{2}\right]^{-1}$ & $\sin(k_j\Delta x)/\Delta x$ \\
-four-point & $-\left[\sum_jD_j^2\right]^{-1}$ with the four-point $D_j$ & $\frac{8\sin(k_j\Delta x)-\sin(2k_j\Delta x)}{6\Delta x}$ \\
-\bottomrule
-\end{tabularx}
-\end{center}
-For an even mesh every gradient kernel is zero for the Nyquist component $k_j=k_{\rm Ny}$ (the mode is its own mirror
-image, so its derivative is ambiguous; this keeps the force of a reflected density the reflected force); the
-discrete Green's functions set modes where $\sum_jD_j^2$ vanishes to zero. \code{laplace_kernel_from_name} and
-\code{gradient_kernel_from_name} map \code{continuous}, \code{discrete_2pt}, \code{discrete_4pt}. Finite-difference
-forces on the grid (with a stencil order) are an alternative to Fourier differentiation (in SimulationCode,
-experimental: \param{force_use_finite_difference_force}, \param{force_finite_difference_stencil_order}). There are no global defaults:
-each call takes its \cls{ForceOptions}.
+default, does this when the density is also a NUFFT, so that there is still no self-force). The Green's function $G$ and the gradient $\bm D$ (\cls{ForceOptions}) are described in \cref{sec:nbody-kernels}. There are no global defaults: each call takes its \cls{ForceOptions}.
 
 \begin{cppcode}[A PM force]
 #include <FML/NBody/NBody.h>
@@ -75,6 +57,131 @@ options.deconvolve      = false;
 double norm = 1.5 * OmegaM * a;                       // the Poisson prefactor C(a)
 FML::NBODY::compute_force_from_density_fourier<3>(density_fourier, force, "CIC", norm, options);
 \end{cppcode}
+
+\subsection{The force kernels}\label{sec:nbody-kernels}
+
+A PM force is built from three kernels: the Green's function $G(\vk)$ that inverts the Laplacian, the gradient
+$\bm D(\vk)$ that differentiates the potential ($\nabla\to i\bm D$) and the assignment window $W(\vk)$. With
+$\Delta x=1/N_{\rm mesh}$ (box units), $\delta(\vk)$ the Fourier transform of the assigned density and $C$ the Poisson
+prefactor ($\nabla^2\Phi=C\delta$), the force on the grid is
+\begin{equation}\label{eq:nbody-force-kernels}
+\Phi(\vk)=G(\vk)\,C\,\delta(\vk),\qquad
+\bm F(\vk)=-i\bm D(\vk)\,\frac{\Phi(\vk)}{W^{n}(\vk)},\qquad
+W(\vk)=\prod_{j}\left[\mathrm{sinc}\frac{k_j\Delta x}{2}\right]^{p},
+\end{equation}
+with $n=0$ (\code{deconvolve = false}, the default) or $n=$ \code{deconvolve_window_power} (2: assignment and
+interpolation with the window; 1 if one of them is exact, as with the NUFFT), and $p$ the assignment order
+(1 NGP, 2 CIC, 3 TSC, 4 PCS, 5 PQS). The exact force of the band-limited density is $G=-1/k^2$ and $\bm D=\vk$. The
+discrete kernels are the Fourier transforms of finite-difference stencils: a stencil acting on $\phi(x_i+l\Delta x)$
+becomes a multiplication by $e^{ilk\Delta x}$, so a symmetric difference gives $i\sin$ and a symmetric second difference
+$\cos$. All kernels act direction by direction, $\bm D=(D(k_1),D(k_2),D(k_3))$ and
+$G=-1/\sum_jL(k_j)$, where $L(k)$ is minus the one-dimensional Laplacian. With $x=k\Delta x$ ($x=\pi$ at the
+grid Nyquist frequency $k_{\rm Ny}=\pi/\Delta x$):
+
+\paragraph{Green's functions} (\cls{GreensFunctionLaplaceOperatorKernels}, \param{force_greens_function_kernel};
+\code{greens_function_laplace_operator_fourier} in \file{NBody/NBody.h})
+\begin{center}\small
+\begin{tabularx}{\textwidth}{@{}llXl@{}}
+\toprule
+Name & Real-space stencil for $\partial^2\phi$ & $L(k)\,\Delta x^2$ & Small $x$ \\
+\midrule
+\code{continuous} & (spectral) & $x^2$ & exact \\
+\code{discrete_2pt} & $\dfrac{\phi_{i+1}-2\phi_i+\phi_{i-1}}{\Delta x^2}$ & $4\sin^2\dfrac{x}{2}=2(1-\cos x)$ & $x^2\left(1-\dfrac{x^2}{12}\right)$ \\[1.5ex]
+\code{discrete_4pt} & $\dfrac{-\phi_{i+2}+16\phi_{i+1}-30\phi_i+16\phi_{i-1}-\phi_{i-2}}{12\Delta x^2}$ & $\dfrac{15-16\cos x+\cos 2x}{6}$ & $x^2\left(1-\dfrac{x^4}{90}\right)$ \\
+\bottomrule
+\end{tabularx}
+\end{center}
+\code{discrete_2pt} is the 7-point Laplacian in 3D, the discrete Green's function of \citet{HockneyEastwood1988}; it is
+second order and makes the potential too large at high $k$ ($L/k^2=0.81$ at $k_{\rm Ny}/2$ and $4/\pi^2=0.41$ at
+$k_{\rm Ny}$ along an axis). \code{discrete_4pt} is the fourth-order (5-point per direction) stencil ($L/k^2=0.95$ at
+$k_{\rm Ny}/2$, $0.54$ at $k_{\rm Ny}$). Both vanish only at $\vk=0$, where $G$ is set to zero (the mean density does
+not source the potential). Until November 2026 \code{discrete_4pt} was $L=D_4^2$, the square of the four-point gradient
+below; that vanishes at $k_{\rm Ny}$, so the modes near it got a potential up to $\sim10^4$ times too large and runs
+with it blew up. Since the potential is computed once and then differentiated, $G$ and $\bm D$ need not come from the
+same stencil: composing the two-point gradient twice gives the wide stencil
+$(\phi_{i+2}-2\phi_i+\phi_{i-2})/(4\Delta x^2)$, with $L=\sin^2x/\Delta x^2$, not \code{discrete_2pt}.
+
+\paragraph{Gradients} (\cls{GradientKernels}, \param{force_gradient_kernel}; \code{gradient_kernel_fourier})
+\begin{center}\small
+\begin{tabularx}{\textwidth}{@{}llXl@{}}
+\toprule
+Name & Real-space stencil for $\partial\phi$ & $D(k)\,\Delta x$ & Small $x$ \\
+\midrule
+\code{continuous} & (spectral) & $x$ ($0$ at $x=\pi$) & exact \\
+\code{discrete_2pt} & $\dfrac{\phi_{i+1}-\phi_{i-1}}{2\Delta x}$ & $\sin x$ & $x\left(1-\dfrac{x^2}{6}\right)$ \\[1.5ex]
+\code{discrete_4pt} & $\dfrac{-\phi_{i+2}+8\phi_{i+1}-8\phi_{i-1}+\phi_{i-2}}{12\Delta x}$ & $\dfrac{8\sin x-\sin 2x}{6}$ & $x\left(1-\dfrac{x^4}{30}\right)$ \\[1.5ex]
+6th order (FD only) & $\dfrac{45\delta_1\phi-9\delta_2\phi+\delta_3\phi}{60\Delta x}$, $\delta_l\phi=\phi_{i+l}-\phi_{i-l}$ & $\dfrac{45\sin x-9\sin 2x+\sin 3x}{30}$ & $x\left(1-\dfrac{x^6}{140}\right)$ \\
+\bottomrule
+\end{tabularx}
+\end{center}
+$D/k$ is $0.64$, $0.85$ and $0.93$ at $k_{\rm Ny}/2$ for the 2-, 4- and 6-point stencils. Every gradient is zero for the
+Nyquist component $k_j=k_{\rm Ny}$ of an even mesh: the discrete ones because $\sin(\pi)=0$, the continuous one by
+construction, since that mode is its own mirror image and $ik_j$ would depend on the sign chosen for it (FFTW's
+$+k_{\rm Ny}$); with zero there the force of a reflected density is the reflected force. The finite-difference force
+(\code{compute_force_from_potential_real}, \param{force_use_finite_difference_force} with
+\param{force_finite_difference_stencil_order} $=2,4,6$) applies the stencils in real space to the potential computed
+with the chosen Green's function; orders 2 and 4 give the same force as the Fourier gradients \code{discrete_2pt} and
+\code{discrete_4pt} (to $10^{-15}$), order 6 exists only there.
+
+\paragraph{The force of a combination.} Without the window, the force of a single mode relative to the exact force
+$\vk/k^2$, along the wave vector, is
+\begin{equation}
+\frac{F_{\rm PM}}{F_{\rm exact}}=\frac{|\vk|\,\hat{\vk}\cdot\bm D(\vk)}{\sum_jL(k_j)}
+\;\xrightarrow{\ \vk\parallel\hat{\bm e}_1\ }\;\frac{k\,D(k)}{L(k)} .
+\end{equation}
+Along an axis, at small $x$, this is $1$ (continuous/continuous), $1-x^2/6$ (two-point $\bm D$, continuous $G$),
+$1-x^4/30$ (four-point $\bm D$, continuous or four-point $G$), $1-x^2/12$ (two-point $\bm D$ and $G$) and $1+x^2/12$
+(four-point $\bm D$, two-point $G$). The discrete kernels are anisotropic: the same $|\vk|$ along the diagonal
+$(1,1,1)/\sqrt3$ has each component $\sqrt3$ times smaller and is closer to exact. \Cref{fig:nbody-force-kernels} shows
+the kernels; some values:
+\begin{center}\small
+\begin{tabular}{@{}llcccc@{}}
+\toprule
+& & \multicolumn{2}{c}{along an axis} & \multicolumn{2}{c}{along the diagonal} \\
+$\bm D$ & $G$ & $k_{\rm Ny}/4$ & $k_{\rm Ny}/2$ & $k_{\rm Ny}/4$ & $k_{\rm Ny}/2$ \\
+\midrule
+continuous & continuous & 1 & 1 & 1 & 1 \\
+\code{discrete_2pt} & continuous & 0.900 & 0.637 & 0.966 & 0.869 \\
+\code{discrete_4pt} & continuous & 0.988 & 0.849 & 0.999 & 0.980 \\
+\code{discrete_2pt} & \code{discrete_2pt} & 0.948 & 0.785 & 0.983 & 0.931 \\
+\code{discrete_4pt} & \code{discrete_2pt} & 1.041 & 1.047 & 1.016 & 1.050 \\
+\code{discrete_4pt} & \code{discrete_4pt} & 0.992 & 0.898 & 0.999 & 0.986 \\
+continuous & \code{discrete_2pt} & 1.053 & 1.234 & 1.017 & 1.072 \\
+\bottomrule
+\end{tabular}
+\end{center}
+Pairing a discrete Green's function with the continuous gradient boosts the force at high $k$ (the potential is too
+large and nothing compensates). These are the kernels alone: the window then multiplies the force by $W^{2-n}$ (CIC:
+$W^2=0.66$ along an axis at $k_{\rm Ny}/2$), and the aliased images of the assignment add to it, which interlacing
+(\param{force_interlacing_order}) reduces: the force is averaged over $M$ copies of the particles shifted by fractions of
+a cell, and for the half-cell diagonal ($M=2$) the images at $\vk+2k_{\rm Ny}\bm n$ with odd $\sum_jn_j$ get the
+phase $-1$ and cancel. On a grid finer than the particle grid the kernels also decide how the lattice signal at the
+grid Nyquist frequency reaches the particles (next subsection), which is why SimulationCode's fiducial gradient is not
+the continuous one there.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{force_kernels}
+\caption{The force kernels of \cls{ForceOptions} along a grid axis: the gradients $D(k)/k$ (\emph{left}; the sixth order
+is the finite-difference force), the Laplacians $L(k)/k^2=-1/(k^2G)$ (\emph{middle}; dotted: the pre-November 2026
+\code{discrete_4pt}, $D_4^2$, which vanishes at $k_{\rm Ny}$) and the force of the combinations relative to the exact
+force, without the assignment window (\emph{right}). Made with \file{Documentation/tools/force_kernels_figure.py}.}
+\label{fig:nbody-force-kernels}
+\end{figure}
+
+\paragraph{Choosing.} The library default (an omitted \cls{ForceOptions}) is continuous $G$ and $\bm D$ without
+deconvolution. SimulationCode's \code{fiducial} is the continuous Green's function and, for the gradient, continuous
+for $N_{\rm mesh}=N_p^{1/3}$, \code{discrete_4pt} for $N_p^{1/3}<N_{\rm mesh}\le3N_p^{1/3}$ and \code{discrete_2pt} for
+finer grids, with the lattice offset by half a force cell. In the PM settings study ($64^3$ particles in
+$250\Mpch$) \code{discrete_4pt} for $G$ gives $P(k)$ within $0.1\%$ of the continuous $G$ to
+$k=0.3\hMpc$ and \code{discrete_2pt} $+8.5\%$; the larger effects come from the grid size and the window
+(\cref{sec:nbody-pm}, \file{SimulationCode/tests/check_pm_settings.py}).
+
+\begin{validation}[Validation: force kernels (\file{tests/test_nbody.cpp})]
+\code{test_nbody} checks the \code{discrete_4pt} Green's function against its 5-point stencil (to $10^{-15}$) and that it is bounded at the Nyquist frequency ($k^2|G|\le1.85$), the plane-wave force $\sin(kx)\,D_4/L_4$ of the four-point kernels, that the force of a reflected density is the reflected force also for the Nyquist modes (which needs the zero Nyquist gradient), and that the finite-difference force equals the Fourier force of the same stencil, with and without deconvolution.
+\code{check_pm_settings.py} (1--3 minutes) runs a $64^3$ simulation with each setting, \code{discrete_4pt} $G$
+included, against a converged run.
+\end{validation}
 
 \subsection{The force grid, the lattice and the gradient kernel}
 
