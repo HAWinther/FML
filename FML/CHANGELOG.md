@@ -5,6 +5,11 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### AMRCode: covariantised dark scattering
+- `gravity_model = CovariantDarkScattering` (`ds_w`, `cds_alpha`), as SimulationCode's: wCDM background and the CDM drag
+  alpha a^3 / (Omega_c0 E) (one fluid: f_c times it; `particle_baryons`: the CDM only), the dark energy at rest.
+  Transfer tables checked for the model and its parameters. Tests in `testamrnbody cq` and `twofluid`.
+
 ### AMRCode: the Fading Dark Sector / coupled quintessence
 - `gravity_model = FadingDarkSector` (`fds_c`, `fds_cprime`) and `CoupledQuintessence` (`cq_lambda`, `cq_beta`): FML's
   coupled-quintessence background (`Cosmology/Background`), the one-fluid G_eff/G and varying CDM mass in the Poisson

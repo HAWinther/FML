@@ -13,7 +13,8 @@
 //             the periodic Poisson equation; the image terms vanish to second order by symmetry)
 //  zeldovich  A plane wave evolved from z = 49 to just before shell crossing, against the exact
 //             Zel'dovich solution, with and without subcycling (refining on the pancake)
-//  cq         Coupled quintessence / Fading Dark Sector: LCDM limit, plane wave with the model's growth
+//  cq         Coupled quintessence / Fading Dark Sector and covariant dark scattering: LCDM limit, plane wave with
+//             the model's growth
 //  twofluid   CDM and baryons as two sets of particles: an LCDM plane wave (both species on the Zel'dovich
 //             solution), and with coupled quintessence (beta = 0.3) the split of CDM and baryons against the linear
 //             two-fluid growth
@@ -201,13 +202,15 @@ struct ZeldovichResult {
 // so the Zel'dovich solution with the model's growth factor is exact). lcdm_growth: compare with the LCDM growth instead
 ZeldovichResult run_zeldovich(int levelmin, int levelmax, double n_refine, bool subcycling, int nsteps, bool verbose,
                               const std::string & model = "LCDM", double lambda = 0.0, double beta = 0.0,
-                              bool lcdm_growth = false) {
+                              bool lcdm_growth = false, double ds_w = -0.98, double cds_alpha = 1.0) {
     const double OmegaM = 0.3;
     AMRNBodyParameters par;
     par.OmegaM = OmegaM;
     par.gravity_model = model;
     par.cq_lambda = lambda;
     par.cq_beta = beta;
+    par.ds_w = ds_w;
+    par.cds_alpha = cds_alpha;
     const Cosmology cosmo = lcdm_growth ? Cosmology(OmegaM) : make_cosmology(par);
     const double aini = 0.02, across = 1.0, aend = 0.8;
     const double b = 1.0 / cosmo.D1(across);
@@ -269,8 +272,13 @@ ZeldovichResult run_zeldovich(int levelmin, int levelmax, double n_refine, bool 
         if (nl[l] > 0)
             finest = l;
     if (FML::ThisTask == 0 and verbose)
-        std::cout << "  " << (model == "LCDM" ? "" : model + " (lambda " + std::to_string(lambda) + ", beta " +
-                                                       std::to_string(beta) + (lcdm_growth ? ", LCDM growth" : "") + "): ")
+        std::cout << "  "
+                  << (model == "LCDM" ? ""
+                      : model == "CovariantDarkScattering"
+                          ? model + " (w " + std::to_string(ds_w) + ", alpha " + std::to_string(cds_alpha) +
+                                (lcdm_growth ? ", LCDM growth" : "") + "): "
+                          : model + " (lambda " + std::to_string(lambda) + ", beta " + std::to_string(beta) +
+                                (lcdm_growth ? ", LCDM growth" : "") + "): ")
                   << n1 << "^3 particles, levels " << levelmin << "-" << finest << ", subcycling " << subcycling
                   << ": rms error x " << res.errx << ", v " << res.errv << " (relative to the amplitudes), max |dy| "
                   << res.maxdy << ", " << nsub << " sub-steps, " << double(kicks) / double(ntot) << " kicks per particle\n";
@@ -329,6 +337,62 @@ void test_coupled_quintessence() {
                   << fds.friction(1.0) << ", P(a = 1) " << fds.poisson_factor(1.0) << "\n";
     check(fds.poisson_factor(1.0) > 1.0 and fds.poisson_factor(1.0) < 1.005, "FDS: G_eff/G of the one fluid in (1, 1 + 2 c'^2)");
 
+    // Covariant dark scattering: alpha = 0, w = -1 is LCDM; the linear growth of the N-body equations (two fluids) for
+    // alpha = 1, w = -0.98 from z = 49 to 0 relative to alpha = 0 is that of SimulationCode (SPECIES.md: CDM -9.13%,
+    // baryons -0.32%, CDM+baryons -7.77%, with OmegaCDM = 0.2685, Omegab = 0.049)
+    {
+        const Cosmology z0 = Cosmology::covariant_dark_scattering(0.3, 0.049, -1.0, 0.0);
+        double e = 0.0;
+        for (double a : {0.02, 0.1, 0.3, 0.6, 1.0}) {
+            e = std::max(e, std::abs(z0.E(a) / lcdm.E(a) - 1.0));
+            e = std::max(e, std::abs(z0.D1(a) / lcdm.D1(a) - 1.0));
+            e = std::max(e, std::abs(z0.kick_factor(a, 1.1 * a) / lcdm.kick_factor(a, 1.1 * a) - 1.0));
+        }
+        check(e < 1e-6, "covariant dark scattering with alpha = 0, w = -1 is LCDM");
+        const double OM = 0.3175, OB = 0.049, aini = 1.0 / 50.0;
+        auto grow = [&](const Cosmology & c) {
+            auto rhs = [&](double x, const std::array<double, 4> & y) {
+                const double a = std::exp(x), fc = c.cdm_fraction(a);
+                const double om = 1.5 * c.OmegaM_of_a(a), h = 2.0 + c.dlogEdloga(a), sb = om * (fc * y[0] + (1 - fc) * y[2]);
+                return std::array<double, 4>{y[1], -(h + c.friction(a, Fluid::CDM)) * y[1] + sb, y[3], -h * y[3] + sb};
+            };
+            const double D0 = c.D1(aini), f0 = c.f1(aini);
+            std::array<double, 4> y{D0, f0 * D0, D0, f0 * D0};
+            const int n = 4000;
+            const double x1 = std::log(aini), dx = -x1 / n;
+            for (int i = 0; i < n; i++) {
+                const double x = x1 + i * dx;
+                auto add = [](const std::array<double, 4> & p, const std::array<double, 4> & q, double t) {
+                    std::array<double, 4> r;
+                    for (int k = 0; k < 4; k++)
+                        r[k] = p[k] + t * q[k];
+                    return r;
+                };
+                auto k1 = rhs(x, y), k2 = rhs(x + dx / 2, add(y, k1, dx / 2)), k3 = rhs(x + dx / 2, add(y, k2, dx / 2)),
+                     k4 = rhs(x + dx, add(y, k3, dx));
+                for (int k = 0; k < 4; k++)
+                    y[k] += dx / 6 * (k1[k] + 2 * k2[k] + 2 * k3[k] + k4[k]);
+            }
+            return y;
+        };
+        const auto c1 = Cosmology::covariant_dark_scattering(OM, OB, -0.98, 1.0), c0 = Cosmology::covariant_dark_scattering(OM, OB, -0.98, 0.0);
+        const auto y1 = grow(c1), y0 = grow(c0);
+        const double fc = c1.cdm_fraction(1.0);
+        const double dc = 100 * (y1[0] / y0[0] - 1), db = 100 * (y1[2] / y0[2] - 1),
+                     dcb = 100 * ((fc * y1[0] + (1 - fc) * y1[2]) / (fc * y0[0] + (1 - fc) * y0[2]) - 1);
+        if (FML::ThisTask == 0)
+            std::cout << "  Covariant dark scattering (alpha = 1, w = -0.98), two-fluid growth z = 49 -> 0: CDM " << dc
+                      << "%, baryons " << db << "%, CDM+baryons " << dcb << "% (SimulationCode: -9.13, -0.32, -7.77); "
+                      << "Gamma today " << c1.friction(1.0, Fluid::CDM) << "\n";
+        check(std::abs(dc + 9.13) < 0.02 and std::abs(db + 0.32) < 0.02 and std::abs(dcb + 7.77) < 0.02,
+              "covariant dark scattering: the linear growth is that of SimulationCode");
+        auto cds = run_zeldovich(5, 5, 8.0, false, 40, true, "CovariantDarkScattering", 0.0, 0.0, false, -0.98, 1.0);
+        auto cdsw = run_zeldovich(5, 5, 8.0, false, 40, true, "CovariantDarkScattering", 0.0, 0.0, true, -0.98, 1.0);
+        // The drag acts late (Gamma ~ 2 per ln a at a = 0.8), so the velocities tell the models apart
+        check(cds.errx < 0.03 and cds.errv < 0.04 and cdsw.errv > 3.0 * cds.errv,
+              "covariant dark scattering: one fluid follows the Zel'dovich solution with the model's growth");
+    }
+
     auto cq = run_zeldovich(5, 5, 8.0, false, 40, true, "CoupledQuintessence", 0.5, 0.3);
     auto wrong = run_zeldovich(5, 5, 8.0, false, 40, true, "CoupledQuintessence", 0.5, 0.3, true);
     check(cq.errx < 0.03 and cq.maxdy < 1e-4, "coupled quintessence: Zel'dovich solution with the model's growth reproduced");
@@ -349,7 +413,8 @@ struct TwoFluidResult {
     double errx[2];    // rms deviation from the linear two-fluid solution, relative to the amplitude
 };
 
-TwoFluidResult run_twofluid_wave(const std::string & model, double lambda, double beta, int level, int nsteps) {
+TwoFluidResult run_twofluid_wave(const std::string & model, double lambda, double beta, int level, int nsteps,
+                                 double ds_w = -0.98, double cds_alpha = 1.0) {
     const double OmegaM = 0.3, OmegaB = 0.05;
     AMRNBodyParameters par;
     par.OmegaM = OmegaM;
@@ -357,6 +422,8 @@ TwoFluidResult run_twofluid_wave(const std::string & model, double lambda, doubl
     par.gravity_model = model;
     par.cq_lambda = lambda;
     par.cq_beta = beta;
+    par.ds_w = ds_w;
+    par.cds_alpha = cds_alpha;
     par.baryons = true;
     par.levelmin = level;
     par.levelmax = level;
@@ -442,7 +509,11 @@ TwoFluidResult run_twofluid_wave(const std::string & model, double lambda, doubl
         r.errx[sp] = std::sqrt(e2[sp] / den[sp]) / Dlin[sp];
     }
     if (FML::ThisTask == 0)
-        std::cout << "  " << model << (model == "LCDM" ? "" : " (beta " + std::to_string(beta) + ")") << ", " << n1
+        std::cout << "  " << model
+                  << (model == "LCDM"                      ? ""
+                      : model == "CovariantDarkScattering" ? " (alpha " + std::to_string(cds_alpha) + ")"
+                                                           : " (beta " + std::to_string(beta) + ")")
+                  << ", " << n1
                   << "^3 of each species: D_c / D = " << r.amp[0] << " (linear two-fluid " << r.lin[0]
                   << "), D_b / D = " << r.amp[1] << " (" << r.lin[1] << "); rms deviation " << r.errx[0] << " (CDM), "
                   << r.errx[1] << " (baryons)\n";
@@ -465,6 +536,16 @@ void test_two_fluid() {
           "coupled quintessence: each species follows the linear two-fluid growth (relative to LCDM)");
     check(std::abs(split_sim / split_lin - 1.0) < 1e-3 and split_lin < 0.9,
           "coupled quintessence: the baryon-CDM split D_b / D_c agrees with linear theory");
+    // Covariant dark scattering (alpha = 1, w = -0.98): the CDM drag, the baryons only gravity
+    auto d = run_twofluid_wave("CovariantDarkScattering", 0.0, 0.0, 5, 40, -0.98, 1.0);
+    const double dsplit_sim = d.amp[1] / d.amp[0], dsplit_lin = d.lin[1] / d.lin[0];
+    if (FML::ThisTask == 0)
+        std::cout << "  D_b / D_c = " << dsplit_sim << " (linear two-fluid " << dsplit_lin << "); relative to LCDM: D_c "
+                  << d.amp[0] / l.amp[0] << " (" << d.lin[0] << "), D_b " << d.amp[1] / l.amp[1] << " (" << d.lin[1] << ")\n";
+    check(std::abs(d.amp[0] / l.amp[0] / d.lin[0] - 1.0) < 3e-3 and std::abs(d.amp[1] / l.amp[1] / d.lin[1] - 1.0) < 3e-3,
+          "covariant dark scattering: each species follows the linear two-fluid growth (relative to LCDM)");
+    check(std::abs(dsplit_sim / dsplit_lin - 1.0) < 1e-3 and dsplit_lin > 1.03,
+          "covariant dark scattering: the baryon-CDM split D_b / D_c agrees with linear theory");
 }
 
 int main(int argc, char ** argv) {

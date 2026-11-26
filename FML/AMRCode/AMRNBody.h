@@ -35,6 +35,9 @@
 // coupled quintessence and the CDM+baryon particles (one fluid) feel (3/2) OmegaM P(a) / (a E) in place of
 // (3/2) OmegaM / (a E), P = G_eff/G rho_m(a) a^3 / OmegaM, and the friction dv/dtau = -Gamma(a) v (see Cosmology)
 //
+// Covariantised dark scattering (gravity_model = CovariantDarkScattering, Beltran Jimenez et al. 2020): wCDM and the CDM
+// drag Gamma = alpha a^3 / (Omega_c0 E) (one fluid: f_c Gamma), the dark energy smooth and at rest (see Cosmology)
+//
 // CDM and baryons as two sets of particles (AMRNBodyParameters::baryons; AMRParticle::species 0 = CDM, 1 = baryons, the
 // same number of each): the density is that of all the CDM+baryons, each species weighted by its fraction f_c(a), f_b(a)
 // (the refinement counts a CDM-baryon pair as one particle). The baryons are collisionless (no hydrodynamics). With
@@ -50,6 +53,7 @@
 #include <FML/MultigridSolver/AMRDilatonSolver.h>
 #include <FML/MultigridSolver/AMRSymmetronSolver.h>
 #include <FML/Cosmology/Background/BackgroundModel_CoupledQuintessence.h>
+#include <FML/Cosmology/Background/BackgroundModel_DarkScattering.h>
 
 #include <algorithm>
 #include <array>
@@ -118,6 +122,7 @@ namespace FML {
                 double OmegaB{0.049};
                 std::string model{"LCDM"}; // LCDM or CoupledQuintessence
                 double cq_lambda{0.0}, cq_beta{0.0};
+                double ds_w{-1.0}, cds_alpha{0.0}; // CovariantDarkScattering
 
                 Cosmology() = default;
                 Cosmology(double OmegaM_, double OmegaR_ = 0.0) : OmegaM(OmegaM_), OmegaR(OmegaR_), OmegaL(1.0 - OmegaM_ - OmegaR_) {
@@ -136,23 +141,34 @@ namespace FML {
                     c.model = "CoupledQuintessence";
                     c.cq_lambda = lambda;
                     c.cq_beta = beta;
-                    BG::BackgroundParameters bp;
-                    bp.Omega_b = OmegaB_;
-                    bp.Omega_cdm = OmegaM_ - OmegaB_;
-                    bp.m_nu_eV = {};
-                    if (OmegaR_ > 0.0) {
-                        // The CMB temperature that gives OmegaR (radiation ~ T^4)
-                        const double OmegaR_ref = bp.Omega_gamma() + bp.Omega_nu_massless();
-                        bp.T_CMB *= std::pow(OmegaR_ / OmegaR_ref, 0.25);
-                    } else {
-                        bp.T_CMB = 0.0;
-                        bp.N_eff = 0.0;
-                    }
-                    c.bg = BG::make_coupled_quintessence(bp, lambda, beta);
+                    c.bg = BG::make_coupled_quintessence(background_parameters(OmegaM_, OmegaB_, OmegaR_), lambda, beta);
                     for (const auto & s : c.bg->species())
                         if (const auto * field = dynamic_cast<const BG::CoupledFieldSpecies *>(s.get()))
                             c.cq = &field->sector();
                     assert_mpi(c.cq != nullptr, "Cosmology: no coupled dark sector in the background");
+                    c.compute_growth();
+                    return c;
+                }
+                /// The covariantised dark Thomson-like scattering (Beltran Jimenez et al. 2020; N-body: arXiv:2510.12551),
+                /// Q^mu = alpha_bar (u_DE^mu - u_c^mu): momentum exchange only, so the background is wCDM (w), and the
+                /// CDM has the drag Gamma_c = alpha a^3 / (Omega_c0 E) per ln a (alpha = 8 pi G alpha_bar / (3 H0^3);
+                /// BACKGROUND::covariant_dark_scattering_cdm_drag, the rate of the Einstein-Boltzmann solver). The dark
+                /// energy is smooth and at rest (as SimulationCode's CovariantDarkScattering: the drag is too strong
+                /// for k < ~0.05 h/Mpc, where the solver's dark energy moves with the dark matter). Baryons do not scatter
+                static Cosmology covariant_dark_scattering(double OmegaM_, double OmegaB_, double w, double alpha, double OmegaR_ = 0.0) {
+                    namespace BG = FML::COSMOLOGY::BACKGROUND;
+                    assert_mpi(OmegaB_ >= 0.0 and OmegaB_ < OmegaM_, "Cosmology: need 0 <= OmegaB < OmegaM");
+                    assert_mpi(alpha >= 0.0, "Cosmology: CovariantDarkScattering needs cds_alpha >= 0");
+                    Cosmology c;
+                    c.OmegaM = OmegaM_;
+                    c.OmegaR = OmegaR_;
+                    c.OmegaB = OmegaB_;
+                    c.OmegaL = 0.0;
+                    c.model = "CovariantDarkScattering";
+                    c.ds_w = w;
+                    c.cds_alpha = alpha;
+                    c.bg = BG::make_dark_scattering(background_parameters(OmegaM_, OmegaB_, OmegaR_), w);
+                    c.cds = true;
                     c.compute_growth();
                     return c;
                 }
@@ -197,16 +213,18 @@ namespace FML {
                 /// D^2 phi_c = delta_c (the same factor poisson_factor(a, CDM) in front): 2 beta^2 f_c(a)
                 double cdm_fifth_force(double a) const { return cq ? 2.0 * cq_beta * cq_beta * cdm_fraction(a) : 0.0; }
                 bool has_cdm_fifth_force() const { return cq != nullptr and cq_beta != 0.0; }
-                /// The friction Gamma of dv/dtau = -Gamma v + force (0 for LCDM). CB: -f_c beta dphi/dlna (one fluid),
-                /// CDM: -beta dphi/dlna, Baryon: 0
+                /// The friction Gamma of dv/dtau = -Gamma v + force (0 for LCDM). CDM: -beta dphi/dlna (coupled
+                /// quintessence) or the drag alpha a^3 / (Omega_c0 E) (CovariantDarkScattering); CB (one fluid): f_c
+                /// times that; Baryon: 0
                 double friction(double a, Fluid fluid = Fluid::CB) const {
-                    if (not cq or fluid == Fluid::Baryon)
+                    if (not has_friction(fluid))
                         return 0.0;
-                    const double g = -cq_beta * cq->dphidx(std::log(a));
+                    const double g = cds ? FML::COSMOLOGY::BACKGROUND::covariant_dark_scattering_cdm_drag(*bg, cds_alpha, std::log(a))
+                                         : -cq_beta * cq->dphidx(std::log(a));
                     return fluid == Fluid::CB ? cdm_fraction(a) * g : g;
                 }
                 bool has_friction(Fluid fluid = Fluid::CB) const {
-                    return cq != nullptr and cq_beta != 0.0 and fluid != Fluid::Baryon;
+                    return ((cq != nullptr and cq_beta != 0.0) or (cds and cds_alpha != 0.0)) and fluid != Fluid::Baryon;
                 }
                 /// dphi/dlna of the field (0 for LCDM)
                 double dphidlna(double a) const { return cq ? cq->dphidx(std::log(a)) : 0.0; }
@@ -241,6 +259,25 @@ namespace FML {
               private:
                 std::shared_ptr<const FML::COSMOLOGY::BACKGROUND::ComponentBackground> bg;
                 const FML::COSMOLOGY::BACKGROUND::CoupledDarkSector * cq{nullptr};
+                bool cds{false}; // CovariantDarkScattering
+
+                /// The background parameters of FML's models: OmegaB, OmegaM - OmegaB, and the radiation OmegaR (photons
+                /// + massless neutrinos with T_CMB scaled to give it; none if OmegaR = 0)
+                static FML::COSMOLOGY::BACKGROUND::BackgroundParameters background_parameters(double OmegaM_, double OmegaB_, double OmegaR_) {
+                    FML::COSMOLOGY::BACKGROUND::BackgroundParameters bp;
+                    bp.Omega_b = OmegaB_;
+                    bp.Omega_cdm = OmegaM_ - OmegaB_;
+                    bp.m_nu_eV = {};
+                    if (OmegaR_ > 0.0) {
+                        // The CMB temperature that gives OmegaR (radiation ~ T^4)
+                        const double OmegaR_ref = bp.Omega_gamma() + bp.Omega_nu_massless();
+                        bp.T_CMB *= std::pow(OmegaR_ / OmegaR_ref, 0.25);
+                    } else {
+                        bp.T_CMB = 0.0;
+                        bp.N_eff = 0.0;
+                    }
+                    return bp;
+                }
 
                 // Table in x = log(a) of D1, dD1/dx, D2, dD2/dx and int_xmin^x Gamma dx of the one fluid and of the CDM
                 static constexpr double xmin = -11.0, xmax = 1.0;
@@ -832,6 +869,10 @@ namespace FML {
                 double cq_beta{0.05};
                 double fds_c{-0.85};
                 double fds_cprime{0.05};
+                // The covariantised dark Thomson-like scattering (gravity_model = "CovariantDarkScattering", see
+                // Cosmology::covariant_dark_scattering): wCDM with w = ds_w and the CDM drag alpha a^3 / (Omega_c0 E)
+                double ds_w{-0.98};
+                double cds_alpha{1.0};
                 // CDM and baryons as two sets of particles (the same number of each; species 0 and 1) instead of one
                 // set of CDM+baryon particles. Both feel the gravity of all the CDM+baryons (collisionless baryons);
                 // with coupled quintessence the CDM also feels the fifth force of the CDM and the friction
@@ -842,6 +883,7 @@ namespace FML {
                 bool coupled_quintessence() const {
                     return gravity_model == "CoupledQuintessence" or gravity_model == "FadingDarkSector";
                 }
+                bool covariant_dark_scattering() const { return gravity_model == "CovariantDarkScattering"; }
             };
 
             /// The background of the parameters (LCDM, or coupled quintessence / the Fading Dark Sector)
@@ -850,6 +892,8 @@ namespace FML {
                     return Cosmology::coupled_quintessence(p.OmegaM, p.OmegaB, p.fds_c, p.fds_cprime, p.OmegaR);
                 if (p.gravity_model == "CoupledQuintessence")
                     return Cosmology::coupled_quintessence(p.OmegaM, p.OmegaB, p.cq_lambda, p.cq_beta, p.OmegaR);
+                if (p.covariant_dark_scattering())
+                    return Cosmology::covariant_dark_scattering(p.OmegaM, p.OmegaB, p.ds_w, p.cds_alpha, p.OmegaR);
                 Cosmology c(p.OmegaM, p.OmegaR);
                 c.OmegaB = p.OmegaB;
                 return c;
@@ -932,9 +976,9 @@ namespace FML {
                                                             p.boxsize / FML::UTILS::SI::c_over_H0_mpch,
                                                             false);
                     else
-                        assert_mpi(p.gravity_model == "LCDM" or p.coupled_quintessence(),
-                                   "AMRNBody: gravity_model must be LCDM, Symmetron, Dilaton, CoupledQuintessence or "
-                                   "FadingDarkSector");
+                        assert_mpi(p.gravity_model == "LCDM" or p.coupled_quintessence() or p.covariant_dark_scattering(),
+                                   "AMRNBody: gravity_model must be LCDM, Symmetron, Dilaton, CoupledQuintessence, "
+                                   "FadingDarkSector or CovariantDarkScattering");
                     npart_total = (long long)part.get_npart_total();
                     npart_species = p.baryons ? npart_total / 2 : npart_total;
                     if (p.baryons) {

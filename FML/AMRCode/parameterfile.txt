@@ -39,7 +39,8 @@ output_gadget    = false
 output_images    = false # A PNG of the particles in a slab through the middle of the box at the outputs
 
 # Gravity: LCDM, Symmetron or Dilaton (the fifth force of the scalar field, solved on the AMR grid), or
-# FadingDarkSector / CoupledQuintessence (background, G_eff and friction; no field solve)
+# FadingDarkSector / CoupledQuintessence (background, G_eff and friction; no field solve), or CovariantDarkScattering
+# (wCDM and the CDM drag)
 gravity_model    = LCDM
 # symmetron_assb   = 0.5 # Symmetry breaking scale factor
 # symmetron_beta   = 1.0 # Coupling
@@ -55,7 +56,9 @@ gravity_model    = LCDM
 # fds_cprime       = 0.05  # m_DM ~ exp(-c' phi): the CDM feels G (1 + 2 c'^2)
 # cq_lambda        = 0.5   # CoupledQuintessence: V ~ exp(-lambda phi) (FDS: lambda = c, beta = c')
 # cq_beta          = 0.05  # m_DM ~ exp(-beta phi)
-# ic_growth        = model # FDS/CQ: pk_file is the model's P(k, z = 0) (model) or LCDM's (LCDM: the same initial
+# ds_w             = -0.98 # CovariantDarkScattering: w of the dark energy
+# cds_alpha        = 1.0   # CovariantDarkScattering: the CDM drag alpha a^3 / (Omega_c0 E) per ln a
+# ic_growth        = model # FDS/CQ/CovariantDarkScattering: pk_file is the model's P(k, z = 0) (model) or LCDM's (LCDM: the same initial
 #                          # amplitude as an LCDM run)
 
 # CDM and baryons as two sets of particles (Npart_1D^3 of each), IC from the CDM and baryon transfer functions at

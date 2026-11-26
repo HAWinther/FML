@@ -1,6 +1,6 @@
 # AMRCode
 
-A simple adaptive mesh refinement (AMR) N-body code for LCDM (and symmetron, dilaton, coupled quintessence / the Fading Dark Sector), in the spirit of RAMSES, built on
+A simple adaptive mesh refinement (AMR) N-body code for LCDM (and symmetron, dilaton, coupled quintessence / the Fading Dark Sector, covariant dark scattering), in the spirit of RAMSES, built on
 `AdaptiveMPIGrid` (Hilbert-ordered linear octree, MPI) and `AMRMultiGridSolver` (FAS multigrid on the leaves).
 
 ```
@@ -130,6 +130,24 @@ Units: positions in [0,1), velocities `v = a^2 dx/dt / (H0 B)` (FML's convention
    - Cost (2 cores, CQ): 5m07s against 2m10s with one species (twice the particles and the second Poisson solve);
      LCDM 2m06s against 1m20s.
 
+9. **Covariantised dark Thomson-like scattering** (`gravity_model = CovariantDarkScattering`, parameters `ds_w`,
+   `cds_alpha`; Beltran Jimenez et al. 2020, N-body: arXiv:2510.12551; SimulationCode's `CovariantDarkScattering`):
+   Q^mu = alpha_bar (u_DE^mu - u_c^mu) exchanges momentum only, so the background is wCDM (FML's
+   `make_dark_scattering`), and the CDM has the drag `Gamma = alpha a^3 / (Omega_c0 E)` per ln a
+   (`covariant_dark_scattering_cdm_drag`, the rate of the Einstein-Boltzmann solver; alpha = 8 pi G alpha_bar /
+   (3 H0^3)): one set of particles `f_c Gamma`, with `particle_baryons` the CDM the full drag and the baryons none. No
+   field solve, the Poisson equation is that of GR. The dark energy is smooth and at rest (as SimulationCode): the
+   solver's dark energy moves with the dark matter on large scales (R ~ 1/(1 + w)), so the drag is too strong for
+   k < ~0.05 h/Mpc. Checks (alpha = 1, w = -0.98):
+   - alpha = 0, w = -1 is LCDM to 1e-15; the two-fluid linear growth z = 49 -> 0 relative to alpha = 0 is CDM -9.13%,
+     baryons -0.32%, CDM+baryons -7.78% (SimulationCode's SPECIES.md: -9.13, -0.32, -7.77); Gamma = 3.72 today, 0.26
+     at a = 0.5. Plane waves: one fluid on the model's Zel'dovich solution; two fluids D_b / D_c = 1.05107 against
+     1.05137 from linear theory.
+   - 64^3 of each species in 1024 Mpc/h with EBS tables, the growth from z = 49 to 0 relative to LCDM (k = 0.008 -
+     0.025 h/Mpc): CDM -9.55%, baryons -0.82%, CDM+baryons -8.20%; SimulationCode (PM, Quinn) -9.56%, -0.87%, -8.22%.
+     The EBS has -6.8% for the CDM at k = 0.008 and -9.2% at 0.025 (the moving dark energy). One set of particles
+     suppresses P_cb by 0.48% more (the momentum-weighted one-fluid approximation, as in SimulationCode).
+
 Outputs: `pofk_<label>_z<z>.txt` (k, P(k) without shot-noise subtraction, linear P(k)) and optionally GADGET
 snapshots and a PNG of the particles in a slab through the middle of the box (`output_images`, `images_npix`,
 `images_slab_thickness`), at `output_redshifts`. The parameter file can `include = file` another (shared
@@ -140,7 +158,7 @@ breakdown.
 
 | File | |
 |---|---|
-| `AMRNBody.h` | The code: `AMRParticle`, `Cosmology` (LCDM or coupled quintessence/FDS), `assign_mass_to_leaves`, `interpolate_to_particle`, `compute_force_field`, `refine_on_particle_count`, `AMRNBodySimulation` |
+| `AMRNBody.h` | The code: `AMRParticle`, `Cosmology` (LCDM, coupled quintessence/FDS or covariant dark scattering), `assign_mass_to_leaves`, `interpolate_to_particle`, `compute_force_field`, `refine_on_particle_count`, `AMRNBodySimulation` |
 | `Main.cpp` | Parameter file, power spectrum, initial conditions, time loop and outputs |
 | `parameterfile.txt` | Example (64^3 or 32^3 in a 100 Mpc/h box) |
 | `tests/TestAMRNBody.cpp` | Deposit, Gaussian blob force, Zel'dovich plane wave (with/without refinement and subcycling), coupled quintessence, two fluids |
@@ -159,13 +177,15 @@ The library parts (partial solves in `MultigridSolver/AMRMultiGridSolver.h`, the
   32^3 particles on level 5 and 1.0% with 64^3 on level 6 (the force on a plane wave is 0.999 of the exact one at
   the fundamental mode); refined to level 7 on the pancake 0.8-0.9%. Subcycling vs. every particle on the finest
   step: 0.15% of the amplitude. The result does not depend on the time step (40 vs 160 steps: 0.2%).
-- **Two fluids** (`testamrnbody twofluid`, ~30 s): CDM and baryon particles on a plane wave (D b = 0.15 at a = 0.8):
+- **Two fluids** (`testamrnbody twofluid`, ~45 s; also covariant dark scattering, D_b / D_c = 1.05107 against
+  1.05137): CDM and baryon particles on a plane wave (D b = 0.15 at a = 0.8):
   LCDM: both species on the Zel'dovich solution together (D_b / D_c = 1 to 1e-6); coupled quintessence with
   beta = 0.3: D_b / D_c = 0.784746 against 0.784771 from the linear two-fluid growth, each species within 8e-4 of it
   (relative to the LCDM run, which removes the force resolution of the 32^3 grid); the same on 1-3 tasks.
-- **Coupled quintessence / FDS** (`testamrnbody cq`, seconds): lambda = beta = 0 is LCDM to 6e-16; the FDS best
-  fit has G_eff/G of the one fluid in (1, 1 + 2 c'^2); the beta = 0.3 plane wave follows the model's Zel'dovich
-  solution and not LCDM's.
+- **Coupled quintessence / FDS, covariant dark scattering** (`testamrnbody cq`, seconds): lambda = beta = 0 is LCDM
+  to 6e-16; the FDS best fit has G_eff/G of the one fluid in (1, 1 + 2 c'^2); the beta = 0.3 plane wave follows the
+  model's Zel'dovich solution and not LCDM's. Covariant dark scattering: alpha = 0, w = -1 is LCDM; the two-fluid
+  linear growth is SimulationCode's (to 0.02%); the plane wave (alpha = 1, w = -0.98) follows the model's growth.
 - **Partial solves:** recover the full solution to 1e-10 with the fixed cells unchanged (bitwise), 0.05-0.1
   residual reduction per V-cycle.
 - **LCDM 64^3, 100 Mpc/h, levels 6-10, z = 49 -> 0:** large-scale growth follows linear theory (the growth factor

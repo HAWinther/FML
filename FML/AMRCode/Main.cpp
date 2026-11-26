@@ -357,11 +357,13 @@ std::shared_ptr<FML::INITIALCONDITIONS::TransferProvider> make_transfers(const s
             check("cosmology_Omega_cdm", par.OmegaM - par.OmegaB);
         if (tf.contains("cosmology_m_nu_eV") and tf.get("cosmology_m_nu_eV") != "none")
             throw std::runtime_error(msg + "Tables with massive neutrinos are not supported");
-        // The model: LCDM, or coupled quintessence / the Fading Dark Sector with the same parameters
+        // The model: LCDM, or coupled quintessence / the Fading Dark Sector / covariant dark scattering with the same
+        // parameters (ds_cs2, the sound speed of the dark energy, only enters the transfer functions)
         const std::string model = tf.get("cosmology_model");
-        const std::string want = par.gravity_model == "FadingDarkSector"      ? "fading_dark_sector"
-                                 : par.gravity_model == "CoupledQuintessence" ? "coupled_quintessence"
-                                                                               : "lcdm";
+        const std::string want = par.gravity_model == "FadingDarkSector"          ? "fading_dark_sector"
+                                 : par.gravity_model == "CoupledQuintessence"     ? "coupled_quintessence"
+                                 : par.gravity_model == "CovariantDarkScattering" ? "covariant_dark_scattering"
+                                                                                   : "lcdm";
         if (not model.empty() and model != want and not(want == "lcdm" and model == "LCDM"))
             throw std::runtime_error(msg + "Made for cosmology_model = " + model + ", the simulation has " + want);
         if (want == "fading_dark_sector") {
@@ -371,6 +373,10 @@ std::shared_ptr<FML::INITIALCONDITIONS::TransferProvider> make_transfers(const s
         if (want == "coupled_quintessence") {
             check("cosmology_model_cq_lambda", par.cq_lambda);
             check("cosmology_model_cq_beta", par.cq_beta);
+        }
+        if (want == "covariant_dark_scattering") {
+            check("cosmology_model_ds_w", par.ds_w);
+            check("cosmology_model_cds_alpha", par.cds_alpha);
         }
         if (FML::ThisTask == 0 and tf.contains("cosmology_T_CMB") and std::stod(tf.get("cosmology_T_CMB")) > 0.0 and
             par.OmegaR == 0.0)
@@ -524,6 +530,10 @@ int main(int argc, char ** argv) {
         par.fds_c = pf.get("fds_c", -0.85);
         par.fds_cprime = pf.get("fds_cprime", 0.05);
     }
+    if (par.covariant_dark_scattering()) {
+        par.ds_w = pf.get("ds_w", -0.98);
+        par.cds_alpha = pf.get("cds_alpha", 1.0);
+    }
     // Transfer functions (transfer_file set): the initial conditions from the transfer functions at zini
     // (transfer_source = tables: a file of FML's transfer tables, e.g. from SimulationCode's nbody --write-transfers
     // with the Einstein-Boltzmann solver; camb: a CAMB transfer info file; class: the root of a CLASS run with mTk).
@@ -563,9 +573,10 @@ int main(int argc, char ** argv) {
             }
         }
     }
-    // Coupled quintessence / FDS: the input P(k) is the linear P(k) at z = 0 of the model (ic_growth = model, the
-    // default), or of LCDM with the same OmegaM (ic_growth = LCDM: the same initial amplitude as an LCDM run)
-    const std::string ic_growth = (par.coupled_quintessence() and transfer_file.empty())
+    // Coupled quintessence / FDS / covariant dark scattering: the input P(k) is the linear P(k) at z = 0 of the model
+    // (ic_growth = model, the default), or of LCDM with the same OmegaM (ic_growth = LCDM: the same initial amplitude as
+    // an LCDM run)
+    const std::string ic_growth = ((par.coupled_quintessence() or par.covariant_dark_scattering()) and transfer_file.empty())
                                       ? pf.get("ic_growth", std::string("model"))
                                       : "model";
     assert_mpi(ic_growth == "model" or ic_growth == "LCDM", "ic_growth must be model or LCDM");
@@ -608,9 +619,13 @@ int main(int argc, char ** argv) {
     const double growth_ini = ic_cosmo.D1(aini) / ic_cosmo.D1(1.0);
     // D(a) / D(1) of the input P(k): the model's growth from the initial amplitude
     auto growth_of_a = [&](double a) { return growth_ini * cosmo.D1(a) / cosmo.D1(aini); };
-    if (par.coupled_quintessence() and FML::ThisTask == 0) {
-        std::cout << "\n" << par.gravity_model << ": lambda = " << cosmo.cq_lambda << ", beta = " << cosmo.cq_beta
-                  << " (OmegaM = " << OmegaM << ", OmegaB = " << OmegaB << ")\n";
+    if ((par.coupled_quintessence() or par.covariant_dark_scattering()) and FML::ThisTask == 0) {
+        if (par.coupled_quintessence())
+            std::cout << "\n" << par.gravity_model << ": lambda = " << cosmo.cq_lambda << ", beta = " << cosmo.cq_beta;
+        else
+            std::cout << "\n" << par.gravity_model << ": w = " << cosmo.ds_w << ", alpha = " << cosmo.cds_alpha
+                      << " (CDM drag alpha a^3 / (Omega_c0 E); the dark energy at rest)";
+        std::cout << " (OmegaM = " << OmegaM << ", OmegaB = " << OmegaB << ")\n";
         for (double a : {aini, 0.25, 0.5, 1.0})
             std::cout << "  a = " << std::setw(8) << a << ": E / E_LCDM = " << std::setw(10) << cosmo.E(a) / lcdm.E(a)
                       << "  dphi/dlna = " << std::setw(11) << cosmo.dphidlna(a) << "  G_eff rho_m a^3 / (G OmegaM) = "
