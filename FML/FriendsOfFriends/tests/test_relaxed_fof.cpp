@@ -8,6 +8,7 @@
 //   * One bin without the velocity cut is standard FoF; FriendsOfFriends equals the reference
 //   * FriendsOfFriends with a given mean particle separation on a subset (empty tasks with 2 or 4 tasks)
 //   * The linking lengths, r0 and the settings checks; the halo IDs stored in the particles
+//   * smooth_bin_edges and the PM-calibrated settings (pm_calibrated)
 // =============================================================================
 
 #include <FML/FriendsOfFriends/RelaxedFoF.h>
@@ -197,6 +198,34 @@ int main() {
         RelaxedFoFParameters bad;
         bad.bin_edges = {20, 10};
         check(FML::TESTS::throws<std::invalid_argument>([&] { bad.validate(); }), "decreasing bin edges rejected");
+    }
+
+    //-------------------------------------------------------------------------
+    // The smooth bin edges and the PM-calibrated settings
+    //-------------------------------------------------------------------------
+    {
+        const auto e = RelaxedFoFParameters::smooth_bin_edges();
+        const std::vector<size_t> expected{20, 24, 28, 34, 40, 48, 57, 67, 80, 95, 113, 135, 160, 190, 226, 269, 320};
+        check(e == expected, "smooth_bin_edges: 20 2^(k/4), 18 bins with the end points of the 6 FastPM bins");
+        check(RelaxedFoFParameters::smooth_bin_edges(20, 320, 1) == std::vector<size_t>{20, 40, 80, 160, 320},
+              "smooth_bin_edges with one edge per doubling: FastPM's edges");
+        check(FML::TESTS::throws<std::invalid_argument>([] { RelaxedFoFParameters::smooth_bin_edges(20, 10, 4); }),
+              "smooth_bin_edges: last < first rejected");
+
+        const auto p1 = RelaxedFoFParameters::pm_calibrated(0.977);
+        const auto p2 = RelaxedFoFParameters::pm_calibrated(1.954);
+        p1.validate();
+        check(std::abs(p1.l1 - 0.22) < 1e-12 and std::abs(p2.l1 - 0.20) < 1e-12 and not p1.velocity_rejection and
+                  p1.nbins() == 18,
+              "pm_calibrated: l1 = 0.22 at 1 Mpc/h, 0.20 at 2 Mpc/h, 18 bins, no velocity cut");
+        // l_1(z) = l1 + 0.04/(1+z), l_n = 0.20, linear in the bin index between
+        const bool ll_ok = std::abs(p1.linking_length(1, 0.0) - 0.26) < 1e-12 and
+                           std::abs(p1.linking_length(1, 1.0) - 0.24) < 1e-12 and
+                           std::abs(p1.linking_length(18, 0.0) - 0.20) < 1e-12 and
+                           std::abs(p1.linking_length(9, 0.0) - (9.0 * 0.26 + 8.0 * 0.20) / 17.0) < 1e-12;
+        check(ll_ok, "pm_calibrated: the linking lengths at z = 0 and 1");
+        check(FML::TESTS::throws<std::invalid_argument>([] { RelaxedFoFParameters::pm_calibrated(0.0); }),
+              "pm_calibrated: separation <= 0 rejected");
     }
 
     //-------------------------------------------------------------------------

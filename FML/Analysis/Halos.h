@@ -97,6 +97,12 @@ namespace FML {
                   so_nmin_center,
                   20,
                   "Stop the shrinking sphere when fewer particles than this are left");
+                // The relaxed FoF defaults are FastPM's (fitted at 0.3 Mpc/h). For PM/COLA runs at 1-2 Mpc/h mean
+                // particle separation (2x CIC force grid, 40 steps) use the settings of
+                // RelaxedFoFParameters::pm_calibrated (FriendsOfFriends/RelaxedFoF.md): relaxed_velocity_rejection =
+                // false, relaxed_bin_edges = {20, 24, 28, 34, 40, 48, 57, 67, 80, 95, 113, 135, 160, 190, 226, 269,
+                // 320}, relaxed_l6 = 0.20, relaxed_a2 = 0, relaxed_linking_length_min = 0.1, relaxed_a1 = -0.04 and
+                // relaxed_l1 = 0.22 (1 Mpc/h) or 0.20 (2 Mpc/h)
                 f("relaxed",
                   relaxed,
                   false,

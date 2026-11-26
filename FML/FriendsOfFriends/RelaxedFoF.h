@@ -52,6 +52,15 @@ namespace FML {
         // NB: with the default b1, b2, r0(z) is 0.40 at z = 2 and negative for z > 2.2 (all halos rejected); the
         // parameters were fitted at z <= 2. Set r0_min to put a floor on r0.
         //
+        // The defaults are fitted for FastPM at a mean particle separation of 0.3 Mpc/h and do not carry over to
+        // coarser PM/COLA runs: at 1-2 Mpc/h separation (COLA, force grid twice the particle grid, CIC, 40 steps) they
+        // give -8 to -10% of the halos above 20 particles at z = 0 and +6 to +18% above 100 particles at z = 1 against
+        // Gadget-4 FoF b = 0.2 from the same initial conditions. RelaxedFoFParameters::pm_calibrated(Delta) has the
+        // linking lengths fitted for such runs (2-3% in the counts above 20 particles and in the masses of matched
+        // halos at z = 0-1, at Delta = 1 and 2 Mpc/h). With the 6 bins the step of the linking length at each bin edge
+        // gives a +-10-30% sawtooth in dn/dM (too few halos just below an edge, too many just above): more bins with
+        // the same end points (smooth_bin_edges: 18 bins, edges 20 2^(k/4)) reduce it to ~+-5% at the same cost.
+        //
         // The particles are not reordered (unlike FriendsOfFriends) and not changed, except that the halo ID is set
         // if the particle has a set_fofid method. MPI: the same slab decomposition as FriendsOfFriends.
         //=============================================================================================================
@@ -85,6 +94,47 @@ namespace FML {
             bool verbose{true};
 
             size_t nbins() const { return bin_edges.size() + 1; }
+
+            /// Bin edges first * 2^(k / per_doubling) (rounded), k = 0, 1, ... up to last: with the linking length
+            /// linear in the bin index (eq. 2.5) it goes linearly in log N from l_1 (N < first) to l_n (N >= last), in
+            /// steps of 1/(nbins - 1) of the difference. The defaults (20, 320, 4) give 17 edges (18 bins) with the end
+            /// points of FastPM's 6 bins: no sawtooth in dn/dM from the steps at the edges (+-10-30% with the 6 bins at
+            /// 1-2 Mpc/h)
+            static std::vector<size_t> smooth_bin_edges(size_t first = 20, size_t last = 320, int per_doubling = 4) {
+                if (first < 1 or last < first or per_doubling < 1)
+                    throw std::invalid_argument("RelaxedFoFParameters::smooth_bin_edges: need 1 <= first <= last, "
+                                                "per_doubling >= 1");
+                const int n = int(std::round(per_doubling * std::log2(double(last) / double(first))));
+                std::vector<size_t> edges;
+                for (int k = 0; k <= n; k++) {
+                    const size_t e = size_t(std::round(double(first) * std::pow(2.0, double(k) / per_doubling)));
+                    if (edges.empty() or e > edges.back())
+                        edges.push_back(e);
+                }
+                return edges;
+            }
+
+            /// Settings fitted to Gadget-4 FoF b = 0.2 halos (from the same initial conditions) for COLA runs with a
+            /// force grid twice the particle grid, CIC and 40 steps (SimulationCode, runs/halos): no velocity cut, 18
+            /// bins (smooth_bin_edges()), l6 = 0.20 (a2 = 0, linking_length_min = 0.1) and l1(z) = l1 + 0.04 / (1 + z)
+            /// (a1 = -0.04) with l1 = 0.22 at a mean particle separation Delta = 1 Mpc/h and 0.20 at 2 Mpc/h (linear in
+            /// log2 Delta between and outside; only fitted at 0.98 and 1.95 Mpc/h and 0 <= z <= 1). Accuracy there:
+            /// 2-3% (rms) in the number of halos above 20-1000 particles and in the masses of matched halos; halo bias
+            /// within 0.5-3.5%. Not fitted for other force resolutions or for the particles after PGD (which need l6
+            /// ~0.005-0.01 smaller)
+            static RelaxedFoFParameters pm_calibrated(double mean_separation_mpch) {
+                if (not(mean_separation_mpch > 0.0))
+                    throw std::invalid_argument("RelaxedFoFParameters::pm_calibrated: the separation must be > 0");
+                RelaxedFoFParameters p;
+                p.velocity_rejection = false;
+                p.bin_edges = smooth_bin_edges();
+                p.l1 = 0.22 - 0.02 * std::log2(mean_separation_mpch / 0.977);
+                p.a1 = -0.04;
+                p.l6 = 0.20;
+                p.a2 = 0.0;
+                p.linking_length_min = 0.1;
+                return p;
+            }
 
             /// The linking length of bin i = 1..nbins() at redshift z
             double linking_length(size_t i, double z) const {

@@ -1836,24 +1836,23 @@ namespace FML {
                     break;
                 }
                 case DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT: {
-                    double sum2 = 0.0;
+                    // The standard 4th-order (5-point) stencil for D^2 in each direction,
+                    // [-phi(i+2) + 16 phi(i+1) - 30 phi(i) + 16 phi(i-1) - phi(i-2)] / (12 dx^2), i.e. in Fourier space
+                    // D^2 = -(15 - 16 cos(k dx) + cos(2 k dx)) / (6 dx^2) = -k^2 (1 + O(k dx)^4): the 4th-order
+                    // counterpart of the 3-point stencil of discrete_2pt. It used to be minus the square of the
+                    // 4-point gradient, which vanishes at the Nyquist frequency: the potential of the modes near it was
+                    // up to ~10^4 times too large and simulations with this kernel blew up (backlog item 59).
+                    // The stencil vanishes only for k = 0 (at the Nyquist frequency it is 32 / (6 dx^2) per direction)
+                    double sum = 0.0;
                     for (int idim = 0; idim < NDIM; idim++) {
-                        double _sin = std::sin(kvec[idim] * dx);
-                        double _cos = std::cos(kvec[idim] * dx);
-                        // D^2 = -(D4)^2 with the 4-point gradient D4 = (8 sin(k dx) - sin(2k dx)) / (6 dx) (see
-                        // gradient_kernel_fourier) = sin(k dx) (4 - cos(k dx)) / (3 dx) so that
-                        // D4^2 = sin^2 (16 - 8cos + cos^2) / (9 dx^2) = sin^2 (9 - 8(cos - 1) - sin^2) / (9 dx^2)
-                        sum2 += _sin * _sin * (9.0 - 8.0 * (_cos - 1.0) - _sin * _sin);
+                        const double kdx = kvec[idim] * dx;
+                        sum += 15.0 - 16.0 * std::cos(kdx) + std::cos(2.0 * kdx);
                     }
-                    // D4 vanishes not only for k = 0, but also when every component is 0 or the Nyquist frequency
-                    // (sin(k dx) = 0 up to rounding): we set the potential of these modes to zero (as for k = 0).
-                    // Otherwise sum2 (before the factor 1/(9 dx^2) below) is at least ~ 9 (2pi/Nmesh)^2 > 1e-16 for any
-                    // Nmesh < 10^9, while rounding gives sum2 ~ 1e-31 for these modes. They are self-conjugate
-                    // modes where the gradient is (numerically) zero so this does not change the force.
-                    if (sum2 < 1e-20)
+                    // For k = 0 the sum is zero up to rounding; otherwise it is at least ~ 6 (2pi/Nmesh)^2 > 1e-16 for
+                    // any Nmesh < 10^8
+                    if (sum < 1e-20)
                         return 0.0;
-                    sum2 *= 1.0 / (9.0 * dx * dx);
-                    return -1.0 / sum2;
+                    return -6.0 * dx * dx / sum;
                     break;
                 }
                 default: {

@@ -426,9 +426,13 @@ int main(int argc, char ** argv) {
                 "NBody.h and PotentialGradientDecent.h can be included in several translation units");
 
     //=====================================================
-    // 1. The 4-point Green's function is -1/D4^2
+    // 1. The 4-point Green's function is -1 over the 5-point (4th-order) Laplacian stencil
     //=====================================================
     {
+        // The stencil applied to a plane wave in real space, summed over the directions
+        auto stencil = [&](double k) {
+            return (-2.0 * std::cos(2.0 * k * dx) + 32.0 * std::cos(k * dx) - 30.0) / (12.0 * dx * dx);
+        };
         double maxerr = 0.0;
         const std::vector<std::array<int, 3>> modes{{1, 0, 0},
                                                     {3, 2, 1},
@@ -438,35 +442,39 @@ int main(int argc, char ** argv) {
                                                     {7, 0, -3}};
         for (auto & n : modes) {
             std::array<double, 3> kvec;
-            double kmag2 = 0.0, sumD2 = 0.0;
+            double kmag2 = 0.0, lap = 0.0;
             for (int i = 0; i < 3; i++) {
                 kvec[i] = 2.0 * M_PI * n[i];
                 kmag2 += kvec[i] * kvec[i];
-                const double D = NBODY::gradient_kernel_fourier(kvec[i], Nmesh, NBODY::DISCRETE_FOUR_POINT_GRADIENT);
-                sumD2 += D * D;
+                lap += stencil(kvec[i]);
             }
             const double G =
                 NBODY::greens_function_laplace_operator_fourier<3>(kmag2,
                                                                    kvec,
                                                                    Nmesh,
                                                                    NBODY::DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT);
-            maxerr = std::max(maxerr, std::fabs(G * sumD2 + 1.0));
+            maxerr = std::max(maxerr, std::fabs(G * lap - 1.0));
         }
         check_local(maxerr < 1e-12,
-                    "discrete_4pt Green's function = -1 / (4-point gradient)^2 (max error " + num(maxerr) + ")");
-        // The 4-point gradient vanishes when all components are 0 or the Nyquist frequency: no (infinite) potential
-        std::array<double, 3> knyq{M_PI * Nmesh, 0.0, -M_PI * Nmesh};
-        const double Gnyq =
-            NBODY::greens_function_laplace_operator_fourier<3>(2.0 * M_PI * M_PI * Nmesh * Nmesh,
-                                                               knyq,
-                                                               Nmesh,
-                                                               NBODY::DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT);
-        check_local(Gnyq == 0.0,
-                    "discrete_4pt Green's function is 0 for the Nyquist modes where D4 = 0 (got " + num(Gnyq) + ")");
+                    "discrete_4pt Green's function = 1 / (5-point Laplacian stencil) (max error " + num(maxerr) + ")");
+        // The stencil does not vanish at the Nyquist frequency (the old kernel, -1/D4^2, diverged there and
+        // simulations with it blew up): k^2 |G| stays below 2 for all modes, as for the 2-point kernel (< 2.5)
+        double maxboost = 0.0;
+        for (int i = 1; i <= Nmesh / 2; i++)
+            for (int j : {0, i / 2, i}) {
+                std::array<double, 3> kvec{2.0 * M_PI * i, 2.0 * M_PI * j, 0.0};
+                const double kmag2 = kvec[0] * kvec[0] + kvec[1] * kvec[1];
+                const double G = NBODY::greens_function_laplace_operator_fourier<3>(
+                    kmag2, kvec, Nmesh, NBODY::DISCRETE_GREENS_FUNCTION_FROM_FOUR_POINT);
+                maxboost = std::max(maxboost, -kmag2 * G);
+            }
+        check_local(maxboost > 1.0 && maxboost < 2.0,
+                    "discrete_4pt Green's function is finite up to the Nyquist frequency (max k^2|G| = " +
+                        num(maxboost) + ")");
     }
 
     //=====================================================
-    // 2. Fourier force on a plane wave with the 4-point kernels: F = sin(kx) / D4(k)
+    // 2. Fourier force on a plane wave with the 4-point kernels: F = sin(kx) D4(k) / L5(k), L5 = -the 5-point stencil
     //=====================================================
     {
         const auto options =
@@ -479,15 +487,17 @@ int main(int argc, char ** argv) {
         std::array<FFTWGrid, 3> force;
         NBODY::compute_force_from_density_fourier<3>(wave, force, "CIC", 1.0, options);
         const double D4 = (8.0 * std::sin(k * dx) - std::sin(2.0 * k * dx)) / (6.0 * dx);
+        const double L5 = (15.0 - 16.0 * std::cos(k * dx) + std::cos(2.0 * k * dx)) / (6.0 * dx * dx);
+        const double amp = D4 / L5;
         double maxerr = 0.0;
         for (auto && i : force[1].get_real_range()) {
             auto x = force[1].get_real_position(force[1].get_coord_from_index(i));
-            maxerr = std::max(maxerr, std::fabs(force[1].get_real_from_index(i) - std::sin(k * x[1]) / D4) * D4);
-            maxerr = std::max(maxerr, double(std::fabs(force[0].get_real_from_index(i))) * D4);
+            maxerr = std::max(maxerr, std::fabs(force[1].get_real_from_index(i) - amp * std::sin(k * x[1])) / amp);
+            maxerr = std::max(maxerr, double(std::fabs(force[0].get_real_from_index(i))) / amp);
         }
         FML::MaxOverTasks(&maxerr);
         check_local(maxerr < FML::TESTS::grid_tol(1e-10, 1e-5),
-                    "Fourier force on a plane wave with the 4-point kernels is sin(kx)/D4(k) (rel. error " +
+                    "Fourier force on a plane wave with the 4-point kernels is sin(kx) D4(k)/L5(k) (rel. error " +
                         num(maxerr) + ")");
     }
 

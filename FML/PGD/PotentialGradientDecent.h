@@ -41,6 +41,11 @@ namespace FML {
         /// prefactor \f$ 1.5\Omega_M a \f$ which agrees with this only at a = 1. The sign convention of the paper is
         /// ambiguous (eq. 2.7 vs 2.14); here a positive alpha moves particles towards overdensities.
         ///
+        /// PGD sharpens the halos so P(k) is restored on small scales, but it does not recover halos that the PM force
+        /// did not form: FoF halos found after PGD are too massive above ~300 particles (1-3% in mass) and the small
+        /// ones are still missing, so find halos before PGD. It does not fix the velocities either (PM halos are too
+        /// cold; a PGD-like velocity kick does not give the right redshift-space P(k)).
+        ///
         /// NB: this moves the particles but does not communicate them: afterwards particles can be outside the domain
         /// of the current task and the caller has to call communicate_particles (or use the MPIParticles overload below
         /// which does this). All tasks have to call this method (it is collective) also if they have no particles.
@@ -177,8 +182,23 @@ namespace FML {
             part.communicate_particles();
         }
 
+        //=================================================================================
+        // The fitting formulae of the paper (below) are fitted to FastPM (10 steps, force grid twice the particle grid)
+        // at mean particle separations 0.3 <= Delta <= 1 Mpc/h and do not extrapolate. For COLA in SimulationCode (2x
+        // CIC force grid, 40 steps) they are wrong already at the edge of their range and unusable beyond it:
+        //   - Delta = 0.98 Mpc/h: the alpha that fits P(k) of Gadget-4 from the same initial conditions is ~0.0042/a
+        //     (k_l = 1.5, k_s = 6 h/Mpc), 2-4 times smaller than the formula;
+        //   - Delta = 1.95 Mpc/h: alpha ~0.022 (k_l = 1.5, k_s = 3 h/Mpc), while the formula for k_s is negative
+        //     (33.4 - 30 Delta) and alpha0 has a Delta^25 term.
+        // Calibrated against EuclidEmulator2 instead, alpha = 0.0044 (Delta / 0.977 Mpc/h)^2.69 a^-1.25 with k_l = 1.5
+        // h/Mpc and k_s = 6 / Delta (P(k) within 1-3% rms up to the particle Nyquist frequency at z <= 1; fitted at
+        // Delta = 0.98 and 1.95 Mpc/h only). The best parameters depend on the N-body scheme, the force resolution and
+        // the time stepping: refit them for other setups.
+        //=================================================================================
+
         /// Fitting formula for the displacement factor alpha needed in the PGD method (eqs. 4.3-4.5 in 1804.00671,
-        /// valid for 0.3 < Delta < 1 and 0 < z < 2). Delta is the mean particle separation in Mpc/h
+        /// valid for 0.3 < Delta < 1 and 0 < z < 2). Delta is the mean particle separation in Mpc/h. NB: see the
+        /// comment above (not valid for COLA or other setups, or outside the range)
         inline double pgd_fitting_formula_alpha(double Delta, double scale_factor) {
             const double alpha0 = 0.0061 * std::pow(Delta, 25) + 0.0051 * std::pow(Delta, 3) + 0.00314;
             const double mu = -5.18 * Delta * Delta * Delta + 11.57 * Delta * Delta - 8.58 * Delta + 0.77;
@@ -187,12 +207,14 @@ namespace FML {
         }
         /// Fitting formula for k_l in h/Mpc (eq. 4.1 in 1804.00671): the scale of the filter exp(-k_l^2/k^2) that
         /// removes large scales (the k_lowpass argument above). Delta is the mean particle separation in Mpc/h
+        /// (FastPM, 0.3 <= Delta <= 1)
         inline double pgd_fitting_formula_klowpass_hmpc(double Delta) {
             const double kl = (1.52 - 0.3 * Delta);
             return kl;
         }
         /// Fitting formula for k_s in h/Mpc (eq. 4.2 in 1804.00671): the scale of the filter exp(-k^4/k_s^4) that
-        /// removes small scales (the k_highpass argument above). Delta is the mean particle separation in Mpc/h
+        /// removes small scales (the k_highpass argument above). Delta is the mean particle separation in Mpc/h.
+        /// NB: negative for Delta > 1.11 Mpc/h (FastPM, 0.3 <= Delta <= 1)
         inline double pgd_fitting_formula_khighpass_hmpc(double Delta) {
             const double ks = (33.4 - 30 * Delta);
             return ks;

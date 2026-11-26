@@ -105,6 +105,22 @@ lattice of the initial conditions gives spurious forces and the growth of the in
 scatters by 40-70%; with the fiducial settings (half-cell lattice offset, discrete_4pt kernel up to 3x and discrete_2pt beyond) the growth on
 the largest scales is right to < 1.5% with < 1% scatter between modes.
 
+## Accuracy of the PM settings (`check_pm_settings.py`)
+
+```bash
+python3 tests/check_pm_settings.py ./nbody /tmp/pmsettings   # about 1-3 minutes, needs numpy
+```
+
+The quick cases of the PM settings study (backlog item 59): 64^3 particles in 200 Mpc/h to z = 0 with the baseline
+(COLA, CIC, 1x grid, 20 steps), the two recommended force settings (2x CIC grid; TSC + interlacing 2 + deconvolution
+on the 1x grid), the NUFFT, FastPM stepping on a 2x grid, the discrete_4pt Laplacian and the lattice-calibrated early
+force, each against a converged run of the code (3x grid, PCS + interlacing 2, 100 log steps, no COLA). Checks the
+converged P(k) against its stored values (`pm_settings_reference.json`, 0.5%), the error of each setting at
+k_Ny/8, k_Ny/4 and k_Ny/2 against the stored error (TOL = 0.5%), and the ordering found in the study (the recommended
+settings within 5% of the converged run at k_Ny/2, the 1x CIC grid more than 10% low). The stored values are the
+same for 2 and 4 MPI ranks to all printed digits. The pre-fix discrete_4pt Laplacian (-96% at k_Ny/2) fails it.
+After an intended change of the results, rewrite the reference with `--write-reference`.
+
 ## Lightcone (`check_lightcone.py`)
 
 ```bash

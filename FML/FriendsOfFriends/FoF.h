@@ -58,7 +58,10 @@ namespace FML {
         /// A class derived from FoFHalo (with using FoFHalo::FoFHalo;) works.
         ///
         /// @param[in] part Pointer to particles. If the particle has a set_fofid then we will also store the FoFID in
-        /// the particles. NB: the particles are sorted (by their y-coordinate) in place.
+        /// the particles: the id member of its group (FoFHalo::id), or no_FoF_ID if it is in no group that is kept.
+        /// NB: the IDs are numbered before the groups smaller than nmin_FoF_group are removed, so they are not
+        /// contiguous and not the index of the group in LocalFoFGroups: map them with LocalFoFGroups[i].id (over all
+        /// tasks with MPI). NB: the particles are sorted (by their y-coordinate) in place.
         /// @param[in] NumPart Number of local particles (may be zero on some of the tasks)
         /// @param[in] linking_length The distance in units of mean particle separation (in [0,1)) required to have a
         /// link between two particles. Typical value is 0.2.

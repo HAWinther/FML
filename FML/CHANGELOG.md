@@ -5,6 +5,49 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### NBody: the `discrete_4pt` Green's function is the 5-point Laplacian stencil
+- `force_greens_function_kernel = discrete_4pt` was -1/D4^2 with the 4-point gradient D4, which vanishes at the
+  Nyquist frequency: the potential of the modes near it was up to ~6000 times too large and simulations with this
+  kernel blew up (P(k) -99% at z = 0 in backlog item 59; -81% at k = 0.1 h/Mpc in a 64^3, 250 Mpc/h test). It is now
+  the standard 4th-order stencil, D^2 = -(15 - 16 cos(k dx) + cos(2k dx)) / (6 dx^2), the 4th-order counterpart of
+  the 3-point stencil of `discrete_2pt`; it vanishes only at k = 0 and k^2|G| <= 1.85. In the 64^3 test P(k) is now
+  within 0.1% of the continuous kernel to k = 0.3 h/Mpc (`discrete_2pt`: +8.5%). The finite-difference force with
+  stencil order 4 uses the same Green's function (still equal to the Fourier force to 1e-15). `test_nbody` checks the
+  stencil, its bound at the Nyquist frequency and the plane-wave force sin(kx) D4/L5.
+
+### SimulationCode: regression test of the PM settings
+- `tests/check_pm_settings.py` (1-3 minutes) runs the quick 64^3 cases of the PM settings study (backlog item 59):
+  the baseline, the two recommended force settings (2x CIC grid; TSC + interlacing 2 + deconvolution on the 1x grid),
+  the NUFFT, FastPM stepping on a 2x grid, the discrete_4pt Laplacian and the lattice-calibrated early force, each
+  against a converged run of the code (3x grid, PCS + interlacing 2, 100 log steps, no COLA). It checks the converged
+  P(k) against stored values, the error of each setting against the stored error (0.5%) and the ordering found in the
+  study. The pre-fix discrete_4pt Laplacian fails it. See `tests/README.md`.
+
+### FriendsOfFriends: relaxed FoF settings calibrated for coarse PM/COLA runs
+- `RelaxedFoFParameters::smooth_bin_edges(first, last, per_doubling)`: bin edges first 2^(k/per_doubling). The
+  defaults give 18 bins with the end points of FastPM's 6. The step in the linking length at each of the 6 bin edges
+  gives a +-10-30% sawtooth in dn/dM at 1-2 Mpc/h particle separation; the 18 bins reduce it to ~+-5% at the same
+  cost.
+- `RelaxedFoFParameters::pm_calibrated(Delta)`: the settings fitted to Gadget-4 FoF b = 0.2 halos for COLA with a 2x
+  CIC force grid and 40 steps at mean separations Delta = 0.98 and 1.95 Mpc/h: 18 bins, no velocity cut, l6 = 0.20,
+  l1(z) = l1 + 0.04/(1+z) with l1 = 0.22 (1 Mpc/h) to 0.20 (2 Mpc/h). This gives 2-3% in the counts above 20
+  particles and the matched masses at z = 0-1. The FastPM defaults (fitted at 0.3 Mpc/h) are off by -10 to +18%
+  there.
+- Documented in `RelaxedFoF.md` (new section) and at the `fof_relaxed_*` parameters (`Analysis/Halos.h`). Tested in
+  `tests/test_relaxed_fof.cpp`.
+
+### Documentation: PGD fitting formulae, FoF halo IDs, redshift-space velocities
+- `PGD/PotentialGradientDecent.h`: the paper's fitting formulae (FastPM, 0.3-1 Mpc/h) do not apply to COLA runs. At
+  1 Mpc/h they give a 2-4 times too large alpha, and at 2 Mpc/h a negative k_s. The header now gives the values
+  calibrated against Gadget-4 and EuclidEmulator2, and notes that halos should be found before PGD.
+- `FriendsOfFriends/FoF.h`: the FoF ID stored in the particles is the group's `id`. It is numbered before the
+  nmin cut, so it is not the index in the returned list.
+- `SimulationCode/VELOCITY_DISPERSION.md` (new): PM/COLA halos at 1-2 Mpc/h have 0.37-0.72 of the virial velocity
+  dispersion, so P0 in redshift space is 8-17% too high at k = 0.3 h/Mpc. A PGD-like velocity kick does not fix
+  this. Raising the halo dispersion to c sigma_Evrard(M) does, with c(a) = 1.1 - 0.3a at both resolutions. With
+  relaxed FoF halos at z = 0 this gives P0 and P2 within 1-2% of Gadget-4 up to k_Ny/2. The limits are 2 Mpc/h at
+  z >= 0.5 and k > 1 h/Mpc at z = 1. The note gives the measurements and how to implement it (not implemented yet).
+
 ### FieldLevel: analytic bias marginalization and a free-IC sampler comparison
 - `MarginalizedBias.h`: `BiasMarginalizedPosterior` integrates the four Eulerian bias coefficients out exactly
   (unbounded Gaussian priors, fixed noise), with gradients through the new
