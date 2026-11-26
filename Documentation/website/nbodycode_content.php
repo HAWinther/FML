@@ -29,6 +29,7 @@
 <a href="#NbodyGauge">20. The N-body gauge</a><br>
 <a href="#ICs">21. Initial conditions: Philox fields and internal transfer functions</a><br>
 <a href="#Analysis">22. On-the-fly analysis: SO masses, hybrid bias spectra, baryonification, lightcone, images</a><br>
+<a href="#Reports">23. Validation reports (PDF)</a><br>
 <a href="#References">Method references and scope</a><br>
 <a href="#Interacting">Interacting dark sectors and species evolution</a><br>
 <a href="#Horndeski">Reduced Horndeski from a Lagrangian</a><br>
@@ -578,6 +579,28 @@ All parameters, with types, defaults and allowed values, are listed in <tt>Simul
 <hr/>
 
 <p><a href="snapshotanalyzer.php" style="display: inline">SnapshotAnalyzer</a> runs independently on Gadget binary or HDF5 outputs. It shares the library's power, multipole, bispectrum, FoF/SO and baryonification kernels with SimulationCode and adds configurable T-web, Minkowski, hybrid-bias, void and DTFE workflows. Use it to reanalyse existing snapshots without rerunning their dynamics. <a href="https://github.com/HAWinther/FML/blob/master/FML/Analysis/README.md" style="display: inline">FML/Analysis</a> also exposes the context and settings for use from another application.</p>
+
+<header class="entry-header text-center">
+  <h1 class="entry-title" id="Reports">Validation reports</h1>
+</header>
+<hr/>
+
+<p>
+Detailed tests of the code, written up as reports (PDF). They give the numbers behind the recommended settings and the defaults on this page; the regression tests in <tt>SimulationCode/tests</tt> check the main results on every change.
+</p>
+<div class="table-responsive">
+<table class="table table-striped table-condensed">
+<thead><tr><th>Report</th><th>What it tests</th></tr></thead>
+<tbody>
+<tr><td><a href="reports/linear_step_report.pdf" style="display: inline">Linear single-step tests of the PM force and the time steppers</a> (20 November 2026, 35 pages)</td><td>Single steps deep in the linear regime against linear theory with an exact mode-by-mode estimator: the assignment schemes (NGP&ndash;PQS), interlacing and deconvolution, the <a href="nbody.php#ForceKernels" style="display: inline">Green's function and gradient kernels</a>, and the Quinn, Tassev, FastPM, BullFrog and COLA steppers; then 5&ndash;50 steps to $z = 0$, force grids of 1&ndash;3$\times$ the particle grid, sheet interpolation, and CDM + baryon and neutrino particles.</td></tr>
+<tr><td><a href="reports/high_redshift_starts.pdf" style="display: inline">Starting at high redshift</a> (21 November 2026, 10 pages)</td><td>1LPT from $z = 1000$ against 2LPT from $z = 19$ (the NUFFT and the lattice-calibrated Green's function at early times), forward initial conditions from the Boltzmann solver in the N-body gauge, massive neutrinos, and a single BullFrog step from the Big Bang.</td></tr>
+<tr><td><a href="reports/item59_phase1.pdf" style="display: inline">PM settings 1: nonlinear accuracy</a> (25 November 2026, 65 pages)</td><td>Every PM setting changed one at a time (stepper, number and spacing of steps, start, force grid, assignment, interlacing, deconvolution, NUFFT, kernels) against Gadget-4 TreePM and converged runs from the same initial conditions: $P(k)$, multipoles, bispectrum, cross-correlation and halos, in 1000 and 250 Mpc/$h$ boxes with $256^3$ and $512^3$ particles.</td></tr>
+<tr><td><a href="reports/item59_phase2.pdf" style="display: inline">PM settings 2: speed, memory and scaling</a> (25 November 2026, 3 pages)</td><td>The cost of the settings on whole nodes, accuracy against cost, where the time goes, memory per particle and per cell, and strong and weak scaling with MPI and OpenMP.</td></tr>
+<tr><td><a href="reports/item59_phase3.pdf" style="display: inline">PM settings 3: combinations, and FastPM</a> (25 November 2026, 6 pages)</td><td>Combinations of the best settings, how many steps are needed, and the code against FastPM run from the same initial conditions.</td></tr>
+<tr><td><a href="reports/halos_pgd.pdf" style="display: inline">Halos, relaxed FoF and potential gradient descent</a> (26 November 2026, 11 pages)</td><td>FoF halos of the fiducial COLA runs against Gadget-4, relaxed FoF with linking lengths fitted for PM/COLA resolutions, and PGD for $P(k)$ (calibrated to EuclidEmulator2), with the recommendation to find halos before applying PGD.</td></tr>
+</tbody>
+</table>
+</div>
 
 <header class="entry-header text-center">
   <h1 class="entry-title" id="References">Method references and scope</h1>

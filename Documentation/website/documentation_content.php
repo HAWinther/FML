@@ -9,7 +9,7 @@
 </p>
 
 <p>
-Each page below explains the theory behind the methods and shows how to use them. Every module folder also has a README with the full conventions and the validation, an <tt>example</tt> folder and (for most) a <tt>tests</tt> folder; <tt>FML/CAPABILITIES.md</tt> lists them all and <tt>FML/BUILDING.md</tt> explains the build options. The <a href="main.pdf" style="display: inline">FML book</a> (PDF) covers all of this in one document: the equations, algorithms, usage, validation and references. For every class and method see the <a href="doxygen/index.html" style="display: inline">doxygen documentation</a>. As always: test things before using them for something new.
+Each page below explains the theory behind the methods and shows how to use them. Every module folder also has a README with the full conventions and the validation, an <tt>example</tt> folder and (for most) a <tt>tests</tt> folder; <tt>FML/CAPABILITIES.md</tt> lists them all and <tt>FML/BUILDING.md</tt> explains the build options. The <a href="main.pdf" style="display: inline">FML book</a> (PDF) covers all of this in one document: the equations, algorithms, usage, validation and references. Detailed tests of the N-body code (PM force and time stepping, high-redshift starts, the PM settings study, halos and PGD) are in its <a href="nbodycode.php#Reports" style="display: inline">validation reports</a>. For every class and method see the <a href="doxygen/index.html" style="display: inline">doxygen documentation</a>. As always: test things before using them for something new.
 </p>
 
 <p class="page-toc">

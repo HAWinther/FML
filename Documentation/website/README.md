@@ -12,3 +12,8 @@ php -S localhost:8000 -t Documentation/website     # from the repository root
 Deploy by copying the folder to the web server. The Doxygen reference (`../doxygen`) is uploaded to its `doxygen/`
 folder, and the book (`../main.pdf`, built with `make` in `Documentation/`) next to `index.php` as `main.pdf`, where
 `header.php`, `index_content.php` and `documentation_content.php` link to it.
+
+The SimulationCode validation reports linked from `nbodycode_content.php` (section "Validation reports") are expected in
+`reports/` next to `index.php`, with the file names they have in the repository's top-level `Reports/` folder
+(flat: `linear_step_report.pdf`, `high_redshift_starts.pdf`, `item59_phase1.pdf`, `item59_phase2.pdf`,
+`item59_phase3.pdf`, `halos_pgd.pdf`). When a report is added, add a row to that table.
