@@ -30,6 +30,11 @@
 // Dilaton gravity (gravity_model = Dilaton): the same for w = phi / phi_bar(a) of the (generalised) dilaton
 // (AMRDilatonSolver.h, Brax et al. 2012), with PhiF = PhiF_bar(a) w^2, from dilaton_start_redshift on (LCDM before)
 //
+// Coupled quintessence / the Fading Dark Sector (gravity_model = CoupledQuintessence / FadingDarkSector, Obied, Vafa &
+// Wu, arXiv:2611.17422): no field solve (the field is light: unscreened, scale independent). The background is FML's
+// coupled quintessence and the CDM+baryon particles (one fluid) feel (3/2) OmegaM P(a) / (a E) in place of
+// (3/2) OmegaM / (a E), P = G_eff/G rho_m(a) a^3 / OmegaM, and the friction dv/dtau = -Gamma(a) v (see Cosmology)
+//
 //==========================================================================================
 
 #include <FML/AdaptiveMPIGrid/AdaptiveMPIGrid.h>
@@ -38,6 +43,7 @@
 #include <FML/MultigridSolver/AMRMultiGridSolver.h>
 #include <FML/MultigridSolver/AMRDilatonSolver.h>
 #include <FML/MultigridSolver/AMRSymmetronSolver.h>
+#include <FML/Cosmology/Background/BackgroundModel_CoupledQuintessence.h>
 
 #include <algorithm>
 #include <array>
@@ -78,26 +84,110 @@ namespace FML {
             };
 
             //======================================================================================
-            /// Flat LCDM background (matter + Lambda, optional radiation) with the 1LPT/2LPT growth
-            /// factors and the kick and drift integrals of the code's equations of motion
+            /// The background of the simulation with the 1LPT/2LPT growth factors and the kick and drift
+            /// integrals of the code's equations of motion:
+            ///  - LCDM (the default): flat, matter + Lambda (+ optional radiation)
+            ///  - Coupled quintessence / the Fading Dark Sector (Obied, Vafa & Wu, arXiv:2611.17422; V ~ exp(-c phi),
+            ///    m_DM ~ exp(-c' phi): coupled quintessence with lambda = c, beta = c'). The background (E(a), phi(a), the
+            ///    CDM density with the varying mass) is FML's (Cosmology/Background, make_coupled_quintessence). The
+            ///    particles are CDM + baryons as one fluid, as SimulationCode's GravityModel_CoupledQuintessence: the
+            ///    field is light (no screening, scale-independent on N-body scales), so the model enters only through
+            ///      Poisson: G_eff/G = (1 + 2 beta^2 f_c^2) and the source rho_m(a) a^3 / OmegaM (the varying CDM mass)
+            ///      friction: dv/dtau = -Gamma v + force, Gamma = -f_c beta dphi/dlna
+            ///    with f_c(a) = rho_c(a) / (rho_c(a) + rho_b(a)) (momentum-weighted: only the CDM couples)
+            /// For beta = lambda = 0 it is LCDM (with OmegaR = 0: the same background)
             //======================================================================================
-            class LCDM {
+            class Cosmology {
               public:
                 double OmegaM{0.3};
                 double OmegaR{0.0};
                 double OmegaL{0.7};
+                double OmegaB{0.049};
+                std::string model{"LCDM"}; // LCDM or CoupledQuintessence
+                double cq_lambda{0.0}, cq_beta{0.0};
 
-                LCDM() = default;
-                LCDM(double OmegaM_, double OmegaR_ = 0.0) : OmegaM(OmegaM_), OmegaR(OmegaR_), OmegaL(1.0 - OmegaM_ - OmegaR_) {
+                Cosmology() = default;
+                Cosmology(double OmegaM_, double OmegaR_ = 0.0) : OmegaM(OmegaM_), OmegaR(OmegaR_), OmegaL(1.0 - OmegaM_ - OmegaR_) {
                     compute_growth();
                 }
+                /// Coupled quintessence (the Fading Dark Sector: lambda = c, beta = c'), with OmegaB of the OmegaM
+                /// (only the CDM couples). The radiation OmegaR > 0 is photons + 3.046 massless neutrinos
+                static Cosmology coupled_quintessence(double OmegaM_, double OmegaB_, double lambda, double beta, double OmegaR_ = 0.0) {
+                    namespace BG = FML::COSMOLOGY::BACKGROUND;
+                    assert_mpi(OmegaB_ >= 0.0 and OmegaB_ < OmegaM_, "Cosmology: need 0 <= OmegaB < OmegaM");
+                    Cosmology c;
+                    c.OmegaM = OmegaM_;
+                    c.OmegaR = OmegaR_;
+                    c.OmegaB = OmegaB_;
+                    c.OmegaL = 0.0;
+                    c.model = "CoupledQuintessence";
+                    c.cq_lambda = lambda;
+                    c.cq_beta = beta;
+                    BG::BackgroundParameters bp;
+                    bp.Omega_b = OmegaB_;
+                    bp.Omega_cdm = OmegaM_ - OmegaB_;
+                    bp.m_nu_eV = {};
+                    if (OmegaR_ > 0.0) {
+                        // The CMB temperature that gives OmegaR (radiation ~ T^4)
+                        const double OmegaR_ref = bp.Omega_gamma() + bp.Omega_nu_massless();
+                        bp.T_CMB *= std::pow(OmegaR_ / OmegaR_ref, 0.25);
+                    } else {
+                        bp.T_CMB = 0.0;
+                        bp.N_eff = 0.0;
+                    }
+                    c.bg = BG::make_coupled_quintessence(bp, lambda, beta);
+                    for (const auto & s : c.bg->species())
+                        if (const auto * field = dynamic_cast<const BG::CoupledFieldSpecies *>(s.get()))
+                            c.cq = &field->sector();
+                    assert_mpi(c.cq != nullptr, "Cosmology: no coupled dark sector in the background");
+                    c.compute_growth();
+                    return c;
+                }
 
-                double E(double a) const { return std::sqrt(OmegaR / (a * a * a * a) + OmegaM / (a * a * a) + OmegaL); }
+                double E(double a) const {
+                    if (bg)
+                        return bg->E(std::log(a));
+                    return std::sqrt(OmegaR / (a * a * a * a) + OmegaM / (a * a * a) + OmegaL);
+                }
                 double dlogEdloga(double a) const {
+                    if (bg)
+                        return bg->dlogEdx(std::log(a));
                     const double E2 = E(a) * E(a);
                     return (-4.0 * OmegaR / (a * a * a * a) - 3.0 * OmegaM / (a * a * a)) / (2.0 * E2);
                 }
+                /// OmegaM / (a^3 E^2) (the Poisson source is (3/2) OmegaM_of_a * poisson_factor)
                 double OmegaM_of_a(double a) const { return OmegaM / (a * a * a * E(a) * E(a)); }
+
+                /// The CDM mass relative to today (1 for LCDM)
+                double cdm_mass_factor(double a) const {
+                    if (not cq)
+                        return 1.0;
+                    return cq->rho_c(std::log(a)) * a * a * a / (OmegaM - OmegaB);
+                }
+                /// rho_c / (rho_c + rho_b)
+                double cdm_fraction(double a) const {
+                    const double c = (OmegaM - OmegaB) * cdm_mass_factor(a);
+                    return c / (c + OmegaB);
+                }
+                /// The factor of (3/2) OmegaM / a in the Poisson equation of the one-fluid particles: G_eff/G times
+                /// rho_m(a) a^3 / OmegaM (1 for LCDM)
+                double poisson_factor(double a) const {
+                    if (not cq)
+                        return 1.0;
+                    const double fc = cdm_fraction(a);
+                    const double mass = ((OmegaM - OmegaB) * cdm_mass_factor(a) + OmegaB) / OmegaM;
+                    return mass * (1.0 + 2.0 * cq_beta * cq_beta * fc * fc);
+                }
+                /// The friction Gamma of dv/dtau = -Gamma v + force (0 for LCDM)
+                double friction(double a) const {
+                    if (not cq)
+                        return 0.0;
+                    return -cdm_fraction(a) * cq_beta * cq->dphidx(std::log(a));
+                }
+                bool has_friction() const { return cq != nullptr and cq_beta != 0.0; }
+                /// dphi/dlna of the field (0 for LCDM)
+                double dphidlna(double a) const { return cq ? cq->dphidx(std::log(a)) : 0.0; }
+                const FML::COSMOLOGY::BACKGROUND::ComponentBackground * background() const { return bg.get(); }
 
                 /// Growth factors (D1 normalized to a at early times, D2 to -3/7 D1^2) and growth rates dlogD/dloga
                 double D1(double a) const { return interp(a, 0); }
@@ -105,9 +195,19 @@ namespace FML {
                 double D2(double a) const { return interp(a, 2); }
                 double f2(double a) const { return interp(a, 3) / interp(a, 2); }
 
-                /// Kick integral (3/2) OmegaM int dtau / (a E) from a1 to a2 (multiplies -D phi)
+                /// The kick from a1 to a2: v(a2) = friction_factor(a1, a2) v(a1) + kick_factor(a1, a2) (-D phi) for a
+                /// constant force. kick_factor = (3/2) OmegaM int dtau poisson_factor / (a E) exp(-int_tau^tau2 Gamma)
                 double kick_factor(double a1, double a2) const {
-                    return 1.5 * OmegaM * integrate([&](double a) { return 1.0 / (a * E(a)); }, a1, a2);
+                    const double I2 = friction_integral(a2);
+                    return 1.5 * OmegaM *
+                           integrate([&](double a) {
+                               const double fr = has_friction() ? std::exp(friction_integral(a) - I2) : 1.0;
+                               return poisson_factor(a) * fr / (a * E(a));
+                           }, a1, a2);
+                }
+                /// exp(-int_tau1^tau2 Gamma dtau) (1 without friction)
+                double friction_factor(double a1, double a2) const {
+                    return has_friction() ? std::exp(friction_integral(a1) - friction_integral(a2)) : 1.0;
                 }
                 /// Drift integral int dtau / (a^2 E) from a1 to a2 (multiplies v)
                 double drift_factor(double a1, double a2) const {
@@ -115,10 +215,15 @@ namespace FML {
                 }
 
               private:
-                // Table in x = log(a) of D1, dD1/dx, D2, dD2/dx
+                std::shared_ptr<const FML::COSMOLOGY::BACKGROUND::ComponentBackground> bg;
+                const FML::COSMOLOGY::BACKGROUND::CoupledDarkSector * cq{nullptr};
+
+                // Table in x = log(a) of D1, dD1/dx, D2, dD2/dx and int_xmin^x Gamma dx
                 static constexpr double xmin = -11.0, xmax = 1.0;
                 static constexpr int ntab = 4801;
-                std::vector<std::array<double, 4>> table;
+                std::vector<std::array<double, 5>> table;
+
+                double friction_integral(double a) const { return has_friction() ? interp(a, 4) : 0.0; }
 
                 template <class F>
                 static double integrate(F && f, double a1, double a2) {
@@ -135,7 +240,7 @@ namespace FML {
 
                 double interp(double a, int k) const {
                     const double x = std::log(a);
-                    assert_mpi(x >= xmin and x <= xmax, "LCDM: scale factor out of range of the growth table");
+                    assert_mpi(x >= xmin and x <= xmax, "Cosmology: scale factor out of range of the growth table");
                     const double u = (x - xmin) / (xmax - xmin) * (ntab - 1);
                     const int i = std::min(int(u), ntab - 2);
                     const double w = u - i;
@@ -143,16 +248,19 @@ namespace FML {
                 }
 
                 void compute_growth() {
-                    // D'' + (2 + dlogE/dx) D' = 3/2 OmegaM(a) D, D2'' + (2 + dlogE/dx) D2' = 3/2 OmegaM(a) (D2 - D1^2)
-                    // with growing-mode initial conditions deep in matter domination (RK4 in x = log a)
-                    auto rhs = [&](double x, const std::array<double, 4> & y) {
+                    // D'' + (2 + dlogE/dx + Gamma) D' = 3/2 OmegaM(a) P(a) D, D2'' + (...) D2' = 3/2 OmegaM(a) P(a) (D2 - D1^2)
+                    // (P = poisson_factor) with growing-mode initial conditions deep in matter domination (RK4 in x = log a),
+                    // and the integral of the friction Gamma
+                    using Y = std::array<double, 5>;
+                    auto rhs = [&](double x, const Y & y) {
                         const double a = std::exp(x);
-                        const double fr = 2.0 + dlogEdloga(a), om = 1.5 * OmegaM_of_a(a);
-                        return std::array<double, 4>{y[1], -fr * y[1] + om * y[0], y[3], -fr * y[3] + om * (y[2] - y[0] * y[0])};
+                        const double G = friction(a);
+                        const double fr = 2.0 + dlogEdloga(a) + G, om = 1.5 * OmegaM_of_a(a) * poisson_factor(a);
+                        return Y{y[1], -fr * y[1] + om * y[0], y[3], -fr * y[3] + om * (y[2] - y[0] * y[0]), G};
                     };
                     table.resize(ntab);
                     const double a0 = std::exp(xmin);
-                    std::array<double, 4> y{a0, a0, -3.0 / 7.0 * a0 * a0, -6.0 / 7.0 * a0 * a0};
+                    Y y{a0, a0, -3.0 / 7.0 * a0 * a0, -6.0 / 7.0 * a0 * a0, 0.0};
                     const double dx = (xmax - xmin) / (ntab - 1);
                     table[0] = y;
                     for (int i = 1; i < ntab; i++) {
@@ -160,9 +268,9 @@ namespace FML {
                         const double h = dx / nsub;
                         for (int s = 0; s < nsub; s++) {
                             const double x = xmin + (i - 1) * dx + s * h;
-                            auto add = [](const std::array<double, 4> & p, const std::array<double, 4> & q, double c) {
-                                std::array<double, 4> r;
-                                for (int k = 0; k < 4; k++)
+                            auto add = [](const Y & p, const Y & q, double c) {
+                                Y r;
+                                for (int k = 0; k < 5; k++)
                                     r[k] = p[k] + c * q[k];
                                 return r;
                             };
@@ -170,13 +278,15 @@ namespace FML {
                             auto k2 = rhs(x + 0.5 * h, add(y, k1, 0.5 * h));
                             auto k3 = rhs(x + 0.5 * h, add(y, k2, 0.5 * h));
                             auto k4 = rhs(x + h, add(y, k3, h));
-                            for (int k = 0; k < 4; k++)
+                            for (int k = 0; k < 5; k++)
                                 y[k] += h / 6.0 * (k1[k] + 2 * k2[k] + 2 * k3[k] + k4[k]);
                         }
                         table[i] = y;
                     }
                 }
             };
+            /// The flat LCDM background (the name used before the coupled quintessence)
+            using LCDM = Cosmology;
 
             //======================================================================================
             /// Send a vector of trivially copyable items to every task (send[r] to task r) and get
@@ -658,10 +768,32 @@ namespace FML {
                 double dilaton_xi{1e-3};
                 double dilaton_epsilon{1e-6}; // Residual < this * rms(linear source) on the unknown leaves
                 double dilaton_start_redshift{4.0};
+                // Coupled quintessence (gravity_model = "CoupledQuintessence"): V ~ exp(-cq_lambda phi), m_DM ~
+                // exp(-cq_beta phi). The Fading Dark Sector (gravity_model = "FadingDarkSector", Obied, Vafa & Wu,
+                // arXiv:2611.17422): V ~ exp(-c phi), m_DM ~ exp(-c' phi), the same model with lambda = fds_c, beta =
+                // fds_cprime (the paper's best fit c = -0.85, c' = 0.05). The baryon density OmegaB (of OmegaM) does
+                // not couple. See Cosmology
+                double OmegaB{0.049};
+                double cq_lambda{0.5};
+                double cq_beta{0.05};
+                double fds_c{-0.85};
+                double fds_cprime{0.05};
                 double boxsize{100.0};
                 bool symmetron() const { return gravity_model == "Symmetron"; }
                 bool dilaton() const { return gravity_model == "Dilaton"; }
+                bool coupled_quintessence() const {
+                    return gravity_model == "CoupledQuintessence" or gravity_model == "FadingDarkSector";
+                }
             };
+
+            /// The background of the parameters (LCDM, or coupled quintessence / the Fading Dark Sector)
+            inline Cosmology make_cosmology(const AMRNBodyParameters & p) {
+                if (p.gravity_model == "FadingDarkSector")
+                    return Cosmology::coupled_quintessence(p.OmegaM, p.OmegaB, p.fds_c, p.fds_cprime, p.OmegaR);
+                if (p.gravity_model == "CoupledQuintessence")
+                    return Cosmology::coupled_quintessence(p.OmegaM, p.OmegaB, p.cq_lambda, p.cq_beta, p.OmegaR);
+                return Cosmology(p.OmegaM, p.OmegaR);
+            }
 
             //======================================================================================
             /// Statistics of one coarse step
@@ -705,7 +837,7 @@ namespace FML {
                 using Particles = FML::PARTICLE::MPIParticles<AMRParticle>;
 
                 AMRNBodyParameters p;
-                LCDM cosmo;
+                Cosmology cosmo;
                 Grid grid;
                 Particles & part;
                 double a{0.0};           // Current scale factor (positions and velocities synchronized)
@@ -714,7 +846,7 @@ namespace FML {
                 StepStats last;
 
                 AMRNBodySimulation(const AMRNBodyParameters & params, Particles & particles, double aini)
-                    : p(params), cosmo(params.OmegaM, params.OmegaR),
+                    : p(params), cosmo(make_cosmology(params)),
                       grid(params.levelmin, params.levelmax, {true, true, true}), part(particles), a(aini) {
                     if (p.symmetron())
                         symmetron = std::make_unique<Symmetron>(p.OmegaM,
@@ -734,7 +866,9 @@ namespace FML {
                                                             p.boxsize / FML::UTILS::SI::c_over_H0_mpch,
                                                             false);
                     else
-                        assert_mpi(p.gravity_model == "LCDM", "AMRNBody: gravity_model must be LCDM, Symmetron or Dilaton");
+                        assert_mpi(p.gravity_model == "LCDM" or p.coupled_quintessence(),
+                                   "AMRNBody: gravity_model must be LCDM, Symmetron, Dilaton, CoupledQuintessence or "
+                                   "FadingDarkSector");
                     npart_total = (long long)part.get_npart_total();
                     mpart = 1.0 / double(npart_total);
                     // Wrap and move the particles to the grid's decomposition, refine, and compute the forces
@@ -1333,12 +1467,17 @@ namespace FML {
                 auto ticks_of_bin = [&](int b) { return 1LL << (B - b); };
 
                 // Kick factors only depend on the bin: from tick t - half a step of the bin to t, and from t to t + half
-                std::vector<double> Kclose(B + 1), Kopen(B + 1);
+                // With friction (coupled quintessence) a kick is v -> F v + K Acc (F = 1 without)
+                std::vector<double> Kclose(B + 1), Kopen(B + 1), Fclose(B + 1, 1.0), Fopen(B + 1, 1.0);
                 auto set_kick_factors = [&](long long t) {
                     for (int b = 0; b <= B; b++) {
                         const double nt = double(ticks_of_bin(b));
-                        Kclose[b] = cosmo.kick_factor(std::exp(tau_of_tick(t - 0.5 * nt)), std::exp(tau_of_tick(double(t))));
-                        Kopen[b] = cosmo.kick_factor(std::exp(tau_of_tick(double(t))), std::exp(tau_of_tick(t + 0.5 * nt)));
+                        const double am = std::exp(tau_of_tick(t - 0.5 * nt)), ac = std::exp(tau_of_tick(double(t))),
+                                     ap = std::exp(tau_of_tick(t + 0.5 * nt));
+                        Kclose[b] = cosmo.kick_factor(am, ac);
+                        Kopen[b] = cosmo.kick_factor(ac, ap);
+                        Fclose[b] = cosmo.friction_factor(am, ac);
+                        Fopen[b] = cosmo.friction_factor(ac, ap);
                     }
                 };
 
@@ -1348,9 +1487,9 @@ namespace FML {
                 for (size_t ip = 0; ip < part.get_npart(); ip++) {
                     auto & pt = part[ip];
                     pt.bin = wanted_bin(pt, a, dtau);
-                    const double K = Kopen[pt.bin];
+                    const double K = Kopen[pt.bin], F = Fopen[pt.bin];
                     for (int d = 0; d < NDIM; d++)
-                        pt.Vel[d] += pt.Acc[d] * K;
+                        pt.Vel[d] = F * pt.Vel[d] + pt.Acc[d] * K;
                 }
                 last.time_move += now() - t0;
 
@@ -1398,9 +1537,9 @@ namespace FML {
                         auto & pt = part[ip];
                         if (not full and pt.bin < min_bin)
                             continue;
-                        const double K = Kclose[pt.bin];
+                        const double K = Kclose[pt.bin], F = Fclose[pt.bin];
                         for (int d = 0; d < NDIM; d++)
-                            pt.Vel[d] += pt.Acc[d] * K;
+                            pt.Vel[d] = F * pt.Vel[d] + pt.Acc[d] * K;
                         last.nkicks++;
                         if (full)
                             continue;
@@ -1409,9 +1548,9 @@ namespace FML {
                         while (t % ticks_of_bin(b) != 0)
                             b++;
                         pt.bin = b;
-                        const double K2 = Kopen[b];
+                        const double K2 = Kopen[b], F2 = Fopen[b];
                         for (int d = 0; d < NDIM; d++)
-                            pt.Vel[d] += pt.Acc[d] * K2;
+                            pt.Vel[d] = F2 * pt.Vel[d] + pt.Acc[d] * K2;
                     }
                     last.time_move += now() - t0;
                 }

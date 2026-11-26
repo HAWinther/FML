@@ -1,10 +1,12 @@
 # Tests of AMRCode: testamrnbody (deposit, blob, zeldovich) and testpartial (partial multigrid solves)
 USE_MPI ?= true
 USE_OMP ?= false
+USE_GSL ?= true
 TARGETS := testamrnbody testpartial
 include ../../Makefile.config
-FML_MODULES := Global
-testamrnbody: TestAMRNBody.o Global.o
+FML_MODULES := Global Spline ODESolver Math
+# Spline, ODESolver, Math: the coupled quintessence background (Cosmology/Background)
+testamrnbody: TestAMRNBody.o Global.o Spline.o ODESolver.o NumericalMethods.o
 	$(LINK_EXE)
 testpartial: TestPartialSolve.o Global.o
 	$(LINK_EXE)
@@ -18,12 +20,12 @@ NP_LIST = 1
 RUN =
 endif
 
-# make run: deposit and blob (seconds) and the partial solves. The Zel'dovich test takes ~4 min per task count:
+# make run: deposit, blob and coupled quintessence (seconds) and the partial solves. The Zel'dovich test takes ~4 min per task count:
 # make run-zeldovich runs it on 4 tasks (nightly)
 .PHONY: run run-zeldovich
 run: $(TARGETS)
 	@set -e; for np in $(NP_LIST); do \
-	  for t in deposit blob; do echo "== Running testamrnbody $$t with $$np task(s)"; $(RUN) ./testamrnbody $$t; done; \
+	  for t in deposit blob cq; do echo "== Running testamrnbody $$t with $$np task(s)"; $(RUN) ./testamrnbody $$t; done; \
 	  echo "== Running testpartial with $$np task(s)"; $(RUN) ./testpartial; \
 	done
 

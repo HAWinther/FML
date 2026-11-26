@@ -5,6 +5,13 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### AMRCode: the Fading Dark Sector / coupled quintessence
+- `gravity_model = FadingDarkSector` (`fds_c`, `fds_cprime`) and `CoupledQuintessence` (`cq_lambda`, `cq_beta`): FML's
+  coupled-quintessence background (`Cosmology/Background`), the one-fluid G_eff/G and varying CDM mass in the Poisson
+  source, and the CDM velocity term (friction, integrated exactly in the kicks), as SimulationCode. No field solve.
+  `ic_growth = model | LCDM` for the input P(k). `LCDM` in `AMRNBody.h` is now `Cosmology` (alias kept).
+- Test `testamrnbody cq` (in `make run`); AMRCode and its tests now link Spline, ODESolver and NumericalMethods.
+
 ### NBody: the `discrete_4pt` Green's function is the 5-point Laplacian stencil
 - `force_greens_function_kernel = discrete_4pt` was -1/D4^2 with the 4-point gradient D4, which vanishes at the
   Nyquist frequency: the potential of the modes near it was up to ~6000 times too large and simulations with this

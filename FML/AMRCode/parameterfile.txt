@@ -38,7 +38,8 @@ pofk_ngrid       = 64
 output_gadget    = false
 output_images    = false # A PNG of the particles in a slab through the middle of the box at the outputs
 
-# Gravity: LCDM, Symmetron or Dilaton (the fifth force of the scalar field, solved on the AMR grid)
+# Gravity: LCDM, Symmetron or Dilaton (the fifth force of the scalar field, solved on the AMR grid), or
+# FadingDarkSector / CoupledQuintessence (background, G_eff and friction; no field solve)
 gravity_model    = LCDM
 # symmetron_assb   = 0.5 # Symmetry breaking scale factor
 # symmetron_beta   = 1.0 # Coupling
@@ -50,3 +51,9 @@ gravity_model    = LCDM
 # dilaton_r        = 1.0   # Mass m(a) = m0 a^-r (r <= 3/2; 3/2 is the original dilaton)
 # dilaton_xi       = 1e-3  # H0 / m0 (range today c/H0 xi = 3 Mpc/h)
 # dilaton_start_redshift = 4 # Solve for the field from here on (LCDM before)
+# fds_c            = -0.85 # FadingDarkSector: V ~ exp(-c phi) (the paper's best fit)
+# fds_cprime       = 0.05  # m_DM ~ exp(-c' phi): the CDM feels G (1 + 2 c'^2)
+# cq_lambda        = 0.5   # CoupledQuintessence: V ~ exp(-lambda phi) (FDS: lambda = c, beta = c')
+# cq_beta          = 0.05  # m_DM ~ exp(-beta phi)
+# ic_growth        = model # FDS/CQ: pk_file is the model's P(k, z = 0) (model) or LCDM's (LCDM: the same initial
+#                          # amplitude as an LCDM run)

@@ -192,9 +192,19 @@ struct ZeldovichResult {
     std::vector<double> x; // Final x of the particles with id < n1 (to compare runs)
 };
 
-ZeldovichResult run_zeldovich(int levelmin, int levelmax, double n_refine, bool subcycling, int nsteps, bool verbose) {
+// gravity_model = CoupledQuintessence (lambda, beta): the same with that background, G_eff and friction (in one
+// dimension the force is linear in the displacement until shell crossing for any scale-independent Poisson equation,
+// so the Zel'dovich solution with the model's growth factor is exact). lcdm_growth: compare with the LCDM growth instead
+ZeldovichResult run_zeldovich(int levelmin, int levelmax, double n_refine, bool subcycling, int nsteps, bool verbose,
+                              const std::string & model = "LCDM", double lambda = 0.0, double beta = 0.0,
+                              bool lcdm_growth = false) {
     const double OmegaM = 0.3;
-    LCDM cosmo(OmegaM);
+    AMRNBodyParameters par;
+    par.OmegaM = OmegaM;
+    par.gravity_model = model;
+    par.cq_lambda = lambda;
+    par.cq_beta = beta;
+    const Cosmology cosmo = lcdm_growth ? Cosmology(OmegaM) : make_cosmology(par);
     const double aini = 0.02, across = 1.0, aend = 0.8;
     const double b = 1.0 / cosmo.D1(across);
     const int n1 = 1 << levelmin;
@@ -211,8 +221,6 @@ ZeldovichResult run_zeldovich(int levelmin, int levelmax, double n_refine, bool 
         p.Pos[0] = exact_x(q[0], aini);
         p.Vel[0] = exact_v(q[0], aini);
     });
-    AMRNBodyParameters par;
-    par.OmegaM = OmegaM;
     par.levelmin = levelmin;
     par.levelmax = levelmax;
     par.n_refine = n_refine;
@@ -257,7 +265,9 @@ ZeldovichResult run_zeldovich(int levelmin, int levelmax, double n_refine, bool 
         if (nl[l] > 0)
             finest = l;
     if (FML::ThisTask == 0 and verbose)
-        std::cout << "  " << n1 << "^3 particles, levels " << levelmin << "-" << finest << ", subcycling " << subcycling
+        std::cout << "  " << (model == "LCDM" ? "" : model + " (lambda " + std::to_string(lambda) + ", beta " +
+                                                       std::to_string(beta) + (lcdm_growth ? ", LCDM growth" : "") + "): ")
+                  << n1 << "^3 particles, levels " << levelmin << "-" << finest << ", subcycling " << subcycling
                   << ": rms error x " << res.errx << ", v " << res.errv << " (relative to the amplitudes), max |dy| "
                   << res.maxdy << ", " << nsub << " sub-steps, " << double(kicks) / double(ntot) << " kicks per particle\n";
     return res;
@@ -284,6 +294,43 @@ void test_zeldovich() {
     check(diff < 0.005, "subcycling agrees with the finest common step");
 }
 
+//==========================================================================================
+// Coupled quintessence / the Fading Dark Sector: lambda = beta = 0 is LCDM (no radiation: the same background), and
+// the plane wave with a strong coupling (beta = 0.3: G_eff/G = 1.18 for the CDM) follows the model's growth factor
+//==========================================================================================
+void test_coupled_quintessence() {
+    if (FML::ThisTask == 0)
+        std::cout << "\nCoupled quintessence / Fading Dark Sector\n";
+    const Cosmology lcdm(0.3), zero = Cosmology::coupled_quintessence(0.3, 0.049, 0.0, 0.0);
+    double emax = 0.0;
+    for (double a : {0.02, 0.1, 0.3, 0.6, 1.0}) {
+        emax = std::max(emax, std::abs(zero.E(a) / lcdm.E(a) - 1.0));
+        emax = std::max(emax, std::abs(zero.D1(a) / lcdm.D1(a) - 1.0));
+        emax = std::max(emax, std::abs(zero.f1(a) / lcdm.f1(a) - 1.0));
+        emax = std::max(emax, std::abs(zero.D2(a) / lcdm.D2(a) - 1.0));
+        emax = std::max(emax, std::abs(zero.kick_factor(a, 1.1 * a) / lcdm.kick_factor(a, 1.1 * a) - 1.0));
+        emax = std::max(emax, std::abs(zero.drift_factor(a, 1.1 * a) / lcdm.drift_factor(a, 1.1 * a) - 1.0));
+    }
+    if (FML::ThisTask == 0)
+        std::cout << "  lambda = beta = 0 vs LCDM: max relative difference (E, D1, f1, D2, kick, drift) " << emax << "\n";
+    check(emax < 1e-6, "coupled quintessence with lambda = beta = 0 is LCDM");
+
+    // The Fading Dark Sector best fit (c = -0.85, c' = 0.05): G_eff/G of the CDM 1 + 2 c'^2 = 1.005
+    AMRNBodyParameters par;
+    par.gravity_model = "FadingDarkSector";
+    const Cosmology fds = make_cosmology(par);
+    if (FML::ThisTask == 0)
+        std::cout << "  FDS best fit: E/E_LCDM(a = 1) " << fds.E(1.0) / lcdm.E(1.0) << ", D/D_LCDM(a = 1) "
+                  << fds.D1(1.0) / lcdm.D1(1.0) << ", dphi/dlna(a = 1) " << fds.dphidlna(1.0) << ", Gamma(a = 1) "
+                  << fds.friction(1.0) << ", P(a = 1) " << fds.poisson_factor(1.0) << "\n";
+    check(fds.poisson_factor(1.0) > 1.0 and fds.poisson_factor(1.0) < 1.005, "FDS: G_eff/G of the one fluid in (1, 1 + 2 c'^2)");
+
+    auto cq = run_zeldovich(5, 5, 8.0, false, 40, true, "CoupledQuintessence", 0.5, 0.3);
+    auto wrong = run_zeldovich(5, 5, 8.0, false, 40, true, "CoupledQuintessence", 0.5, 0.3, true);
+    check(cq.errx < 0.03 and cq.maxdy < 1e-4, "coupled quintessence: Zel'dovich solution with the model's growth reproduced");
+    check(wrong.errx > 3.0 * cq.errx, "coupled quintessence: the LCDM growth does not fit (the test sees the model)");
+}
+
 int main(int argc, char ** argv) {
     const std::string which = argc > 1 ? argv[1] : "all";
     if (which == "deposit" or which == "all")
@@ -292,6 +339,8 @@ int main(int argc, char ** argv) {
         test_blob();
     if (which == "zeldovich" or which == "all")
         test_zeldovich();
+    if (which == "cq" or which == "all")
+        test_coupled_quintessence();
     if (FML::ThisTask == 0)
         std::cout << "\n" << (nfail ? std::to_string(nfail) + " tests FAILED" : "All tests passed") << "\n";
     return nfail ? 1 : 0;

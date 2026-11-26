@@ -1,6 +1,6 @@
 # AMRCode
 
-A simple adaptive mesh refinement (AMR) N-body code for LCDM, in the spirit of RAMSES, built on
+A simple adaptive mesh refinement (AMR) N-body code for LCDM (and symmetron, dilaton, coupled quintessence / the Fading Dark Sector), in the spirit of RAMSES, built on
 `AdaptiveMPIGrid` (Hilbert-ordered linear octree, MPI) and `AMRMultiGridSolver` (FAS multigrid on the leaves).
 
 ```
@@ -80,6 +80,26 @@ Units: positions in [0,1), velocities `v = a^2 dx/dt / (H0 B)` (FML's convention
    redone. The dilaton costs about 70% more time (2m05s against 1m14s on 2 cores; SimulationCode's exact solver ~8 min
    against 4 s for GR).
 
+7. **Coupled quintessence / the Fading Dark Sector** (`gravity_model = FadingDarkSector`, parameters `fds_c`,
+   `fds_cprime`, default the paper's best fit -0.85, 0.05; or `gravity_model = CoupledQuintessence` with `cq_lambda`,
+   `cq_beta`): the Fading Dark Sector of Obied, Vafa & Wu (arXiv:2611.17422), V ~ exp(-c phi), m_DM ~ exp(-c' phi),
+   is coupled quintessence with lambda = c, beta = c' (as in SimulationCode and the Einstein-Boltzmann solver). The
+   field is light (unscreened, scale independent on N-body scales), so nothing is solved on the grid: the background
+   `E(a)`, `phi(a)` and the CDM density with its varying mass are FML's (`Cosmology/Background`,
+   `make_coupled_quintessence`; `OmegaB` does not couple), and the particles (CDM + baryons as one fluid, as
+   SimulationCode's `GravityModel_CoupledQuintessence`) have
+   `dv/dtau = -Gamma v - (3/2) OmegaM P(a) / (a E) D phi`, with `P = (1 + 2 beta^2 f_c^2) rho_m(a) a^3 / OmegaM`,
+   `Gamma = -f_c beta dphi/dlna` and `f_c = rho_c / (rho_c + rho_b)`. A kick is `v -> F v + K Acc` with the friction
+   integrated exactly (`Cosmology::kick_factor`, `friction_factor`), the growth factors of the ICs include `P` and
+   `Gamma`. `ic_growth = model` (default): `pk_file` / sigma8 is the model's linear P(k) at z = 0; `ic_growth = LCDM`:
+   LCDM's (the same initial amplitude as an LCDM run with the same seed). Checks: lambda = beta = 0 gives the LCDM
+   background, growth, kick and drift factors to 6e-16; the one-fluid growth equals a two-fluid (CDM + baryons)
+   integration to 1e-5; a plane wave with beta = 0.3 (G_eff/G = 1.18) follows the model's Zel'dovich solution
+   (2.3% rms, as LCDM; 26% with the LCDM growth). 64^3 in 128 Mpc/h, levels 6-10, best fit, `ic_growth = LCDM`, the
+   same seed as LCDM: P_FDS / P_LCDM = 1.012 at z = 1 and 0.995 at z = 0 for k < 0.3 h/Mpc, as linear theory
+   (1.0121, 0.9948); at z = 0 0.983 at k = 0.5, 0.996 at 1 and 1.009 at 3 h/Mpc. No extra cost (3m45s against 3m41s
+   on 2 cores).
+
 Outputs: `pofk_<label>_z<z>.txt` (k, P(k) without shot-noise subtraction, linear P(k)) and optionally GADGET
 snapshots and a PNG of the particles in a slab through the middle of the box (`output_images`, `images_npix`,
 `images_slab_thickness`), at `output_redshifts`. The parameter file can `include = file` another (shared
@@ -90,7 +110,7 @@ breakdown.
 
 | File | |
 |---|---|
-| `AMRNBody.h` | The code: `AMRParticle`, `LCDM`, `assign_mass_to_leaves`, `interpolate_to_particle`, `compute_force_field`, `refine_on_particle_count`, `AMRNBodySimulation` |
+| `AMRNBody.h` | The code: `AMRParticle`, `Cosmology` (LCDM or coupled quintessence/FDS), `assign_mass_to_leaves`, `interpolate_to_particle`, `compute_force_field`, `refine_on_particle_count`, `AMRNBodySimulation` |
 | `Main.cpp` | Parameter file, power spectrum, initial conditions, time loop and outputs |
 | `parameterfile.txt` | Example (64^3 or 32^3 in a 100 Mpc/h box) |
 | `tests/TestAMRNBody.cpp` | Deposit, Gaussian blob force, Zel'dovich plane wave (with/without refinement and subcycling) |
@@ -109,6 +129,9 @@ The library parts (partial solves in `MultigridSolver/AMRMultiGridSolver.h`, the
   32^3 particles on level 5 and 1.0% with 64^3 on level 6 (the force on a plane wave is 0.999 of the exact one at
   the fundamental mode); refined to level 7 on the pancake 0.8-0.9%. Subcycling vs. every particle on the finest
   step: 0.15% of the amplitude. The result does not depend on the time step (40 vs 160 steps: 0.2%).
+- **Coupled quintessence / FDS** (`testamrnbody cq`, seconds): lambda = beta = 0 is LCDM to 6e-16; the FDS best
+  fit has G_eff/G of the one fluid in (1, 1 + 2 c'^2); the beta = 0.3 plane wave follows the model's Zel'dovich
+  solution and not LCDM's.
 - **Partial solves:** recover the full solution to 1e-10 with the fixed cells unchanged (bitwise), 0.05-0.1
   residual reduction per V-cycle.
 - **LCDM 64^3, 100 Mpc/h, levels 6-10, z = 49 -> 0:** large-scale growth follows linear theory (the growth factor

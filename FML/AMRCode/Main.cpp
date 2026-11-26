@@ -1,6 +1,7 @@
 //==========================================================================================
 //
-// AMRNBody: a simple AMR N-body code for LCDM (see AMRNBody.h and README.md)
+// AMRNBody: a simple AMR N-body code for LCDM, symmetron, dilaton and coupled quintessence / the Fading Dark Sector
+// (see AMRNBody.h and README.md)
 //
 //   1. 2LPT initial conditions (FML NBodyInitialConditions) from a linear P(k) at z = 0
 //      (a CAMB-format file, or Eisenstein & Hu no-wiggle normalized to sigma8)
@@ -180,7 +181,7 @@ void output_power_spectrum(const std::string & filename,
                            double box,
                            double a,
                            const LinearPower & pk,
-                           const LCDM & cosmo) {
+                           double growth) {
     // Copy the positions to particles on the slab domain (the domain the FFTW grids use)
     using SP = SimpleParticle<3>;
     std::vector<SP> tmp(part.get_npart());
@@ -205,7 +206,8 @@ void output_power_spectrum(const std::string & filename,
     pofk.scale(box);
     if (FML::ThisTask == 0) {
         std::ofstream fp(filename);
-        const double growth2 = std::pow(cosmo.D1(a) / cosmo.D1(1.0), 2);
+        // growth: D(a) / D(1) of the input P(k) (z = 0)
+        const double growth2 = growth * growth;
         fp << "# a = " << a << "  z = " << 1.0 / a - 1.0 << "  Poisson shot noise V/N = "
            << box * box * box / double(part.get_npart_total()) << " (not subtracted)\n"
            << "# k (h/Mpc)   P(k) ((Mpc/h)^3)   P_linear(k)\n";
@@ -284,6 +286,19 @@ int main(int argc, char ** argv) {
     par.dilaton_xi = pf.get("dilaton_xi", 1e-3);
     par.dilaton_epsilon = pf.get("dilaton_epsilon", 1e-6);
     par.dilaton_start_redshift = pf.get("dilaton_start_redshift", 4.0);
+    par.OmegaB = OmegaB;
+    if (par.gravity_model == "CoupledQuintessence") {
+        par.cq_lambda = pf.get("cq_lambda", 0.5);
+        par.cq_beta = pf.get("cq_beta", 0.05);
+    }
+    if (par.gravity_model == "FadingDarkSector") {
+        par.fds_c = pf.get("fds_c", -0.85);
+        par.fds_cprime = pf.get("fds_cprime", 0.05);
+    }
+    // Coupled quintessence / FDS: the input P(k) is the linear P(k) at z = 0 of the model (ic_growth = model, the
+    // default), or of LCDM with the same OmegaM (ic_growth = LCDM: the same initial amplitude as an LCDM run)
+    const std::string ic_growth = par.coupled_quintessence() ? pf.get("ic_growth", std::string("model")) : "model";
+    assert_mpi(ic_growth == "model" or ic_growth == "LCDM", "ic_growth must be model or LCDM");
     const int Npart_1D = pf.get("Npart_1D", 64);
     const int Nmesh_ic = pf.get("Nmesh_ic", Npart_1D);
     const int LPT_order = pf.get("LPT_order", 2);
@@ -303,7 +318,8 @@ int main(int argc, char ** argv) {
     const int images_npix = pf.get("images_npix", 1024);
     const double images_thickness = pf.get("images_slab_thickness", 0.1);
 
-    LCDM cosmo(OmegaM);
+    const Cosmology cosmo = make_cosmology(par);
+    const Cosmology lcdm(OmegaM, par.OmegaR);
     const double sigma8_rescale = pf.get("sigma8_rescale", -1.0);
     LinearPower pk(pk_file, OmegaM, OmegaB, h, ns, pk_file.empty() ? sigma8 : sigma8_rescale);
     pf.warn_unused();
@@ -312,7 +328,21 @@ int main(int argc, char ** argv) {
     // Initial conditions (made on the FFTW slab domain, then moved to the grid's domain)
     //======================================================================================
     const double aini = 1.0 / (1.0 + zini);
-    const double growth_ini = cosmo.D1(aini) / cosmo.D1(1.0);
+    const Cosmology & ic_cosmo = ic_growth == "LCDM" ? lcdm : cosmo;
+    const double growth_ini = ic_cosmo.D1(aini) / ic_cosmo.D1(1.0);
+    // D(a) / D(1) of the input P(k): the model's growth from the initial amplitude
+    auto growth_of_a = [&](double a) { return growth_ini * cosmo.D1(a) / cosmo.D1(aini); };
+    if (par.coupled_quintessence() and FML::ThisTask == 0) {
+        std::cout << "\n" << par.gravity_model << ": lambda = " << cosmo.cq_lambda << ", beta = " << cosmo.cq_beta
+                  << " (OmegaM = " << OmegaM << ", OmegaB = " << OmegaB << ")\n";
+        for (double a : {aini, 0.25, 0.5, 1.0})
+            std::cout << "  a = " << std::setw(8) << a << ": E / E_LCDM = " << std::setw(10) << cosmo.E(a) / lcdm.E(a)
+                      << "  dphi/dlna = " << std::setw(11) << cosmo.dphidlna(a) << "  G_eff rho_m a^3 / (G OmegaM) = "
+                      << std::setw(10) << cosmo.poisson_factor(a) << "  Gamma = " << std::setw(11) << cosmo.friction(a)
+                      << "  D / D_LCDM (equal at zini) = " << cosmo.D1(a) / cosmo.D1(aini) * lcdm.D1(aini) / lcdm.D1(a) << "\n";
+        std::cout << "  input P(k) back-scaled with the growth of " << (ic_growth == "LCDM" ? "LCDM" : "the model")
+                  << ": D(zini) / D(0) = " << growth_ini << "\n";
+    }
     FML::PARTICLE::MPIParticles<AMRParticle> part;
     {
         std::unique_ptr<FML::RANDOM::RandomGenerator> rng;
@@ -371,7 +401,7 @@ int main(int argc, char ** argv) {
                 times.end());
 
     AMRNBodySimulation sim(par, part, aini);
-    output_power_spectrum(outdir + "/pofk_" + label + "_z" + std::to_string(zini).substr(0, 6) + ".txt", part, pofk_ngrid, box, aini, pk, cosmo);
+    output_power_spectrum(outdir + "/pofk_" + label + "_z" + std::to_string(zini).substr(0, 6) + ".txt", part, pofk_ngrid, box, aini, pk, growth_of_a(aini));
 
     size_t iout = 0;
     for (size_t istep = 1; istep < times.size(); istep++) {
@@ -386,7 +416,7 @@ int main(int argc, char ** argv) {
         while (iout < zout.size() and std::abs(sim.a * (1.0 + zout[iout]) - 1.0) < 1e-6) {
             char zs[32];
             std::snprintf(zs, sizeof(zs), "%.3f", zout[iout]);
-            output_power_spectrum(outdir + "/pofk_" + label + "_z" + zs + ".txt", part, pofk_ngrid, box, sim.a, pk, cosmo);
+            output_power_spectrum(outdir + "/pofk_" + label + "_z" + zs + ".txt", part, pofk_ngrid, box, sim.a, pk, growth_of_a(sim.a));
             if (gadget)
                 output_gadget(outdir + "/gadget_" + label + "_z" + zs, part, sim.a, box, OmegaM, h);
             if (images) {

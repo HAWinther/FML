@@ -7,6 +7,6 @@ USE_MEMORYLOG ?= false
 USE_GSL       ?= true
 TARGETS := amrnbody
 include ../Makefile.config
-FML_MODULES := Global FileUtils GadgetUtils Spline ODESolver
-amrnbody: Main.o Global.o FileUtils.o GadgetUtils.o Spline.o ODESolver.o
+FML_MODULES := Global FileUtils GadgetUtils Spline ODESolver Math
+amrnbody: Main.o Global.o FileUtils.o GadgetUtils.o Spline.o ODESolver.o NumericalMethods.o
 	$(LINK_EXE)
