@@ -17,3 +17,9 @@ The SimulationCode validation reports linked from `nbodycode_content.php` (secti
 `reports/` next to `index.php`, with the file names they have in the repository's top-level `Reports/` folder
 (flat: `linear_step_report.pdf`, `high_redshift_starts.pdf`, `item59_phase1.pdf`, `item59_phase2.pdf`,
 `item59_phase3.pdf`, `halos_pgd.pdf`). When a report is added, add a row to that table.
+
+Table of contents: every page starts with a "Table of contents" heading and a `<p class="page-toc">` with the two
+"Back to" links (main page, documentation; not on the front page) and then one numbered entry per section
+(`<h1 class="entry-title" id="...">`), `1. ...`, `2. ...`, in the order of the sections on the page. When a section is
+added, add its entry at that position and renumber the ones after it.
+

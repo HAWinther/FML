@@ -10,8 +10,8 @@
 <a href="#Overview">1. Overview: Random numbers</a><br>
 <a href="#Random">2. Creating random numbers</a><br>
 <a href="#Philox">3. Counter-based random numbers (Philox)</a><br>
-<a href="#References">Method references and scope</a><br>
-<a href="#LatinHypercube">Latin hypercube experiment designs</a><br>
+<a href="#LatinHypercube">4. Latin hypercube experiment designs</a><br>
+<a href="#References">5. Method references and scope</a><br>
 </p>
 
 <header class="entry-header text-center">

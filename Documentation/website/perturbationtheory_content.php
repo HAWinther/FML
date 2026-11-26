@@ -13,9 +13,9 @@
 <a href="#Fast">4. The fast algorithm (FFTLog for $P_{22}$, FFT convolution for $P_{13}$)</a><br>
 <a href="#Direct">5. Direct quadrature and custom kernels</a><br>
 <a href="#Validation">6. Validation</a><br>
-<a href="#References">Method references and scope</a><br>
-<a href="#RSD">TNS and EFTofLSS redshift-space spectra</a><br>
-<a href="#Correlation">Correlation multipoles and survey predictions</a><br>
+<a href="#RSD">7. TNS and EFTofLSS redshift-space spectra</a><br>
+<a href="#Correlation">8. Correlation multipoles and survey predictions</a><br>
+<a href="#References">9. Method references and scope</a><br>
 </p>
 
 <header class="entry-header text-center">

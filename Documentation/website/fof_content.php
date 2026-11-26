@@ -9,10 +9,10 @@
 <a href="documentation.php">Back to the documentation</a><br>
 <a href="#Overview">1. Overview: Friends of Friends</a><br>
 <a href="#Methods">2. Available methods</a><br>
-<a href="#SO">3. Spherical-overdensity masses</a><br>
-<a href="#Subhalos">4. Subhaloes and merger trees</a><br>
-<a href="#References">Method references and scope</a><br>
-<a href="#Relaxed">Relaxed FoF for low-resolution simulations</a><br>
+<a href="#Relaxed">3. Relaxed FoF for low-resolution simulations</a><br>
+<a href="#SO">4. Spherical-overdensity masses</a><br>
+<a href="#Subhalos">5. Subhaloes and merger trees</a><br>
+<a href="#References">6. Method references and scope</a><br>
 </p>
 
 <header class="entry-header text-center">

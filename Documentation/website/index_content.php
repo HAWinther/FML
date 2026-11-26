@@ -5,15 +5,15 @@
 <hr/>
 
 <p class="page-toc">
-<a href="#About">About</a><br>
-<a href="#Ideas">The ideas behind FML</a><br>
-<a href="#Code">Getting the code: FML 2.0 and 1.0</a><br>
-<a href="#Features">Features</a><br>
-<a href="#Requirements">Requirements</a><br>
-<a href="#Compiling">Compiling</a><br>
-<a href="documentation.php">Documentation</a><br>
-<a href="main.pdf">The FML book (PDF)</a><br>
-<a href="#Example">Code examples</a><br>
+<a href="#About">1. About</a><br>
+<a href="#Ideas">2. The ideas behind FML</a><br>
+<a href="#Code">3. Getting the code: FML 2.0 and 1.0</a><br>
+<a href="#Features">4. Features</a><br>
+<a href="#Requirements">5. Requirements</a><br>
+<a href="#Compiling">6. Compiling</a><br>
+<a href="documentation.php">7. Documentation</a><br>
+<a href="main.pdf">8. The FML book (PDF)</a><br>
+<a href="#Example">9. Code examples</a><br>
 </p>
 
 <hr/>

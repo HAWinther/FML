@@ -16,8 +16,8 @@
 <a href="#Poly">7. General polyspectra</a><br>
 <a href="#PolyNew">8. Polyspectra: dealiasing, selected configurations, sparse results and memory</a><br>
 <a href="#Related">9. Related pages: survey multipoles, matched spectra, hybrid bias</a><br>
-<a href="#References">Method references and scope</a><br>
-<a href="#Connected">Connected four-point statistics</a><br>
+<a href="#Connected">10. Connected four-point statistics</a><br>
+<a href="#References">11. Method references and scope</a><br>
 </p>
 
 <header class="entry-header text-center">

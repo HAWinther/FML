@@ -15,10 +15,10 @@
 <a href="#Lensing">6. Lensing, nonlinear power and two-point functions</a><br>
 <a href="#Tensors">7. Tensor and isocurvature modes</a><br>
 <a href="#Models">8. Complete model catalogue</a><br>
-<a href="#Usage">9. Running the solver</a><br>
-<a href="#Validation">10. Validation against CLASS and CAMB</a><br>
-<a href="#References">Method references and scope</a><br>
-<a href="#Axion">Mixed ultralight-axion dark matter</a><br>
+<a href="#Axion">9. Mixed ultralight-axion dark matter</a><br>
+<a href="#Usage">10. Running the solver</a><br>
+<a href="#Validation">11. Validation against CLASS and CAMB</a><br>
+<a href="#References">12. Method references and scope</a><br>
 </p>
 
 <header class="entry-header text-center">

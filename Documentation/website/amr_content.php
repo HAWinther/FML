@@ -5,6 +5,7 @@
 <hr/>
 
 <p class="page-toc">
+<a href="index.php">Back to the main page</a><br>
 <a href="documentation.php">Back to the documentation</a><br>
 <a href="#Overview">1. Overview: adaptive mesh refinement</a><br>
 <a href="#Grid">2. The adaptive grid (FML::GRID::AdaptiveMPIGrid)</a><br>

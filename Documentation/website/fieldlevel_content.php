@@ -13,10 +13,10 @@
 <a href="#Gradient">4. Adjoint gradients</a><br>
 <a href="#Sampler">5. Sampling with HMC</a><br>
 <a href="#Validation">6. Validation and simulation-based calibration</a><br>
-<a href="#References">Method references and scope</a><br>
-<a href="#Framework">Periodic field-level inference: serial and MPI</a><br>
-<a href="#Outputs">Reconstruction products and restart</a><br>
-<a href="#PM">Particle-mesh forward model, adjoint and posterior</a><br>
+<a href="#Framework">7. Periodic field-level inference: serial and MPI</a><br>
+<a href="#Outputs">8. Reconstruction products and restart</a><br>
+<a href="#PM">9. Particle-mesh forward model, adjoint and posterior</a><br>
+<a href="#References">10. Method references and scope</a><br>
 </p>
 
 <header class="entry-header text-center">

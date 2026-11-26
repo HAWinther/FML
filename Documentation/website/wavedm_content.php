@@ -5,6 +5,7 @@
 <hr/>
 
 <p class="page-toc">
+<a href="index.php">Back to the main page</a><br>
 <a href="documentation.php">Back to the documentation</a><br>
 <a href="#Overview">1. Overview: wave (fuzzy) dark matter</a><br>
 <a href="#Equations">2. The Schr&ouml;dinger&ndash;Poisson equations and units</a><br>

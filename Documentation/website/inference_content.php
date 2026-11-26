@@ -14,9 +14,9 @@
 <a href="#Diagnostics">5. Convergence diagnostics</a><br>
 <a href="#Fitting">6. Cosmological parameter fits (CosmologyFitting)</a><br>
 <a href="#Emulator">7. The EuclidEmulator2</a><br>
-<a href="#References">Method references and scope</a><br>
-<a href="#NeuralNetwork">Trainable neural-network emulators</a><br>
-<a href="#CosmicShear">Tomographic cosmic shear and COSEBIs</a><br>
+<a href="#NeuralNetwork">8. Trainable neural-network emulators</a><br>
+<a href="#CosmicShear">9. Tomographic cosmic shear and COSEBIs</a><br>
+<a href="#References">10. Method references and scope</a><br>
 </p>
 
 <header class="entry-header text-center">
@@ -204,15 +204,6 @@ net.save(&quot;emulator.txt&quot;);
 auto restored = NeuralNetwork::load(&quot;emulator.txt&quot;);</pre></div></div>
 <p>Networks trained with Sesame's PyTorch Lightning emulator can be exported with <tt>export_lightning_emulator.py</tt> and loaded in C++; export needs PyTorch, evaluation does not. See <a href="https://github.com/HAWinther/FML/blob/master/FML/Emulator/NeuralNetwork/README.md" style="display: inline">the training and export guide</a>. The <a href="random.php#LatinHypercube" style="display: inline">Latin hypercube sampler</a> supplies training designs. This trainable module is separate from the fixed EuclidEmulator2 cosmology emulator.</p>
 
-<header class="entry-header text-center">
-  <h1 class="entry-title" id="References">Method references and scope</h1>
-</header>
-<hr/>
-
-<p>
-The native neural-network emulator (<tt>Emulator/NeuralNetwork</tt>) follows the <a href="https://github.com/renmau/Sesame_pipeline/blob/main/Pipeline/neural_network_emulator/Emulator.py" style="display: inline">Sesame pipeline training recipe</a>, using <a href="https://arxiv.org/abs/1412.6980" style="display: inline">Kingma &amp; Ba, Adam</a>, <a href="https://arxiv.org/abs/1803.05407" style="display: inline">Izmailov et al., stochastic weight averaging</a>, and <a href="https://proceedings.mlr.press/v9/glorot10a.html" style="display: inline">Glorot &amp; Bengio (2010) initialization</a>. The C++ implementation is independent; PyTorch supplies comparison fixtures and exportable checkpoints. Input/output standardization and initialization differ from Sesame defaults, as documented in the <a href="https://github.com/HAWinther/FML/blob/master/FML/Emulator/NeuralNetwork/README.md" style="display: inline">module README</a>.
-</p>
-
 <header class="entry-header text-center"><h1 class="entry-title" id="CosmicShear">Tomographic cosmic shear and COSEBIs</h1></header>
 <p><tt>WeakLensing/CosmicShear.h</tt> adds tomographic GG, GI and II Limber spectra, nonlinear intrinsic alignments,
 per-bin photo-z shifts and multiplicative shear calibration, flat-sky xi_+/xi_- (including angular bins), and logarithmic COSEBIs.
@@ -226,3 +217,12 @@ Independent numerical comparisons use <a href="https://github.com/LSSTDESC/CCL">
 conventions also follow <a href="https://github.com/joezuntz/cosmosis-standard-library">CosmoSIS</a>.
 The <a href="https://github.com/HAWinther/FML/blob/master/FML/WeakLensing/README.md">module documentation</a>
 records API examples, units, finite integration ranges and test tolerances. KiDS likelihood data and theory integration belong to CosmologyFitting.</p>
+
+<header class="entry-header text-center">
+  <h1 class="entry-title" id="References">Method references and scope</h1>
+</header>
+<hr/>
+
+<p>
+The native neural-network emulator (<tt>Emulator/NeuralNetwork</tt>) follows the <a href="https://github.com/renmau/Sesame_pipeline/blob/main/Pipeline/neural_network_emulator/Emulator.py" style="display: inline">Sesame pipeline training recipe</a>, using <a href="https://arxiv.org/abs/1412.6980" style="display: inline">Kingma &amp; Ba, Adam</a>, <a href="https://arxiv.org/abs/1803.05407" style="display: inline">Izmailov et al., stochastic weight averaging</a>, and <a href="https://proceedings.mlr.press/v9/glorot10a.html" style="display: inline">Glorot &amp; Bengio (2010) initialization</a>. The C++ implementation is independent; PyTorch supplies comparison fixtures and exportable checkpoints. Input/output standardization and initialization differ from Sesame defaults, as documented in the <a href="https://github.com/HAWinther/FML/blob/master/FML/Emulator/NeuralNetwork/README.md" style="display: inline">module README</a>.
+</p>

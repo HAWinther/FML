@@ -11,13 +11,13 @@
 <a href="#Timing">2. Timing</a><br>
 <a href="#Units">3. Units</a><br>
 <a href="#Plot">4. Plotting</a><br>
-<a href="#Visualization">4b. Pictures without Python (Visualization)</a><br>
-<a href="#Math">5. Math</a><br>
-<a href="#Wrap">6. Making Python wrapper</a><br>
-<a href="#KDTree">7. KD-tree</a><br>
-<a href="#PGD">8. Potential gradient descent (PGD)</a><br>
-<a href="#Performance">9. Performance cases and counters</a><br>
-<a href="#Hilbert">Standalone Peano–Hilbert domain decomposition</a><br>
+<a href="#Visualization">5. Pictures without Python (Visualization)</a><br>
+<a href="#Math">6. Math</a><br>
+<a href="#Wrap">7. Making Python wrapper</a><br>
+<a href="#KDTree">8. KD-tree</a><br>
+<a href="#PGD">9. Potential gradient descent (PGD)</a><br>
+<a href="#Performance">10. Performance cases and counters</a><br>
+<a href="#Hilbert">11. Standalone Peano–Hilbert domain decomposition</a><br>
 </p>
 
 <header class="entry-header text-center">

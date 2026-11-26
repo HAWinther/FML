@@ -9,12 +9,12 @@
 <a href="documentation.php">Back to the documentation</a><br>
 <a href="#Overview">1. Classical 1LPT, 2LPT and 3LPT</a><br>
 <a href="#ArbitraryOrder">2. Arbitrary-order EdS LPT</a><br>
-<a href="#Methods">3. Methods we provide</a><br>
-<a href="#Growth">4. Growth factors</a><br>
-<a href="#Recon">5. Reconstruction</a><br>
-<a href="#Dealias">6. Dealiasing the 2LPT and 3LPT sources</a><br>
-<a href="#BigBang">7. Initial conditions from the Big Bang (StepFromBigBang)</a><br>
-<a href="#SixthOrder">Sixth-order checks and plane-wave cancellation</a><br>
+<a href="#SixthOrder">3. Sixth-order checks and plane-wave cancellation</a><br>
+<a href="#Methods">4. Methods we provide</a><br>
+<a href="#Growth">5. Growth factors</a><br>
+<a href="#Recon">6. Reconstruction</a><br>
+<a href="#Dealias">7. Dealiasing the 2LPT and 3LPT sources</a><br>
+<a href="#BigBang">8. Initial conditions from the Big Bang (StepFromBigBang)</a><br>
 </p>
 
 <header class="entry-header text-center">

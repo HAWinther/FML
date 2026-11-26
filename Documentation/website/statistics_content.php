@@ -12,8 +12,8 @@
 <a href="#Environment">3. Density-split and marked correlations (FML::ENVIRONMENT)</a><br>
 <a href="#Morphology">4. Minkowski functionals of excursion sets (FML::MORPHOLOGY)</a><br>
 <a href="#Ensemble">5. Control variates and ensemble summaries (FML::ENSEMBLE)</a><br>
-<a href="#References">Method references and scope</a><br>
-<a href="#Matched">Phase-tracked ensemble means</a><br>
+<a href="#Matched">6. Phase-tracked ensemble means</a><br>
+<a href="#References">7. Method references and scope</a><br>
 </p>
 
 <header class="entry-header text-center">

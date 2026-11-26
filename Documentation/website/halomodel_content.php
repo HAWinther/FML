@@ -10,14 +10,14 @@
 <a href="#Collapse">1. Spherical collapse (FML::COSMOLOGY::SPHERICALCOLLAPSE)</a><br>
 <a href="#Halomodel">2. Halo model and HMcode library</a><br>
 <a href="#Nonlinear">3. Nonlinear power in the Einstein&ndash;Boltzmann Solver</a><br>
-<a href="#Axion">4. Standalone AxionHMcode</a><br>
-<a href="#HOD">5. HOD mock galaxies (FML::HOD)</a><br>
-<a href="#Baryons">6. Baryonification (FML::BARYONIFICATION)</a><br>
-<a href="#References">Method references and scope</a><br>
-<a href="#AssemblyBias">Decorated HOD and marginal satellite occupations</a><br>
-<a href="#Reaction">Native screened collapse and halo-model reactions</a><br>
-<a href="#EMantis">e-MANTIS emulators</a><br>
-<a href="#Bacco">baccoemu emulators: matter, baryons and galaxy bias</a><br>
+<a href="#Reaction">4. Native screened collapse and halo-model reactions</a><br>
+<a href="#Axion">5. Standalone AxionHMcode</a><br>
+<a href="#HOD">6. HOD mock galaxies (FML::HOD)</a><br>
+<a href="#AssemblyBias">7. Decorated HOD and marginal satellite occupations</a><br>
+<a href="#Baryons">8. Baryonification (FML::BARYONIFICATION)</a><br>
+<a href="#EMantis">9. e-MANTIS emulators</a><br>
+<a href="#Bacco">10. baccoemu emulators: matter, baryons and galaxy bias</a><br>
+<a href="#References">11. Method references and scope</a><br>
 </p>
 
 <header class="entry-header text-center">
@@ -213,15 +213,6 @@ correction.apply(particles.data(), particles.size());</pre>
 The N-body code (<a href="nbodycode.php" style="display: inline">SimulationCode</a>) can apply baryonification to its outputs.
 </p>
 
-<header class="entry-header text-center">
-  <h1 class="entry-title" id="References">Method references and scope</h1>
-</header>
-<hr/>
-
-<p>
-Decorated HOD assembly bias follows <a href="https://arxiv.org/abs/1512.03050" style="display: inline">Hearin et al. (2016)</a> and the Halotools Heaviside prescription. <tt>HOD/AssemblyBias.h</tt> decorates the central probability and the <em>marginal</em> satellite mean at fixed mass; callers supply calibrated conditional percentiles. Population-weighted first moments are preserved, rather than each realized galaxy count. See the <a href="https://github.com/HAWinther/FML/blob/master/FML/HOD/README.md" style="display: inline">HOD conventions and comparison scope</a>. Native halo-model reactions also cite <a href="https://arxiv.org/abs/2105.12114">the massive-neutrino extension</a> and <a href="https://arxiv.org/abs/2210.01094">ReACT v2</a>. Native halo-model reactions follow <a href="https://arxiv.org/abs/1812.05594" style="display: inline">Cataneo et al. (2019)</a> and <a href="https://arxiv.org/abs/2005.12184" style="display: inline">Bose et al. (2020)</a>; <a href="https://github.com/nebblu/ACTio-ReACTio" style="display: inline">ACTio-ReACTio</a> supplies comparison fixtures.
-</p>
-
 <header class="entry-header text-center"><h1 class="entry-title" id="EMantis">e-MANTIS emulators</h1></header>
 <p><tt>Emulator/EMantis/EMantis.h</tt> ports the prediction code and trained Gaussian processes of
 <a href="https://gitlab.obspm.fr/e-mantis/e-mantis">e-MANTIS 1.4.0</a>.
@@ -274,3 +265,12 @@ checks pinned SHA-256 sums and converts them with numpy and h5py; <tt>--matter</
 them the constructors throw an error that says how to get them. The predictions agree with the Python package to ~1e-15 (with the
 networks evaluated in double precision in both) in 251 test cases;
 <a href="https://github.com/HAWinther/FML/blob/master/FML/Emulator/Bacco/README.md">the module notes</a> list the parameter ranges.</p>
+
+<header class="entry-header text-center">
+  <h1 class="entry-title" id="References">Method references and scope</h1>
+</header>
+<hr/>
+
+<p>
+Decorated HOD assembly bias follows <a href="https://arxiv.org/abs/1512.03050" style="display: inline">Hearin et al. (2016)</a> and the Halotools Heaviside prescription. <tt>HOD/AssemblyBias.h</tt> decorates the central probability and the <em>marginal</em> satellite mean at fixed mass; callers supply calibrated conditional percentiles. Population-weighted first moments are preserved, rather than each realized galaxy count. See the <a href="https://github.com/HAWinther/FML/blob/master/FML/HOD/README.md" style="display: inline">HOD conventions and comparison scope</a>. Native halo-model reactions also cite <a href="https://arxiv.org/abs/2105.12114">the massive-neutrino extension</a> and <a href="https://arxiv.org/abs/2210.01094">ReACT v2</a>. Native halo-model reactions follow <a href="https://arxiv.org/abs/1812.05594" style="display: inline">Cataneo et al. (2019)</a> and <a href="https://arxiv.org/abs/2005.12184" style="display: inline">Bose et al. (2020)</a>; <a href="https://github.com/nebblu/ACTio-ReACTio" style="display: inline">ACTio-ReACTio</a> supplies comparison fixtures.
+</p>

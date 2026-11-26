@@ -1,8 +1,16 @@
-<p class="page-toc"><a href="documentation.php">Back to documentation</a><br>
-<a href="#Overview">Overview</a><br>
-<a href="#Analyses">Available analyses</a><br>
-<a href="#Usage">Usage</a><br>
-<a href="#HybridBias">Hybrid bias input</a><br>
+<hr/>
+<header class="entry-header text-center">
+  <h1 class="entry-title">Table of contents</h1>
+</header>
+<hr/>
+
+<p class="page-toc">
+<a href="index.php">Back to the main page</a><br>
+<a href="documentation.php">Back to the documentation</a><br>
+<a href="#Overview">1. Overview</a><br>
+<a href="#Analyses">2. Available analyses</a><br>
+<a href="#Usage">3. Usage</a><br>
+<a href="#HybridBias">4. Hybrid bias input</a><br>
 </p>
 <header class="entry-header text-center">
   <h1 class="entry-title" id="Overview">SnapshotAnalyzer: analyse existing Gadget snapshots</h1>

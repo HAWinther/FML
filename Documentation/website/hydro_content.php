@@ -5,6 +5,7 @@
 <hr/>
 
 <p class="page-toc">
+<a href="index.php">Back to the main page</a><br>
 <a href="documentation.php">Back to the documentation</a><br>
 <a href="#Overview">1. Overview: gas dynamics</a><br>
 <a href="#FiniteVolume">2. Finite-volume Euler equations (FML::HYDRODYNAMICS)</a><br>

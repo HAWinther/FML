@@ -13,8 +13,8 @@
 <a href="#Window">4. The survey window and the window matrix</a><br>
 <a href="#Recon">5. BAO reconstruction</a><br>
 <a href="#Validation">6. Example and validation</a><br>
-<a href="#References">Method references and scope</a><br>
-<a href="#Convergence">External comparisons and window convergence</a><br>
+<a href="#Convergence">7. External comparisons and window convergence</a><br>
+<a href="#References">8. Method references and scope</a><br>
 </p>
 
 <header class="entry-header text-center">
