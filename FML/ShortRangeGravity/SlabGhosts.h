@@ -1,5 +1,6 @@
 #ifndef FML_SHORT_RANGE_SLAB_GHOSTS_HEADER
 #define FML_SHORT_RANGE_SLAB_GHOSTS_HEADER
+#include <FML/Global/ChunkedExchange.h>
 #include <FML/Global/Global.h>
 #include <FML/ShortRangeGravity/ShortRangeGravity.h>
 #include <cstring>
@@ -203,13 +204,130 @@ namespace FML::SHORT_RANGE_GRAVITY {
         }
     } // namespace detail
 
-    /// The same for the particles on a domain (Slab or Pencil; FML::domain: the slabs of FML::xmin_domain,
-    /// FML::xmax_domain or the pencils): the region of a rank is its slab or pencil (in units of the box)
+    /// The ghosts for particles on a Peano-Hilbert domain (contiguous ranges of the Hilbert key, Global/Domain.h): every
+    /// rank gets the remote particles that can be within the cutoff of its region. The box is divided into coarse cells
+    /// of the curve (2^level per side, at least the cutoff wide, at most 2^7); a coarse cell is a contiguous key range,
+    /// so the ranks owning any part of it are a range of ranks. A particle goes to the ranks of the cells within the
+    /// cutoff of it (the cells around its own one): a superset of the ranks that need it, never fewer. Each source is
+    /// sent once per rank. Owned particles must be in this rank's domain (positions in the kernel's length unit).
+    /// Collective
+    inline GhostSources exchange_peano_hilbert_ghosts(const std::vector<Particle> & owned,
+                                                      const FML::PeanoHilbertDomain & domain,
+                                                      const Kernel & kernel) {
+        namespace PH = FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT;
+        using Key = FML::PeanoHilbertDomain::Key;
+        const double L = kernel.options().boxsize;
+        int invalid = 0;
+        try {
+            detail::validate_particles(owned, L, true);
+            for (const auto & p : owned)
+                if (domain.owner_of_position({p.position[0] / L, p.position[1] / L, p.position[2] / L}) != FML::ThisTask)
+                    invalid = 1;
+        } catch (const std::exception &) {
+            invalid = 1;
+        }
+        FML::MaxOverTasks(&invalid);
+        if (invalid)
+            throw std::invalid_argument("[ShortRangeGravity] Invalid owned particles or Peano-Hilbert domain on a rank");
+        GhostSources result;
+        result.particles = owned;
+        if (FML::NTasks == 1)
+            return result;
+
+        // The coarse cells: 2^level per side, each at least the cutoff wide (so the cells within the cutoff of a point
+        // are among the 27 around it), at most the resolution of the domain and 2^7
+        const double cutoff = kernel.cutoff() / L;
+        int level = 0;
+        while (level < 7 and level < int(domain.bits()) and std::ldexp(1.0, -(level + 1)) >= cutoff)
+            level++;
+        const int n = 1 << level;
+        const unsigned shift = 3 * (domain.bits() - unsigned(level));
+        // The ranks owning the keys of each coarse cell: [first, last]
+        std::vector<std::array<int, 2>> ranks(size_t(n) * n * n);
+        for (int ix = 0; ix < n; ix++)
+            for (int iy = 0; iy < n; iy++)
+                for (int iz = 0; iz < n; iz++) {
+                    const Key k0 = PH::key_from_grid_coordinate({uint32_t(ix), uint32_t(iy), uint32_t(iz)}, unsigned(level))
+                                   << shift;
+                    const Key k1 = k0 + (Key(1) << shift) - 1;
+                    ranks[(size_t(ix) * n + iy) * n + iz] = {domain.owner_of_key(k0), domain.owner_of_key(k1)};
+                }
+
+        // The destinations of each particle
+        struct Record {
+            double position[3];
+            double mass;
+            std::uint64_t id;
+        };
+        std::vector<std::vector<Record>> outgoing(FML::NTasks);
+        std::vector<int> dest;
+        for (const auto & p : owned) {
+            std::array<double, 3> x;
+            std::array<int, 3> c;
+            for (int d = 0; d < 3; d++) {
+                x[d] = p.position[d] / L;
+                c[d] = std::min(n - 1, int(x[d] * n));
+            }
+            dest.clear();
+            for (int a = -1; a <= 1; a++)
+                for (int b = -1; b <= 1; b++)
+                    for (int e = -1; e <= 1; e++) {
+                        const int o[3] = {a, b, e};
+                        // The periodic distance from the particle to the neighbour cell
+                        double dist2 = 0;
+                        std::array<int, 3> cc;
+                        for (int d = 0; d < 3; d++) {
+                            cc[d] = ((c[d] + o[d]) % n + n) % n;
+                            if (o[d] != 0) {
+                                const double edge = o[d] > 0 ? double(c[d] + 1) / n : double(c[d]) / n;
+                                const double dd = std::fabs(x[d] - edge);
+                                dist2 += dd * dd;
+                            }
+                        }
+                        if (n > 1 and dist2 >= cutoff * cutoff)
+                            continue;
+                        const auto & r = ranks[(size_t(cc[0]) * n + cc[1]) * n + cc[2]];
+                        for (int rank = r[0]; rank <= r[1]; rank++)
+                            if (rank != FML::ThisTask)
+                                dest.push_back(rank);
+                    }
+            std::sort(dest.begin(), dest.end());
+            dest.erase(std::unique(dest.begin(), dest.end()), dest.end());
+            for (int rank : dest) {
+                Record rec;
+                for (int d = 0; d < 3; d++)
+                    rec.position[d] = p.position[d];
+                rec.mass = p.mass;
+                rec.id = p.id;
+                outgoing[rank].push_back(rec);
+                result.sent_particles++;
+            }
+        }
+        auto consume = [&](const Record * r, size_t count) noexcept {
+            for (size_t i = 0; i < count; i++) {
+                Particle p;
+                for (int d = 0; d < 3; d++)
+                    p.position[d] = r[i].position[d];
+                p.mass = r[i].mass;
+                p.id = r[i].id;
+                result.particles.push_back(p);
+                result.received_particles++;
+            }
+        };
+        FML::COMMUNICATION::exchange_records_chunked<Record>(outgoing, consume);
+        return result;
+    }
+
+    /// The same for the particles on a domain (Slab, Pencil or PeanoHilbert; FML::domain: the slabs of
+    /// FML::xmin_domain, FML::xmax_domain or the pencils): the region of a rank is its slab or pencil (in units of the
+    /// box), or its key ranges (exchange_peano_hilbert_ghosts)
     inline GhostSources
     exchange_domain_ghosts(const std::vector<Particle> & owned, const FML::Domain & domain, const Kernel & kernel) {
         const double L = kernel.options().boxsize;
+        if (domain.holds<FML::PeanoHilbertDomain>())
+            return exchange_peano_hilbert_ghosts(owned, domain.get<FML::PeanoHilbertDomain>(), kernel);
         assert_mpi(domain.is_slab() or domain.holds<FML::PencilDomain>(),
-                   "[ShortRangeGravity] exchange_domain_ghosts needs a Slab or a Pencil domain");
+                   "[ShortRangeGravity] exchange_domain_ghosts needs a Slab, a Pencil or a PeanoHilbert domain");
         if (domain.is_slab())
             return exchange_slab_ghosts(owned, domain.x_min(FML::ThisTask) * L, domain.x_max(FML::ThisTask) * L, kernel);
         std::vector<detail::Box> boxes(FML::NTasks);

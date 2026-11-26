@@ -24,6 +24,10 @@
 // use directly (ParticleGridInterpolation(Generic).h need the particles in the domain of the grid), without moving
 // the particles: particles_to_grid_any_domain(MPIParticles, grid, "CIC").
 //
+// The inverse, interpolate_grids_to_particles_any_domain (interpolate_from_partitioned_mesh), gathers the cells of the
+// grids that the local particles' stencils touch from their owners (in passes of x-slices) and interpolates them to
+// the particles, as interpolate_grid_to_particle_positions but for particles on any task (the PM force of GADGET).
+//
 // The assignment kernels are those of ParticleGridInterpolation.h (B-splines of order 1-5: NGP, CIC, TSC, PCS, PQS,
 // the same cells and weights), and particles_to_grid_any_domain gives the same overdensity field as particles_to_grid
 // (mass or delta-f weighted, normalized to the mean) up to the order of the floating-point sums, but without
@@ -637,6 +641,318 @@ namespace FML::INTERPOLATION {
                                                   density_assignment_method,
                                                   assignment_offset,
                                                   options);
+    }
+
+    //==========================================================================================================
+    // Interpolation from a distributed mesh to particles anywhere: the inverse of the deposit. Each task gathers the
+    // part of the mesh its particles' stencils touch (the same periodic bounding box, in passes of x-slices) from the
+    // tasks that own it, then interpolates with the kernel of ParticleGridInterpolation.h (the same cells and weights
+    // as interpolate_grid_to_particle_positions). This is how GADGET gets the PM force to particles on its
+    // Peano-Hilbert domain (pm_periodic.c)
+    //==========================================================================================================
+
+    /// Interpolate M fields of a distributed mesh to the particles part[0..NumPart) (anywhere in the box, on any task):
+    /// result[i][m] = sum over the stencil of particle i of W * field m. get_local(global_cell) is called on the task
+    /// that owns the cell (partition.box[ThisTask]) and returns the M values there (it must not call MPI). Returns
+    /// what was exchanged (values_sent: values sent by this task to others and itself). Collective
+    template <int N, int ORDER, int M, class T, class GetLocal>
+    DepositInfo interpolate_from_partitioned_mesh(const T * part,
+                                                  size_t NumPart,
+                                                  const MeshPartition<N> & partition,
+                                                  GetLocal && get_local,
+                                                  std::vector<std::array<double, M>> & result,
+                                                  const std::array<double, N> & assignment_offset = {},
+                                                  const DepositOptions & options = {}) {
+        static_assert(ORDER >= 1 and ORDER <= 5, "[interpolate_from_partitioned_mesh] ORDER must be 1..5");
+        static_assert(M >= 1, "[interpolate_from_partitioned_mesh] Need at least one field");
+        partition.validate();
+        const auto & mesh = partition.mesh;
+        DepositInfo info;
+        result.assign(NumPart, std::array<double, M>{});
+
+        bool shifted = false;
+        for (int d = 0; d < N; d++) {
+            assert_mpi(std::isfinite(assignment_offset[d]) and assignment_offset[d] >= 0.0 and
+                           assignment_offset[d] < 1.0 / mesh[d],
+                       "[interpolate_from_partitioned_mesh] Assignment offsets must be in [0, 1/Nmesh)");
+            shifted = shifted or assignment_offset[d] != 0.0;
+        }
+        auto stencil = [&](size_t i) {
+            return detail::stencil_of<N, ORDER, T>(part[i], mesh, assignment_offset, shifted);
+        };
+
+        // 1. The periodic bounding box of the cells the local stencils touch (as the deposit)
+        std::array<int, N> pstart{}, pcount{};
+        size_t patch_volume = 1;
+        {
+            std::array<std::vector<char>, N> marked;
+            for (int d = 0; d < N; d++)
+                marked[d].assign(mesh[d], 0);
+            for (size_t i = 0; i < NumPart; i++) {
+                const auto s = stencil(i);
+                for (int d = 0; d < N; d++)
+                    for (int j = 0; j < ORDER; j++)
+                        marked[d][detail::positive_mod(s.first[d] + j, mesh[d])] = 1;
+            }
+            for (int d = 0; d < N; d++) {
+                const auto [a, L] = detail::covering_interval(marked[d]);
+                pstart[d] = a;
+                pcount[d] = L;
+                patch_volume *= size_t(L);
+            }
+        }
+        for (int d = 0; d < std::min(N, 3); d++)
+            info.patch_count[d] = pcount[d];
+        auto patch_coord = [&](int global, int d) { return detail::positive_mod((long long)global - pstart[d], mesh[d]); };
+
+        // Passes over x-slices of the patch: a pass interpolates the particles whose stencil starts in its slices and
+        // gathers ORDER - 1 slices more (budget: max_patch_cells values per field, as the deposit)
+        size_t budget = options.max_patch_cells;
+        if (budget == 0) {
+            double cells = 1.0;
+            for (int d = 0; d < N; d++)
+                cells *= mesh[d];
+            budget = std::max(size_t(1) << 18, size_t(2.0 * cells / FML::NTasks) + 1);
+        }
+        const size_t slice_cells = pcount[0] > 0 ? patch_volume / size_t(pcount[0]) : 0;
+        const int slices_per_pass =
+            pcount[0] > 0 ? int(std::max<size_t>(1, std::min<size_t>(pcount[0], budget / std::max<size_t>(1, slice_cells))))
+                          : 1;
+        info.passes = pcount[0] > 0 ? (pcount[0] + slices_per_pass - 1) / slices_per_pass : 0;
+        int npasses = info.passes;
+        FML::MaxOverTasks(&npasses);
+
+        // The particles of each pass (by the first slice of their stencil)
+        std::vector<size_t> start(std::max(info.passes, 0) + 1, 0), order(NumPart);
+        {
+            std::vector<int> pass_of(NumPart);
+            for (size_t i = 0; i < NumPart; i++) {
+                pass_of[i] = patch_coord(stencil(i).first[0], 0) / slices_per_pass;
+                start[pass_of[i] + 1]++;
+            }
+            for (int p = 0; p < info.passes; p++)
+                start[p + 1] += start[p];
+            std::vector<size_t> next(start.begin(), start.end() - 1);
+            for (size_t i = 0; i < NumPart; i++)
+                order[next[pass_of[i]]++] = i;
+        }
+
+        // The requests: the global box a task wants (the owner sends its values back to `from`)
+        struct Request {
+            int from;
+            std::array<int, N> start, count;
+        };
+        std::vector<double> window;
+        for (int pass = 0; pass < npasses; pass++) {
+            const int x0 = pass * slices_per_pass;
+            const int nx = pass < info.passes ? std::min(slices_per_pass, pcount[0] - x0) : 0;
+            // The slices needed: those of the pass and ORDER - 1 more (periodic if the patch spans the mesh)
+            const int wlen = nx == 0 ? 0 : std::min(nx + ORDER - 1, pcount[0] == mesh[0] ? mesh[0] : pcount[0] - x0);
+            const int wstart = (pstart[0] + x0) % mesh[0];
+            std::array<size_t, N> stride{};
+            stride[N - 1] = 1;
+            for (int d = N - 2; d >= 0; d--)
+                stride[d] = stride[d + 1] * size_t(pcount[d + 1]);
+            window.assign(size_t(wlen) * slice_cells * M, 0.0);
+
+            // 2. Ask the owners of the cells of the window for their values
+            std::vector<std::vector<Request>> requests(FML::NTasks);
+            if (wlen > 0) {
+                for (int r = 0; r < FML::NTasks; r++) {
+                    const auto & box = partition.box[r];
+                    if (box.volume() == 0)
+                        continue;
+                    std::array<detail::Piece[2], N> pieces;
+                    std::array<int, N> npieces{};
+                    bool empty = false;
+                    for (int d = 0; d < N; d++) {
+                        const int a = d == 0 ? wstart : pstart[d];
+                        const int L = d == 0 ? wlen : pcount[d];
+                        npieces[d] = detail::interval_pieces(a, L, box.start[d], box.count[d], mesh[d], pieces[d]);
+                        empty = empty or npieces[d] == 0;
+                    }
+                    if (empty)
+                        continue;
+                    int ncombinations = 1;
+                    for (int d = 0; d < N; d++)
+                        ncombinations *= npieces[d];
+                    for (int comb = 0; comb < ncombinations; comb++) {
+                        Request q;
+                        q.from = FML::ThisTask;
+                        for (int d = 0, n = 1; d < N; d++) {
+                            const auto & p = pieces[d][comb / n % npieces[d]];
+                            q.start[d] = p.global_start;
+                            q.count[d] = p.count;
+                            n *= npieces[d];
+                        }
+                        requests[r].push_back(q);
+                    }
+                }
+            }
+
+            // 3. The owners pack the values of the requested boxes (header: N starts and N counts, then M values per
+            // cell, row-major, the last axis fastest)
+            std::vector<std::vector<double>> replies(FML::NTasks);
+            auto answer = [&](const Request * q, size_t n) noexcept {
+                for (size_t k = 0; k < n; k++) {
+                    auto & out = replies[q[k].from];
+                    size_t count = 1;
+                    for (int d = 0; d < N; d++) {
+                        out.push_back(double(q[k].start[d]));
+                        count *= size_t(q[k].count[d]);
+                    }
+                    for (int d = 0; d < N; d++)
+                        out.push_back(double(q[k].count[d]));
+                    std::array<int, N> cell;
+                    for (size_t c = 0; c < count; c++) {
+                        size_t rem = c;
+                        for (int d = N - 1; d >= 0; d--) {
+                            cell[d] = q[k].start[d] + int(rem % size_t(q[k].count[d]));
+                            rem /= size_t(q[k].count[d]);
+                        }
+                        const std::array<double, M> v = get_local(cell);
+                        out.insert(out.end(), v.begin(), v.end());
+                    }
+                    info.values_sent += count * M;
+                    info.blocks_sent++;
+                }
+            };
+            // (a request is a few ints: always room for one, also with a tiny message limit)
+            FML::COMMUNICATION::exchange_records_chunked<Request>(requests, answer,
+                                                                  std::max(options.max_message_bytes, sizeof(Request)));
+
+            // 4. The replies into the window (a stream per source, parsed in order)
+            struct Parser {
+                int nheader = 0;
+                std::array<double, 2 * N> header{};
+                size_t remaining = 0, done = 0;
+                int m = 0;
+                std::array<int, N> start{}, count{};
+            } parser;
+            auto window_index = [&](const std::array<int, N> & cell) {
+                size_t index = size_t(detail::positive_mod((long long)cell[0] - wstart, mesh[0])) * stride[0];
+                for (int d = 1; d < N; d++)
+                    index += size_t(patch_coord(cell[d], d)) * stride[d];
+                return index;
+            };
+            auto consume = [&](const double * values, size_t n) noexcept {
+                for (size_t i = 0; i < n; i++) {
+                    if (parser.remaining == 0) {
+                        parser.header[parser.nheader++] = values[i];
+                        if (parser.nheader == 2 * N) {
+                            parser.remaining = 1;
+                            for (int d = 0; d < N; d++) {
+                                parser.start[d] = int(parser.header[d]);
+                                parser.count[d] = int(parser.header[N + d]);
+                                parser.remaining *= size_t(parser.count[d]);
+                            }
+                            parser.remaining *= M;
+                            parser.done = 0;
+                            parser.m = 0;
+                            parser.nheader = 0;
+                        }
+                        continue;
+                    }
+                    size_t k = parser.done / M;
+                    std::array<int, N> cell;
+                    for (int d = N - 1; d >= 0; d--) {
+                        cell[d] = parser.start[d] + int(k % size_t(parser.count[d]));
+                        k /= size_t(parser.count[d]);
+                    }
+                    window[window_index(cell) * M + parser.done % M] = values[i];
+                    parser.done++;
+                    parser.remaining--;
+                }
+            };
+            FML::COMMUNICATION::exchange_records_chunked<double>(replies, consume, options.max_message_bytes);
+
+            // 5. Interpolate the particles of this pass
+            if (nx > 0) {
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+                for (size_t k = start[pass]; k < start[pass + 1]; k++) {
+                    const size_t i = order[k];
+                    const auto s = stencil(i);
+                    std::array<std::array<size_t, ORDER>, N> pc;
+                    for (int d = 0; d < N; d++)
+                        for (int j = 0; j < ORDER; j++)
+                            pc[d][j] = d == 0 ? size_t(detail::positive_mod(patch_coord(s.first[0] + j, 0) - x0, mesh[0]))
+                                              : size_t(patch_coord(s.first[d] + j, d));
+                    std::array<double, M> sum{};
+                    constexpr int ncells = FML::power(ORDER, N);
+                    for (int c = 0; c < ncells; c++) {
+                        double w = 1.0;
+                        size_t index = 0;
+                        for (int d = 0, n = 1; d < N; d++, n *= ORDER) {
+                            const int j = c / n % ORDER;
+                            w *= s.w[d][j];
+                            index += pc[d][j] * stride[d];
+                        }
+                        for (int m = 0; m < M; m++)
+                            sum[m] += w * window[index * M + m];
+                    }
+                    result[i] = sum;
+                }
+            }
+        }
+        return info;
+    }
+
+    /// Interpolate the M grids (FFTWGrid, PencilGrid, ... with the same layout) to the particles part[0..NumPart), on
+    /// any task: result[i][m] is grid m at particle i, with the kernel of order ORDER (as
+    /// interpolate_grid_to_particle_positions, without needing the particles in the domain of the grid or the extra
+    /// slices of the grid). Collective
+    template <int N, int ORDER, int M, class T, template <int> class Grid>
+    DepositInfo interpolate_grids_to_particles_any_domain(const std::array<const Grid<N> *, M> & grids,
+                                                          const T * part,
+                                                          size_t NumPart,
+                                                          std::vector<std::array<double, M>> & result,
+                                                          const std::array<double, N> & assignment_offset = {},
+                                                          const DepositOptions & options = {}) {
+        for (int m = 0; m < M; m++)
+            assert_mpi(grids[m] != nullptr and grids[m]->get_nmesh() == grids[0]->get_nmesh(),
+                       "[interpolate_grids_to_particles_any_domain] The grids must have the same size and layout");
+        const auto partition = mesh_partition_from_grid(*grids[0]);
+        std::array<int, N> local_start;
+        for (int d = 0; d < N; d++)
+            local_start[d] = int(grids[0]->get_local_range(d)[0]);
+        auto get_local = [&](const std::array<int, N> & cell) {
+            std::array<int, N> local;
+            for (int d = 0; d < N; d++)
+                local[d] = cell[d] - local_start[d];
+            std::array<double, M> v;
+            for (int m = 0; m < M; m++)
+                v[m] = double(grids[m]->get_real_from_index(grids[m]->get_index_real(local)));
+            return v;
+        };
+        return interpolate_from_partitioned_mesh<N, ORDER, M, T>(part, NumPart, partition, get_local, result,
+                                                                 assignment_offset, options);
+    }
+
+    /// As above with the method by name (NGP, CIC, TSC, PCS, PQS)
+    template <int N, int M, class T, template <int> class Grid>
+    DepositInfo interpolate_grids_to_particles_any_domain(const std::array<const Grid<N> *, M> & grids,
+                                                          const T * part,
+                                                          size_t NumPart,
+                                                          std::vector<std::array<double, M>> & result,
+                                                          const std::string & interpolation_method,
+                                                          const std::array<double, N> & assignment_offset = {},
+                                                          const DepositOptions & options = {}) {
+        switch (interpolation_order_from_name(interpolation_method)) {
+            case 1:
+                return interpolate_grids_to_particles_any_domain<N, 1, M, T>(grids, part, NumPart, result, assignment_offset, options);
+            case 2:
+                return interpolate_grids_to_particles_any_domain<N, 2, M, T>(grids, part, NumPart, result, assignment_offset, options);
+            case 3:
+                return interpolate_grids_to_particles_any_domain<N, 3, M, T>(grids, part, NumPart, result, assignment_offset, options);
+            case 4:
+                return interpolate_grids_to_particles_any_domain<N, 4, M, T>(grids, part, NumPart, result, assignment_offset, options);
+            case 5:
+                return interpolate_grids_to_particles_any_domain<N, 5, M, T>(grids, part, NumPart, result, assignment_offset, options);
+        }
+        throw std::runtime_error("[interpolate_grids_to_particles_any_domain] Unknown interpolation method [" +
+                                 interpolation_method + "]");
     }
 
 } // namespace FML::INTERPOLATION

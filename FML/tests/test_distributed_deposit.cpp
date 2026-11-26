@@ -2,7 +2,9 @@
 // the particles in the slabs of the grid: particles on a Peano-Hilbert domain, scattered randomly over the tasks or all
 // on one task; NGP-PQS, with and without masses, assignment offsets (interlacing); several passes over the patch and
 // tiny messages (blocks split over messages); PencilGrids (every process grid that fits) and a hand-made box
-// partition; MPIParticles on a PeanoHilbertDomain; OpenMP determinism.
+// partition; MPIParticles on a PeanoHilbertDomain; OpenMP determinism. The inverse, interpolation from the grid to
+// particles on any domain (interpolate_grids_to_particles_any_domain): against interpolate_grid_to_particle_positions
+// with the particles in the slabs and against a direct sum over the stencil of a field known everywhere.
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/DistributedDeposit.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
@@ -280,6 +282,102 @@ void test_threads() {
 #endif
 }
 
+/// A smooth field known on every task (to check interpolation without the grid's layout)
+inline double field_value(int m, const std::array<int, 3> & c, int Nmesh) {
+    const double t = 2.0 * M_PI / Nmesh;
+    return std::sin(t * (c[0] + 2 * m)) + 0.5 * std::cos(t * 2 * c[1] + m) + 0.25 * std::sin(t * 3 * c[2] - m) + 0.1 * m;
+}
+
+/// Interpolation to particles on any domain: (1) the same as a direct sum over the stencil of the field, (2) the same as
+/// interpolate_grid_to_particle_positions for the particles in the slabs of the grid
+template <int ORDER>
+void compare_interpolation(int Nmesh, Distribution how, const std::string & label, I::DepositOptions options = {},
+                           const std::array<double, 3> & offset = {}) {
+    constexpr int N = 3, M = 3;
+    using P = Particle<N>;
+    const auto all = global_particles<P, N>(5000, Nmesh);
+    std::array<FML::GRID::FFTWGrid<N>, M> grids;
+    for (int m = 0; m < M; m++) {
+        auto extra = I::get_extra_slices_needed_by_order<ORDER>();
+        grids[m] = FML::GRID::FFTWGrid<N>(Nmesh, extra.first, extra.second);
+        grids[m].fill_real_grid([&](const std::array<double, N> & x) {
+            std::array<int, N> c;
+            for (int d = 0; d < N; d++)
+                c[d] = int(std::lround(x[d] * Nmesh)) % Nmesh;
+            return FML::GRID::FloatType(field_value(m, c, Nmesh));
+        });
+        grids[m].communicate_boundaries();
+    }
+    std::array<const FML::GRID::FFTWGrid<N> *, M> ptr{&grids[0], &grids[1], &grids[2]};
+
+    // (1) Against the direct sum (the same kernel) on any distribution
+    const auto mine = distribute<P, N>(all, how);
+    std::vector<std::array<double, M>> result;
+    const auto info = I::interpolate_grids_to_particles_any_domain<N, ORDER, M, P>(ptr, mine.data(), mine.size(), result,
+                                                                                   offset, options);
+    std::array<int, N> mesh;
+    mesh.fill(Nmesh);
+    const bool shifted = offset[0] != 0.0 or offset[1] != 0.0 or offset[2] != 0.0;
+    double err = 0, scale = 0;
+    for (size_t i = 0; i < mine.size(); i++) {
+        const auto st = I::detail::stencil_of<N, ORDER, P>(mine[i], mesh, offset, shifted);
+        for (int m = 0; m < M; m++) {
+            double sum = 0;
+            for (int a = 0; a < ORDER; a++)
+                for (int b = 0; b < ORDER; b++)
+                    for (int c = 0; c < ORDER; c++) {
+                        const std::array<int, N> cell{I::detail::positive_mod(st.first[0] + a, Nmesh),
+                                                      I::detail::positive_mod(st.first[1] + b, Nmesh),
+                                                      I::detail::positive_mod(st.first[2] + c, Nmesh)};
+                        sum += st.w[0][a] * st.w[1][b] * st.w[2][c] * field_value(m, cell, Nmesh);
+                    }
+            err = std::max(err, std::fabs(sum - result[i][m]));
+            scale = std::max(scale, std::fabs(sum));
+        }
+    }
+    FML::MaxOverTasks(&err);
+    FML::MaxOverTasks(&scale);
+    int passes = info.passes;
+    FML::MaxOverTasks(&passes);
+    char text[160];
+    std::snprintf(text, sizeof text, "%s: = direct stencil sum (relative difference %.1e, %d pass%s)", label.c_str(),
+                  err / scale, passes, passes > 1 ? "es" : "");
+    check(err / scale < FML::TESTS::grid_tol(1e-13, 1e-5), text);
+
+    // (2) Against interpolate_grid_to_particle_positions for the particles in the slabs (no offset there)
+    if (not shifted) {
+        const auto slab = slab_particles<P, N>(all, grids[0]);
+        std::vector<std::array<double, M>> any;
+        I::interpolate_grids_to_particles_any_domain<N, ORDER, M, P>(ptr, slab.data(), slab.size(), any, {}, options);
+        double e2 = 0;
+        for (int m = 0; m < M; m++) {
+            std::vector<FML::GRID::FloatType> ref;
+            I::interpolate_grid_to_particle_positions<N, ORDER, P>(grids[m], slab.data(), slab.size(), ref);
+            for (size_t i = 0; i < slab.size(); i++)
+                e2 = std::max(e2, std::fabs(double(ref[i]) - any[i][m]));
+        }
+        FML::MaxOverTasks(&e2);
+        std::snprintf(text, sizeof text, "%s: = interpolate_grid_to_particle_positions for slab particles (difference %.1e)",
+                      label.c_str(), e2 / scale);
+        check(e2 / scale < FML::TESTS::grid_tol(1e-13, 1e-5), text);
+    }
+}
+
+void test_interpolation() {
+    const int Nmesh = 24;
+    compare_interpolation<2>(Nmesh, Distribution::PeanoHilbert, "Interpolation CIC, Peano-Hilbert domain");
+    compare_interpolation<1>(Nmesh, Distribution::PeanoHilbert, "Interpolation NGP, Peano-Hilbert domain");
+    compare_interpolation<3>(Nmesh, Distribution::Random, "Interpolation TSC, random tasks");
+    compare_interpolation<4>(Nmesh, Distribution::OneTask, "Interpolation PCS, all particles on one task");
+    compare_interpolation<5>(Nmesh, Distribution::PeanoHilbert, "Interpolation PQS, Peano-Hilbert domain");
+    I::DepositOptions tiny;
+    tiny.max_patch_cells = 1;
+    tiny.max_message_bytes = 3 * sizeof(double);
+    compare_interpolation<3>(Nmesh, Distribution::Random, "Interpolation TSC, one slice per pass, tiny messages", tiny);
+    const double h = 0.5 / Nmesh;
+    compare_interpolation<2>(Nmesh, Distribution::PeanoHilbert, "Interpolation CIC, offset (h, h, h)", {}, {h, h, h});
+}
+
 int main() {
     const int Nmesh = 24;
     {
@@ -331,5 +429,6 @@ int main() {
     }
     test_pencils();
     test_threads();
+    test_interpolation();
     return FML::TESTS::summary("distributed deposit");
 }

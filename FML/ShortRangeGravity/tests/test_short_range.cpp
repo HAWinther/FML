@@ -339,6 +339,55 @@ void ghosts() {
         }
     }
 }
+void peano_hilbert_ghosts() {
+    namespace PH = FML::DOMAIN_DECOMPOSITION::PEANO_HILBERT;
+    // Uniform and clustered catalogues on a load-balanced Peano-Hilbert domain, small and wide cutoffs, a box not of
+    // unit size; the ghosts must give the forces of the replicated catalogue without duplicates
+    for (bool clustered : {false, true})
+        for (double rs : {.02, .045}) {
+            const double L = 3.0;
+            auto all = catalogue(800, clustered);
+            for (auto & p : all)
+                for (auto & x : p.position)
+                    x *= L;
+            Options o;
+            o.boxsize = L;
+            o.cutoff_tolerance = 1e-8;
+            o.split_scale = rs * L;
+            o.softening_support = .005 * L;
+            Kernel k(o);
+            const unsigned bits = 12;
+            std::vector<PH::Key> keys;
+            for (std::size_t i = FML::ThisTask; i < all.size(); i += FML::NTasks)
+                keys.push_back(PH::key_from_position({all[i].position[0] / L, all[i].position[1] / L, all[i].position[2] / L}, bits));
+            const auto domain = FML::Domain::peano_hilbert(FML::PeanoHilbertDomain::build(keys, bits, 10));
+            std::vector<Particle> local;
+            for (const auto & p : all) {
+                const double x[3] = {p.position[0] / L, p.position[1] / L, p.position[2] / L};
+                if (domain.owner(x) == FML::ThisTask)
+                    local.push_back(p);
+            }
+            auto sources = exchange_domain_ghosts(local, domain, k);
+            const auto expected = direct_sum(local, all, k);
+            const auto actual = CellList(sources.particles, k).compute(local);
+            const auto tree = Octree(sources.particles, k, {0, 8, 40}).compute(local);
+            std::set<std::uint64_t> ids;
+            for (const auto & p : sources.particles)
+                ids.insert(p.id);
+            double e = std::max(error(actual.acceleration, expected.acceleration), error(tree.acceleration, expected.acceleration));
+            FML::MaxOverTasks(&e);
+            int dup = ids.size() != sources.particles.size();
+            FML::MaxOverTasks(&dup);
+            std::uint64_t received = sources.received_particles, total = all.size();
+            FML::SumOverTasks(&received);
+            char text[200];
+            std::snprintf(text, sizeof text,
+                          "MPI Peano-Hilbert ghosts match the replicated reference without duplicates (%s, cutoff %.2f of "
+                          "the box: error %.1e, %.2f ghosts per particle)",
+                          clustered ? "clustered" : "uniform", k.cutoff() / L, e, double(received) / double(total));
+            check(e < 3e-14 and not dup, text);
+        }
+}
 void normalization_and_scaling() {
     auto p = catalogue(100);
     double total_mass = 0;
@@ -453,6 +502,7 @@ int main(int argc, char ** argv) {
     backends();
     periodic_force();
     ghosts();
+    peano_hilbert_ghosts();
     normalization_and_scaling();
     chunked_ghosts_and_errors();
     return FML::TESTS::summary("ShortRangeGravity");
