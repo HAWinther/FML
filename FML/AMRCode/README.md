@@ -34,8 +34,17 @@ set in `../Makefile.config` / `Makefile.local` as for the rest of FML.
    is the 4th order (5 point, as RAMSES) gradient of phi where the neighbours are at the same level, else 2nd order,
    interpolated back to the particles with the same CIC stencil.
 4. **Time stepping.** Kick-drift-kick in `tau = log(a)` with block time steps: a particle in a leaf at level `l` has
-   the step `dt_coarse / 2^(l - levelmin)` (or smaller, `cfl`: `|dx| < cfl * cellsize` per step). Coarse steps are
-   uniform in `log(a)` (`nsteps`, plus the output times). Every particle is drifted at every fine sub-step, only the
+   the step `dt_coarse / 2^(l - levelmin)` (or smaller, `cfl`: `|dx| < cfl * cellsize` per step). The coarse steps
+   (`timestep_method`): `fixed` (default), uniform in `log(a)` (`nsteps`, plus the output times); or `ramses`, adaptive
+   as RAMSES chooses them (newdt_fine): on every level with particles the Courant condition (a particle moves at most
+   `courant_factor` times the cell size, default 0.5) and the free-fall time of its densest leaf
+   (`courant_factor * sqrt(3 pi / (32 G rho_max))`, with G_eff and the varying mass of the model), the level taking
+   `2^(l - levelmin)` steps per coarse step (all the finest step without subcycling), and at most `max_da_over_a`
+   (default 0.1) change of a per coarse step; the outputs are hit exactly. In the 64^3 / 128 Mpc/h LCDM run (levels
+   6-10) the expansion limit sets the steps to z ~ 5 and the Courant condition on levels 9-10 later: 63 coarse steps
+   (4m13s on 2 cores against 40 fixed steps), and P(k) as with the fixed steps (within 2% to k = 2 h/Mpc: the spatial
+   resolution, not the steps, limits it there; against EuclidEmulator2 0.73 at k = 1 h/Mpc at z = 0 with either).
+   Every particle is drifted at every fine sub-step, only the
    active ones are kicked. At a sub-step where only the bins of levels `>= L` are active, Poisson is solved only on
    the leaves at levels `>= L` (a *partial solve*); the coarser leaves keep the potential of their last solve and
    act as Dirichlet values, as in RAMSES.
@@ -229,7 +238,6 @@ first version). At z = 0 a coarse step costs: refinement 0.8 s, solver setup 1.1
 - Every sub-step drifts all particles (Gadget-style) and passes once over all particles to find which to deposit.
   The full solve, the solver setup (truncated grids, faces, transfers) and the refinement are O(leaves) per coarse
   step and now dominate.
-- The coarse step is fixed (`nsteps` in log a); there is no adaptive global step.
 - With the base level equal to the particle grid, intermediate scales lose a few % of growth (see Tests).
 - No OpenMP. Flat LCDM, the symmetron and the dilaton (no massive neutrinos; the solver also has DGP).
 - **Memory**: about 2.7 kB per particle for LCDM (64^3: 0.7 GB) and 4.8 kB with the symmetron, mostly the

@@ -22,6 +22,10 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 - `SlabGhosts.h`: `exchange_peano_hilbert_ghosts`, and `exchange_domain_ghosts` for a PeanoHilbert domain (coarse
   cells at least the cutoff wide, the ranks owning each). Test against the replicated direct sum in `test_short_range`.
 
+### AMRCode: RAMSES coarse steps
+- `timestep_method = ramses` (`courant_factor`, `max_da_over_a`): adaptive coarse steps as RAMSES' newdt_fine (Courant
+  and free-fall time per level, da/a per step); `fixed` (default) unchanged.
+
 ### AMRCode: covariantised dark scattering
 - `gravity_model = CovariantDarkScattering` (`ds_w`, `cds_alpha`), as SimulationCode's: wCDM background and the CDM drag
   alpha a^3 / (Omega_c0 E) (one fluid: f_c times it; `particle_baryons`: the CDM only), the dark energy at rest.

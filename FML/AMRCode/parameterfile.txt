@@ -30,7 +30,10 @@ cfl        = 0.5       # Also |dx| < cfl * cellsize per step (0: off)
 mg_epsilon = 1e-6      # Multigrid tolerance (residual relative to rms(delta))
 
 # Time stepping and output
-nsteps           = 20  # Coarse steps, uniform in log(a)
+nsteps           = 20  # Coarse steps, uniform in log(a) (timestep_method = fixed)
+# timestep_method  = fixed # fixed (nsteps) or ramses (adaptive: Courant + free fall per level, da/a per step)
+# courant_factor   = 0.5   # ramses: Courant factor (particle displacement / cell size and free-fall time)
+# max_da_over_a    = 0.1   # ramses: largest change of a per coarse step
 output_redshifts = 3, 1, 0
 output_folder    = .
 label            = test

@@ -589,6 +589,13 @@ int main(int argc, char ** argv) {
     const bool fix_amplitude = pf.get("fix_amplitude", false);
     const double zini = pf.get("zini", 49.0);
     const int nsteps = pf.get("nsteps", 50);
+    // The coarse steps: fixed (nsteps uniform in log a, plus the outputs) or ramses (adaptive, as RAMSES: the Courant
+    // condition and the free-fall time on every level with courant_factor, and da/a <= max_da_over_a per coarse step;
+    // the outputs are hit exactly)
+    const std::string timestep_method = pf.get("timestep_method", std::string("fixed"));
+    assert_mpi(timestep_method == "fixed" or timestep_method == "ramses", "timestep_method must be fixed or ramses");
+    const double courant_factor = timestep_method == "ramses" ? pf.get("courant_factor", 0.5) : 0.5;
+    const double max_da_over_a = timestep_method == "ramses" ? pf.get("max_da_over_a", 0.1) : 0.1;
     auto zout = pf.get_list("output_redshifts");
     const std::string outdir = pf.get("output_folder", std::string("."));
     const std::string label = pf.get("label", std::string("amrnbody"));
@@ -716,13 +723,36 @@ int main(int argc, char ** argv) {
     write_pofk(std::to_string(zini).substr(0, 6), aini);
 
     size_t iout = 0;
-    for (size_t istep = 1; istep < times.size(); istep++) {
+    const bool ramses = timestep_method == "ramses";
+    for (size_t istep = 1; ramses or istep < times.size(); istep++) {
+        // The next coarse step: the list (fixed), or RAMSES' conditions up to the next output (ramses)
+        double anew;
+        std::string limit;
+        if (ramses) {
+            if (iout >= zout.size())
+                break;
+            const double aout = 1.0 / (1.0 + zout[iout]);
+            anew = sim.a * std::exp(sim.ramses_timestep(courant_factor, max_da_over_a, &limit));
+            if (anew >= aout * (1.0 - 1e-8)) {
+                anew = aout;
+                limit += ", then the output";
+            }
+        } else {
+            anew = times[istep];
+        }
+        const double aold = sim.a;
         const auto t0 = std::chrono::steady_clock::now();
-        sim.step(times[istep]);
+        sim.step(anew);
         const double dt = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        if (FML::ThisTask == 0)
-            std::cout << "\nStep " << istep << " / " << times.size() - 1 << ": a = " << sim.a << " (z = " << 1.0 / sim.a - 1.0
-                      << "), " << dt << " s\n";
+        if (FML::ThisTask == 0) {
+            if (ramses)
+                std::cout << "\nStep " << istep << ": a = " << sim.a << " (z = " << 1.0 / sim.a - 1.0 << "), dlog(a) = "
+                          << std::log(anew / aold) << " [" << limit << "], " << dt
+                          << " s\n";
+            else
+                std::cout << "\nStep " << istep << " / " << times.size() - 1 << ": a = " << sim.a << " (z = " << 1.0 / sim.a - 1.0
+                          << "), " << dt << " s\n";
+        }
         sim.print_status(std::cout);
 
         while (iout < zout.size() and std::abs(sim.a * (1.0 + zout[iout]) - 1.0) < 1e-6) {

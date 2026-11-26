@@ -1003,6 +1003,14 @@ namespace FML {
                 /// Take one coarse step from the current a to anew
                 void step(double anew);
 
+                /// The coarse step (in tau = log a) as RAMSES chooses it (newdt_fine): on every level l with particles
+                /// the step is limited by the Courant condition, a particle moves at most courant * cellsize, and by the
+                /// free-fall time of the densest cell, courant * sqrt(3 pi / (32 G rho_max)); with subcycling level l
+                /// takes 2^(l - levelmin) steps per coarse step (without: all particles the finest step), and the
+                /// expansion factor changes by at most max_da_over_a per coarse step. limit (if given) says which
+                /// condition set it. Collective
+                double ramses_timestep(double courant, double max_da_over_a, std::string * limit = nullptr);
+
                 /// Leaves per level and particles per bin (global, collective)
                 std::vector<long long> leaves_per_level() const;
                 std::vector<long long> particles_per_level();
@@ -1673,6 +1681,54 @@ namespace FML {
                 last.scalar_mean = lmean;
                 last.scalar_background = D.get_beta_background(a_now);
                 return true;
+            }
+
+            inline double AMRNBodySimulation::ramses_timestep(double courant, double max_da_over_a, std::string * limit) {
+                const int lmin = grid.get_levelmin(), nlev = p.levelmax - lmin + 1;
+                // The largest speed (dx/dtau) of the particles in the leaves of each level and the largest density
+                // (1 + delta, the source of the Poisson equation) of the leaves of each level
+                std::vector<double> vmax(nlev, 0.0), rhomax(nlev, 0.0);
+                const double E = cosmo.E(a);
+                for (size_t ip = 0; ip < part.get_npart(); ip++) {
+                    auto & pt = part[ip];
+                    const int l = leaf_level(pt) - lmin;
+                    const double v = std::sqrt(pt.Vel[0] * pt.Vel[0] + pt.Vel[1] * pt.Vel[1] + pt.Vel[2] * pt.Vel[2]);
+                    vmax[l] = std::max(vmax[l], v / (a * a * E));
+                }
+                const auto mass = assign_mass_to_leaves(grid, part, mpart, p.cic, nullptr, weights(a));
+                for (IndexInt i = 0; i < grid.get_n_local(); i++) {
+                    const int l = grid.get_cell(i).level - lmin;
+                    rhomax[l] = std::max(rhomax[l], mass[i] / std::ldexp(1.0, -NDIM * grid.get_cell(i).level));
+                }
+                FML::MaxArrayOverTasks(vmax.data(), vmax.size());
+                FML::MaxArrayOverTasks(rhomax.data(), rhomax.size());
+
+                // Free fall: t_ff = sqrt(3 pi / (32 G rho)) with 4 pi G rho = (3/2) H0^2 OmegaM P(a) (1 + delta) / a^3,
+                // in tau: H t_ff = (pi / 2) E sqrt(a^3 / (OmegaM P (1 + delta)))
+                const double P = cosmo.poisson_factor(a);
+                double dtau = std::log(1.0 + max_da_over_a);
+                std::string why = "da/a <= " + std::to_string(max_da_over_a);
+                for (int l = 0; l < nlev; l++) {
+                    if (rhomax[l] <= 0.0 and vmax[l] <= 0.0)
+                        continue;
+                    // Coarse steps per step of this level
+                    const double nsub = p.subcycling ? std::ldexp(1.0, l) : std::ldexp(1.0, nbins - 1);
+                    const double h = std::ldexp(1.0, -(l + lmin));
+                    if (vmax[l] > 0.0 and courant * h / vmax[l] * nsub < dtau) {
+                        dtau = courant * h / vmax[l] * nsub;
+                        why = "Courant at level " + std::to_string(l + lmin);
+                    }
+                    if (rhomax[l] > 0.0) {
+                        const double tff = 0.5 * M_PI * E * std::sqrt(a * a * a / (p.OmegaM * P * rhomax[l]));
+                        if (courant * tff * nsub < dtau) {
+                            dtau = courant * tff * nsub;
+                            why = "free fall at level " + std::to_string(l + lmin);
+                        }
+                    }
+                }
+                if (limit)
+                    *limit = why;
+                return dtau;
             }
 
             // The bin a particle wants: the level of its leaf, or finer if needed for |v dt_drift| < cfl * cellsize
