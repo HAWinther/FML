@@ -30,6 +30,8 @@
 #include <FML/Visualization/Visualization.h>
 
 #include <algorithm>
+#include <cmath>
+#include <fstream>
 #include <functional>
 #include <iomanip>
 #include <iostream>
@@ -64,7 +66,8 @@ namespace FML::NBODY::TREEPM {
                            double box,
                            double a,
                            const std::function<double(const P &)> & weight,
-                           const std::function<double(double)> & plin) {
+                           const std::function<double(double)> & plin,
+                           const std::string & assignment = "CIC") {
         // Copy the positions to particles on the slab domain (the domain the FFTW grids use)
         std::vector<SP> tmp;
         tmp.reserve(part.get_npart());
@@ -99,7 +102,7 @@ namespace FML::NBODY::TREEPM {
                                                              slab.get_npart(),
                                                              slab.get_npart_total(),
                                                              pofk,
-                                                             "CIC",
+                                                             assignment,
                                                              true);
         pofk.scale(box);
         if (FML::ThisTask == 0) {
@@ -123,10 +126,10 @@ namespace FML::NBODY::TREEPM {
                                double box,
                                double a,
                                const LinearPower & pk,
-                               double growth) {
-        power_spectrum_of<::SimpleParticle<3>, P>(filename, part, Ngrid, box, a, nullptr, [&](double k) {
-            return pk(k) * growth * growth;
-        });
+                               double growth,
+                               const std::string & assignment = "CIC") {
+        power_spectrum_of<::SimpleParticle<3>, P>(
+            filename, part, Ngrid, box, a, nullptr, [&](double k) { return pk(k) * growth * growth; }, assignment);
     }
 
     /// CDM and baryon particles: P(k) of the CDM (pofk_cdm_), the baryons (pofk_baryon_) and the CDM+baryons (pofk_,
@@ -140,18 +143,19 @@ namespace FML::NBODY::TREEPM {
                                           double box,
                                           double a,
                                           double fc,
-                                          const FML::INITIALCONDITIONS::TransferProvider & tr) {
+                                          const FML::INITIALCONDITIONS::TransferProvider & tr,
+                                          const std::string & assignment = "CIC") {
         using S = FML::INITIALCONDITIONS::Species;
         auto plin = [&](S s) { return [&tr, s, a](double k) { return tr.power(s, k, a); }; };
         power_spectrum_of<::SimpleParticle<3>, P>(outdir + "/pofk_cdm_" + label + "_z" + zs + ".txt", part, Ngrid, box, a,
                                              [](const P & p) { return p.species == 0 ? 1.0 : 0.0; },
-                                             plin(S::CDM));
+                                             plin(S::CDM), assignment);
         power_spectrum_of<::SimpleParticle<3>, P>(outdir + "/pofk_baryon_" + label + "_z" + zs + ".txt", part, Ngrid, box, a,
                                              [](const P & p) { return p.species == 1 ? 1.0 : 0.0; },
-                                             plin(S::Baryon));
+                                             plin(S::Baryon), assignment);
         power_spectrum_of<MassParticle, P>(outdir + "/pofk_" + label + "_z" + zs + ".txt", part, Ngrid, box, a,
                                         [fc](const P & p) { return p.species == 0 ? fc : 1.0 - fc; },
-                                        plin(S::CDMBaryon));
+                                        plin(S::CDMBaryon), assignment);
     }
 
     /// species: -1 all the particles, else only those of that species (OmegaM: the density of what is written)
@@ -360,9 +364,12 @@ namespace FML::NBODY::TREEPM {
         bool fix_amplitude{false};
         double zini{49.0};
         int nsteps{50};
+        std::vector<int> nsteps_between_outputs; // optional: the steps from zini to the first output, then between outputs
+        std::string ic_gadget_file;               // optional: start from the particles of a GADGET file (zini from its header)
         std::vector<double> zout;
         std::string outdir{"."}, label;
         int pofk_ngrid{128};
+        std::string pofk_assignment{"CIC"};
         bool gadget{false}, images{false};
         int images_npix{1024};
         double images_thickness{0.1};
@@ -451,9 +458,31 @@ namespace FML::NBODY::TREEPM {
         r.zini = pf.get("zini", 49.0);
         r.nsteps = pf.get("nsteps", 50);
         r.zout = pf.get_list("output_redshifts");
+        for (double n : pf.get_list("nsteps_between_outputs"))
+            r.nsteps_between_outputs.push_back(int(n));
+        assert_mpi(r.nsteps_between_outputs.empty() or r.nsteps_between_outputs.size() == r.zout.size(),
+                   "nsteps_between_outputs needs one number per output redshift");
+        // Initial conditions from a GADGET file (one file, or file.0, file.1, ...): zini is the redshift of its header
+        r.ic_gadget_file = pf.get("ic_gadget_file", std::string(""));
+        if (not r.ic_gadget_file.empty()) {
+            FML::FILEUTILS::GADGET::GadgetReader g;
+            const std::string f = std::ifstream(r.ic_gadget_file).good() ? r.ic_gadget_file : r.ic_gadget_file + ".0";
+            std::ifstream fp(f, std::ios::binary);
+            assert_mpi(fp.good(), ("ic_gadget_file: cannot open " + r.ic_gadget_file).c_str());
+            g.read_header(fp);
+            const auto header = g.get_header();
+            r.zini = 1.0 / header.time - 1.0;
+            assert_mpi(std::abs(header.BoxSize / r.box - 1.0) < 1e-5, "ic_gadget_file: the box size differs from box");
+            const long long n = (long long)header.npartTotal[1] + ((long long)header.npartTotalHighWord[1] << 32);
+            assert_mpi(n == (long long)r.Npart_1D * r.Npart_1D * r.Npart_1D,
+                       "ic_gadget_file: the number of particles (type 1) is not Npart_1D^3");
+            assert_mpi(not model.baryons, "ic_gadget_file: only one set of particles");
+        }
         r.outdir = pf.get("output_folder", std::string("."));
         r.label = pf.get("label", default_label);
         r.pofk_ngrid = pf.get("pofk_ngrid", 2 * r.Npart_1D);
+        // The density assignment of P(k) (NGP, CIC, TSC, PCS, PQS; with interlacing)
+        r.pofk_assignment = pf.get("pofk_assignment", std::string("CIC"));
         r.gadget = pf.get("output_gadget", false);
         // A PNG of the particles in a slab through the middle of the box at every output
         r.images = pf.get("output_images", false);
@@ -524,6 +553,10 @@ namespace FML::NBODY::TREEPM {
         /// the CDM+baryon P(k, zini) of the transfer functions; CDM and baryons from their transfer functions
         template <class P>
         void initial_conditions(FML::PARTICLE::MPIParticles<P> & part) const {
+            if (not s.ic_gadget_file.empty()) {
+                gadget_initial_conditions(part);
+                return;
+            }
             std::unique_ptr<FML::RANDOM::RandomGenerator> rng;
             if (s.random_generator == "GSL")
                 rng = std::make_unique<FML::RANDOM::GSLRandomGenerator>();
@@ -569,12 +602,49 @@ namespace FML::NBODY::TREEPM {
                           << s.transfer_file << ")\n";
         }
 
+        /// The particles of a GADGET file (ic_gadget_file: one file, or file.0, file.1, ...; type 1) at aini. Every task
+        /// reads every file and keeps the particles of its slab. GADGET's velocities sqrt(a) dx/dt (km/s) -> v =
+        /// a^2 dx/dt / (H0 B)
+        template <class P>
+        void gadget_initial_conditions(FML::PARTICLE::MPIParticles<P> & part) const {
+            FML::FILEUTILS::GADGET::GadgetReader g;
+            std::vector<P> tmp;
+            if (std::ifstream(s.ic_gadget_file).good())
+                g.read_gadget_single(s.ic_gadget_file, tmp, true, false);
+            else
+                g.read_gadget(s.ic_gadget_file, tmp, 1.5, true, false);
+            // The reader: Pos in [0, 1), Vel = sqrt(a) * (sqrt(a) dx/dt) = a dx/dt in km/s
+            const double vnorm = aini / (100.0 * s.box);
+            for (auto & p : tmp) {
+                for (int d = 0; d < 3; d++)
+                    p.Vel[d] *= vnorm;
+                p.species = 0;
+            }
+            const long long N = (long long)s.Npart_1D * s.Npart_1D * s.Npart_1D;
+            part.create(tmp, size_t(1.5 * double(N) / FML::NTasks + 1000), FML::PARTICLE::Input::Distributed);
+            if (FML::ThisTask == 0)
+                std::cout << "\nInitial conditions: " << part.get_npart_total() << " particles from " << s.ic_gadget_file
+                          << " at z = " << s.zini << "\n";
+        }
+
         /// The coarse steps: uniform in log(a) from aini to the last output (nsteps), plus the output times
         std::vector<double> step_times() const {
             const double aend = 1.0 / (1.0 + s.zout.back());
             std::vector<double> times;
-            for (int i = 0; i <= s.nsteps; i++)
-                times.push_back(aini * std::pow(aend / aini, double(i) / s.nsteps));
+            if (s.nsteps_between_outputs.empty())
+                for (int i = 0; i <= s.nsteps; i++)
+                    times.push_back(aini * std::pow(aend / aini, double(i) / s.nsteps));
+            else {
+                // n_j steps uniform in log(a) from the previous output (or aini) to output j
+                double a0 = aini;
+                times.push_back(aini);
+                for (size_t j = 0; j < s.zout.size(); j++) {
+                    const double a1 = 1.0 / (1.0 + s.zout[j]);
+                    for (int i = 1; i <= s.nsteps_between_outputs[j]; i++)
+                        times.push_back(a0 * std::pow(a1 / a0, double(i) / s.nsteps_between_outputs[j]));
+                    a0 = a1;
+                }
+            }
             for (auto z : s.zout)
                 times.push_back(1.0 / (1.0 + z));
             std::sort(times.begin(), times.end());
@@ -589,14 +659,16 @@ namespace FML::NBODY::TREEPM {
             const auto & outdir = s.outdir;
             const auto & label = s.label;
             if (model.baryons)
-                output_power_spectra_two_species(outdir, label, zs, part, s.pofk_ngrid, s.box, a, cosmo.cdm_fraction(a), *transfers);
+                output_power_spectra_two_species(outdir, label, zs, part, s.pofk_ngrid, s.box, a, cosmo.cdm_fraction(a), *transfers,
+                                                 s.pofk_assignment);
             else if (transfers)
                 power_spectrum_of<::SimpleParticle<3>, P>(
-                    outdir + "/pofk_" + label + "_z" + zs + ".txt", part, s.pofk_ngrid, s.box, a, nullptr, [&](double k) {
-                        return transfers->power(FML::INITIALCONDITIONS::Species::CDMBaryon, k, a);
-                    });
+                    outdir + "/pofk_" + label + "_z" + zs + ".txt", part, s.pofk_ngrid, s.box, a, nullptr,
+                    [&](double k) { return transfers->power(FML::INITIALCONDITIONS::Species::CDMBaryon, k, a); },
+                    s.pofk_assignment);
             else
-                output_power_spectrum(outdir + "/pofk_" + label + "_z" + zs + ".txt", part, s.pofk_ngrid, s.box, a, pk, growth_of_a(a));
+                output_power_spectrum(outdir + "/pofk_" + label + "_z" + zs + ".txt", part, s.pofk_ngrid, s.box, a, pk, growth_of_a(a),
+                                      s.pofk_assignment);
         }
 
         /// The outputs at a (P(k), GADGET files, an image) for the output redshift string zs

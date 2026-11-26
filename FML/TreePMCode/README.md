@@ -17,7 +17,8 @@ divide the PM grid `Nmesh`.
 1. **Initial conditions** as AMRCode: 1LPT/2LPT from a linear P(k) at z = 0 (CAMB-format file, or Eisenstein & Hu
    normalized to `sigma8`) back-scaled with the model's growth, or from transfer functions (`transfer_file`,
    `transfer_source = tables | camb | class`), N-GenIC seeding (`random_generator = GSL`). CDM and baryons as two sets
-   of particles (`particle_baryons = true`) from their transfer functions (`baryon_lattice = same | offset`).
+   of particles (`particle_baryons = true`) from their transfer functions (`baryon_lattice = same | offset`). Or the
+   particles of a GADGET file (`ic_gadget_file`, one set of type-1 particles; zini from its header).
 2. **Domain.** The particles are on a Peano-Hilbert domain (`Global/Domain.h`), rebuilt with equal particles per task
    every step (`hilbert_bits`).
 3. **Gravity** split with a Gaussian of scale `r_s = asmth` PM cells (GADGET-2's split and cubic-spline softening,
@@ -27,12 +28,15 @@ divide the PM grid `Nmesh`.
      `deconvolve`), and the force interpolated back to the particles (`interpolate_grids_to_particles_any_domain`,
      the inverse: each task gathers the part of the force grids its particles need);
    - short range: the ghosts within the cutoff from the other tasks (`exchange_domain_ghosts` on the Peano-Hilbert
-     domain) and the monopole octree (`backend = tree`, `opening_angle`, `leaf_size`) or the cell list
+     domain) and the monopole octree (`backend = tree`, `leaf_size`; `opening_criterion = geometric` with
+     `opening_angle`, or `relative` as GADGET-2 with `relative_tolerance` = ErrTolForceAcc) or the cell list
      (`backend = cell`) over local + ghost particles. Softening `softening` (Plummer-equivalent, in units of the mean
      particle spacing, comoving; the spline support is 2.8 times it), cutoff where the pair force is
      `cutoff_tolerance` of Newton's.
 4. **Time stepping** (`timestep_method`):
-   - `fixed` (default): kick-drift-kick with a common step, `nsteps` uniform in log(a) (plus the outputs).
+   - `fixed` (default): kick-drift-kick with a common step, `nsteps` uniform in log(a) (plus the outputs), or
+     `nsteps_between_outputs` (one number per output: uniform in log(a) from zini to the first output, then between
+     the outputs).
    - `gadget`: as GADGET-2. The PM (long-range) force on a global step: the rms displacement in a step is at most
      `max_rms_displacement` (MaxRMSDisplacementFac, 0.25) times min(mean particle spacing, r_s), and the step at most
      `max_dlna` (MaxSizeTimestep, in log a, 0.025); the outputs are hit exactly. The short-range force on individual
@@ -52,7 +56,8 @@ Units: positions in [0,1), tau = log(a), v = a^2 dx/dt / (H0 B): `dx/dtau = v / 
 `dv/dtau = -Gamma v - (3/2) OmegaM P(a) / (a E) D phi`, `D^2 phi = delta`.
 
 Outputs: `pofk_<label>_z<z>.txt` (k, P(k) without shot-noise subtraction, linear P(k); with two species also
-`pofk_cdm_` and `pofk_baryon_`), optionally GADGET files and a PNG image at `output_redshifts`.
+`pofk_cdm_` and `pofk_baryon_`; `pofk_ngrid`, `pofk_assignment`, interlaced), optionally GADGET files and a PNG image
+at `output_redshifts`.
 
 ## Files
 
@@ -109,13 +114,51 @@ EE2: the small box (no larger modes, few modes). Above k ~ 1 the mass resolution
 far shorter for the TreePM force resolution, while AMRCode does not change with RAMSES' steps (its resolution, not its
 steps, limits it).
 
+## Against the SimulationCode TreePM reference
+
+`ShortRangeGravity/tests/simcode_reference`: 32^3 particles in 64 Mpc/h from `ic_z19.000.gadget` (z = 19), PM 64^3
+CIC, r_s = 1.25 Mpc/h, softening support 0.14 Mpc/h (`softening = 0.025`), cutoff tolerance 1e-6, 768 + 256 log steps
+(`nsteps_between_outputs = 768, 256`), P(k) on 64^3 PCS with interlacing (`pofk_assignment = PCS`), OmegaR of
+T_CMB = 2.7255 K and N_eff = 3.046.
+
+**The frozen reference does not deconvolve the CIC window** (SimulationCode's default `force_deconvolve_window = false`,
+not set in its Lua files): the long-range force on the 64^3 grid is suppressed by W^2(k) near r_s, so the result
+depends on the split. TreePMCode (which deconvolves, as GADGET-2) is 7% above `treepm_1024` at k = 1 h/Mpc at z = 1
+and fails `check_against_reference.py`. The evidence (256 steps, P / reference at z = 1, k = 0.5 / 1 / 1.5 h/Mpc):
+
+| | k = 0.5 | 1.0 | 1.5 |
+|---|---|---|---|
+| TreePMCode, `deconvolve = false` / SimulationCode `treepm_256` (the same settings) | 1.0003 | 1.0003 | 1.0015 |
+| TreePMCode, PM 64^3, r_s = 1.25 Mpc/h / `treepm_256` | 1.044 | 1.077 | 1.084 |
+| TreePMCode, PM 256^3, r_s = 0.31 Mpc/h / `treepm_256` | 1.043 | 1.072 | 1.080 |
+| SimulationCode, PM 256^3, r_s = 0.31 Mpc/h / `treepm_256` | 1.044 | 1.076 | 1.086 |
+
+With the window deconvolved the result does not depend on the split (64^3 or 256^3), and the two codes agree.
+SimulationCode with `force_deconvolve_window = true` (otherwise the parameters of `treepm_1024`, 1024 steps, 8.5 min on
+2 tasks) gives the corrected reference; against it, max |P / P_ref - 1|:
+
+| | z = 1, k <= 1 | z = 1, to k_Ny | z = 0, k <= 1 | z = 0, to k_Ny | time (2 tasks) |
+|---|---|---|---|---|---|
+| TreePMCode, cell list, 1024 steps | 0.01% | 0.13% | 0.11% | 0.7% | 8.7 min |
+| TreePMCode, tree, `opening_criterion = relative`, `relative_tolerance = 0.005` | 0.03% | 0.24% | 0.16% | 2.0% | 5.3 min |
+| the same, `relative_tolerance = 0.002` | 0.08% | 0.30% | 0.23% | 0.9% | 5.8 min |
+| (the same, 0.005, before the quadrupole-trace term in the tree) | 0.16% | 0.60% | 0.69% | 3.8% | 4.9 min |
+| TreePMCode, cell list, 256 steps | 0.8% | 5.2% | 2.0% | 9.7% | 2.0 min |
+| SimulationCode, 256 steps (PM 256^3) | 0.9% | 4.8% | 1.9% | 9.2% | 3.3 min |
+| The frozen `treepm_1024` (window not deconvolved) | 7.2% | 7.9% | 4.9% | 6.6% | |
+
+(At 256 steps both codes have the same time-step error.) The tree with the relative criterion is the faster backend
+here (the geometric criterion accepts almost no nodes at this resolution: it is a direct sum within the cutoff, as the
+cell list); the monopole alone biased the force low on the scale of the nodes (P(k) 4% low at k_Ny at z = 0), see
+`ShortRangeGravity/README.md`.
+
 ## Limitations / next steps
 
 - **Individual time steps:** the ghosts and the tree are rebuilt at every sub-step (GADGET-2 drifts the tree nodes
   instead); a larger box at higher resolution against EE2 (and GADGET-4) is the next validation.
-- **Tree performance:** the monopole octree's acceptance is conservative (inside the cutoff and the split scale); at
-  these resolutions it accepts almost no nodes and is a direct sum within the cutoff. A relative opening criterion,
-  quadrupoles and a faster walk are needed.
+- **Tree performance:** the relative opening criterion (GADGET-2) is 1.6-1.8 times faster than the cell list on the
+  reference runs; the walk itself (recursive, per target) and the ghosts / tree rebuilt at every (sub-)step are next.
+  Full quadrupoles (only the trace is included) would allow larger nodes.
 - **CDM and baryons on the same lattice:** with a force that resolves the particle spacing each baryon is pulled back
   to its CDM partner, which damps the CDM-baryon difference (the split of coupled quintessence is 0.916 instead of
   0.785 with softening 1/4 spacing on the plane wave). Use a softening of about the spacing for two species, or the

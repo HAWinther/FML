@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstdio>
 #include <FML/NBody/NBody.h>
 #include <FML/ShortRangeGravity/LongRangePM.h>
@@ -492,6 +493,91 @@ void benchmark() {
     }
 }
 
+
+/// GADGET-2's relative opening criterion on a halo in a uniform background (split scale 1.25 cells of a 64^3 grid):
+/// percentiles of the relative force error per particle against the exact sum, with the exact |acceleration| as the
+/// reference; the error falls with the tolerance, nodes are accepted, and without a reference it is the geometric tree
+void relative_opening() {
+    std::mt19937 rng(7);
+    std::uniform_real_distribution<double> u(0, 1);
+    std::normal_distribution<double> g(0, 1);
+    std::vector<Particle> p(16000);
+    for (std::size_t i = 0; i < p.size(); ++i) {
+        p[i].id = i;
+        p[i].mass = 1;
+        if (i % 2 == 0)
+            for (auto & x : p[i].position)
+                x = u(rng);
+        else {
+            // A cuspy halo: radius r_h (u^2), isotropic
+            Vector n{g(rng), g(rng), g(rng)};
+            const double r = .03 * u(rng) * u(rng) / norm(n);
+            for (int d = 0; d < 3; ++d)
+                p[i].position[d] = std::fmod(.5 + r * n[d] + 1, 1.0);
+        }
+    }
+    Options o;
+    o.split_scale = 1.25 / 64;
+    o.softening_support = .1 / 64;
+    o.cutoff_tolerance = 1e-6;
+    Kernel k(o);
+    const auto exact = CellList(p, k).compute(p);
+    std::vector<double> reference(p.size());
+    for (std::size_t i = 0; i < p.size(); ++i)
+        reference[i] = norm(exact.acceleration[i]);
+    auto percentiles = [&](const std::vector<Vector> & a) {
+        std::vector<double> e(p.size());
+        for (std::size_t i = 0; i < p.size(); ++i)
+            e[i] = norm({a[i][0] - exact.acceleration[i][0], a[i][1] - exact.acceleration[i][1],
+                         a[i][2] - exact.acceleration[i][2]}) / std::max(reference[i], 1e-300);
+        std::sort(e.begin(), e.end());
+        // The mean error along the exact force (a bias weakens or strengthens the force systematically)
+        double bias = 0;
+        for (std::size_t i = 0; i < p.size(); ++i)
+            for (int d = 0; d < 3; ++d)
+                bias += (a[i][d] - exact.acceleration[i][d]) * exact.acceleration[i][d] /
+                        std::max(reference[i] * reference[i], 1e-300) / double(p.size());
+        return std::array<double, 4>{e[e.size() / 2], e[size_t(.9 * e.size())], e[size_t(.99 * e.size())], bias};
+    };
+    auto seconds = [](auto t0) { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
+    bool falls = true, accepts = true, accurate = true;
+    double last99 = 1e100;
+    for (double tol : {.02, .005, .001, 0.0}) {
+        TreeOptions to{.5, 8, 40};
+        to.criterion = TreeOptions::Opening::relative;
+        to.relative_tolerance = tol;
+        const auto t0 = std::chrono::steady_clock::now();
+        const auto r = Octree(p, k, to).compute(p, &reference);
+        const double dt = seconds(t0);
+        const auto e = percentiles(r.acceleration);
+        if (FML::ThisTask == 0)
+            std::printf("Relative opening %.3f: |da|/|a| median %.2e  90%% %.2e  99%% %.2e, bias %+.1e, nodes %llu, pairs %llu, %.3f s\n",
+                        tol, e[0], e[1], e[2], e[3], (unsigned long long)r.accepted_nodes,
+                        (unsigned long long)r.statistics.accepted_pairs, dt);
+        falls &= e[2] <= last99;
+        last99 = e[2];
+        accepts &= tol == 0 ? r.accepted_nodes == 0 : r.accepted_nodes > 0;
+        if (tol == .005)
+            accurate &= e[2] < .01 && std::abs(e[3]) < 1.5e-4; // without the quadrupole trace the bias is -2e-4
+        if (tol == 0)
+            accurate &= e[2] < 1e-12;
+    }
+    {
+        const auto t0 = std::chrono::steady_clock::now();
+        const auto r = Octree(p, k, {.5, 8, 40}).compute(p);
+        const auto e = percentiles(r.acceleration);
+        if (FML::ThisTask == 0)
+            std::printf("Geometric opening 0.5: |da|/|a| median %.2e  90%% %.2e  99%% %.2e, bias %+.1e, nodes %llu, %.3f s; cell list exact\n",
+                        e[0], e[1], e[2], e[3], (unsigned long long)r.accepted_nodes, seconds(t0));
+        TreeOptions to{.5, 8, 40};
+        to.criterion = TreeOptions::Opening::relative;
+        accurate &= Octree(p, k, to).compute(p).acceleration == r.acceleration;
+    }
+    check(falls && accepts && accurate,
+          "relative (GADGET-2) opening: error falls with the tolerance, 99% below 1% and |bias| < 1.5e-4 at 0.005, geometric "
+          "without a reference");
+}
+
 int main(int argc, char ** argv) {
     if (argc > 1 && std::string(argv[1]) == "--benchmark") {
         benchmark();
@@ -500,6 +586,7 @@ int main(int argc, char ** argv) {
 
     kernel_tests();
     backends();
+    relative_opening();
     periodic_force();
     ghosts();
     peano_hilbert_ghosts();

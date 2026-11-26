@@ -6,6 +6,8 @@ The files are P(k) of the cb particles in the format of pofk/ here (columns k [h
 measured as SimulationCode does: 64^3 PCS grid, interlacing, no shot-noise subtraction. Exit status 1 if
 |P / P_ref - 1| > tol for any k <= kmax at either redshift. The default tolerance (2%) allows for different time
 stepping and tree opening: the reference itself is converged in time to about 0.6% for k <= 1 h/Mpc (summary.json).
+The reference does not deconvolve the CIC window of the force (README.md): run the new code the same way (TreePMCode:
+deconvolve = false); with the window deconvolved P(k) is about 7% higher at k = 1 h/Mpc.
 """
 import argparse
 import sys

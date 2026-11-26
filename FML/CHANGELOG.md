@@ -5,6 +5,21 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### ShortRangeGravity: relative opening criterion and the quadrupole trace in the octree
+- `Octree.h`: `TreeOptions::criterion = Opening::relative` (GADGET-2's relative criterion: a node's force times
+  (l/r)^2 at most `relative_tolerance` times the target's previous |acceleration|, passed to `compute(targets,
+  &reference)`; nodes crossing the cutoff need their whole force below it; geometric without a reference). Accepted
+  nodes add the trace of their quadrupole (the short-range potential is not harmonic: without it the monopole biases
+  the force low by order (l/r_s)^2). Test `relative_opening` in `test_short_range` (error percentiles and bias on a halo).
+
+### TreePMCode: the SimulationCode TreePM reference
+- `ic_gadget_file` (start from a GADGET file), `nsteps_between_outputs`, `pofk_assignment`, `opening_criterion` /
+  `relative_tolerance`; `parameterfile_simcode_reference.txt`. Against `ShortRangeGravity/tests/simcode_reference`:
+  the frozen reference does not deconvolve the CIC window (SimulationCode's default `force_deconvolve_window = false`),
+  which TreePMCode reproduces to 0.3% with `deconvolve = false`; with the window deconvolved both codes are independent
+  of the split and agree (TreePMCode 1024 steps vs SimulationCode with `force_deconvolve_window = true`: 0.11% for
+  k <= 1 h/Mpc at z = 0). See TreePMCode/README.md.
+
 ### TreePMCode: a GADGET-like TreePM N-body code
 - New `TreePMCode/` (`treepm`), separate from AMRCode: particles on a Peano-Hilbert domain (rebuilt every step), the
   Gaussian force split of ShortRangeGravity (PM long range on a slab grid, monopole octree or cell list short range

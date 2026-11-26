@@ -95,6 +95,11 @@ namespace FML {
                 std::string backend{"tree"};    // The short-range sum: tree (monopole octree) or cell (cell list)
                 double opening_angle{0.5};      // The tree's opening angle (0: exact)
                 int leaf_size{8};               // Particles per tree leaf
+                // The tree's opening criterion: geometric (opening_angle) or relative (GADGET-2: a node's force times
+                // (size / distance)^2 at most relative_tolerance times the particle's |Acc| of its last force; the
+                // first force is geometric)
+                std::string opening_criterion{"geometric"};
+                double relative_tolerance{0.005};
                 int hilbert_bits{21};           // Bits per coordinate of the Peano-Hilbert keys of the domain
                 int Npart_1D{64};               // Particles per dimension (per species) for the softening
                 double boxsize{100.0};          // Mpc/h (for output only)
@@ -363,7 +368,17 @@ namespace FML {
                     SR::TreeOptions to;
                     to.opening_angle = p.opening_angle;
                     to.leaf_capacity = size_t(p.leaf_size);
-                    const auto r = SR::Octree(sources.particles, kernel, to).compute(targets);
+                    // The relative criterion needs |Acc| of the last force of every target (zero before the first)
+                    std::vector<double> reference;
+                    if (p.opening_criterion == "relative") {
+                        to.criterion = SR::TreeOptions::Opening::relative;
+                        to.relative_tolerance = p.relative_tolerance;
+                        for (size_t k = 0; k < targets.size(); k++) {
+                            const auto & q = part[active ? index[k] : k];
+                            reference.push_back(std::sqrt(q.Acc[0] * q.Acc[0] + q.Acc[1] * q.Acc[1] + q.Acc[2] * q.Acc[2]));
+                        }
+                    }
+                    const auto r = SR::Octree(sources.particles, kernel, to).compute(targets, reference.empty() ? nullptr : &reference);
                     add(r.acceleration);
                     pairs = (long long)r.statistics.accepted_pairs;
                     nodes = (long long)r.accepted_nodes;
@@ -634,6 +649,7 @@ namespace FML {
             inline void TreePMSimulation::print_status(std::ostream & os) const {
                 if (FML::ThisTask != 0)
                     return;
+                const auto precision = os.precision();
                 if (p.gadget())
                     os << "  short-range sub-steps " << last.nsub << " (finest bin " << last.finest_bin << "), active "
                        << "particle forces " << last.nactive << " (" << std::fixed << std::setprecision(2)
@@ -646,7 +662,7 @@ namespace FML {
                    << "  time [s]: domain " << last.time_domain << "  PM " << last.time_pm << "  ghosts "
                    << last.time_ghosts << "  short-range " << last.time_short << "  kick/drift " << last.time_move
                    << "\n"
-                   << std::defaultfloat;
+                   << std::defaultfloat << std::setprecision(int(precision));
             }
 
         } // namespace TREEPM

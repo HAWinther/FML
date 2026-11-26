@@ -41,6 +41,10 @@ int main(int argc, char ** argv) {
     par.backend = pf.get("backend", std::string("tree"));
     par.opening_angle = pf.get("opening_angle", 0.5);
     par.leaf_size = pf.get("leaf_size", 8);
+    par.opening_criterion = pf.get("opening_criterion", std::string("geometric"));
+    assert_mpi(par.opening_criterion == "geometric" or par.opening_criterion == "relative",
+               "opening_criterion must be geometric or relative");
+    par.relative_tolerance = pf.get("relative_tolerance", 0.005);
     par.hilbert_bits = pf.get("hilbert_bits", 21);
     // Time steps: fixed (nsteps uniform in log a, plus the outputs) or gadget (GADGET-2: the PM step from
     // max_rms_displacement (MaxRMSDisplacementFac) and max_dlna (MaxSizeTimestep, in log a), individual short-range

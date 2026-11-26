@@ -1,0 +1,33 @@
+# TreePMCode on ShortRangeGravity/tests/simcode_reference (run from TreePMCode/): 32^3 in 64 Mpc/h from its z = 19
+# particles, the force, steps and P(k) of the SimulationCode TreePM reference runs (see README.md). Compare with
+#   python3 ../ShortRangeGravity/tests/simcode_reference/check_against_reference.py pofk_ref_z1.000.txt pofk_ref_z0.000.txt
+# (the frozen reference does not deconvolve the CIC window: deconvolve = false reproduces it, the default true is
+# 7% above it at k = 1 h/Mpc)
+OmegaM   = 0.3175
+OmegaB   = 0.049
+OmegaR   = 9.29214e-05   # photons + 3.046 massless neutrinos, T_CMB = 2.7255 K, h = 0.671 (as SimulationCode)
+h        = 0.671
+n_s      = 0.966
+pk_file  = ../SimulationCode/input/example_power_spectrum_cb_z0.000.txt # only for the linear P(k) column
+box      = 64.0
+Npart_1D = 32
+ic_gadget_file = ../ShortRangeGravity/tests/simcode_reference/ic_z19.000.gadget
+
+Nmesh      = 64
+assignment = CIC
+deconvolve = true
+asmth      = 1.25      # r_s = 1.25 Mpc/h
+softening  = 0.025     # spline support 2.8 * 0.025 * 2 Mpc/h = 0.14 Mpc/h
+cutoff_tolerance = 1e-6
+backend    = tree
+opening_criterion  = relative
+relative_tolerance = 0.002
+leaf_size  = 8
+
+timestep_method        = fixed
+output_redshifts       = 1, 0
+nsteps_between_outputs = 768, 256
+pofk_ngrid       = 64
+pofk_assignment  = PCS
+output_folder    = .
+label            = ref

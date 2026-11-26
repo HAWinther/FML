@@ -18,6 +18,8 @@ seed       = 1234
 random_generator = GSL # GSL (ranlxd1, as N-GenIC/2LPTic/L-PICOLA) or MT19937
 fix_amplitude = false
 zini       = 49.0
+# ic_gadget_file = ../ShortRangeGravity/tests/simcode_reference/ic_z19.000.gadget # Start from the particles of a
+#                  GADGET file instead (one set, type 1; zini from its header)
 
 # The force
 Nmesh      = 64        # PM grid (default 2 Npart_1D; the number of tasks must divide it)
@@ -29,10 +31,15 @@ cutoff_tolerance = 1e-4 # Short-range pair force at the cutoff relative to Newto
 backend    = tree      # tree (monopole octree) or cell (cell list)
 opening_angle = 0.5    # Tree opening angle (0: exact)
 leaf_size  = 8
+opening_criterion = geometric # geometric (opening_angle) or relative (GADGET-2: a node's force times (size/distance)^2
+                       # at most relative_tolerance times the particle's last |acceleration|; the first force geometric)
+relative_tolerance = 0.005 # GADGET-2's ErrTolForceAcc
 
 # Steps and outputs
 timestep_method  = fixed # fixed (nsteps uniform in log a) or gadget (GADGET-2: PM step + individual short-range steps)
 nsteps           = 40  # Steps uniform in log(a) (fixed)
+# nsteps_between_outputs = 30, 10 # Instead of nsteps: steps uniform in log(a) from zini to the first output, then
+#                  between the outputs (one number per output redshift)
 # eta              = 0.025 # gadget: ErrTolIntAccuracy, dt_i = sqrt(2 eta eps / |a_i|)
 # max_rms_displacement = 0.25 # gadget: MaxRMSDisplacementFac (PM step)
 # max_dlna         = 0.025 # gadget: MaxSizeTimestep in log a (PM step)
@@ -41,6 +48,7 @@ output_redshifts = 1, 0
 output_folder    = .
 label            = test
 pofk_ngrid       = 64
+pofk_assignment  = CIC # P(k) density assignment (NGP, CIC, TSC, PCS, PQS), with interlacing
 output_gadget    = false
 output_images    = false
 

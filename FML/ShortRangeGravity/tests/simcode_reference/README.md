@@ -30,6 +30,24 @@ velocities in the GADGET convention v_pec/√a km/s, int32 IDs; particle mass 70
 `pofk/` has P(k) of the cb particles at z = 1 and 0 for every case (64³ PCS grid, interlacing, no shot-noise
 subtraction; columns k [h/Mpc], P(k), linear P(k), and a nonlinear prediction).
 
+## The CIC window is not deconvolved
+
+The runs use SimulationCode's default `force_deconvolve_window = false` (not set in the parameter files): the CIC
+window of the density assignment and of the force interpolation is not divided out. On the 64³ force grid, with
+r_s = 1.25 cells, this suppresses the long-range force near r_s, so the result depends on the split, and it is not
+the standard TreePM (GADGET-2 deconvolves). Found with TreePMCode (November 26 2026; see `TreePMCode/README.md`):
+
+- TreePMCode with `deconvolve = false` reproduces `treepm_256` to 0.3% at all k (z = 1): the same dynamics.
+- With the window deconvolved the result does not depend on the split: TreePMCode with PM 64³ (r_s = 1.25 Mpc/h)
+  and 256³ (r_s = 0.31 Mpc/h), and SimulationCode with 256³ (r_s = 0.31 Mpc/h), agree to about 0.5% for k ≤ 1.5 h/Mpc,
+  and are 4% / 7.5% / 8% above `treepm_256` at k = 0.5 / 1 / 1.5 h/Mpc (z = 1).
+- SimulationCode with the parameters of `treepm_1024` and `force_deconvolve_window = true` (not stored here) agrees
+  with TreePMCode (deconvolved, cell list, the same 1024 steps) to 0.01% (z = 1) and 0.11% (z = 0) for k ≤ 1 h/Mpc, and
+  0.7% up to k_Ny. Relative to it, `treepm_1024` is low by up to 7.2% (z = 1) and 4.9% (z = 0) for k ≤ 1 h/Mpc.
+
+So compare a code with this reference with the window not deconvolved (TreePMCode: `deconvolve = false`); a code
+that deconvolves fails `check_against_reference.py` by about 7%, as it should.
+
 ## Accuracy of the reference (summary.json)
 
 | | z = 1, k ≤ 1 h/Mpc | z = 1, up to k_Ny | z = 0, k ≤ 1 h/Mpc | z = 0, up to k_Ny |

@@ -4,9 +4,17 @@
 
 namespace FML::SHORT_RANGE_GRAVITY {
     struct TreeOptions {
-        double opening_angle{0.3}; // 0: exact traversal; geometric criterion, not a guaranteed relative force error.
+        /// geometric: open unless the node is smaller than opening_angle times its distance and times the split scale
+        /// (opening_angle 0: exact traversal; not a guaranteed relative force error). relative (GADGET-2's
+        /// TypeOfOpeningCriterion = 1): accept a node of side l and mass M at distance r if its short-range force
+        /// times (l / r)^2 is at most relative_tolerance times the target's acceleration from the previous step
+        /// (compute(targets, reference)); targets without one (<= 0, or no reference) use the geometric criterion
+        enum class Opening { geometric, relative };
+        double opening_angle{0.3};
         std::size_t leaf_capacity{16};
         int max_depth{40};
+        Opening criterion{Opening::geometric};
+        double relative_tolerance{0.005}; // GADGET-2's ErrTolForceAcc
     };
     struct TreeResult : Result {
         std::uint64_t accepted_nodes{0}, visited_nodes{0};
@@ -14,10 +22,12 @@ namespace FML::SHORT_RANGE_GRAVITY {
     };
 
     /// Flat monopole octree. Source vector must outlive the tree and remain unchanged. No quadrupole approximation.
+    /// The node force is the pair force at the centre of mass (with the split and the cutoff)
     class Octree {
         struct Node {
             Vector centre{}, centre_of_mass{};
             double halfwidth{0}, mass{0};
+            double spread{0}; // sum m |x - centre of mass|^2 (the trace of the quadrupole)
             std::size_t begin{0}, end{0};
             std::array<std::size_t, 8> children{}; // 0 denotes absent; root is never a child.
             bool leaf{true};
@@ -50,6 +60,11 @@ namespace FML::SHORT_RANGE_GRAVITY {
                     x /= node.mass;
             else
                 node.centre_of_mass = centre;
+            for (auto i = begin; i < end; ++i) {
+                const auto & p = sources_[indices_[i]];
+                for (int d = 0; d < 3; ++d)
+                    node.spread += p.mass * (p.position[d] - node.centre_of_mass[d]) * (p.position[d] - node.centre_of_mass[d]);
+            }
             if (end - begin > options_.leaf_capacity && depth < options_.max_depth) {
                 const auto octant = [&](const Particle & p) {
                     int index = 0;
@@ -85,6 +100,7 @@ namespace FML::SHORT_RANGE_GRAVITY {
         void walk(std::size_t index,
                   std::size_t excluded_index,
                   const Particle & target,
+                  double reference,
                   Vector & acceleration,
                   std::uint64_t & candidates,
                   std::uint64_t & accepted,
@@ -114,12 +130,38 @@ namespace FML::SHORT_RANGE_GRAVITY {
             // Never approximate a node containing the target, crossing a periodic image/cutoff, or touching softening.
             // Also resolve the Gaussian variation: a Newtonian opening angle alone is insufficient near the cutoff.
             const double diameter = 2 * std::sqrt(3.0) * node.halfwidth;
-            if (!node.leaf && !(excluded_index >= node.begin && excluded_index < node.end) && !contains &&
-                single_image && max2 < cutoff2 &&
-                min2 >= kernel_.options().softening_support * kernel_.options().softening_support &&
-                diameter < options_.opening_angle * std::sqrt(r2) &&
-                kernel_.tree_scale_resolved(diameter, options_.opening_angle)) {
-                const double factor = node.mass * kernel_.fast_coefficient(r2);
+            const bool can_approximate =
+                !node.leaf && !(excluded_index >= node.begin && excluded_index < node.end) && !contains && single_image &&
+                min2 >= kernel_.options().softening_support * kernel_.options().softening_support;
+            bool accept = false;
+            if (can_approximate and reference > 0) {
+                // GADGET-2: open if the target is within the node enlarged by 20%. The monopole's error is second
+                // order, (l / r)^2 times the node's force (estimated with the coefficient at the node's nearest
+                // point). A node crossing the cutoff misses (or adds) the force of the part on the other side, a
+                // first-order error: accept it only if its whole force is below the tolerance (else it biases the
+                // force low)
+                bool near = true;
+                for (int d = 0; d < 3; ++d)
+                    near &= std::abs(dx[d]) < 1.2 * node.halfwidth;
+                const double side = 2 * node.halfwidth;
+                const double force = node.mass * std::abs(kernel_.fast_coefficient(min2)) * std::sqrt(min2);
+                const double error = max2 < cutoff2 ? force * side * side / r2 : force;
+                accept = !near && r2 > 0 && error <= options_.relative_tolerance * reference;
+            } else if (can_approximate) {
+                accept = max2 < cutoff2 && diameter < options_.opening_angle * std::sqrt(r2) &&
+                         kernel_.tree_scale_resolved(diameter, options_.opening_angle);
+            }
+            if (accept) {
+                // The monopole, plus the trace of the quadrupole: the short-range potential is not harmonic outside
+                // its source (D^2 phi = -4 pi G W(r), W the Gaussian of the split), so the spread of the node's mass
+                // adds -(spread / 6) D(D^2 phi) = (spread / 6) 4 pi G W(r) / (2 r_s^2) per unit displacement toward the
+                // node (a first-order bias of the monopole, (l / r_s)^2; zero for Newton). Not for Yukawa kernels
+                double factor = node.mass * kernel_.fast_coefficient(r2);
+                if (!kernel_.has_yukawa() && r2 < cutoff2) {
+                    const double rs2 = kernel_.options().split_scale * kernel_.options().split_scale;
+                    const double W = std::exp(-r2 / (4 * rs2)) / std::pow(4 * M_PI * rs2, 1.5);
+                    factor += node.spread / 6 * 4 * M_PI * kernel_.options().coupling * W / (2 * rs2);
+                }
                 for (int d = 0; d < 3; ++d)
                     acceleration[d] += factor * com_dx[d];
                 ++approximated;
@@ -136,7 +178,8 @@ namespace FML::SHORT_RANGE_GRAVITY {
             } else {
                 for (auto child : node.children)
                     if (child)
-                        walk(child, excluded_index, target, acceleration, candidates, accepted, visited, approximated);
+                        walk(child, excluded_index, target, reference, acceleration, candidates, accepted, visited,
+                             approximated);
             }
         }
 
@@ -145,6 +188,7 @@ namespace FML::SHORT_RANGE_GRAVITY {
             : sources_(sources), kernel_(kernel), options_(options) {
             detail::validate_particles(sources, kernel.options().boxsize, true);
             if (!std::isfinite(options.opening_angle) || options.opening_angle < 0 || options.opening_angle > 1 ||
+                !std::isfinite(options.relative_tolerance) || options.relative_tolerance < 0 ||
                 options.leaf_capacity == 0 || options.max_depth < 1 || options.max_depth > 60)
                 throw std::invalid_argument("[ShortRangeGravity] Invalid tree options");
             indices_.resize(sources.size());
@@ -159,8 +203,13 @@ namespace FML::SHORT_RANGE_GRAVITY {
             scratch_.shrink_to_fit();
         }
         Octree(std::vector<Particle> &&, const Kernel &, TreeOptions = {}) = delete;
-        TreeResult compute(const std::vector<Particle> & targets) const {
+        /// The accelerations of the targets. reference (criterion relative): |acceleration| of each target from the
+        /// previous step, in the units of the result (the total, long- plus short-range, as in GADGET-2)
+        TreeResult compute(const std::vector<Particle> & targets, const std::vector<double> * reference = nullptr) const {
             detail::validate_particles(targets, kernel_.options().boxsize, false);
+            if (reference && reference->size() != targets.size())
+                throw std::invalid_argument("[ShortRangeGravity] One reference acceleration per target");
+            const bool relative = options_.criterion == TreeOptions::Opening::relative && reference;
             TreeResult result;
             result.acceleration.resize(targets.size());
             result.tree_nodes = nodes_.size();
@@ -174,7 +223,8 @@ namespace FML::SHORT_RANGE_GRAVITY {
                                                     std::pair<std::uint64_t, std::size_t>{targets[i].id, 0});
                 const auto excluded =
                     match != identity_order_.end() && match->first == targets[i].id ? match->second : sources_.size();
-                walk(0, excluded, targets[i], result.acceleration[i], candidates, accepted, visited, approximated);
+                walk(0, excluded, targets[i], relative ? (*reference)[i] : 0.0, result.acceleration[i], candidates,
+                     accepted, visited, approximated);
             }
             result.statistics.candidate_pairs = candidates;
             result.statistics.accepted_pairs = accepted;
