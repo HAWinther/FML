@@ -13,6 +13,7 @@
 <a href="#Methods">4. Cell lists, the octree and the API</a><br>
 <a href="#PM">5. Coupling to the PM force</a><br>
 <a href="#MPI">6. MPI ghosts and validation</a><br>
+<a href="treepm.php">7. TreePMCode: a TreePM N-body code built on these</a><br>
 </p>
 
 <header class="entry-header text-center">
@@ -58,7 +59,7 @@ evaluated with scaled error functions, series and heat-kernel integrals in the e
 <hr/>
 
 <p>
-The <b>cell list</b> bins the sources in cells at least one cutoff wide and sums all pairs in the 27 neighbouring cells. The <b>octree</b> stores mass, centre of mass and bounds per node and accepts a node as a monopole if it lies entirely within the cutoff and outside the softening region, within a single periodic image, and is small compared both to the distance ($\ell/d &lt; \theta$) and to the split scale. An opening angle of 0 gives exact sums. Results are accelerations; both are OpenMP parallel over targets.
+The <b>cell list</b> bins the sources in cells at least one cutoff wide and sums all pairs in the 27 neighbouring cells. The <b>octree</b> stores mass, centre of mass and bounds per node and accepts a node as a monopole if it lies entirely within the cutoff and outside the softening region, within a single periodic image, and is small compared both to the distance ($\ell/d &lt; \theta$) and to the split scale. An opening angle of 0 gives exact sums. With <tt>TreeOptions::criterion = Opening::relative</tt> nodes are accepted as in GADGET-2: if the node's force times $(\ell/r)^2$ is at most <tt>relative_tolerance</tt> (0.005) times the target's acceleration from the previous step (<tt>compute(targets, &amp;reference)</tt>). Accepted nodes add the trace of their quadrupole: the short-range potential is not harmonic outside its source, and without this term the monopole is biased low by order $(\ell/r_s)^2$. Results are accelerations; both are OpenMP parallel over targets.
 </p>
 <div style="text-align: center">
   <div style="width:700px;display: inline-block;text-align: left">
@@ -97,5 +98,5 @@ so <tt>fml_acceleration_coupling(C, M, L)</tt> gives the coupling that matches t
 <hr/>
 
 <p>
-With slab domain decomposition, <tt>exchange_slab_ghosts</tt> sends each particle once to every slab within the cutoff (including periodic and non-adjacent slabs), in bounded chunks and without gathering the particles; the local cell list or tree then computes the forces on the owned particles. The tests check the spline against independent quadrature, the direct/cell/tree agreement for uniform, clustered, coincident and periodic particles, periodic Ewald sums at several split and softening scales, the FML force sign and normalization, ghost completeness and the Yukawa kernels against 100-digit references. The octree is currently slower than the cell list; higher multipoles and better acceptance criteria are possible extensions.
+With slab domain decomposition, <tt>exchange_slab_ghosts</tt> sends each particle once to every slab within the cutoff (including periodic and non-adjacent slabs), in bounded chunks and without gathering the particles; the local cell list or tree then computes the forces on the owned particles. The tests check the spline against independent quadrature, the direct/cell/tree agreement for uniform, clustered, coincident and periodic particles, periodic Ewald sums at several split and softening scales, the FML force sign and normalization, ghost completeness and the Yukawa kernels against 100-digit references. With the geometric criterion the octree accepts few nodes when $r_s$ is about the particle spacing; with the relative criterion it is 1.6&ndash;1.8 times faster than the cell list in <a href="treepm.php" style="display: inline">TreePMCode</a>. Particles on a Peano&ndash;Hilbert domain use <tt>exchange_peano_hilbert_ghosts</tt> (or <tt>exchange_domain_ghosts</tt>, which picks the method for the domain).
 </p>

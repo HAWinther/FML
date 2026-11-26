@@ -36,7 +36,9 @@ The complete programs are
       from any code;
 \item \textbf{CosmologyFitting} (\cref{ch:sampling-fitting}), likelihoods and samplers built on the solver;
 \item \textbf{AMRCode} (\cref{sec:sr-amr}), an adaptive-mesh-refinement $N$-body code for $\Lambda$CDM and screened
-      modified gravity.
+      modified gravity, in the spirit of RAMSES;
+\item \textbf{TreePMCode} (\cref{sec:sr-treepm}), a TreePM $N$-body code with individual time steps for CDM, or CDM and
+      baryons, in the spirit of GADGET-2.
 \end{itemize}
 
 \section{The ideas behind FML}
@@ -146,7 +148,7 @@ Linear theory & \file{Cosmology/Background}, \file{Cosmology/Recombination}, \fi
 Nonlinear models & \file{PerturbationTheory}, \file{SphericalCollapse}, \file{HaloModel}, \file{AxionHMcode},
   \file{Emulator} \\
 Initial conditions & \file{RandomFields}, \file{LPT}, \file{GlassIC} \\
-Simulations & \file{NBody}, \file{ShortRangeGravity}, \file{SimulationCode}, \file{AMRCode}, \file{Hydrodynamics}, \file{SPH},
+Simulations & \file{NBody}, \file{ShortRangeGravity}, \file{SimulationCode}, \file{AMRCode}, \file{TreePMCode}, \file{Hydrodynamics}, \file{SPH},
   \file{WaveDarkMatter}, \file{PGD}, \file{Baryonification} \\
 Structures & \file{FriendsOfFriends}, \file{PhaseSpaceHaloFinder}, \file{HaloHistory}, \file{CosmicWeb},
   \file{TidalTensor}, \file{Morphology}, \file{VoidFinders}, \file{Triangulation} \\

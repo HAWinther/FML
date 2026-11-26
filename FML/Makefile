@@ -17,7 +17,7 @@
 # Examples that only need MPI/OpenMP/FFTW/GSL
 EXAMPLE_DIRS := $(sort $(dir $(wildcard */example/Makefile */examples/Makefile */*/example/Makefile */*/*/example/Makefile))) \
                 Cosmology/EinsteinBoltzmannSolver/ CosmologyFitting/ \
-                RamsesUtils/ramses2pk/ SimulationCode/ AMRCode/
+                RamsesUtils/ramses2pk/ SimulationCode/ AMRCode/ TreePMCode/
 
 # Examples that need extra libraries (built with make examples-extra)
 #   LuaFileParser: LUA   Triangulation: FFTW   VoidFinders: FFTW   Plotting: python + matplotlib

@@ -44,7 +44,7 @@ cosmological model you add.
   a registry for the Einstein–Boltzmann solver and everything built on its background, and the gravity models of
   SimulationCode use the same quasi-static definitions. Some twenty models are included.
 - **Programs as examples.** SimulationCode (formerly COLASolver), SnapshotAnalyzer, the Einstein–Boltzmann solver,
-  CosmologyFitting and AMRCode were written to show what can be done with the library. They have grown into codes that
+  CosmologyFitting, AMRCode and TreePMCode were written to show what can be done with the library. They have grown into codes that
   are useful in their own right, and they are also the most demanding tests of the building blocks.
 - **Tested and validated.** About 200 test programs compare with analytic results, manufactured solutions,
   conservation laws and external codes (CLASS, CAMB, CCL, FAST-PT, MG-PICOLA, ...). They run in CI on every push with
@@ -77,7 +77,8 @@ cosmological model you add.
   ([StepFromBigBang](FML/StepFromBigBang/README.md): BullFrog, a new step exact to third-order LPT, and a
   scale-dependent hybrid for massive neutrinos and modified gravity), short-range forces for P3M/TreePM, and
   modified-gravity solvers.
-- Smaller, newer codes: an [AMR N-body code](FML/AMRCode/README.md), [wave dark matter](FML/WaveDarkMatter/README.md)
+- Smaller, newer codes: an [AMR N-body code](FML/AMRCode/README.md) (RAMSES-like), a [TreePM N-body code](FML/TreePMCode/README.md)
+  (GADGET-like, individual time steps), [wave dark matter](FML/WaveDarkMatter/README.md)
   (Schrödinger–Poisson), and gas dynamics with [finite volumes](FML/Hydrodynamics/README.md) and
   [SPH](FML/SPH/README.md). A moving-mesh (AREPO-style) solver is planned; its tessellation is done (below).
 

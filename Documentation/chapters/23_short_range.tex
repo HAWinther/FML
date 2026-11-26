@@ -5,14 +5,16 @@ A PM force is accurate only on scales several cells above the mesh spacing. To r
 \fml{} splits the force into a long-range part, computed on the mesh, and a short-range part, summed over particle
 pairs within a cutoff: the P$^3$M method with cell lists, or a TreePM method with a monopole octree. The same split
 supports Newtonian gravity plus a Yukawa fifth force, the linear force of chameleon-like theories. This chapter
-describes the kernels, the search structures, the MPI ghost exchange and the integration into SimulationCode. The
-other route to small scales, refining the mesh where the particles are, is the adaptive $N$-body code \file{AMRCode}
-(\cref{sec:sr-amr}), which also solves the nonlinear symmetron and dilaton fifth forces with screening.
+describes the kernels, the search structures, the MPI ghost exchange, the integration into SimulationCode and the
+GADGET-like TreePM code \file{TreePMCode} (\cref{sec:sr-treepm}). The other route to small scales, refining the mesh
+where the particles are, is the adaptive $N$-body code \file{AMRCode} (\cref{sec:sr-amr}), which also solves the
+nonlinear symmetron and dilaton fifth forces with screening.
 
 \begin{modulebox}{ShortRangeGravity}
 Namespace \nsp{FML::SHORT_RANGE_GRAVITY}, header-only: \file{ShortRangeGravity.h} (\cls{Options}, \cls{Kernel},
 \code{direct_sum}, \cls{CellList}), \file{Softening.h}, \file{Yukawa.h}, \file{Octree.h} (\cls{Octree}),
-\file{LongRangePM.h} (\code{apply_long_range_filter}), \file{SlabGhosts.h} (\code{exchange_slab_ghosts}).\par
+\file{LongRangePM.h} (\code{apply_long_range_filter}), \file{SlabGhosts.h} (\code{exchange_slab_ghosts},
+\code{exchange_peano_hilbert_ghosts}, \code{exchange_domain_ghosts}).\par
 SimulationCode: \file{src/ShortRangeForce.h}, \file{src/ShortRangeInteraction.h}, \file{src/ShortRangeSettings.h}.\par
 Documentation: \file{ShortRangeGravity/README.md}, \file{ShortRangeGravity/tests/RESULTS.md},
 \file{ShortRangeGravity/tests/CLUSTERED_FORCE.md}, \file{SimulationCode/SHORT_RANGE.md}, \file{COLA_SHORT_RANGE.md},
@@ -83,6 +85,15 @@ are in the coordinate unit: for a fixed physical range in comoving coordinates p
       and is small relative to both the distance and the split scale (\param{force_short_range_opening_angle}, $0.3$ a
       starting value; $0$ gives exact leaf sums). With Yukawa forces the opening also resolves $\lambda$. One-sided
       tree approximations need not conserve momentum exactly.
+      With \code{TreeOptions::criterion = Opening::relative} the node is instead accepted as in GADGET-2
+      \cite{Springel2005}: if its force times $(l/r)^2$ is at most \code{relative_tolerance} (GADGET's ErrTolForceAcc,
+      0.005) times the target's acceleration from the previous step, passed to \code{compute(targets, &reference)}
+      ($l$ the node's side, $r$ the distance to its centre of mass, the force estimated at the node's nearest point; a
+      node crossing the cutoff needs its whole force below the tolerance). Accepted nodes add the trace of their
+      quadrupole: the short-range potential is not harmonic outside its source, $\nabla^2\phi_s=-4\pi GW(r)$ with $W$
+      the Gaussian of the split, so a node with $S=\sum m|\vec x-\vec x_{\rm cm}|^2$ adds
+      $(S/6)\,4\pi G\,W(r)/(2r_s^2)$ per unit displacement towards it; without this term the monopole is biased low
+      by $\order{(l/r_s)^2}$.
 \item OpenMP over targets with no shared writes; results are attractive accelerations with source mass and coupling
       included; targets can be a subset of the sources; self-interactions are excluded by ID.
 \item \code{exchange_slab_ghosts}: each source is sent once to every remote slab within the cutoff (including periodic
@@ -168,6 +179,12 @@ timestep_method                     = "Quinn"
 These are controlled verification cases, not a calibration of nonlinear cosmological statistics.
 \end{validation}
 
+\paragraph*{The frozen reference runs.} \file{ShortRangeGravity/tests/simcode_reference} keeps SimulationCode's TreePM
+runs ($32^3$ particles in $64\Mpch$ from $z=19$, 256--1024 steps) for codes that replace it. They use SimulationCode's
+default \param{force_deconvolve_window} \code{= false}: the CIC window of the 64$^3$ force grid is not divided out,
+which suppresses the long-range force near $r_s=1.25$ cells, so the result depends on the split. A code that
+deconvolves (\file{TreePMCode}, GADGET-2) is about 7\% above them at $k=1\hMpc$; see \cref{sec:sr-treepm}.
+
 \section{Adaptive mesh refinement: AMRCode}\label{sec:sr-amr}
 
 \begin{modulebox}{AMRCode}
@@ -213,6 +230,14 @@ RAMSES \cite{Teyssier2002}. Positions are in box units, $\tau=\ln a$ is the time
       \param{dilaton_start_redshift} (default 4) the run is $\Lambda$CDM: there $\beta(a)$ is small and the field contrasts on the
       particle lattice are too large. The field is first solved at a full solve, and a non-finite solve is reported and retried
       before the run aborts.
+\item \emph{Coupled dark sectors and two species}: coupled quintessence and the Fading Dark Sector
+      (\param{gravity_model} \code{= "CoupledQuintessence"} or \code{"FadingDarkSector"}), covariantised dark scattering
+      (\code{"CovariantDarkScattering"}), and CDM and baryons as two sets of particles from transfer functions
+      (\param{particle_baryons}); the same models as \file{TreePMCode} (see \file{AMRCode/README.md}).
+\item \emph{RAMSES time steps} (\param{timestep_method} \code{= ramses}): the coarse step as RAMSES chooses it, the
+      Courant condition (\param{courant_factor}) and the free-fall time of the densest leaf on every level, with
+      $2^{l-l_{\rm min}}$ steps per level, and at most \param{max_da_over_a} in $\Delta a/a$; the default
+      \code{fixed} is uniform in $\ln a$.
 \end{itemize}
 
 \begin{implementation}
@@ -255,3 +280,87 @@ exact dilaton solver (PM, $128^3$): $P/P_{\Lambda\rm CDM}$ at $z=0$ agrees to 0.
 1.042 at $k=0.3$, 1.078 against 1.079 at $k=1\hMpc$) and is lower above, where the AMR resolves the screened haloes (1.037 against
 1.083 at $k=3\hMpc$); the dilaton costs about 70\% more time than $\Lambda$CDM.
 \end{validation}
+
+\section{A TreePM code: TreePMCode}\label{sec:sr-treepm}
+
+\begin{modulebox}{TreePMCode}
+Program \code{treepm} (\file{TreePMCode/Main.cpp}); the code \file{TreePMCode/TreePM.h} (\cls{TreePMSimulation},
+\cls{TreePMParameters}, \cls{TreePMParticle}), \file{Setup.h} (initial conditions, steps, outputs),
+\file{Cosmology.h} (background and models). Built on \file{ShortRangeGravity}, \code{particles_to_grid_any_domain}
+and \code{interpolate_grids_to_particles_any_domain} (\file{Interpolation/DistributedDeposit.h}) and the
+Peano--Hilbert domain of \file{Global/Domain.h}.\par
+Documentation: \file{TreePMCode/README.md}. Tests: \file{TreePMCode/tests} (\file{TestTreePM.cpp}).
+\end{modulebox}
+
+\file{TreePMCode} is a simple TreePM $N$-body code for collisionless particles in the spirit of GADGET-2
+\cite{Springel2005}: CDM (or CDM and baryons as one set of particles), or CDM and baryons as two sets; no
+hydrodynamics. It is separate from \file{AMRCode} and \file{SimulationCode}, with the same equations and units as
+\file{AMRCode}, $\tau=\ln a$ and
+\begin{equation}
+\frac{dx}{d\tau}=\frac{v}{a^2E},\qquad\frac{dv}{d\tau}=-\Gamma v-\frac{3\Om_mP(a)}{2aE}\nabla\phi,\qquad\nabla^2\phi=\delta,
+\end{equation}
+with $P(a)$ the Poisson factor and $\Gamma$ the friction of the model.
+\begin{itemize}
+\item \emph{Initial conditions}: 1LPT/2LPT from a linear $P(k)$ at $z=0$ or from transfer functions (\param{transfer_file},
+      \param{transfer_source} \code{= tables | camb | class}); CDM and baryons from their own transfer functions
+      (\param{particle_baryons}, \param{baryon_lattice} \code{= same | offset}); or the particles of a GADGET file
+      (\param{ic_gadget_file}).
+\item \emph{Domain}: the particles are on a Peano--Hilbert domain rebuilt with equal particles per task every (PM)
+      step.
+\item \emph{Gravity}, split with a Gaussian of scale $r_s=$\,\param{asmth} PM cells: the long range on the
+      \param{Nmesh}$^3$ slab grid (the density deposited from the Hilbert domain, the filtered Poisson equation with the
+      window deconvolved, \param{deconvolve}, and the force interpolated back by gathering the part of the grid each task
+      needs); the short range over the ghosts within the cutoff (\code{exchange_domain_ghosts}) with the octree
+      (\param{backend} \code{= tree}; \param{opening_criterion} \code{= geometric} with \param{opening_angle}, or
+      \code{relative} with \param{relative_tolerance}) or the cell list (\code{cell}). \param{softening} is
+      Plummer-equivalent in units of the mean particle spacing (the spline support is 2.8 times it).
+\item \emph{Time stepping} (\param{timestep_method}): \code{fixed}, kick--drift--kick with a common step uniform in
+      $\ln a$ (\param{nsteps}, or \param{nsteps_between_outputs}); or \code{gadget}, as GADGET-2: the PM step limited by
+      the rms displacement (\param{max_rms_displacement} of $\min(\text{spacing},r_s)$) and \param{max_dlna}, and
+      individual short-range steps $\Delta t_i=\sqrt{2\eta\epsilon/|a_i|}$ (\param{eta}) in power-of-two bins of the PM
+      step (at most \param{max_bins}), the long-range kicks at the ends of the PM step.
+\item \emph{Models} (as \file{AMRCode}): $\Lambda$CDM, coupled quintessence and the Fading Dark Sector, covariantised
+      dark scattering. With two species the source is weighted by $f_c(a)$, $f_b(a)$, and with coupled quintessence the
+      CDM also feels $2\beta^2f_c$ times the force of the CDM alone.
+\item \emph{Outputs}: $P(k)$ (\param{pofk_ngrid}, \param{pofk_assignment}, interlaced; per species with two),
+      GADGET files and images at \param{output_redshifts}.
+\end{itemize}
+
+\begin{paramfile}[TreePMCode (the parameter file is \code{key = value})]
+Npart_1D   = 256
+box        = 256.0
+Nmesh      = 512        # the number of tasks must divide it
+asmth      = 1.25       # r_s in PM cells
+softening  = 0.0333     # in units of the mean particle spacing
+backend    = tree
+opening_criterion  = relative
+relative_tolerance = 0.005
+timestep_method    = gadget
+output_redshifts   = 1, 0
+\end{paramfile}
+
+\begin{validation}[Validation: TreePMCode]
+\file{TreePMCode/tests} (1, 2 and 4 tasks): the force of a Gaussian blob against the exact periodic force (rms errors
+3.7/2.1/1.3/0.4\% at $r/\sigma$ in $[0.5,1)$/$[1,2)$/$[2,4)$/$[4,8)$, the particle noise); a Zel'dovich plane wave
+(2.2\% in $x$, 2.5\% in $v$, the same on 1, 2 and 4 tasks to 14 digits); the CDM--baryon growth with coupled
+quintessence and dark scattering against the linear two-fluid growth (0.1\%); GADGET steps against 160 common steps.
+
+Against the SimulationCode TreePM reference runs (\cref{sec:sr-simcode}): with \param{deconvolve} \code{= false}, as
+they were run, TreePMCode reproduces them to 0.3\% at all $k$. With the window deconvolved the result no longer depends
+on the split (PM $64^3$ and $256^3$ agree to 0.5\%), and against SimulationCode run with
+\param{force_deconvolve_window} \code{= true} (1024 steps) the cell list agrees to 0.11\% for $k\le1\hMpc$ at $z=0$
+(0.7\% up to the particle Nyquist frequency), and the tree with the relative criterion to 0.16\% / 0.23\%
+(\param{relative_tolerance} 0.005 / 0.002; 2.0\% / 0.9\% up to $k_{\rm Ny}$) in 0.6--0.7 of the time.
+(\file{TreePMCode/parameterfile_simcode_reference.txt}.)
+
+Against EuclidEmulator2 \cite{Knabenhans2021} ($64^3$ in $128\Mpch$, $z=0$): $P/P_{\rm EE2}$ is 1.02/0.89/0.86 at
+$k=0.5/1/1.5\hMpc$ with GADGET steps (0.86/0.54/0.33 with 40 common steps), against 0.92/0.73/0.63 for \file{AMRCode}
+with RAMSES steps and 0.98/0.78/0.62 for SimulationCode's PM on $128^3$; the mass resolution limits every code above
+$k\sim1\hMpc$.
+\end{validation}
+
+\begin{caveat}
+The ghosts and the tree are rebuilt at every short-range sub-step (GADGET-2 drifts the tree nodes); the load is
+balanced by particle count, not work. With CDM and baryons on the same lattice, a force that resolves the particle
+spacing damps the CDM--baryon relative mode; use a softening of about the spacing or the offset lattice.
+\end{caveat}

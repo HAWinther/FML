@@ -45,6 +45,7 @@ Each page below explains the theory behind the methods and shows how to use them
   <a href="shortrange.php">Short-range gravity for P3M / TreePM, also with a Yukawa force (FML::SHORT_RANGE_GRAVITY)</a><br>
   <a href="nbodycode.php">SimulationCode: PM/COLA model catalogue, equations and analysis capabilities</a><br>
   <a href="amr.php#AMRCode">AMRCode: an adaptive-mesh-refinement N-body code</a><br>
+  <a href="treepm.php">TreePMCode: a GADGET-like TreePM N-body code with individual time steps</a><br>
   <a href="wavedm.php">Wave (fuzzy) dark matter: Schr&ouml;dinger&ndash;Poisson (FML::WAVEDM)</a><br>
   <a href="hydro.php">Gas dynamics: finite-volume Euler equations and SPH (FML::HYDRODYNAMICS, FML::SPH)</a><br>
 </p>
