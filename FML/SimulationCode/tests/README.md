@@ -191,32 +191,6 @@ before the source factors were included).
 Small simulations covering all the main code paths, for checking that a change does not change the
 results (or only changes what it should). See `regression/README.md`.
 
-
-`test_gravity_short_range` checks the model-owned unscreened mesh/pair split,
-analytic Yukawa limits/ranges, the inherited finite-k fallback for new models,
-an independent particle kick and collective model validation. Run in serial and
-with 1/2/4 MPI ranks; see [../SHORT_RANGE.md](../SHORT_RANGE.md) for end-to-end runs.
-
-
-The longer static clustered-force experiment (`benchmark_clustered_force`) and the
-Ewald references used by these tests (`PairwiseEwaldReference.h`,
-`ClusteredForceReference.h`; `ShortRangeReference.h` and `ClusteredForceReference.h`
-here only forward to them) are in the library tests,
-[../../ShortRangeGravity/tests](../../ShortRangeGravity/tests/CLUSTERED_FORCE.md).
-
-
-`benchmark_short_range_dynamics` is an optional longer trajectory experiment.
-It compares actual SimulationCode steps with adaptive direct Ewald evolution,
-including synchronized velocities, timestep convergence, periodic unwrapping and
-MPI ownership migration. Build the target explicitly and run
-`python3 regression/short_range_dynamics.py --binary ./benchmark_short_range_dynamics --output /tmp/fml-dynamics`.
-See [../DYNAMICS.md](../DYNAMICS.md) for the fixture-specific refinement grids,
-reference tolerances, plotting/MPI options and scope.
-
-
-`regression/short_range_cola.py` validates common-timestep short forces in COLA
-with Quinn/Tassev, nonzero 1LPT/2LPT and scale-dependent frames, physical state
-restoration, timestep refinement, interlacing, lightcone transparency and MPI.
-Build `test_short_range_simulation` explicitly (Make or CMake); see
-[../COLA_SHORT_RANGE.md](../COLA_SHORT_RANGE.md) for the supported combinations
-and independent frame/body reference. The longer suite is outside default CTest.
+The short-range force (PM + P3M/TreePM, backlog item 47) was removed from SimulationCode in November 2026, with
+its tests; TreePMCode (`../../TreePMCode`) has it now. Frozen reference runs of the removed implementation and the
+clustered-force experiment are in [../../ShortRangeGravity/tests](../../ShortRangeGravity/tests/simcode_reference/README.md).

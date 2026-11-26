@@ -43,8 +43,7 @@ namespace SIMCODE {
     /// step (all of it: the force is linear in the density). Without scale-dependent growth R = 1 and nothing is done.
     ///
     /// Not with velocity friction (the friction term of the growth equation is not in the kick factor), the N-body
-    /// gauge source, COLA, CDM and baryons or neutrinos as separate particles (one factor for one growth), or a
-    /// short-range force (it is not multiplied by R).
+    /// gauge source, COLA, or CDM and baryons or neutrinos as separate particles (one factor for one growth).
     template <int NDIM>
     class ScaleDependentKick {
       public:

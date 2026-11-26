@@ -10,7 +10,6 @@
 #include "BaryonificationParameters.h"
 #include "ParameterDefaults.h"
 #include "ParameterFields.h"
-#include "ShortRangeSettings.h"
 #include <FML/Analysis/Images.h>
 #include <FML/Global/Global.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
@@ -248,7 +247,6 @@ namespace SIMCODE {
     };
 
     struct ForceSettings {
-        ShortRangeSettings short_range;
         int nmesh;                             // The gridsize to bin particles to and compute PM forces
         std::string density_assignment_method; // Density assignment (CIC,TSC,PCS,PQS; not NGP)
         bool linear_massive_neutrinos;         // Include the effects of massive neutrinos using linear theory
@@ -277,7 +275,6 @@ namespace SIMCODE {
         /// The parameters (see ParameterFields.h)
         template <class F>
         void fields(F && f) {
-            short_range.fields(f);
             f.required("force_nmesh", nmesh, 0, "Grid size used to compute the PM forces", check::positive());
             f.optional("force_density_assignment_method",
                        density_assignment_method,
@@ -1639,24 +1636,6 @@ namespace SIMCODE {
 #endif
             }
 
-            if (force.short_range.enabled) {
-                force.short_range.validate(simulation.boxsize);
-                if (simulation.enforce_LPT_trajectories || particle.baryons || particle.neutrinos || force.nbody_gauge)
-                    fail("force_short_range requires ordinary evolution and one cold particle species, without "
-                         "enforced LPT or "
-                         "N-body gauge sources");
-                if (timestep.method != TimestepMethod::Quinn &&
-                    !(simulation.use_cola && simulation.cola_LPT_order >= 1 &&
-                      timestep.method == TimestepMethod::Tassev))
-                    fail("force_short_range requires Quinn, or Tassev with COLA (common kick/drift timesteps)");
-                if (force.greens_function_kernel != "continuous" || force.gradient_kernel != "continuous")
-                    fail("force_short_range requires explicit continuous Green and gradient kernels");
-                if (force.density_method != "assignment" || force.interpolation_method != "assignment" ||
-                    force.early_method != "none")
-                    fail("force_short_range initially requires assignment density/interpolation and "
-                         "force_early_method=none");
-            }
-
             // COLA
             if (simulation.use_cola and simulation.cola_LPT_order > ic.LPT_order)
                 fail("The highest COLA LPT order is ic_LPT_order (i.e. simulation_cola_LPT_order must be <= "
@@ -1754,8 +1733,6 @@ namespace SIMCODE {
                     fail("force_lattice_greens_function needs force_density_method = assignment, "
                          "force_interpolation_method = assignment and force_early_method != nufft (the response "
                          "of the other methods is not derived)");
-                if (force.short_range.enabled)
-                    fail("force_lattice_greens_function does not support force_short_range");
                 if (ic.reads_particles())
                     fail("force_lattice_greens_function needs the IC on a lattice (not read from a file)");
                 if (particle.baryons and particle.baryon_lattice != "same")
@@ -1878,9 +1855,9 @@ namespace SIMCODE {
             if (timestep.spacing == ScaleFactorSpacing::Powerlaw and timestep.spacing_power == 0.0)
                 fail("timestep_spacing_power cannot be 0 (use logarithmic spacing)");
             if (timestep.scaledependent_kick and (simulation.use_cola or particle.baryons or particle.neutrinos or
-                                                  force.nbody_gauge or force.short_range.enabled))
+                                                  force.nbody_gauge))
                 fail("timestep_scaledependent_kick (experimental) is only for one set of particles (no baryons or "
-                     "neutrinos as particles) without COLA, the N-body gauge or a short-range force");
+                     "neutrinos as particles) without COLA or the N-body gauge");
 
             // The mass-encoded relative mode: CDM and baryons start from the same lattice (the masses compensate)
             if (particle.baryons and particle.baryon_relative_mode != "displacement" and

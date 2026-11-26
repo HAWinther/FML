@@ -23,6 +23,7 @@
 
 <p>
 A particle-mesh (PM) force is accurate only on scales larger than a few mesh cells. P3M and TreePM codes add a short-range correction computed from particle pairs: the potential is split into a long-range part, smooth on the mesh scale and solved with FFTs, and a short-range part that falls off exponentially beyond a few split scales and is summed directly (cell lists, P3M) or with a tree (TreePM). <tt>FML/ShortRangeGravity</tt> (namespace FML::SHORT_RANGE_GRAVITY, header-only) provides these building blocks for Newtonian and Newtonian-plus-Yukawa gravity in a periodic box: the split kernels, a cell list, a monopole octree, the long-range Fourier filter and the MPI ghost exchange. Integration into the <a href="nbodycode.php" style="display: inline">COLA code</a> is not done yet.
+ A complete TreePM $N$-body code built from these pieces, with GADGET-2-style individual time steps, is <a href="https://github.com/HAWinther/FML/tree/master/FML/TreePMCode" style="display: inline">TreePMCode</a> (<tt>FML/TreePMCode</tt>).
 </p>
 
 <header class="entry-header text-center">
@@ -87,7 +88,7 @@ auto treepm = Octree(particles, kernel, TreeOptions{.3, 16, 40}).compute(particl
 <hr/>
 
 <p>
-<tt>apply_long_range_filter(fourier, kernel)</tt> multiplies a Fourier density (or potential) by the long-range filter before the ordinary PM force solve. For FML's box coordinates with Poisson equation $\nabla_x^2\Phi = C\delta$ (in SimulationCode $C = \frac{3}{2}\Omega_Ma$) and total mass $M$, a pair interacts as
+<tt>apply_long_range_filter(fourier, kernel)</tt> multiplies a Fourier density (or potential) by the long-range filter before the ordinary PM force solve. For FML's box coordinates with Poisson equation $\nabla_x^2\Phi = C\delta$ ($C = \frac{3}{2}\Omega_Ma$ for GR) and total mass $M$, a pair interacts as
 $$-\nabla_x\Phi_{\rm pair} = \frac{CL^2}{4\pi M}\,m\frac{\vec r_j - \vec r}{|\vec r_j - \vec r|^3},$$
 so <tt>fml_acceleration_coupling(C, M, L)</tt> gives the coupling that matches the mesh force.
 </p>

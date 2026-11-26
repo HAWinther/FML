@@ -1,5 +1,5 @@
 \chapter{Modified gravity and dark-sector simulations}\label{ch:mg-simulations}
-\chapterstatus{written}{2026-11-20}
+\chapterstatus{written}{2026-11-26}
 
 SimulationCode separates the \emph{cosmology} (the background, \param{cosmology_model}) from the \emph{gravity model}
 (the growth of perturbations and the force, \param{gravity_model}), so that one can be changed while the other is
@@ -211,7 +211,7 @@ density at equality scaled as $a^{-3}$ (0.2722 against 0.267 today at the best f
 2\% after equality), computed from the solver's FDS background. The runs are full N-body (Quinn, no COLA) from the
 solver's transfer functions at $z=49$ (2LPT), with fixed amplitudes and paired phases, so the ratio $P_{\rm FDS}/P_{\Lambda\rm
 CDM}$ has almost no cosmic variance; two boxes (production: 1000 and $250\Mpch$ with $512^3$ particles and $1024^3$,
-$1536^3$ force grids; \code{--short-range} adds P3M in the small box).
+$1536^3$ force grids).
 \begin{paramfile}[FDS vs LCDM simulations]
 python3 scripts/fds_vs_lcdm_simulations.py setup runs/fds   # --preset production|test, --c, --cprime
 cd runs/fds && MPIRUN="mpirun -np 64" ./run_all.sh         # solver predictions, then the 8 runs

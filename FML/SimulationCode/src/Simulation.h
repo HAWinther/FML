@@ -33,7 +33,6 @@
 #include "NeutrinoParticles.h"
 #include "Particles.h"
 #include "SimulationParameters.h"
-#include "ShortRangeForce.h"
 #include "ScaleDependentKick.h"
 #include "Species.h"
 #include "SpeciesTimeStepping.h"
@@ -390,7 +389,6 @@ class NBodySimulation {
         const auto it = species_steps.find(info.species);
         return it == species_steps.end() ? s : it->second;
     }
-    void kick_short_range_force(const Step & s);
     void kick_species_extras(const Step & s, FFTWGrid<NDIM> & density, std::array<FFTWGrid<NDIM>, NDIM> & force);
     /// Coupled quintessence with CDM and baryon particles: the fifth force of the CDM on the CDM
     bool cdm_fifth_force_separate() const { return grav->has_cdm_fifth_force() and has_baryons(); }

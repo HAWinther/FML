@@ -13,8 +13,7 @@ the COLA method, in its scale-independent and scale-dependent forms. Short-range
 (\cls{TimeStepping}, \cls{TimestepOptions}); \file{LPT/GrowthHistory.h}.\par
 SimulationCode: \file{src/KickDrift.h}, \file{src/COLA.h}, \file{src/SimulationStep.h}, \file{src/SpeciesTimeStepping.h},
 \file{src/TimeStepping.h}.\par
-Documentation: \file{NBody/ForceOptions.md}, \file{NBody/TimeStepping.md}, \file{SimulationCode/EVOLUTION.md},
-\file{SimulationCode/DYNAMICS.md}.
+Documentation: \file{NBody/ForceOptions.md}, \file{NBody/TimeStepping.md}, \file{SimulationCode/EVOLUTION.md}.
 \end{modulebox}
 
 \section{Equations of motion}\label{sec:nbody-eom}
@@ -363,8 +362,7 @@ BullFrog, Zel'dovich $z=10^7$ & growth factor & 0.6\% / 2.6\% & 0.3\% / 1.8\% & 
 \end{tabular}
 \end{center}
 Quinn with 10 steps from $z=19$ is off by 7--12\%. The coefficients reproduce EdS growth exactly for FastPM and
-BullFrog; Quinn with 20 logarithmic steps from $a=0.05$ has a linear-growth error of $-0.38\%$. Small-$N$ orbit tests
-through the actual simulation step converge at second order (\file{SimulationCode/DYNAMICS.md}).
+BullFrog; Quinn with 20 logarithmic steps from $a=0.05$ has a linear-growth error of $-0.38\%$.
 \end{validation}
 
 \section{COLA}\label{sec:nbody-cola}

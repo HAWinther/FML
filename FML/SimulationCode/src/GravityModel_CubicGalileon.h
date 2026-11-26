@@ -34,8 +34,6 @@ class GravityModelCubicGalileon final : public GravityModelScreened<NDIM> {
     const QuasiStaticGravity_CubicGalileon & galileon() const {
         return static_cast<const QuasiStaticGravity_CubicGalileon &>(this->qs());
     }
-    double GeffOverG_highk(double a) const override { return this->GeffOverG(a, 0); }
-    double short_range_comoving_range(double /*a*/) const override { return 0.; }
     void init() override {
         this->quasi_static = std::make_shared<const QuasiStaticGravity_CubicGalileon>(this->cosmo->background());
         GravityModelScreened<NDIM>::init();

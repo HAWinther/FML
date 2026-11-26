@@ -39,14 +39,6 @@ class GravityModelSymmetron final : public GravityModelScreened<NDIM> {
     const QuasiStaticGravity_Symmetron & symmetron() const {
         return static_cast<const QuasiStaticGravity_Symmetron &>(this->qs());
     }
-    double GeffOverG_highk(double a) const override {
-        const double b = symmetron().beta_of_a(std::log(a));
-        return 1 + 2 * b * b;
-    }
-    double short_range_comoving_range(double a) const override {
-        const double mass2 = symmetron().mass2(std::log(a));
-        return mass2 == 0 ? 0. : 1 / (a * std::sqrt(mass2) * this->H0_hmpc);
-    }
     void init() override {
         this->quasi_static =
             std::make_shared<const QuasiStaticGravity_Symmetron>(this->cosmo->background(), assb, beta, L_mpch, N, M);

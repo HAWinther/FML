@@ -63,9 +63,6 @@ class GravityModelCoupledQuintessence final : public GravityModel<NDIM> {
         return -this->cosmo->cq_beta() * this->cosmo->cq_dphidlna(a);
     }
 
-    // The fifth force has an infinite range on N-body scales (as gravity)
-    double short_range_comoving_range(double /*a*/) const override { return 0.; }
-
     void info_model() const override {
         {
             const double beta = this->cosmo->cq_beta();

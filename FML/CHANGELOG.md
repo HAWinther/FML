@@ -5,6 +5,18 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### SimulationCode: the short-range force is removed (TreePMCode replaces it)
+- `force_short_range` (PM + P3M/TreePM at a common time step, N-body and COLA, backlog item 47) is removed with its
+  settings, the GravityModel hooks (`GeffOverG_highk`, `short_range_comoving_range`, `short_range_screening_active`,
+  `compute_force_for_step`, `kick_short_range`), the tests and drivers (`test_short_range_force`,
+  `test_gravity_short_range`, `test_short_range_simulation`, `benchmark_short_range_dynamics`, the `short_range*.py`
+  regressions) and the docs (`SHORT_RANGE.md`, `COLA_SHORT_RANGE.md`, `SHORT_RANGE_RESULTS.md`, `DYNAMICS.md`).
+  TreePM simulations are `TreePMCode/`. A parameter file with `force_short_range = true` stops with a message saying
+  so (`false` is accepted and ignored). Without it the code is unchanged: the regression cases give identical results.
+- Kept in the library: the clustered-force experiment and the frozen reference runs of the removed implementation
+  (`ShortRangeGravity/tests/`). `scripts/fds_vs_lcdm_simulations.py` loses `--short-range`. Book (chapters 22-25)
+  and website updated.
+
 ### ShortRangeGravity: relative opening criterion and the quadrupole trace in the octree
 - `Octree.h`: `TreeOptions::criterion = Opening::relative` (GADGET-2's relative criterion: a node's force times
   (l/r)^2 at most `relative_tolerance` times the target's previous |acceleration|, passed to `compute(targets,

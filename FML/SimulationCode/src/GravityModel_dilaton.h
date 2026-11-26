@@ -36,13 +36,6 @@ class GravityModelDilaton final : public GravityModelScreened<NDIM> {
     const QuasiStaticGravity_Dilaton & dilaton() const {
         return static_cast<const QuasiStaticGravity_Dilaton &>(this->qs());
     }
-    double GeffOverG_highk(double a) const override {
-        const double b = dilaton().beta(std::log(a));
-        return 1 + 2 * b * b;
-    }
-    double short_range_comoving_range(double a) const override {
-        return 1 / (a * std::sqrt(dilaton().mass2(std::log(a))) * this->H0_hmpc);
-    }
     void init() override {
         this->quasi_static =
             std::make_shared<const QuasiStaticGravity_Dilaton>(this->cosmo->background(), A2, beta0, r, xi);

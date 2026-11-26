@@ -3,14 +3,10 @@ USE_OMP ?= false
 # test_cola_frame uses the cosmology, gravity models and COLA of the solver (FFTW grids and the GSL ODE solver)
 USE_FFTW ?= true
 USE_GSL ?= true
-ifneq ($(filter test_short_range_simulation benchmark_short_range_dynamics,$(MAKECMDGOALS)),)
-USE_LUA ?= true
-endif
-TARGETS := test_baryonification_parameters test_cola_frame test_models test_lightcone_crossing test_short_range_force test_gravity_short_range
+TARGETS := test_baryonification_parameters test_cola_frame test_models test_lightcone_crossing
 include ../../Makefile.config
 OPTIONS += -DNDIM_SPACE=3
 FML_MODULES := Global Spline ODESolver ParameterMap FileUtils Math GadgetUtils
-EXTRA_CLEAN += test_short_range_simulation benchmark_short_range_dynamics
 # TransferInput.cpp (the transfer functions the gravity models read) is in ../src
 EXTRA_VPATH := ../src
 
@@ -33,16 +29,6 @@ test_lightcone_crossing: test_lightcone_crossing.o
 test_models: test_models.o TransferInput.o $(INTERNAL_COSMO_OBJS) Global.o Spline.o ODESolver.o ParameterMap.o FileUtils.o Math.o NumericalMethods.o
 	$(LINK_EXE)
 
-test_gravity_short_range: test_gravity_short_range.o TransferInput.o $(INTERNAL_COSMO_OBJS) Global.o Spline.o ODESolver.o ParameterMap.o FileUtils.o Math.o NumericalMethods.o
-	$(LINK_EXE)
-
-test_short_range_force: test_short_range_force.o Global.o
-	$(LINK_EXE)
-
-# Diagnostic driver; run by the dedicated short-range integration regression script.
-test_short_range_simulation: test_short_range_simulation.o TransferInput.o BaryonificationOutput.o GadgetUtils.o $(INTERNAL_COSMO_OBJS) Global.o Spline.o ODESolver.o ParameterMap.o FileUtils.o Math.o NumericalMethods.o
-	$(LINK_EXE)
-vpath BaryonificationOutput.cpp ../src
 
 .PHONY: run
 run: $(TARGETS)
@@ -50,9 +36,3 @@ run: $(TARGETS)
 	./test_cola_frame
 	./test_models
 	./test_lightcone_crossing
-	./test_short_range_force
-	./test_gravity_short_range
-
-# Actual pipeline trajectories and independent direct-reference evolution.
-benchmark_short_range_dynamics: benchmark_short_range_dynamics.o TransferInput.o BaryonificationOutput.o GadgetUtils.o $(INTERNAL_COSMO_OBJS) Global.o Spline.o ODESolver.o ParameterMap.o FileUtils.o Math.o NumericalMethods.o
-	$(LINK_EXE)

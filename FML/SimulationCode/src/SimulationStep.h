@@ -343,13 +343,12 @@ void NBodySimulation<NDIM, T>::step(const Step & s) {
         if (scaledependent_kick)
             scaledependent_kick->apply(density_grid_fourier, s, params.simulation.boxsize);
         timer.StartTiming("ComputeForce");
-        grav->compute_force_for_step(s.apos,
-                                     grav->H0_hmpc * sim.boxsize,
-                                     density_grid_fourier,
-                                     force.density_assignment_method,
-                                     force_real,
-                                     force_options,
-                                     force.short_range);
+        grav->compute_force(s.apos,
+                            grav->H0_hmpc * sim.boxsize,
+                            density_grid_fourier,
+                            force.density_assignment_method,
+                            force_real,
+                            force_options);
         timer.EndTiming("ComputeForce");
 
         timer.StartTiming("Kick");
@@ -383,7 +382,6 @@ void NBodySimulation<NDIM, T>::step(const Step & s) {
             });
         }
         kick_species_extras(s, density_grid_fourier, force_real);
-        kick_short_range_force(s);
         timer.EndTiming("Kick");
     }
     drift_and_lightcone(s);
@@ -442,19 +440,6 @@ void NBodySimulation<NDIM, T>::kick_species_extras(const Step & s,
         kick_cdm_fifth_force(s, density, force);
     if (has_neutrino_particles())
         part_neutrinos.update_weights();
-}
-
-/// Add the short acceleration once, after the ordinary PM velocity scaling and before any drift.
-template <int NDIM, class T>
-void NBodySimulation<NDIM, T>::kick_short_range_force(const Step & s) {
-    if (!current_force.short_range.enabled || s.delta_time_kick == 0)
-        return;
-    if constexpr (NDIM == 3) {
-        timer.StartTiming("ShortRangeForce");
-        grav->kick_short_range(part, current_force.short_range, s.apos, params.simulation.boxsize, s.delta_time_kick);
-        timer.EndTiming("ShortRangeForce");
-    } else
-        throw std::invalid_argument("Short-range integration requires NDIM=3");
 }
 
 /// The rest of a step after the (PM) kick: COLA kick-drift, lightcone and drift
@@ -587,13 +572,12 @@ void NBodySimulation<NDIM, T>::kick_with_interlaced_force(const Step & s) {
 
         timer.StartTiming("ComputeForce");
         std::array<FFTWGrid<NDIM>, NDIM> & force_real = pm_force_grids;
-        grav->compute_force_for_step(s.apos,
-                                     grav->H0_hmpc * sim.boxsize,
-                                     density_grid_fourier,
-                                     force.density_assignment_method,
-                                     force_real,
-                                     force_options,
-                                     force.short_range);
+        grav->compute_force(s.apos,
+                            grav->H0_hmpc * sim.boxsize,
+                            density_grid_fourier,
+                            force.density_assignment_method,
+                            force_real,
+                            force_options);
         timer.EndTiming("ComputeForce");
 
         timer.StartTiming("Kick");
@@ -632,7 +616,6 @@ void NBodySimulation<NDIM, T>::kick_with_interlaced_force(const Step & s) {
         ispecies++;
     });
     kick_species_extras(s, pm_density_workspace(force.nmesh, nleftright.first, nleftright.second + 1), pm_force_grids);
-    kick_short_range_force(s);
 }
 
 /// Do all the on the fly analysis that is turned on and write the output

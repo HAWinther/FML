@@ -82,7 +82,6 @@ class GravityModelScreened : public GravityModel<NDIM> {
     }
 
     bool get_use_screening() const { return use_screening_method or solve_exact_equation; }
-    bool short_range_screening_active() const override { return get_use_screening(); }
 
     //========================================================================
     // Model specific parts

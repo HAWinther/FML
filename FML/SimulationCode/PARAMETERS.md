@@ -193,13 +193,6 @@ Parameters marked *optional* take the default value if they are not in the param
 
 | Parameter | Type | Default | Used when | Description |
 |---|---|---|---|---|
-| `force_short_range` | bool | `false` | always | Periodic unscreened PM plus short-range forces; common-timestep N-body or COLA scope |
-| `force_short_range_split_scale` | double | *required* | force_short_range = true | Comoving Gaussian split scale in Mpc/h |
-| `force_short_range_softening_support` | double | *required* | force_short_range = true | Comoving spline support h in Mpc/h; h=2.8 Plummer-equivalent epsilon |
-| `force_short_range_backend` | string | `"cell"` | force_short_range = true | Short-range backend: cell (P3M) or tree (monopole TreePM). Options: `cell`, `tree` |
-| `force_short_range_cutoff_tolerance` | double | `1e-06` | force_short_range = true | Truncated pair-window tolerance, not a bound on relative net-force error |
-| `force_short_range_opening_angle` | double | `0.3` | force_short_range = true | Tree opening angle; 0 gives exact leaf sums |
-| `force_short_range_table_points` | int | `16384` | force_short_range = true | Kernel table resolution; 0 evaluates the analytic kernel |
 | `force_nmesh` | int | *required* | always | Grid size used to compute the PM forces |
 | `force_density_assignment_method` | string | `"CIC"` | always | Density assignment method (not NGP: its force only changes when a particle crosses a cell boundary, so near the initial lattice it is zero or jumps by order one, see EVOLUTION.md). Options: `CIC`, `TSC`, `PCS`, `PQS` |
 | `force_greens_function_kernel` | string | `"fiducial"` | always | Kernel for D^2 when solving the Poisson equation (fiducial = continuous). Options: `fiducial`, `continuous`, `discrete_2pt`, `discrete_4pt` |

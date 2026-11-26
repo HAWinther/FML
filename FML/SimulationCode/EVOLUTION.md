@@ -11,8 +11,8 @@ with the cell convention of the code and with nearest-node cells. NGP is still a
 density grids, images). The Green's function and the gradient kernel are
 options: the continuous kernels, and the kernels of Hamming, Hockney & Eastwood and GADGET; the fiducial gradient
 kernel depends on the grid, see below. The force of the screened models is described in
-[MODELS.md](MODELS.md#screening). Short-range forces on top of the PM force (P3M or TreePM, a common time step) are
-in [SHORT_RANGE.md](SHORT_RANGE.md), with COLA in [COLA_SHORT_RANGE.md](COLA_SHORT_RANGE.md).
+[MODELS.md](MODELS.md#screening). The code has no short-range force (it was removed in November 2026;
+TreePM simulations: [TreePMCode](../TreePMCode/README.md)).
 
 Force discretization uses per-simulation [ForceOptions](../NBody/ForceOptions.md), passed explicitly to the gravity
 calculation, including early-time force switching.
@@ -147,7 +147,7 @@ precision). The idea goes back to Bouchet & Kandrup (1985, ApJ 299, 1).
   so the factor is tapered to 1 at the particle Nyquist frequency and clipped. Particle modes with |k| > k_Ny get no
   correction.
 - Requirements (checked): force_nmesh an integer times particle_Npart_1D, assignment density and interpolation (not
-  NUFFT or sheet), the IC on a lattice (not read from a file), one lattice for all species, no short-range force.
+  NUFFT or sheet), the IC on a lattice (not read from a file), one lattice for all species.
 - The response must be linear in the displacement. The assignment kernel of order p (CIC p = 2, TSC 3, PCS 4) has
   knots, where it is only p - 2 times differentiable: on the nodes for even p and half-way between them for odd p.
   For CIC the knots are kinks and the response of a particle on one is not linear at all, so a CIC lattice copy on
@@ -290,8 +290,8 @@ growth D(k, a) and the right hand side of the growth equation of the model, see
 of steps; the drift is unchanged and the velocities between the kicks are effective ones (physical at the outputs). In
 the tests above one step is within 0.015% for k <= 0.4 h/Mpc (f(R); 0.1% at 0.7 h/Mpc, near the Nyquist frequency)
 and 0.00% (neutrinos), five steps within 0.002%. It costs one table of R(k) per step and changes nothing without
-scale-dependent growth. Not with velocity friction, the N-body gauge, COLA, baryons or neutrinos as separate particles,
-or a short-range force. Beyond linear order it is FastPM: one step from a ~ 0 gives Zel'dovich positions.
+scale-dependent growth. Not with velocity friction, the N-body gauge, COLA, or baryons or neutrinos as separate particles.
+Beyond linear order it is FastPM: one step from a ~ 0 gives Zel'dovich positions.
 
 The Quinn, Tassev, FastPM and BullFrog coefficients come from the library's
 [NBody/TimeStepping.h](../NBody/TimeStepping.h); see the [interface and growth conventions](../NBody/TimeStepping.md).

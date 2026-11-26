@@ -35,7 +35,8 @@ snapshots from other simulations. There is more documentation on [the website](h
     steps to z ~ 20 instead of 2LPT initial conditions).
   - FastPM with a scale-dependent kick: the linear growth of any G_eff(k, a), or of massive neutrinos, followed
     exactly for any step size (experimental).
-  - Optional [short-range forces](SHORT_RANGE.md) (P3M or TreePM).
+  - No short-range forces: for TreePM simulations use [TreePMCode](../TreePMCode/README.md) (the short-range force
+    was removed from this code in November 2026).
 - **[Matter content](SPECIES.md)**
   - CDM+baryons as one species or as two.
   - Massive neutrinos as a linear field (with any masses) or as δf particles, from any starting redshift (while they
@@ -134,7 +135,6 @@ Everything goes to `output_folder`, labelled with `simulation_name`:
 | [EVOLUTION.md](EVOLUTION.md) | PM forces, the force grid, accurate forces on a coarse grid, the lattice-calibrated Green's function, time stepping (also FastPM with a scale-dependent kick), starting from the Big Bang, COLA |
 | [SPECIES.md](SPECIES.md) | Separate CDM and baryons, neutrino masses, neutrino particles, the N-body gauge, starting at high redshift |
 | [ANALYSIS.md](ANALYSIS.md) | P(k), multipoles, halos, bispectra, hybrid-bias spectra (real and redshift space), baryonification, snapshots and lightcones |
-| [SHORT_RANGE.md](SHORT_RANGE.md), [COLA_SHORT_RANGE.md](COLA_SHORT_RANGE.md) | Short-range forces with PM and with COLA ([results](SHORT_RANGE_RESULTS.md), [clustered force](../ShortRangeGravity/tests/CLUSTERED_FORCE.md), [dynamics](DYNAMICS.md)) |
 | [DEVELOPING.md](DEVELOPING.md) | The code layout, adding parameters, particle types and models |
 | [tests/README.md](tests/README.md) | The tests: comparisons with MG-PICOLA, accuracy checks and regression tests |
 

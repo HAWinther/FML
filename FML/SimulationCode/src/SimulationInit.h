@@ -14,17 +14,6 @@ void NBodySimulation<NDIM, T>::read_parameters(const ParameterMap & param, const
     // Coupled quintessence with CDM and baryon particles: the PM force is gravity alone and the CDM gets the fifth
     // force of the CDM in a second kick (kick_cdm_fifth_force)
     grav->set_cdm_coupling_in_force(not cdm_fifth_force_separate());
-    // Library callers can construct the simulation without Main.cpp's model checks.
-    if (params.force.short_range.enabled) {
-        params.validate();
-        if (cosmo->get_OmegaMNu() != 0.0 || SIMCODE::get_parameter<bool>(param, "force_use_finite_difference_force"))
-            throw std::invalid_argument(
-                "Short-range integration currently excludes massive neutrinos and finite-difference forces");
-        grav->validate_short_range_support();
-        grav->short_range_interaction(params.ic.a_initial());
-        if (!FML::PARTICLE::has_get_id<T>())
-            throw std::invalid_argument("Short-range integration requires particle IDs");
-    }
 
     // We cannot use COLA if the particle type is not compatible with it
     if (params.simulation.use_cola and not FML::PARTICLE::has_get_D_1LPT<T>()) {

@@ -37,8 +37,6 @@ class GravityModelHorndeski final : public GravityModelScreened<NDIM> {
     const QuasiStaticGravity_Horndeski & horndeski() const {
         return static_cast<const QuasiStaticGravity_Horndeski &>(this->qs());
     }
-    double GeffOverG_highk(double a) const override { return this->GeffOverG(a, 0); }
-    double short_range_comoving_range(double /*a*/) const override { return 0.; }
     double newtonian_factor(double a) const override { return horndeski().GG4(std::log(a)); }
 
     void init() override {

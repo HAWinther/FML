@@ -14,7 +14,7 @@
 #   analyse <dir>  the ratios of the simulations against the predictions: two plots and a table
 #
 #   python3 fds_vs_lcdm_simulations.py setup runs/fds [--preset production|test] [--c -0.85] [--cprime 0.053]
-#       [--short-range] [--nbody ../nbody] [--cmb ../../Cosmology/EinsteinBoltzmannSolver/cmb]
+#       [--nbody ../nbody] [--cmb ../../Cosmology/EinsteinBoltzmannSolver/cmb]
 #   cd runs/fds && MPIRUN="mpirun -np 64" ./run_all.sh     (or the boxes one by one: ./run_all.sh L1000)
 #   python3 fds_vs_lcdm_simulations.py analyse runs/fds
 #
@@ -22,8 +22,7 @@
 #   production: L = 1000 and 250 Mpc/h, 512^3 particles, force grid 1024^3 / 1536^3, 160 / 240 steps. Per run
 #               about 40 / 70 GB of memory; 8 runs.
 #   test:       L = 500 and 125 Mpc/h, 64^3 particles (the pipeline in minutes on a laptop)
-# --short-range adds the P3M short-range force in the small box (SHORT_RANGE.md; not yet calibrated for
-# production P(k): compare with the PM runs).
+# (The --short-range option was removed with SimulationCode's short-range force; use TreePMCode for TreePM runs.)
 #==========================================================================
 import argparse
 import glob
@@ -82,7 +81,7 @@ def lcdm_omega_cdm(cmb, c, cprime, workdir):
     return float(np.exp(np.interp(xe, x, lnrho)) / COSMO["h"]**2), float(np.exp(-xe) - 1)
 
 
-def sim_params(box, model, phase, c, cprime, Oc, short_range):
+def sim_params(box, model, phase, c, cprime, Oc):
     p = dict(cases.BASE)
     for k in [k for k in p if k.startswith("bispectrum") or k.startswith("pofk_multipole") or k.startswith("fof")]:
         del p[k]
@@ -133,14 +132,6 @@ def sim_params(box, model, phase, c, cprime, Oc, short_range):
     )
     if model == "fds":
         p.update(cosmology_fds_c=c, cosmology_fds_cprime=cprime)
-    if short_range:
-        cell = box["box"] / box["nmesh"]
-        p.update(force_greens_function_kernel="continuous", force_gradient_kernel="continuous",
-                 force_density_method="assignment", force_interpolation_method="assignment",
-                 force_early_method="none", force_short_range=True, force_short_range_backend="cell",
-                 force_short_range_split_scale=1.25 * cell,
-                 force_short_range_softening_support=2.8 * box["box"] / box["npart"] / 30.0,
-                 force_short_range_cutoff_tolerance=1e-6, force_short_range_table_points=16384)
     return p
 
 
@@ -159,7 +150,7 @@ def setup(a):
             for phase in "ab":
                 d = os.path.join(root, box["name"], f"{model}_{phase}")
                 os.makedirs(d, exist_ok=True)
-                p = sim_params(box, model, phase, a.c, a.cprime, Oc, a.short_range and box is boxes[-1])
+                p = sim_params(box, model, phase, a.c, a.cprime, Oc)
                 with open(os.path.join(d, "parameterfile.lua"), "w") as f:
                     f.write(f"-- FDS vs LCDM: {box['name']} {model} phase {phase} (fds_vs_lcdm_simulations.py)\n")
                     for k, v in p.items():
@@ -305,7 +296,6 @@ if __name__ == "__main__":
     s.add_argument("--preset", choices=PRESETS, default="production")
     s.add_argument("--c", type=float, default=-0.85)
     s.add_argument("--cprime", type=float, default=0.053)
-    s.add_argument("--short-range", action="store_true")
     s.add_argument("--nbody", default=os.path.join(SIMCODE, "nbody"))
     s.add_argument("--cmb", default=os.path.join(EBS, "cmb"))
     s = sub.add_parser("analyse")

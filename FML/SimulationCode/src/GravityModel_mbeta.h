@@ -18,7 +18,6 @@ class GravityModelmbeta : public GravityModelScreened<NDIM> {
     // Take in parameters used to define m(a), beta(a)
     std::vector<double> mbeta_params;
 
-
   public:
     template <int N>
     using FFTWGrid = SimulationGrid<N>;
@@ -33,15 +32,6 @@ class GravityModelmbeta : public GravityModelScreened<NDIM> {
     using QuasiStaticGravity_MBeta = FML::COSMOLOGY::PERTURBATIONS::QuasiStaticGravity_MBeta;
     const QuasiStaticGravity_MBeta & mbeta() const { return static_cast<const QuasiStaticGravity_MBeta &>(this->qs()); }
     double phi_over_mpl_of_a(double a) const { return mbeta().phi_over_Mpl(a); }
-
-    double GeffOverG_highk(double a) const override {
-        const double b = mbeta().beta_of_a(a);
-        return 1 + 2 * b * b;
-    }
-    double short_range_comoving_range(double a) const override {
-        const double mass2 = mbeta().mass2_of_a(a);
-        return mass2 == 0 ? 0. : 1 / (a * std::sqrt(mass2) * this->H0_hmpc);
-    }
 
     std::string fifth_force_label() const override { return "(m(a),beta(a)) models"; }
 

@@ -384,13 +384,21 @@ namespace SIMCODE {
             }
         }
 
+        // Removed features: an error if they are turned on, silently ignored if turned off
+        const auto names = lfp.get_global_variable_names();
+        const bool has_short_range = std::find(names.begin(), names.end(), "force_short_range") != names.end();
+        if (has_short_range and lfp.read_bool("force_short_range", false, false))
+            throw std::runtime_error("Parameterfile: force_short_range (PM + short-range forces) was removed from "
+                                     "SimulationCode in November 2026. Use TreePMCode (FML/TreePMCode) for TreePM "
+                                     "simulations");
+
         // Warn about names in the parameterfile that are not parameters (most likely typos)
         if (FML::ThisTask == 0) {
             std::set<std::string> known;
             for (auto & spec : schema)
                 known.insert(spec.name);
-            for (auto & name : lfp.get_global_variable_names()) {
-                if (known.count(name))
+            for (auto & name : names) {
+                if (known.count(name) or name.rfind("force_short_range", 0) == 0)
                     continue;
                 std::string closest;
                 size_t best = 4;

@@ -256,20 +256,7 @@ target_link_libraries(nbody PRIVATE ${LUA_LIBRARIES} ${CMAKE_DL_LIBS})
 #-------------------------------------------------------------------
 if(FML_BUILD_TESTS)
   enable_testing()
-  # Explicit, longer accuracy experiment (not part of the default build/CTest).
-  add_executable(benchmark_short_range_dynamics EXCLUDE_FROM_ALL tests/benchmark_short_range_dynamics.cpp src/BaryonificationOutput.cpp)
-  target_link_libraries(benchmark_short_range_dynamics PRIVATE fml_core ${LUA_LIBRARIES} ${CMAKE_DL_LIBS})
-  target_compile_definitions(benchmark_short_range_dynamics PRIVATE USE_LUA)
-  target_include_directories(benchmark_short_range_dynamics PRIVATE ${LUA_INCLUDE_DIR})
-  set_target_properties(benchmark_short_range_dynamics PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
-  add_executable(test_short_range_simulation EXCLUDE_FROM_ALL tests/test_short_range_simulation.cpp src/BaryonificationOutput.cpp)
-  target_link_libraries(test_short_range_simulation PRIVATE fml_core ${LUA_LIBRARIES} ${CMAKE_DL_LIBS})
-  target_compile_definitions(test_short_range_simulation PRIVATE USE_LUA)
-  target_include_directories(test_short_range_simulation PRIVATE ${LUA_INCLUDE_DIR})
-  set_target_properties(test_short_range_simulation PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
-  set(_tests test_baryonification_parameters test_cola_frame test_models test_lightcone_crossing
-             test_short_range_force
-             test_gravity_short_range)
+  set(_tests test_baryonification_parameters test_cola_frame test_models test_lightcone_crossing)
   foreach(t IN LISTS _tests)
     add_executable(${t} tests/${t}.cpp)
     target_link_libraries(${t} PRIVATE fml_core)

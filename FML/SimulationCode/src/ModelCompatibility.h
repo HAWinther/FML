@@ -23,13 +23,6 @@ namespace SIMCODE {
                                          bool has_transfers) {
         auto fail = [](const std::string & msg) { throw std::runtime_error(msg); };
 
-        if (params.force.short_range.enabled) {
-            if (cosmo.get_OmegaMNu() != 0.0)
-                fail("force_short_range currently excludes massive neutrinos");
-            grav.validate_short_range_support();
-            grav.short_range_interaction(params.ic.a_initial());
-        }
-
         if (params.images.enabled) {
             if (NDIM != 3)
                 fail("images are only implemented for NDIM = 3");
@@ -56,9 +49,6 @@ namespace SIMCODE {
         if (cosmo.is_coupled_quintessence()) {
             if (cosmo.get_OmegaMNu() != 0.0)
                 fail("cosmology_model = CoupledQuintessence is not implemented with massive neutrinos");
-            if (params.particle.baryons and params.force.short_range.enabled)
-                fail("cosmology_model = CoupledQuintessence with particle_baryons = true is not implemented with "
-                     "force_short_range");
             // The fifth force of the CDM on the CDM (kick_cdm_fifth_force) is computed with plain density assignment
             // and interpolation
             const auto & f = params.force;

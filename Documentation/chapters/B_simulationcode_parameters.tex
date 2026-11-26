@@ -245,13 +245,6 @@ Every parameter of SimulationCode (\cref{ch:simulation-code}), as the code defin
 \endhead
 \bottomrule
 \endlastfoot
-\param{force_short_range}\newline{\footnotesize bool, \code{false}} & always & Periodic unscreened PM plus short-range forces; common-timestep N-body or COLA scope \\[2pt]
-\param{force_short_range_split_scale}\newline{\footnotesize double, \emph{required}} & \code{force_short_range} = true & Comoving Gaussian split scale in Mpc/h \\[2pt]
-\param{force_short_range_softening_support}\newline{\footnotesize double, \emph{required}} & \code{force_short_range} = true & Comoving spline support h in Mpc/h; h=2.8 Plummer-equivalent epsilon \\[2pt]
-\param{force_short_range_backend}\newline{\footnotesize string, \code{"cell"}} & \code{force_short_range} = true & Short-range backend: cell (P3M) or tree (monopole TreePM). Options: \code{cell}, \code{tree} \\[2pt]
-\param{force_short_range_cutoff_tolerance}\newline{\footnotesize double, \code{1e-06}} & \code{force_short_range} = true & Truncated pair-window tolerance, not a bound on relative net-force error \\[2pt]
-\param{force_short_range_opening_angle}\newline{\footnotesize double, \code{0.3}} & \code{force_short_range} = true & Tree opening angle; 0 gives exact leaf sums \\[2pt]
-\param{force_short_range_table_points}\newline{\footnotesize int, \code{16384}} & \code{force_short_range} = true & Kernel table resolution; 0 evaluates the analytic kernel \\[2pt]
 \param{force_nmesh}\newline{\footnotesize int, \emph{required}} & always & Grid size used to compute the PM forces \\[2pt]
 \param{force_density_assignment_method}\newline{\footnotesize string, \code{"CIC"}} & always & Density assignment method (not NGP: its force only changes when a particle crosses a cell boundary, so near the initial lattice it is zero or jumps by order one, see EVOLUTION.md). Options: \code{CIC}, \code{TSC}, \code{PCS}, \code{PQS} \\[2pt]
 \param{force_greens_function_kernel}\newline{\footnotesize string, \code{"fiducial"}} & always & Kernel for D\textasciicircum{}2 when solving the Poisson equation (fiducial = continuous). Options: \code{fiducial}, \code{continuous}, \code{discrete_2pt}, \code{discrete_4pt} \\[2pt]
