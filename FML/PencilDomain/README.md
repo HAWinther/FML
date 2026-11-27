@@ -22,7 +22,7 @@ tasks approaches `Nmesh`, or when `Nmesh` is not divisible by it.
 - The x- and y-ranges are those of the domain, whose edges must lie on cells (`edge * Nmesh` an integer; with
   `PencilDomain::uniform` `P0` and `P1` must divide `Nmesh`). Without a domain: the process grid of
   `FML::pencil_domain()` (`MPI_Dims_create`) in 3D, `NTasks x 1` in 2D, with the edges on cells as even as possible
-  (so any `Nmesh` works, unlike `FFTWGrid` which needs `NTasks` to divide it). `get_domain().particle_domain()` is the domain for `MPIParticles` (a Slab when `P1 = 1`), so that
+  (so any `Nmesh` works, unlike `FFTWGrid` which needs `NTasks` to divide it). `decomposition()` (or `FML::GRID::particle_domain_of(grid)`) is the domain for `MPIParticles` (a Slab when `P1 = 1`), so that
   particles live on the task of their cells.
 - The transform: r2c along the last axis, then (3D) a transpose in the row (`p0` fixed) and an FFT along y, then a
   transpose in the column (`p1` fixed) and an FFT along x (FFTW's guru interface). A transpose packs the block for
@@ -83,9 +83,10 @@ The particles live on the task of their cells, so a run on pencils sets the glob
 makes every grid on it:
 
 ```cpp
-FML::set_domain(FML::pencil_domain());          // or FML::pencil_domain(px, py), FML::Domain::uniform_pencil(px, py)
-auto grid = FML::GRID::make_grid<FML::GRID::PencilGrid<3>>(Nmesh, n_extra_left, n_extra_right);  // on FML::domain
-FML::PARTICLE::MPIParticles<Particle> part;     // takes FML::domain when created
+FML::set_default_particle_domain(FML::pencil_domain());          // or FML::pencil_domain(px, py), FML::Domain::uniform_pencil(px, py)
+auto grid = FML::GRID::make_grid<FML::GRID::PencilGrid<3>>(Nmesh, n_extra_left, n_extra_right,
+                                                           FML::default_particle_domain);  // on the particles' pencils
+FML::PARTICLE::MPIParticles<Particle> part;     // takes FML::default_particle_domain when created
 ```
 
 | Code | How to get pencils |
@@ -93,7 +94,7 @@ FML::PARTICLE::MPIParticles<Particle> part;     // takes FML::domain when create
 | `SimulationCode` (N-body) | `make USE_PENCIL_GRID=true`; the pencils are `FML_PENCILS="px py"` from the environment, or as square as possible. Every model, COLA, lightcones, neutrinos, ICs and output work on both |
 | `SnapshotAnalyzer` | `make USE_PENCIL_GRID=true` (the same `FML_PENCILS`); every analysis works on both |
 | `Analysis` | `-DFML_ANALYSIS_PENCIL_GRID` (`AnalysisGrid<N>`) |
-| `Survey` | `-DFML_SURVEY_PENCIL_MESH` (the survey meshes on the pencils of `FML::domain`) |
+| `Survey` | `-DFML_SURVEY_PENCIL_MESH` (the survey meshes on the pencils of `FML::default_particle_domain`) |
 | Library functions on grids | Templated on the grid: pass a `PencilGrid` (power spectra, polyspectra, random fields, LPT, smoothing, Hessian, NUFFT, multigrid, voids, morphology, cosmic web, hybrid bias, sheet interpolation, glass ICs, ...). Some take the grid type as a template argument, e.g. `RSDReconstructionFourierMethod<N, T, FML::GRID::PencilGrid>` |
 | EdS arbitrary-order LPT | `compute_eds_lpt(input, options)` with a `PencilGrid` input: computed natively on pencils |
 | Particle methods | On the domain of the particles: FoF (`FoFDomain.h`), Delaunay / DTFE (`MPIPeriodicDelaunay(domain)`, `DTFE(domain)`), SPH, the GADGET / HDF5 / RAMSES readers |

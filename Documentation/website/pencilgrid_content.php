@@ -62,11 +62,11 @@ The particles live on the task of their cells, so set the global domain to penci
 <div style="text-align: center">
 <div style="width:760px;display: inline-block;text-align: left">
 <pre class="prettyprint">
-FML::set_domain(FML::pencil_domain());     // or FML::pencil_domain(px, py)
+FML::set_default_particle_domain(FML::pencil_domain());     // or FML::pencil_domain(px, py)
 
-// A grid on FML::domain (make_grid works for FFTWGrid, PencilGrid, ...)
+// A grid on FML::default_particle_domain (make_grid works for FFTWGrid, PencilGrid, ...)
 using Grid = FML::GRID::PencilGrid&lt;3&gt;;
-auto grid = FML::GRID::make_grid&lt;Grid&gt;(Nmesh, n_extra_left, n_extra_right);
+auto grid = FML::GRID::make_grid&lt;Grid&gt;(Nmesh, n_extra_left, n_extra_right, FML::default_particle_domain);
 
 grid.fill_real_grid([](std::array&lt;double, 3&gt; &amp; x) { return std::sin(2 * M_PI * x[0]); });
 grid.fftw_r2c();                            // normalized by 1/Nmesh^3
@@ -79,7 +79,7 @@ for (auto &amp;&amp; index : grid.get_fourier_range()) {
 grid.fftw_c2r();
 grid.communicate_boundaries();
 
-FML::PARTICLE::MPIParticles&lt;Particle&gt; part;   // on FML::domain when created
+FML::PARTICLE::MPIParticles&lt;Particle&gt; part;   // on FML::default_particle_domain when created
 </pre>
 </div>
 </div>
@@ -98,7 +98,7 @@ The methods have the names and meaning of $\texttt{FFTWGrid}$. The differences: 
 <tr><td><a href="nbodycode.php" style="display: inline">SimulationCode</a></td><td><tt>make USE_PENCIL_GRID=true</tt>. The pencils are <tt>FML_PENCILS="px py"</tt> from the environment, or as square as possible. Every gravity model, COLA, lightcones, neutrinos, ICs and every output and analysis work on both.</td></tr>
 <tr><td><a href="snapshotanalyzer.php" style="display: inline">SnapshotAnalyzer</a></td><td><tt>make USE_PENCIL_GRID=true</tt> (the same <tt>FML_PENCILS</tt>); every analysis works on both.</td></tr>
 <tr><td>FML/Analysis</td><td><tt>-DFML_ANALYSIS_PENCIL_GRID</tt> (the grids are <tt>AnalysisGrid&lt;N&gt;</tt>).</td></tr>
-<tr><td><a href="survey.php" style="display: inline">Survey</a></td><td><tt>-DFML_SURVEY_PENCIL_MESH</tt>: the survey meshes on the pencils of <tt>FML::domain</tt>.</td></tr>
+<tr><td><a href="survey.php" style="display: inline">Survey</a></td><td><tt>-DFML_SURVEY_PENCIL_MESH</tt>: the survey meshes on the pencils of <tt>FML::default_particle_domain</tt>.</td></tr>
 <tr><td>Library functions on grids</td><td>Templated on the grid: pass a $\texttt{PencilGrid}$. Power spectra, polyspectra and multipoles, random fields, LPT, smoothing, Hessians, NUFFT, the multigrid solvers, voids, morphology, cosmic web, hybrid bias, sheet interpolation, glass ICs and more. Some take the grid type as a template argument, e.g. <tt>RSDReconstructionFourierMethod&lt;N, T, FML::GRID::PencilGrid&gt;</tt>.</td></tr>
 <tr><td><a href="lpt.php#ArbitraryOrder" style="display: inline">EdS arbitrary-order LPT</a></td><td><tt>compute_eds_lpt(input, options)</tt> with a $\texttt{PencilGrid}$ input: computed natively on pencils.</td></tr>
 <tr><td>Particle methods</td><td>On the domain of the particles: <a href="fof.php" style="display: inline">FoF</a> (<tt>FoFDomain.h</tt>), <a href="tesselation.php" style="display: inline">Delaunay</a> and <a href="dtfe.php" style="display: inline">DTFE</a> (<tt>MPIPeriodicDelaunay(domain)</tt>, <tt>DTFE(domain)</tt>), SPH, the GADGET / HDF5 / RAMSES readers.</td></tr>

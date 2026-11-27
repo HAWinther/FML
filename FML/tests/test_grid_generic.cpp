@@ -271,7 +271,7 @@ namespace {
                         domains.push_back(FML::PencilDomain::uniform(p0, FML::NTasks / p0));
             for (auto & domain : domains) {
                 // The particles on the pencils of the grid
-                FML::PARTICLE::MPIParticles<Part<N>> particles(domain.particle_domain());
+                FML::PARTICLE::MPIParticles<Part<N>> particles{FML::Domain(domain)};
                 particles.create(mine, 4 * mine.size() + 100, FML::PARTICLE::Input::Distributed);
                 const auto result =
                     pm_force<N>(PencilGrid<N>(Nmesh, extra.first, extra.second, domain), particles, method);
@@ -382,7 +382,7 @@ namespace {
                     if (FML::NTasks % p0 == 0 and Nmesh % p0 == 0 and Nmesh % (FML::NTasks / p0) == 0)
                         domains.push_back(FML::PencilDomain::uniform(p0, FML::NTasks / p0));
             for (auto & domain : domains) {
-                FML::PARTICLE::MPIParticles<PartV<N>> particles(domain.particle_domain());
+                FML::PARTICLE::MPIParticles<PartV<N>> particles{FML::Domain(domain)};
                 particles.create(mine, 4 * mine.size() + 100, FML::PARTICLE::Input::Distributed);
                 const PencilGrid<N> grid(Nmesh, extra.first, extra.second, domain);
                 for (int step = 0; step < nsteps; step++)

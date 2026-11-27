@@ -627,6 +627,67 @@ namespace FML::INTERPOLATION {
                                  density_assignment_method + "]");
     }
 
+    /// The overdensity field in Fourier space of particles on any task (as particles_to_fourier_grid): the deposit of
+    /// particles_to_grid_any_domain, Fourier transformed, and with interlacing the mean with a second deposit at
+    /// positions shifted by half a cell (the same alias cancellation as particles_to_fourier_grid_interlacing; the
+    /// window function is not deconvolved). Collective
+    template <int N, class T, template <int> class Grid>
+    void particles_to_fourier_grid_any_domain(const T * part,
+                                              size_t NumPart,
+                                              size_t NumPartTot,
+                                              Grid<N> & density_grid_fourier,
+                                              const std::string & density_assignment_method,
+                                              bool interlacing,
+                                              const DepositOptions & options = {}) {
+        density_grid_fourier.set_grid_status_real(true);
+        particles_to_grid_any_domain<N, T>(part,
+                                           NumPart,
+                                           NumPartTot,
+                                           density_grid_fourier,
+                                           density_assignment_method,
+                                           {},
+                                           options);
+        density_grid_fourier.fftw_r2c();
+        if (not interlacing)
+            return;
+        const int Ngrid = density_grid_fourier.get_nmesh();
+        const double shift = 1.0 / double(2 * Ngrid);
+        std::array<double, N> assignment_offset;
+        assignment_offset.fill(shift);
+        using FML::GRID::make_grid_like; // unqualified: found by ADL for grid types declared after this header
+        auto shifted = make_grid_like(density_grid_fourier,
+                                      Ngrid,
+                                      density_grid_fourier.get_n_extra_slices_left(),
+                                      density_grid_fourier.get_n_extra_slices_right());
+        shifted.set_grid_status_real(true);
+        particles_to_grid_any_domain<N, T>(part,
+                                           NumPart,
+                                           NumPartTot,
+                                           shifted,
+                                           density_assignment_method,
+                                           assignment_offset,
+                                           options);
+        shifted.fftw_r2c();
+        // (as particles_to_fourier_grid_interlacing)
+#ifdef USE_OMP
+#pragma omp parallel for
+#endif
+        for (FML::IndexIntType irow = 0; irow < density_grid_fourier.get_local_nrows_fourier(); irow++) {
+            const std::complex<FML::GRID::FloatType> I(0, 1);
+            for (auto && fourier_index : density_grid_fourier.get_fourier_range_of_rows(irow, irow + 1)) {
+                auto kvec = density_grid_fourier.get_fourier_wavevector_from_index(fourier_index);
+                auto ksum = kvec[0];
+                for (int idim = 1; idim < N; idim++)
+                    ksum += kvec[idim];
+                auto norm = std::exp(I * FML::GRID::FloatType(ksum * shift));
+                auto grid1 = density_grid_fourier.get_fourier_from_index(fourier_index);
+                auto grid2 = shifted.get_fourier_from_index(fourier_index);
+                density_grid_fourier.set_fourier_from_index(fourier_index,
+                                                            (grid1 + norm * grid2) / FML::GRID::FloatType(2.0));
+            }
+        }
+    }
+
     /// The overdensity field of MPIParticles on any domain (Slab, Pencil, PeanoHilbert) on a distributed grid
     template <int N, class T, template <int> class Grid>
     DepositInfo particles_to_grid_any_domain(FML::PARTICLE::MPIParticles<T> & part,

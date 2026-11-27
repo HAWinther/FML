@@ -448,10 +448,38 @@ endif
 	  ! $(RUN1) ./test_numcore $${m%%:*} > numcore.log 2>&1 && grep -qF "$${m#*:}" numcore.log && echo "[PASS] test_numcore $${m%%:*} gives an error" || exit 1; \
 	done; rm -f numcore.log
 
+# The domain and pencil tests: run every night (nightly.yml), not in CI. make run-domain (NP_LIST as for run); the
+# Delaunay tessellation and the DTFE on pencils also with USE_CGAL=true
+DOMAIN_TARGETS := test_grid_decomposition test_coupling_any_domain test_fof_domain test_multigrid_domain \
+                  test_nufft_domain test_grid_generic test_complex_grids test_ghosted_cells test_ghosts_pencil \
+                  test_assignment_pencil test_cosmicweb_pencil test_eds_lpt_pencil test_glass_pencil \
+                  test_hybridbias_pencil test_interp_pencil test_lpt_pencil test_morphology_pencil \
+                  test_pencil_checkpoint test_ramses_pencil test_random_pencil test_reconstruction_pencil \
+                  test_screened_pencil test_sheet_pencil test_spectra_pencil test_sph_pencil test_voids_pencil
+ifeq ($(USE_CGAL),true)
+DOMAIN_TARGETS += test_delaunay_domain test_dtfe_pencil
+endif
+.PHONY: run-domain
+run-domain: $(DOMAIN_TARGETS)
+	@set -e; for np in $(NP_LIST); do \
+	  for t in $(DOMAIN_TARGETS); do \
+	    echo "== Running $$t with $$np task(s)"; \
+	    OMP_NUM_THREADS=1 $(RUN) ./$$t; \
+	  done; \
+	done
+
 # The grid interface
 test_grid_generic: test_grid_generic.o PencilGrid.o Global.o Spline.o ODESolver.o
 	$(LINK_EXE)
 vpath PencilGrid.cpp $(FML_ROOT)/PencilDomain
+
+# The decomposition of every grid type (grid.decomposition())
+test_grid_decomposition: test_grid_decomposition.o PencilGrid.o Global.o
+	$(LINK_EXE)
+
+# Particles and grids on different domains (P(k), N-body step)
+test_coupling_any_domain: test_coupling_any_domain.o Global.o
+	$(LINK_EXE)
 
 # FoF on a domain
 test_fof_domain: test_fof_domain.o Global.o

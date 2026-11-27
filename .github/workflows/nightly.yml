@@ -1,5 +1,6 @@
 # Longer accuracy checks of SimulationCode, every night and on demand. Also what CI (ci.yml) leaves out to stay fast:
-# the library and module tests on 2 MPI tasks too, the Einstein-Boltzmann solver's tests and a single precision build
+# the library and module tests on 2 MPI tasks too, the domain and pencil tests, the Einstein-Boltzmann solver's tests
+# and a single precision build
 name: Nightly accuracy checks
 
 on:
@@ -22,7 +23,7 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           cache-key: nightly
-          extra-packages: python3-scipy python3-pip cython3
+          extra-packages: python3-scipy python3-pip cython3 libcgal-dev
 
       # CLASS (python wrapper) for the N-body gauge check
       - name: Install CLASS
@@ -34,6 +35,13 @@ jobs:
       - name: Library tests
         if: always()
         run: make -C FML test -j4 MPIRUN="mpirun --oversubscribe" NP_LIST="1 2 4"
+
+      # The domain and pencil tests (not in CI), with the Delaunay tessellation and the DTFE on pencils (CGAL)
+      - name: Domain and pencil tests (1, 2 and 4 MPI tasks)
+        if: always()
+        run: >-
+          make -C FML/tests -j4 run-domain MPIRUN="mpirun --oversubscribe" NP_LIST="1 2 4"
+          USE_CGAL=true CGAL_INCLUDE=/usr/include CGAL_LIB=/usr/lib/x86_64-linux-gnu
 
       - name: Module tests, including the Einstein-Boltzmann solver (1, 2 and 4 MPI tasks)
         if: always()

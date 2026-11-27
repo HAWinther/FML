@@ -1,5 +1,5 @@
-// The RAMSES particle reader with a pencil FML::domain keeps the particles of the pencil of the task (it
-// needs x and y): a small synthetic snapshot read on slabs and on pencils gives the same particles
+// The RAMSES particle reader with a pencil FML::default_particle_domain keeps the particles of the pencil of the task
+// (it needs x and y): a small synthetic snapshot read on slabs and on pencils gives the same particles
 #include <FML/Global/MPICounts.h>
 #include <FML/Global/Global.h>
 #include <FML/RamsesUtils/RamsesUtils.h>
@@ -76,7 +76,7 @@ namespace {
         owned = true;
         std::vector<std::array<double, 6>> local;
         for (auto & q : p) {
-            owned = owned and FML::domain.owner(q.pos) == FML::ThisTask;
+            owned = owned and FML::default_particle_domain.owner(q.pos) == FML::ThisTask;
             local.push_back({q.pos[0], q.pos[1], q.pos[2], q.vel[0], q.vel[1], q.vel[2]});
         }
         auto all = FML::COMMUNICATION::gather_records_checked(local, true);
@@ -97,14 +97,14 @@ int main() {
     bool owned_slab;
     const auto ref = read(owned_slab);
     check(owned_slab and ref.size() == size_t(ncpu * npart_per_file), "slabs: all the particles, each on its task");
-    const FML::Domain slab = FML::domain;
+    const FML::Domain slab = FML::default_particle_domain;
     for (int p0 = 1; p0 <= FML::NTasks; p0++) {
         if (FML::NTasks % p0)
             continue;
-        FML::set_domain(FML::Domain::uniform_pencil(p0, FML::NTasks / p0));
+        FML::set_default_particle_domain(FML::Domain::uniform_pencil(p0, FML::NTasks / p0));
         bool owned;
         const auto res = read(owned);
-        FML::set_domain(slab);
+        FML::set_default_particle_domain(slab);
         check(owned and res == ref, "pencils " + std::to_string(p0) + "x" + std::to_string(FML::NTasks / p0) +
                                         ": the particles of the slabs, each on the task of its pencil");
     }

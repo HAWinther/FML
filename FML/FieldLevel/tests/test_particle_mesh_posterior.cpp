@@ -177,7 +177,8 @@ static Summary exercise(const FML::Domain & domain, const std::string & label, b
     if (FML::ThisTask == 0) std::cout << "PM_POSTERIOR_BACKEND_ERROR " << name << ' ' << e << '\n';
 }
 int main(int argc, char ** argv) {
-    const auto slab = FML::Domain::uniform_slab(FML::NTasks); FML::set_domain(slab);
+    const auto slab = FML::Domain::uniform_slab(FML::NTasks);
+    FML::set_default_particle_domain(slab);
     std::ofstream table, fields;
     if (argc > 1 && FML::ThisTask == 0) {
         table.open(std::string(argv[1]) + ".gradients.csv"); fields.open(std::string(argv[1]) + ".fields.csv");
@@ -192,7 +193,8 @@ int main(int argc, char ** argv) {
           "invalid noise prior rejected");
 #ifdef USE_MPI
     const int px = FML::NTasks == 4 ? 2 : FML::NTasks, py = FML::NTasks / px;
-    const auto pencil = FML::Domain::uniform_pencil(px, py); FML::set_domain(pencil);
+    const auto pencil = FML::Domain::uniform_pencil(px, py);
+    FML::set_default_particle_domain(pencil);
     compare(baseline, exercise<FML::GRID::PencilGrid<3>>(pencil, "pencil", true, 4, 8, &table, &fields), "pencil", true);
     compare(dense, exercise<FML::GRID::PencilGrid<3>>(pencil, "dense-pencil", false, 8, 4, &table), "dense-pencil", false);
     compare(compensated, exercise<FML::GRID::PencilGrid<3>>(pencil, "compensated-pencil", false, 8, 4, &table, nullptr, FF::PMForceWindow::CICCompensated), "compensated-pencil", false);
@@ -201,7 +203,7 @@ int main(int argc, char ** argv) {
         exercise<FML::GRID::PencilGrid<3>>(pencil, "unequal-N10", false, 10, 20, &table);
     }
     if (FML::NTasks > 1) {
-        FML::set_domain(slab);
+        FML::set_default_particle_domain(slab);
         check(FML::TESTS::throws([&] { auto bad = noise(); bad.mean += FML::ThisTask; FF::PeriodicPMModel invalid(configuration(), spectrum(), settings(), bad); }),
               "rank-dependent noise priors rejected collectively");
     }

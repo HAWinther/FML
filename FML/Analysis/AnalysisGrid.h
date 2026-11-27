@@ -4,7 +4,8 @@
 // =====================================================================================================================
 // The grids of the analyses (SnapshotAnalyzer): FFTWGrid slabs, or (-DFML_ANALYSIS_PENCIL_GRID, e.g.
 // make USE_PENCIL_GRID=true in SnapshotAnalyzer) PencilGrid pencils. The grids are decomposed as the particles, the
-// fiducial domain FML::domain (FML::set_domain(FML::Domain::uniform_pencil(px, py)) for pencils)
+// fiducial domain FML::default_particle_domain (FML::set_default_particle_domain(FML::Domain::uniform_pencil(px, py))
+// for pencils)
 // =====================================================================================================================
 
 #include <FML/FFTWGrid/FFTWGrid.h>
@@ -30,10 +31,13 @@ namespace FML {
         template <int N>
         inline constexpr bool analysis_grid_is_fftwgrid = FML::GRID::is_fftwgrid_v<AnalysisGrid<N>>;
 
-        /// A grid for the analyses, decomposed as FML::domain
+        /// A grid for the analyses, decomposed as FML::default_particle_domain
         template <int N = 3>
         AnalysisGrid<N> make_analysis_grid(int nmesh, int n_extra_left = 0, int n_extra_right = 0) {
-            return FML::GRID::make_grid<AnalysisGrid<N>>(nmesh, n_extra_left, n_extra_right, FML::domain);
+            return FML::GRID::make_grid<AnalysisGrid<N>>(nmesh,
+                                                         n_extra_left,
+                                                         n_extra_right,
+                                                         FML::default_particle_domain);
         }
 
         /// The number of local cells along x and y of a grid (slabs: y is whole)

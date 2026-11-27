@@ -6,9 +6,9 @@
 // (e.g. PencilGrid<N>). FFTWGrid keeps its own (optimized) implementation in ParticleGridInterpolation.h: these
 // overloads are chosen for the other grid types (an FFTWGrid<N>& parameter is more specialized than Grid<N>&).
 //
-// The particles must be in the domain of the grid (for a PencilGrid: get_domain().particle_domain()). An axis whose
-// local range (get_local_range) is all of it is periodic within the task; on the others the kernel reaches into the
-// extra cells, which are added to their owners (add_contribution_from_extra_cells) or must be filled before
+// The particles must be in the domain of the grid (FML::GRID::particle_domain_of(grid), i.e. grid.decomposition()). An
+// axis whose local range (get_local_range) is all of it is periodic within the task; on the others the kernel reaches
+// into the extra cells, which are added to their owners (add_contribution_from_extra_cells) or must be filled before
 // interpolating (communicate_boundaries).
 // =====================================================================================================================
 

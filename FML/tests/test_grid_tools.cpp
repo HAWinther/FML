@@ -51,7 +51,7 @@ std::vector<Particle<N>> random_particles(size_t n, unsigned int seed, std::vect
             p.pos[idim] = p.q[idim] = dist(gen);
         if (all)
             all->push_back(p);
-        if (p.pos[0] >= FML::xmin_domain and p.pos[0] < FML::xmax_domain)
+        if (FML::default_particle_domain.contains(FML::ThisTask, p.pos))
             local.push_back(p);
     }
     return local;
@@ -140,7 +140,7 @@ void test_nufft(int nmesh, size_t npart, double epsilon, double sigma = 2.0) {
     maxval = 0.0;
     size_t ilocal = 0;
     for (size_t ip = 0; ip < all.size(); ip++) {
-        if (not(all[ip].pos[0] >= FML::xmin_domain and all[ip].pos[0] < FML::xmax_domain))
+        if (not(FML::default_particle_domain.contains(FML::ThisTask, all[ip].pos)))
             continue;
         maxerr = std::max(maxerr, std::abs(fnufft[ilocal++] - fdirect[ip]));
         maxval = std::max(maxval, std::abs(fdirect[ip]));
@@ -525,7 +525,7 @@ int main(int argc, char ** argv) {
         double maxerr = 0.0, maxval = 0.0;
         size_t ilocal = 0;
         for (auto & p : all) {
-            if (not(p.pos[0] >= FML::xmin_domain and p.pos[0] < FML::xmax_domain))
+            if (not(FML::default_particle_domain.contains(FML::ThisTask, p.pos)))
                 continue;
             std::array<double, 3> f{};
             for (int i0 = -n / 2 + 1; i0 < n / 2; i0++)
@@ -582,7 +582,7 @@ int main(int argc, char ** argv) {
                 p.pos[idim] = q[idim] + psi(q, idim);
                 p.pos[idim] -= std::floor(p.pos[idim]);
             }
-            if (p.pos[0] >= FML::xmin_domain and p.pos[0] < FML::xmax_domain)
+            if (FML::default_particle_domain.contains(FML::ThisTask, p.pos))
                 part.push_back(p);
         }
 
@@ -607,7 +607,7 @@ int main(int argc, char ** argv) {
         double maxerr = 0.0;
         int outside = 0;
         for (auto & t : tracers) {
-            if (not(t.pos[0] >= FML::xmin_domain and t.pos[0] < FML::xmax_domain))
+            if (not(FML::default_particle_domain.contains(FML::ThisTask, t.pos)))
                 outside = 1;
             double best = 1e10;
             std::array<int, 3> i0;
@@ -647,7 +647,7 @@ int main(int argc, char ** argv) {
                 p.pos[idim] = q[idim] + psi(q, idim);
                 p.pos[idim] -= std::floor(p.pos[idim]);
             }
-            if (p.pos[0] >= FML::xmin_domain and p.pos[0] < FML::xmax_domain)
+            if (FML::default_particle_domain.contains(FML::ThisTask, p.pos))
                 analytic.push_back(p);
         }
         FFTWGrid<3> density_ref(nmesh, 1, 2);

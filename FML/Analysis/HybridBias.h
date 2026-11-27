@@ -422,7 +422,7 @@ namespace FML {
         inline HybridBiasLinearField linear_field_from_file(const std::string & filename, double boxsize) {
             namespace HB = FML::CORRELATIONFUNCTIONS::HYBRIDBIAS;
             HB::LinearFieldFileHeader header;
-            auto grid = HB::read_linear_field<3, AnalysisGrid>(filename, header, FML::domain);
+            auto grid = HB::read_linear_field<3, AnalysisGrid>(filename, header, FML::default_particle_domain);
             if (std::abs(header.boxsize / boxsize - 1.0) > 1e-6)
                 throw std::runtime_error("Hybrid bias: the linear field file has boxsize " +
                                          std::to_string(header.boxsize) + " Mpc/h, the snapshot " +

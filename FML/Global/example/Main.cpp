@@ -15,8 +15,9 @@ int main() {
     // FML::info();
 
     // The stuff we store in global
-    std::cout << "Task " << FML::ThisTask << " Total Tasks: " << FML::NTasks << " xmin: " << FML::xmin_domain
-              << " xmax: " << FML::xmax_domain << std::endl;
+    std::cout << "Task " << FML::ThisTask << " Total Tasks: " << FML::NTasks
+              << " xmin: " << FML::default_particle_domain.x_min(FML::ThisTask)
+              << " xmax: " << FML::default_particle_domain.x_max(FML::ThisTask) << std::endl;
 
 #ifdef MEMORY_LOGGING
     // Print the FML memory log

@@ -59,14 +59,10 @@ namespace FML::GLASSIC {
         // MPIParticles requires reserved receive capacity. Count destinations first, then grow only local storage.
         inline void migrate(Particles & p) {
 #ifdef USE_MPI
-            const auto upper = FML::GatherFromTasks(&FML::xmax_domain);
-            const bool slab = FML::domain.is_slab();
             std::vector<unsigned long long> send(FML::NTasks, 0), recv(FML::NTasks, 0);
             for (size_t i = 0; i < p.get_npart(); ++i) {
                 const auto & position = p.get_particles_ptr()[i].position;
-                const auto owner = slab ? std::upper_bound(upper.begin(), upper.end(), position[0]) - upper.begin() :
-                                          std::ptrdiff_t(FML::domain.owner(position.data()));
-                ++send.at(size_t(owner));
+                ++send.at(size_t(FML::default_particle_domain.owner(position.data())));
             }
             MPI_Alltoall(send.data(),
                          1,
@@ -94,34 +90,35 @@ namespace FML::GLASSIC {
         template <class G>
         void check_grid(G & grid) {
             if constexpr (FML::GRID::is_fftwgrid_v<G>) {
+                const auto box = FML::default_particle_domain.box(FML::ThisTask);
                 require(grid.get_nmesh() > 0 && grid.get_local_nx() > 0 && grid.get_n_extra_slices_left() >= 1 &&
-                            grid.get_n_extra_slices_right() >= 1 &&
-                            double(grid.get_local_x_start()) / grid.get_nmesh() == FML::xmin_domain &&
-                            double(grid.get_local_x_start() + grid.get_local_nx()) / grid.get_nmesh() ==
-                                FML::xmax_domain,
+                            grid.get_n_extra_slices_right() >= 1 && FML::default_particle_domain.is_slab() &&
+                            double(grid.get_local_x_start()) / grid.get_nmesh() == box.lo[0] &&
+                            double(grid.get_local_x_start() + grid.get_local_nx()) / grid.get_nmesh() == box.hi[0],
                         "[GlassIC] Need nonempty FFT slabs matching particle domains and one halo on each side");
             } else {
-                // The centers of the first and the last local cells are in the local domain of FML::domain
+                // The centers of the first and the last local cells are in the local domain of
+                // FML::default_particle_domain
                 const double h = 1.0 / std::max(1, grid.get_nmesh());
                 const auto rx = grid.get_local_range(0), ry = grid.get_local_range(1);
                 const double lo[3] = {(rx[0] + 0.5) * h, (ry[0] + 0.5) * h, 0.0};
                 const double hi[3] = {(rx[0] + rx[1] - 0.5) * h, (ry[0] + ry[1] - 0.5) * h, 0.0};
                 require(grid.get_nmesh() > 0 && rx[1] > 0 && ry[1] > 0 && grid.get_n_extra_slices_left() >= 1 &&
-                            grid.get_n_extra_slices_right() >= 1 && FML::domain.owner(lo) == FML::ThisTask &&
-                            FML::domain.owner(hi) == FML::ThisTask,
-                        "[GlassIC] Need a grid decomposed as the particle domain FML::domain and one halo on each side");
+                            grid.get_n_extra_slices_right() >= 1 &&
+                            FML::default_particle_domain.owner(lo) == FML::ThisTask &&
+                            FML::default_particle_domain.owner(hi) == FML::ThisTask,
+                        "[GlassIC] Need a grid decomposed as the particle domain FML::default_particle_domain and one "
+                        "halo on each side");
             }
         }
-        // Is a position in the local domain of FML::domain?
+        // Is a position in the local domain of FML::default_particle_domain?
         inline bool owned(const Vector & position) {
-            if (FML::domain.is_slab())
-                return position[0] >= FML::xmin_domain && position[0] < FML::xmax_domain;
-            return FML::domain.owner(position.data()) == FML::ThisTask;
+            return FML::default_particle_domain.contains(FML::ThisTask, position.data());
         }
         inline void check_load(Load & load) {
             // (slabs: FFTWGrid; pencils: PencilGrid, the template parameter of relax etc.)
-            require(FML::domain.is_slab() || FML::domain.holds<FML::PencilDomain>(),
-                    "[GlassIC] FML::domain must be a Slab or a Pencil domain");
+            require(FML::default_particle_domain.is_slab() || FML::default_particle_domain.holds<FML::PencilDomain>(),
+                    "[GlassIC] FML::default_particle_domain must be a Slab or a Pencil domain");
             same(load.seed, "[GlassIC] Seed differs between ranks");
             same(load.boxsize, "[GlassIC] Box metadata differs between ranks");
             same(int(load.perturbed), "[GlassIC] Load state differs between ranks");
@@ -216,8 +213,9 @@ namespace FML::GLASSIC {
         return {std::sqrt(f2 / n), std::sqrt(fmax), std::sqrt(v2 / n), std::sqrt(vmax)};
     }
     // Persistent four-grid PM workspace. Short-range cells/ghosts rebuild after each drift.
-    /// The force on the particles of a load (long range on a grid of type G, decomposed as FML::domain: FFTWGrid
-    /// for slabs, PencilGrid for pencils; short range from the particles within the cutoff)
+    /// The force on the particles of a load (long range on a grid of type G, decomposed as
+    /// FML::default_particle_domain: FFTWGrid for slabs, PencilGrid for pencils; short range from the particles within
+    /// the cutoff)
     template <class G = Grid>
     class ForceOn {
         G density;
@@ -249,10 +247,10 @@ namespace FML::GLASSIC {
             o.coupling = 1 / (4 * std::acos(-1.) * double(n));
             // Kernel construction is identical on all ranks after the collective settings checks.
             kernel = FML::SHORT_RANGE_GRAVITY::Kernel(o);
-            density = FML::GRID::make_grid<G>(mesh, 1, 1, FML::domain);
+            density = FML::GRID::make_grid<G>(mesh, 1, 1, FML::default_particle_domain);
             detail::check_grid(density);
             for (auto & g : psi)
-                g = FML::GRID::make_grid<G>(mesh, 1, 1, FML::domain);
+                g = FML::GRID::make_grid<G>(mesh, 1, 1, FML::default_particle_domain);
         }
         std::vector<Vector> operator()(Load & load) {
             detail::check_load(load);
@@ -300,9 +298,11 @@ namespace FML::GLASSIC {
                 const auto & p = load.particles.get_particles_ptr()[i];
                 owned[i] = {p.position, 1, p.id};
             }
-            auto sources = FML::domain.is_slab() ?
-                               exchange_slab_ghosts(owned, FML::xmin_domain, FML::xmax_domain, kernel) :
-                               exchange_domain_ghosts(owned, FML::domain, kernel);
+            const auto & domain = FML::default_particle_domain;
+            auto sources =
+                domain.is_slab() ?
+                    exchange_slab_ghosts(owned, domain.x_min(FML::ThisTask), domain.x_max(FML::ThisTask), kernel) :
+                    exchange_domain_ghosts(owned, domain, kernel);
             std::sort(sources.particles.begin(), sources.particles.end(), [](const auto & a, const auto & b) {
                 return a.id < b.id;
             });
@@ -322,8 +322,8 @@ namespace FML::GLASSIC {
         const int target = std::max(4, int(std::ceil(3.0 * std::cbrt(double(count)) - 1e-9)));
         return ((target + step - 1) / step) * step;
     }
-    /// Relax a load to a glass. G: the grid type of the long-range force (FFTWGrid for a Slab FML::domain, PencilGrid
-    /// for a Pencil FML::domain)
+    /// Relax a load to a glass. G: the grid type of the long-range force (FFTWGrid for a Slab
+    /// FML::default_particle_domain, PencilGrid for a Pencil FML::default_particle_domain)
     template <class G = Grid>
     Result relax(Load & load, Options o = {}) {
         for (int x : {o.max_steps, o.min_steps, o.stable_steps})

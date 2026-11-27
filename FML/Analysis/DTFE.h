@@ -98,10 +98,12 @@ namespace FML {
             context.validate();
             const auto sampling = settings.sampling == "grid_point" ? DTFESampling::GridPoint : DTFESampling::CellAverage;
             const auto weighting = settings.weighting == "mass" ? DTFEWeighting::Mass : DTFEWeighting::Volume;
-            // (slabs: the slabs of FML::domain; other domains: the particles are on FML::domain)
+            // (slabs: the slabs of FML::default_particle_domain; other domains: the particles are on
+            // FML::default_particle_domain)
             const auto tess = settings.tessellation == "cgal" ? DTFETessellation::CGAL : DTFETessellation::Native;
-            auto dtfe_ptr = analysis_grid_is_fftwgrid<3> ? std::make_unique<DTFE<P>>(tess) :
-                                                           std::make_unique<DTFE<P>>(FML::domain, tess);
+            auto dtfe_ptr = analysis_grid_is_fftwgrid<3> ?
+                                std::make_unique<DTFE<P>>(tess) :
+                                std::make_unique<DTFE<P>>(FML::default_particle_domain, tess);
             auto & dtfe = *dtfe_ptr;
             dtfe.create(part, npart, settings.buffer_fraction, settings.random_fraction);
             DTFEFields f;

@@ -1,5 +1,5 @@
 \chapter{Parallelism and domain decomposition}\label{ch:parallelism}
-\chapterstatus{written}{2026-11-14}
+\chapterstatus{written}{2026-11-26}
 
 \fml{} is written for distributed memory with MPI and shared memory with OpenMP, and every module also compiles and
 runs without either. This chapter describes the runtime that sets them up, how the box is decomposed over the tasks
@@ -31,8 +31,7 @@ and the globals, and finalises them at exit. With \code{NO_AUTO_FML_SETUP} the u
 \code{MPI_COMM_WORLD}) and then calls \code{FML::init_fml()} (and \code{FML::GRID::init_fftw}).
 
 The globals are \code{FML::ThisTask} and \code{FML::NTasks}, the number of threads, whether MPI and threads can be combined
-with FFTW, the local x-range of the particle domain \code{xmin_domain}, \code{xmax_domain} and the domain itself
-(\cref{sec:par-domains}). On Linux the CPU affinity masks are checked: \code{NTasksThreadsShareCores} counts the tasks
+with FFTW, and the default particle domain (\cref{sec:par-domains}). On Linux the CPU affinity masks are checked: \code{NTasksThreadsShareCores} counts the tasks
 that have fewer cores than OpenMP threads, a common misconfiguration of \code{mpirun}.
 
 \paragraph*{Collectives and errors.} Inplace reductions of one value or an array (\code{SumOverTasks}, \code{MinOverTasks},
@@ -53,16 +52,32 @@ The unit box $[0,1)^D$ is decomposed by a \cls{Domain}, a \code{std::variant} of
 (\code{owner(pos)}, \code{owner_near(task, pos)}, \code{contains(task, pos)}) are inline switches without virtual calls:
 \begin{itemize}
 \item \cls{SlabDomain}: task $i$ owns $x\in[x_{\min,i},x_{\max,i})$, the ranges partitioning $[0,1)$ in rank order (empty
-      slabs allowed). The default, given by \code{xmin_domain} and \code{xmax_domain} of each task (equal slabs
-      $[i/N_{\rm tasks},(i+1)/N_{\rm tasks})$ from \code{init_fml}). Grids, particles and nearly all algorithms support it.
+      slabs allowed). The default (equal slabs $[i/N_{\rm tasks},(i+1)/N_{\rm tasks})$ from \code{init_fml}). Grids, particles and nearly all algorithms support it.
       \code{owner} binary-searches the edges; \code{owner_near} checks the neighbours first, where most leaving particles go.
 \item \cls{PencilDomain}: a $P_0\times P_1$ process grid in $(x,y)$; the task with coordinates $(i_x,i_y)$ is rank
       $i_xP_1+i_y$ and owns a box in $x$ and $y$ and all of $z$. The decomposition of \cls{PencilGrid}.
 \item \cls{PeanoHilbertDomain} (3D): contiguous ranges of the Peano--Hilbert key, built load-balanced from the particles.
 \end{itemize}
-The global instance \code{FML::domain} is set with \code{FML::set_domain} (collectively); \cls{MPIParticles} takes it when
-created, so particles live on the task of their grid cells (\cref{ch:particles}). Code that needs slabs asserts it
-(\code{require_slab}).
+A partition has one representation: pencils with one task along $y$ ($P_0\times1$) are stored as the \cls{SlabDomain}
+with the same $x$-edges, so \code{is_slab()} holds for every slab partition, and \code{same_partition(a, b)} is
+equality. \code{pencils()} views a slab as $P_0\times1$ pencils.
+
+Slab and pencil domains are \emph{box} domains (\code{is_box()}): \code{box(task)} is the region $[{\rm lo}_d,{\rm hi}_d)$
+of a task in each coordinate ($[0,1)$ in those not split), which the particle methods use for their local region and
+buffers; a Peano--Hilbert region is not a box.
+
+Particles and grids each carry their own decomposition. \code{FML::default_particle_domain} (set on all tasks with
+\code{FML::set_default_particle_domain}; it is the only record of the default decomposition, there are no separate
+slab ranges) is what an \cls{MPIParticles} takes unless it is given its own, and what
+the particle methods use by default (\cref{ch:particles}). Every grid describes itself with \code{decomposition()}: the
+uniform slabs of an \cls{FFTWGrid} (FFTW needs $N_{\rm tasks}$ to divide $N_{\rm mesh}$), the pencils of a \cls{PencilGrid}
+(a slab for $P_1=1$; \code{get_domain()} keeps its pencil geometry), the domain an \cls{MPIGrid} was made on, the
+Peano--Hilbert domain of an \cls{AdaptiveMPIGrid}; \code{particle_domain_of(grid)} is the same. \code{make_grid} takes the
+decomposition explicitly. Where particles meet a grid (P(k) of particles, the PM step of \cls{KickDriftKickNBodyStep}) the
+two are compared: on the same partition the particles are deposited and interpolated locally, otherwise (e.g.\ particles on
+a Peano--Hilbert domain) with the deposit and interpolation for any domain (\file{Interpolation/DistributedDeposit.h},
+\cref{ch:mass-assignment}), with the same result to round-off. Code that needs slabs asserts it (\code{require_slab}).
+The old names \code{FML::domain}, \code{FML::set_domain} and \code{FML::get_domain} are removed.
 
 \paragraph*{Slabs.} A slab grid and the particles share the x-ranges; each task stores extra slices to the left and right
 (ghosts) for the stencils of mass assignment, interpolation and finite differences. FFTW-MPI's slab transforms require
@@ -78,9 +93,9 @@ it. The library, \file{SimulationCode} and the snapshot analyser are written aga
 (\cref{sec:grids-interface}) and run on slabs or pencils:
 
 \begin{cppcode}[A run on pencils]
-FML::set_domain(FML::pencil_domain());          // or pencil_domain(px, py)
-auto grid = FML::GRID::make_grid<FML::GRID::PencilGrid<3>>(Nmesh, n_left, n_right);
-FML::PARTICLE::MPIParticles<Particle> part;     // takes FML::domain
+FML::set_default_particle_domain(FML::pencil_domain());          // or pencil_domain(px, py)
+auto grid = FML::GRID::make_grid<FML::GRID::PencilGrid<3>>(Nmesh, n_left, n_right, FML::default_particle_domain);
+FML::PARTICLE::MPIParticles<Particle> part;     // takes FML::default_particle_domain
 \end{cppcode}
 
 \paragraph*{Peano--Hilbert ranges.} \cls{HilbertCurve} maps integer coordinates to 64-bit Hilbert keys with Skilling's

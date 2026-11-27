@@ -318,8 +318,8 @@ namespace FML::SHORT_RANGE_GRAVITY {
         return result;
     }
 
-    /// The same for the particles on a domain (Slab, Pencil or PeanoHilbert; FML::domain: the slabs of
-    /// FML::xmin_domain, FML::xmax_domain or the pencils): the region of a rank is its slab or pencil (in units of the
+    /// The same for the particles on a domain (Slab, Pencil or PeanoHilbert, e.g. FML::default_particle_domain): the
+    /// region of a rank is its slab or pencil (in units of the
     /// box), or its key ranges (exchange_peano_hilbert_ghosts)
     inline GhostSources
     exchange_domain_ghosts(const std::vector<Particle> & owned, const FML::Domain & domain, const Kernel & kernel) {

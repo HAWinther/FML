@@ -25,7 +25,7 @@ The Friends-of-Friends (FoF) linking definition is the standard cosmological met
 </p>
 
 <p>
-<b>Any box domain.</b> <tt>FoFDomain.h</tt> has <tt>FriendsOfFriends(domain, part, NumPart, ...)</tt>: the same arguments and results with the particles on a Slab or Pencil domain (e.g. <tt>MPIParticles::get_domain()</tt>), so halos can be found in a run on <a href="pencilgrid.php" style="display: inline">pencils</a>. Spherical-overdensity masses also work on pencils.
+<b>Any box domain.</b> <tt>FoFDomain.h</tt> has <tt>FriendsOfFriends(domain, part, NumPart, ...)</tt>: the same arguments and results with the particles on a Slab or Pencil domain (e.g. <tt>MPIParticles::get_domain()</tt>), so halos can be found in a run on <a href="pencilgrid.php" style="display: inline">pencils</a>. It is the one implementation: <tt>FriendsOfFriends(part, NumPart, ...)</tt> calls it with the default particle domain. Spherical-overdensity masses also work on pencils.
 </p>
 
 <header class="entry-header text-center">

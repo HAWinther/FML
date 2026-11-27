@@ -74,7 +74,7 @@ namespace FML::SURVEY {
             std::vector<Mesh> output;
             std::vector<std::vector<double>> coefficients;
             for (auto ell : ells) {
-                output.push_back(FML::GRID::make_grid<Mesh>(g.nmesh, 0, 0, FML::domain));
+                output.push_back(FML::GRID::make_grid<Mesh>(g.nmesh, 0, 0, FML::default_particle_domain));
                 output.back().set_grid_status_real(false);
                 output.back().fill_fourier_grid(Complex(0));
                 coefficients.push_back(legendre_coefficients(ell));

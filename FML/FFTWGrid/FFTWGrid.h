@@ -22,6 +22,7 @@
 #include <FML/Spline/Spline.h>
 #endif
 
+#include <FML/Global/Domain.h>
 #include <FML/Global/Global.h>
 #include <FML/Performance/Counters.h>
 #ifdef FML_ENABLE_PERFORMANCE_COUNTERS
@@ -273,6 +274,9 @@ namespace FML {
             ptrdiff_t get_local_nx() const;
             /// The x-slice the first local slice has in the global grid
             ptrdiff_t get_local_x_start() const;
+            /// The decomposition of the grid over the tasks as an FML::Domain: its x-slabs, Nmesh / NTasks slices per
+            /// task (the constructor requires NTasks to divide Nmesh), i.e. the uniform Slab. Not collective
+            FML::Domain decomposition() const;
 
             /// The number of active real cells (with padding)
             ptrdiff_t get_ntot_real() const;
@@ -942,6 +946,11 @@ namespace FML {
                 std::memcpy(recvbuf, sendbuf, bytes_slice);
 #endif
             }
+        }
+
+        template <int N>
+        FML::Domain FFTWGrid<N>::decomposition() const {
+            return FML::Domain::uniform_slab(FML::NTasks);
         }
 
         template <int N>

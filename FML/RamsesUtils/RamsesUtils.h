@@ -531,18 +531,19 @@ namespace FML {
                         // section)
                         RamsesPosType * pos = (RamsesPosType *)buffer.data();
                         int nindomain = 0;
-                        if (FML::domain.holds<FML::PencilDomain>()) {
+                        if (FML::default_particle_domain.holds<FML::PencilDomain>()) {
                             std::vector<char> ybuffer(size_t(header.npart) * 8);
                             read_section(fp, ybuffer.data(), header.npart);
                             const RamsesPosType * ypos = (const RamsesPosType *)ybuffer.data();
                             for (int j = 0; j < header.npart; j++) {
                                 const double xy[2] = {double(wrap_position(pos[j])), double(wrap_position(ypos[j]))};
-                                nindomain += FML::domain.owner(xy) == FML::ThisTask;
+                                nindomain += FML::default_particle_domain.owner(xy) == FML::ThisTask;
                             }
                         } else {
+                            const auto box = FML::default_particle_domain.box(FML::ThisTask);
                             for (int j = 0; j < header.npart; j++) {
                                 const RamsesPosType x = wrap_position(pos[j]);
-                                if (x >= FML::xmin_domain and x < FML::xmax_domain)
+                                if (x >= box.lo[0] and x < box.hi[0])
                                     nindomain++;
                             }
                         }
@@ -740,7 +741,7 @@ namespace FML {
                                   << " InDomain = " << npart_in_domain_in_file[i] << std::endl;
 
                     // Methods for reading each of the types
-                    const bool pencils = FML::domain.holds<FML::PencilDomain>();
+                    const bool pencils = FML::default_particle_domain.holds<FML::PencilDomain>();
                     std::vector<RamsesPosType> xbuffer;
                     auto read_pos = [&](bool store) {
                         if (verbose)
@@ -767,7 +768,8 @@ namespace FML {
                                 if (j == 1) {
                                     for (int i = 0; i < header.npart; i++) {
                                         const double xy[2] = {double(xbuffer[i]), double(posbuf[i])};
-                                        is_in_domain[i] = FML::domain.owner(xy) == FML::ThisTask ? 1 : 0;
+                                        is_in_domain[i] =
+                                            FML::default_particle_domain.owner(xy) == FML::ThisTask ? 1 : 0;
                                     }
                                     if (store)
                                         store_positions(xbuffer.data(), is_in_domain.data(), &p[npart_read], 0,
@@ -783,9 +785,9 @@ namespace FML {
                                     }
                                 } else {
                                     RamsesPosType * pos = (RamsesPosType *)buffer.data();
+                                    const auto box = FML::default_particle_domain.box(FML::ThisTask);
                                     for (int i = 0; i < header.npart; i++) {
-                                        is_in_domain[i] =
-                                            (pos[i] >= FML::xmin_domain and pos[i] < FML::xmax_domain) ? 1 : 0;
+                                        is_in_domain[i] = (pos[i] >= box.lo[0] and pos[i] < box.hi[0]) ? 1 : 0;
                                     }
                                 }
                             }

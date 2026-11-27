@@ -300,7 +300,7 @@ namespace {
         check(ok and not moved, label(grid, "copy, assignment, move (sharing the transforms) and free"));
 
         // The particle domain of the pencils: the owner of the position of every local cell is this task
-        const auto particle_domain = grid.get_domain().particle_domain();
+        const auto particle_domain = grid.decomposition();
         check(particle_domain.is_slab() == (grid.get_domain().process_grid()[1] == 1),
               label(grid, "the particle domain is a Slab when P1 = 1"));
         ok = true;
@@ -345,7 +345,7 @@ namespace {
 
 int main() {
     // The default pencils of a 3D grid
-    const auto P3 = FML::pencil_domain().get<FML::PencilDomain>().process_grid();
+    const auto P3 = FML::pencil_domain().pencils().process_grid();
     for (int n : {12, 9}) {
         for (auto extra : {std::array<int, 2>{0, 0}, std::array<int, 2>{1, 1}, std::array<int, 2>{2, 1}}) {
             // 2D: slabs in x (the default pencils: edges on cells as even as possible)

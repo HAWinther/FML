@@ -1063,7 +1063,7 @@ void Lightcone<NDIM, T, U>::make_potential_maps([[maybe_unused]] const Simulatio
                     pt.pos[idim] = x;
                 }
                 // (the points of the cells of this task: in its part of the domain)
-                if (FML::domain.owner(pt.pos) == FML::ThisTask) {
+                if (FML::default_particle_domain.owner(pt.pos) == FML::ThisTask) {
                     points.push_back(pt);
                     ipixs.push_back(ipix);
                 }
@@ -1332,14 +1332,8 @@ double Lightcone<NDIM, T, U>::local_fraction_of_shell(double rlow, double rhigh)
         return r * r > x * x ? std::pow(r * r - x * x, 0.5 * (NDIM - 1)) : 0.0;
     };
     // The x-range of this task and the fraction of y it has (pencils; the shell is taken to be uniform in y)
-    double xlo = FML::xmin_domain, xhi = FML::xmax_domain, yfraction = 1.0;
-    if (FML::domain.holds<FML::PencilDomain>()) {
-        const auto & pencils = FML::domain.get<FML::PencilDomain>();
-        const auto c = pencils.coords_of(FML::ThisTask);
-        xlo = pencils.x_edges()[c[0]];
-        xhi = pencils.x_edges()[c[0] + 1];
-        yfraction = pencils.y_edges()[c[1] + 1] - pencils.y_edges()[c[1]];
-    }
+    const auto box = FML::default_particle_domain.box(FML::ThisTask);
+    const double xlo = box.lo[0], xhi = box.hi[0], yfraction = box.hi[1] - box.lo[1];
     double local = 0.0, total = 0.0;
     for (int i = 0; i < npts; i++) {
         const double x = xmin + (i + 0.5) * dx;

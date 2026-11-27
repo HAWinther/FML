@@ -116,7 +116,10 @@ void test_lattice() {
             id++;
         }
         FML::SumOverTasks(&idsum0);
-        const size_t needed = size_t(std::ceil(N * (FML::xmax_domain - FML::xmin_domain) - 1e-9)) * N * N;
+        const size_t needed = size_t(std::ceil(N * (FML::default_particle_domain.x_max(FML::ThisTask) -
+                                                    FML::default_particle_domain.x_min(FML::ThisTask)) -
+                                               1e-9)) *
+                              N * N;
         check_local(all_tasks(mp.get_particles().size() >= needed),
                     "create_particle_grid N = " + std::to_string(N) +
                         ": capacity >= the particles of the most lattice "
@@ -135,7 +138,9 @@ void test_lattice() {
         bool ok = true;
         for (auto & p : mp) {
             idsum += p.id;
-            ok = ok and in_domain(p.pos[0], FML::xmin_domain, FML::xmax_domain);
+            ok = ok and in_domain(p.pos[0],
+                                  FML::default_particle_domain.x_min(FML::ThisTask),
+                                  FML::default_particle_domain.x_max(FML::ThisTask));
         }
         FML::SumOverTasks(&idsum);
         check_local(all_tasks(ok) and n == size_t(N * N * N) and idsum == idsum0,
@@ -168,7 +173,9 @@ void test_create() {
         bool ok = true;
         for (auto & p : mp) {
             idsum += p.id;
-            ok = ok and in_domain(p.pos[0], FML::xmin_domain, FML::xmax_domain);
+            ok = ok and in_domain(p.pos[0],
+                                  FML::default_particle_domain.x_min(FML::ThisTask),
+                                  FML::default_particle_domain.x_max(FML::ThisTask));
         }
         FML::SumOverTasks(&idsum);
         check_local(all_tasks(ok) and mp.get_npart_total() == ntot and idsum == idsum0,
@@ -184,7 +191,11 @@ void test_create() {
         mp.create(part.data(), 4, 10, FML::PARTICLE::Input::Replicated);
         bool ok = true;
         for (auto & p : mp)
-            ok = ok and in_domain(p.pos[0], FML::xmin_domain, FML::xmax_domain) and p.pos[0] >= 0.0 and p.pos[0] < 1.0;
+            ok = ok and
+                 in_domain(p.pos[0],
+                           FML::default_particle_domain.x_min(FML::ThisTask),
+                           FML::default_particle_domain.x_max(FML::ThisTask)) and
+                 p.pos[0] >= 0.0 and p.pos[0] < 1.0;
         check_local(all_tasks(ok) and mp.get_npart_total() == 4,
                     "create (all tasks same particles) keeps particles at x = 1.0 and x = -1e-17 (inside [0,1))");
     }
@@ -318,7 +329,9 @@ void test_custom_serialisation() {
         for (int k = 0; k < q.n; k++)
             sum += q.extra[k];
         nextra += q.n;
-        ok = ok and in_domain(q.pos[0], FML::xmin_domain, FML::xmax_domain);
+        ok = ok and in_domain(q.pos[0],
+                              FML::default_particle_domain.x_min(FML::ThisTask),
+                              FML::default_particle_domain.x_max(FML::ThisTask));
     }
     FML::SumOverTasks(&sum);
     FML::SumOverTasks(&nextra);
@@ -730,7 +743,11 @@ struct ExtendedPositionParticle {
 void test_extended_boundary_migration() {
     if (FML::NTasks == 1)
         return;
-    ExtendedPositionParticle p{{.5L * (FML::xmin_domain + FML::xmax_domain), .25L, .75L}, FML::ThisTask};
+    ExtendedPositionParticle p{
+        {.5L * (FML::default_particle_domain.x_min(FML::ThisTask) + FML::default_particle_domain.x_max(FML::ThisTask)),
+         .25L,
+         .75L},
+        FML::ThisTask};
     FML::PARTICLE::MPIParticles<ExtendedPositionParticle> particles;
     particles.create(&p, 1, size_t(FML::NTasks), FML::PARTICLE::Input::Distributed);
     const long double just_below = std::nextafter(static_cast<long double>(1. / FML::NTasks), 0.L);
@@ -739,8 +756,8 @@ void test_extended_boundary_migration() {
     particles.communicate_particles(13);
     bool good = particles.get_npart() == size_t(FML::ThisTask == 0 ? 2 : FML::ThisTask == 1 ? 0 : 1);
     for (auto & q : particles) {
-        good &= q.pos[0] >= static_cast<long double>(FML::xmin_domain) &&
-                q.pos[0] < static_cast<long double>(FML::xmax_domain);
+        good &= q.pos[0] >= static_cast<long double>(FML::default_particle_domain.x_min(FML::ThisTask)) &&
+                q.pos[0] < static_cast<long double>(FML::default_particle_domain.x_max(FML::ThisTask));
         if (q.id == 1)
             good &= q.pos[0] == just_below;
     }
@@ -804,7 +821,12 @@ void test_deprecated_create() {
     for (bool replicated : {true, false}) {
         auto & part = replicated ? all : mine;
         MP old_mp, new_mp;
-        old_mp.create(part.data(), part.size(), 2 * n, FML::xmin_domain, FML::xmax_domain, replicated);
+        old_mp.create(part.data(),
+                      part.size(),
+                      2 * n,
+                      FML::default_particle_domain.x_min(FML::ThisTask),
+                      FML::default_particle_domain.x_max(FML::ThisTask),
+                      replicated);
         new_mp.create(part.data(), part.size(), 2 * n, replicated ? Input::Replicated : Input::Distributed);
         check_local(same(old_mp, new_mp) and old_mp.get_npart_total() == n,
                     std::string("deprecated create(..., xmin, xmax, ") + (replicated ? "true" : "false") +
@@ -831,7 +853,10 @@ void test_deprecated_create() {
     }
     {
         MP old_mp, new_mp;
-        old_mp.create_particle_grid(6, 1.5, FML::xmin_domain, FML::xmax_domain);
+        old_mp.create_particle_grid(6,
+                                    1.5,
+                                    FML::default_particle_domain.x_min(FML::ThisTask),
+                                    FML::default_particle_domain.x_max(FML::ThisTask));
         new_mp.create_particle_grid(6, 1.5);
         bool ok = old_mp.get_npart() == new_mp.get_npart() and old_mp.get_capacity() == new_mp.get_capacity();
         for (size_t i = 0; ok and i < old_mp.get_npart(); i++)

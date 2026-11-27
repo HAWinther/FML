@@ -1,5 +1,5 @@
 \chapter{Halo finding and merger histories}\label{ch:halo-finding}
-\chapterstatus{written}{2026-11-20}
+\chapterstatus{written}{2026-11-26}
 
 Halos are found with friends-of-friends (standard and relaxed), their spherical-overdensity properties measured around
 the FoF centres, substructure resolved with a phase-space finder, and halos followed between snapshots by particle
@@ -27,8 +27,10 @@ cells larger than two linking lengths (at most about one particle per cell; the 
 $2^D$ neighbouring cells need to be searched, and groups are grown by recursively tagging the friends of friends. The particles
 are sorted by one coordinate first (20--30\% faster).
 
-\paragraph*{MPI.} Each task receives copies of the particles within a buffer of its slab (or pencil, \file{FoFDomain.h}, with up to 8
-neighbours) from the neighbouring tasks, links its particles and the copies, and keeps the groups whose centre it owns; the FoF IDs of the
+\paragraph*{MPI.} One implementation for any box domain (\file{FoFDomain.h}; \code{FriendsOfFriends(part, ...)} calls it with the default
+particle domain, \code{FriendsOfFriends(domain, part, ...)} with a given one): each task receives copies of the particles within a buffer
+of its slab (2 neighbours) or pencil (up to 8) from the neighbouring tasks, links its particles and the copies, and keeps the groups
+whose centre it owns; the FoF IDs of the
 copies are sent back to their owners, and IDs are unique across tasks. The buffer must exceed the largest halo
 (\param{fof_buffer_length_mpch}, default $3\Mpch$); groups that reach its edge are counted and reported, as they might be cut and found
 twice. Tasks without particles take part normally.

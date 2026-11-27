@@ -344,8 +344,8 @@ namespace FML {
 
             // The default pencils: 3D the process grid of FML::pencil_domain() (MPI_Dims_create), 2D NTasks x 1
             PencilDomain default_domain(int Nmesh, int ndim) {
-                const auto P = ndim == 3 ? FML::pencil_domain().get<PencilDomain>().process_grid() :
-                                           std::array<int, 2>{FML::NTasks, 1};
+                const auto P =
+                    ndim == 3 ? FML::pencil_domain().pencils().process_grid() : std::array<int, 2>{FML::NTasks, 1};
                 return PencilDomain::from_edges(edges_on_cells(Nmesh, P[0]), edges_on_cells(Nmesh, P[1]));
             }
 

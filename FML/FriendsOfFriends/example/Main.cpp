@@ -49,7 +49,8 @@ int main() {
         double pos[NDIM];
         for (int idim = 0; idim < NDIM; idim++)
             pos[idim] = p.pos[idim] / box;
-        if (pos[0] >= FML::xmin_domain and pos[0] < FML::xmax_domain)
+        if (pos[0] >= FML::default_particle_domain.x_min(FML::ThisTask) and
+            pos[0] < FML::default_particle_domain.x_max(FML::ThisTask))
             part.push_back(Particle<NDIM>(pos));
     }
 

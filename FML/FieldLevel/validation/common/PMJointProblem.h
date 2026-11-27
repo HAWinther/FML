@@ -27,7 +27,13 @@ static inline JointModel make_joint(const Controls & c) {
     FF::PMSettings pm;pm.assignment=FF::PMAssignment::TSC;pm.force_window=FF::PMForceWindow::TSCCompensated;pm.scale_factors.clear();
     for(int j=0;j<=c.steps;++j)pm.scale_factors.push_back(.2+(c.final-.2)*j/c.steps);
     const double noise=std::log(noise_power);FF::PMObservationSettings observed;observed.reference_cic_mesh=16;
-    return JointModel(config,power,pm,{"log_noise_power",noise,noise,.5,-16.,-4.},{8},FML::domain,observed);
+    return JointModel(config,
+                      power,
+                      pm,
+                      {"log_noise_power", noise, noise, .5, -16., -4.},
+                      {8},
+                      FML::default_particle_domain,
+                      observed);
 }
 
 #endif

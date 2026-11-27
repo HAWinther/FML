@@ -10,7 +10,7 @@ slabs and PencilGrid pencils (step 3, 14 November 2026). Periodic forward-model,
 likelihood and sampler formulas are unchanged.
 
 The observation grid is created from the forward model's backend and copied domain,
-so changing `FML::domain` after model construction does not change its observation
+so changing `FML::default_particle_domain` after model construction does not change its observation
 layout. The existing library aliases remain slab based; use the
 `*ModelT<PencilGrid<3>>` APIs for pencil inference. Distributed examples and the
 calibration frontend now support `USE_PENCIL_GRID=true USE_MPI=true`; see

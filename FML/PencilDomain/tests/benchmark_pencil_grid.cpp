@@ -72,7 +72,7 @@ int main(int argc, char ** argv) {
         meshes.push_back(std::atoi(argv[i]));
     if (meshes.empty())
         meshes = {64, 128, 256};
-    const auto P3 = FML::pencil_domain().get<FML::PencilDomain>().process_grid();
+    const auto P3 = FML::pencil_domain().pencils().process_grid();
 
     if (FML::ThisTask == 0) {
         std::printf("# %d tasks, %d thread(s) per task, default pencils %d x %d\n",

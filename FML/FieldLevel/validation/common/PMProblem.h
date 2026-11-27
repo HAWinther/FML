@@ -100,7 +100,13 @@ template<class ModelType=Model> static inline ModelType make_model(const Control
     for (int j=0; j<=c.steps; ++j) pm.scale_factors.push_back(.2+(c.final-.2)*j/c.steps);
     const double noise=std::log(noise_power);
     FF::PMObservationSettings observed;observed.reference_cic_mesh=c.reference;
-    return ModelType(config,spectrum,pm,{"log_noise_power",noise,noise,.5,-16.,-4.},reverse,FML::domain,observed);
+    return ModelType(config,
+                     spectrum,
+                     pm,
+                     {"log_noise_power", noise, noise, .5, -16., -4.},
+                     reverse,
+                     FML::default_particle_domain,
+                     observed);
 }
 static inline size_t mode_index(const int * k) {
     return (size_t((k[0]+common_mesh)%common_mesh)*common_mesh+(k[1]+common_mesh)%common_mesh)*(common_mesh/2+1)+k[2];

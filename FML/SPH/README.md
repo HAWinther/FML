@@ -142,7 +142,7 @@ remains open.
 
 ## MPI, ownership and memory
 
-The solver uses FML's x slabs (`xmin_domain`, `xmax_domain`), which must partition
+The solver uses the slabs of `FML::default_particle_domain`, which must partition
 [0,1]. Empty slabs/ranks are supported; pencil/space-filling-curve particle
 ownership is not selected by this module. The density phase exchanges sources
 within 2h_max; after density/velocity gradients, the force phase exchanges full

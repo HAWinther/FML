@@ -129,10 +129,10 @@ int run(int argc, char ** argv) {
         int px = 0, py = 0;
         if (const char * env = std::getenv("FML_PENCILS"))
             std::sscanf(env, "%d %d", &px, &py);
-        FML::set_domain(FML::pencil_domain(px, py));
+        FML::set_default_particle_domain(FML::pencil_domain(px, py));
         if (FML::ThisTask == 0)
-            std::cout << "The domain: " << FML::domain.pencil_px() << " x " << FML::domain.pencil_py()
-                      << " pencils (USE_PENCIL_GRID)\n";
+            std::cout << "The domain: " << FML::default_particle_domain.pencil_px() << " x "
+                      << FML::default_particle_domain.pencil_py() << " pencils (USE_PENCIL_GRID)\n";
     }
 #endif
 

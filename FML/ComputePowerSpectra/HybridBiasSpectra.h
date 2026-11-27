@@ -619,7 +619,7 @@ namespace FML {
                                          int Nmesh,
                                          std::vector<Grid<N>> & advected,
                                          const HybridBiasOptions & options = HybridBiasOptions(),
-                                         const FML::Domain & domain = FML::domain) {
+                                         const FML::Domain & domain = FML::default_particle_domain) {
                 assert_mpi(values.size() == NumPart * size_t(nfields),
                            "[compute_advected_fields] values has the wrong size");
                 std::vector<detail::WeightedParticle<N>> wp(NumPart);

@@ -126,7 +126,7 @@ void test(bool filament, double buffer) {
     auto all = make_particles(filament);
     std::vector<Particle> local;
     for (auto & p : all)
-        if (p.pos[0] >= FML::xmin_domain and p.pos[0] < FML::xmax_domain)
+        if (FML::default_particle_domain.contains(FML::ThisTask, p.pos))
             local.push_back(p);
 
     std::vector<FML::FOF::FoFHalo<Particle, NDIM>> groups;
@@ -295,7 +295,8 @@ void test_extra() {
     std::vector<Particle> part;
     const double d = 1e-3;
     auto add = [&](double x, double y, double z) {
-        if (x >= FML::xmin_domain and x < FML::xmax_domain)
+        if (x >= FML::default_particle_domain.x_min(FML::ThisTask) and
+            x < FML::default_particle_domain.x_max(FML::ThisTask))
             part.push_back({{x, y, z}, 0, 0});
     };
     for (int i = 0; i < 3; i++) {
@@ -327,7 +328,7 @@ void test_extra() {
             Particle2D p{{(i + 0.5) / n2, (j + 0.5) / n2}};
             if (i == 50 and j == 50)
                 p.pos[0] += 0.5 / n2;
-            if (p.pos[0] >= FML::xmin_domain and p.pos[0] < FML::xmax_domain)
+            if (FML::default_particle_domain.contains(FML::ThisTask, p.pos))
                 p2.push_back(p);
         }
     std::vector<FML::FOF::FoFHalo<Particle2D, 2>> h2;
@@ -347,7 +348,8 @@ int main() {
         if (FML::NTasks > 1) {
             // Tasks without particles take part (RelaxedFoF links subsets): two linked particles on each task but
             // the first, linked with the mean separation of 2 (NTasks - 1) particles
-            const double xc = .5 * (FML::xmin_domain + FML::xmax_domain);
+            const double xc = .5 * (FML::default_particle_domain.x_min(FML::ThisTask) +
+                                    FML::default_particle_domain.x_max(FML::ThisTask));
             Particle p[2] = {{{xc, .5, .5}, 0, 0}, {{xc + 1e-3, .5, .5}, 0, 0}};
             const size_t n = FML::ThisTask == 0 ? 0 : 2;
             FML::FOF::FriendsOfFriends<Particle, NDIM>(p, n, .2, 2, true, .001, empty, 8, 0.01);

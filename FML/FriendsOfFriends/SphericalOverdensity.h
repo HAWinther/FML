@@ -77,28 +77,23 @@ namespace FML {
                 }
                 return shift;
             }
-            // The region of a task in the particle domain FML::domain: its slab ([lo, hi) in x) or its pencil (also
-            // [lo, hi) in y; y_split). The distance of a point to it (periodic): the x-distance for a slab
+            // The region of a task in the particle domain FML::default_particle_domain (Domain::box): its slab ([lo,
+            // hi) in x) or its pencil (also [lo, hi) in y; y_split). The distance of a point to it (periodic): the
+            // x-distance for a slab
             struct Box {
                 double lo[2]{0.0, 0.0}, hi[2]{1.0, 1.0};
                 bool y_split{false};
             };
-            /// The box of a task in FML::domain
+            /// The box of a task in FML::default_particle_domain
             inline Box box_of(int task) {
+                const auto & domain = FML::default_particle_domain;
+                const auto d = domain.box(task);
                 Box b;
-                if (FML::domain.holds<FML::PencilDomain>()) {
-                    const auto & pencils = FML::domain.get<FML::PencilDomain>();
-                    const auto c = pencils.coords_of(task);
-                    b.lo[0] = pencils.x_edges()[c[0]];
-                    b.hi[0] = pencils.x_edges()[c[0] + 1];
-                    b.lo[1] = pencils.y_edges()[c[1]];
-                    b.hi[1] = pencils.y_edges()[c[1] + 1];
-                    b.y_split = pencils.process_grid()[1] > 1;
-                } else {
-                    // (the slabs: as before from xmin_domain, xmax_domain of this task)
-                    b.lo[0] = task == FML::ThisTask ? FML::xmin_domain : FML::domain.x_min(task);
-                    b.hi[0] = task == FML::ThisTask ? FML::xmax_domain : FML::domain.x_max(task);
-                }
+                b.lo[0] = d.lo[0];
+                b.hi[0] = d.hi[0];
+                b.lo[1] = d.lo[1];
+                b.hi[1] = d.hi[1];
+                b.y_split = domain.holds<FML::PencilDomain>() and domain.get<FML::PencilDomain>().process_grid()[1] > 1;
                 return b;
             }
             /// The periodic distance of a point to a box (0 inside)
@@ -129,7 +124,7 @@ namespace FML {
                                                 size_t max_message_bytes = 8 * 1024 * 1024,
                                                 bool unwrap_periodic_images = true) {
             using SO_DETAIL::Count;
-            // (the region of this task: its slab or pencil in FML::domain)
+            // (the region of this task: its slab or pencil in FML::default_particle_domain)
             const auto mybox = SO_DETAIL::box_of(FML::ThisTask);
             const double lo = mybox.lo[0], hi = mybox.hi[0];
             bool valid = std::isfinite(dx) && dx >= 0 && lo >= 0 && hi <= 1 && lo <= hi && (NumPart == 0 || part);
@@ -384,7 +379,12 @@ namespace FML {
             bool valid = centers.size() == initial_radius.size() && total_mass > 0 && std::isfinite(total_mass) &&
                          search_radius > 0 && std::isfinite(search_radius) &&
                          std::isfinite(std::pow(search_radius, NDIM)) && nmin_center >= 0 && (NumPart == 0 || part);
-            valid &= FML::xmin_domain < FML::xmax_domain || centers.empty();
+            SO_DETAIL::require(FML::default_particle_domain.is_box(),
+                               "[SphericalOverdensity] Only Slab and Pencil particle domains are supported");
+            {
+                const auto b = SO_DETAIL::box_of(FML::ThisTask);
+                valid &= (b.lo[0] < b.hi[0] && b.lo[1] < b.hi[1]) || centers.empty();
+            }
             for (size_t i = 0; i < centers.size(); ++i) {
                 for (double x : centers[i])
                     valid &= std::isfinite(x);

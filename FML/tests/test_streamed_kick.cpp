@@ -35,8 +35,8 @@ std::vector<P> make_particles(bool empty_rank, bool all_empty) {
     std::uniform_real_distribution<double> u(0, 1);
     for (size_t i = 0; i < p.size(); i++) {
         for (int d = 0; d < N; d++) {
-            const Pos lo = d == 0 ? Pos(FML::xmin_domain) : Pos(0);
-            const Pos hi = d == 0 ? Pos(FML::xmax_domain) : Pos(1);
+            const Pos lo = d == 0 ? Pos(FML::default_particle_domain.x_min(FML::ThisTask)) : Pos(0);
+            const Pos hi = d == 0 ? Pos(FML::default_particle_domain.x_max(FML::ThisTask)) : Pos(1);
             Pos x = Pos(double(lo) + (double(hi) - lo) * u(rng));
             if (i % 7 == 0)
                 x = lo;

@@ -6,8 +6,8 @@
 // interface of FFTWGrid. The library's grid code is written against this common interface (FFTWGrid/GridInterface.h),
 // so it runs on slabs or on pencils:
 //
-//   FML::set_domain(FML::pencil_domain());                         // the particles and grids on the pencils
-//   auto grid = FML::GRID::make_grid<FML::GRID::PencilGrid<3>>(Nmesh, n_extra_left, n_extra_right);
+//   FML::set_default_particle_domain(FML::pencil_domain());                         // the particles and grids on the
+//   pencils auto grid = FML::GRID::make_grid<FML::GRID::PencilGrid<3>>(Nmesh, n_extra_left, n_extra_right);
 //   grid.fill_real_grid(f); grid.fftw_r2c(); ...; grid.fftw_c2r(); grid.communicate_boundaries();
 //
 // Pencils allow up to Nmesh^2 tasks and any Nmesh (slabs: at most Nmesh tasks dividing Nmesh). The complex counterpart
@@ -265,7 +265,10 @@ namespace FML {
             /// Dimension of the grid
             int get_ndim() const { return N; }
             /// The pencils
+            /// The pencils of the grid (its geometry; can be P0 x 1)
             const PencilDomain & get_domain() const { return domain; }
+            /// The decomposition of the grid over the tasks as an FML::Domain (P0 x 1 pencils are a Slab)
+            FML::Domain decomposition() const { return FML::Domain(domain); }
 
             /// Number of local x-slices in the real grid and the first one
             ptrdiff_t get_local_nx() const { return Local_nx; }

@@ -81,7 +81,7 @@ bool particles_ok(std::vector<T> & part, bool only_dm, double vel_norm) {
         if constexpr (std::is_same_v<T, ParticleWithFamily>)
             if (p.family != expected_family(p.id))
                 return false;
-        if (not(p.pos[0] >= FML::xmin_domain and p.pos[0] < FML::xmax_domain))
+        if (not(FML::default_particle_domain.contains(FML::ThisTask, p.pos)))
             return false;
         for (int idim = 0; idim < 3; idim++) {
             double dx = std::fabs(p.pos[idim] - expected_pos(p.id, idim));

@@ -78,7 +78,7 @@ namespace FML {
                                               double norm_poisson_equation,
                                               int Ngrid,
                                               std::string density_assignment_method,
-                                              const FML::Domain & domain = FML::domain) {
+                                              const FML::Domain & domain = FML::default_particle_domain) {
 
             const std::complex<FML::GRID::FloatType> I(0, 1);
 
@@ -94,7 +94,7 @@ namespace FML {
 
             // Bin particles to grid and fourier transform
             const auto nleftright = FML::INTERPOLATION::get_extra_slices(density_assignment_method);
-            // (decomposed as the domain of the particles: the fiducial FML::domain unless given)
+            // (decomposed as the domain of the particles: the fiducial FML::default_particle_domain unless given)
             auto density_k = FML::GRID::make_grid<Grid<N>>(Ngrid, nleftright.first, nleftright.second, domain);
             const bool interlacing = false;
             FML::INTERPOLATION::particles_to_fourier_grid(p,

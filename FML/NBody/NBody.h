@@ -14,6 +14,7 @@
 #include <FML/Global/Global.h>
 #include <FML/NBody/ForceOptions.h>
 #include <FML/NBody/LatticeGreensFunction.h>
+#include <FML/Interpolation/DistributedDeposit.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/LPT/DisplacementFields.h>
 #include <FML/MPIParticles/MPIParticles.h>
@@ -65,6 +66,13 @@ namespace FML {
                            double delta_time,
                            std::string interpolation_method,
                            double velocity_scale = 1.0);
+
+        template <int N, class T, template <int> class Grid = FFTWGrid>
+        void KickParticlesAnyDomain(std::array<Grid<N>, N> & force_grid,
+                                    MPIParticles<T> & part,
+                                    double delta_time,
+                                    std::string interpolation_method,
+                                    double velocity_scale = 1.0);
 
         /// v -> velocity_scale * v for all the particles
         template <int N, class T>
@@ -152,8 +160,10 @@ namespace FML {
         }
 
         /// @brief The same step for any grid (FFTWGrid, PencilGrid, ...): density_grid_real is the work grid, made
-        /// with the layout to use and the extra cells of the method (get_extra_slices). The particles must be on its
-        /// domain (FML::GRID::particle_domain_of(grid); e.g. part.set_domain(...) first)
+        /// with the layout to use and the extra cells of the method (get_extra_slices). Particles on the partition of
+        /// the grid (FML::GRID::particle_domain_of(grid)) are deposited and kicked locally; particles on another
+        /// domain (e.g. a PeanoHilbertDomain) with the deposit and interpolation for any domain
+        /// (Interpolation/DistributedDeposit.h)
         template <int N, class T, template <int> class Grid>
         void KickDriftKickNBodyStep(Grid<N> density_grid_real,
                                     MPIParticles<T> & part,
@@ -162,18 +172,33 @@ namespace FML {
                                     double norm_poisson_equation,
                                     const ForceOptions & options = {}) {
             options.validate();
-            assert_mpi(part.get_domain() == FML::GRID::particle_domain_of(density_grid_real),
-                       "[KickDriftKickNBodyStep] The particles are not on the domain of the grid");
+            const bool local = FML::same_partition(part.get_domain(), density_grid_real.decomposition());
 
             const bool periodic_box = true;
 
             // Particles -> density field
-            density_grid_real.set_grid_status_real(true);
-            FML::INTERPOLATION::particles_to_grid<N, T>(part.get_particles_ptr(),
-                                                        part.get_npart(),
-                                                        part.get_npart_total(),
-                                                        density_grid_real,
-                                                        density_assignment_method);
+            auto deposit = [&]() {
+                density_grid_real.set_grid_status_real(true);
+                if (local)
+                    FML::INTERPOLATION::particles_to_grid<N, T>(part.get_particles_ptr(),
+                                                                part.get_npart(),
+                                                                part.get_npart_total(),
+                                                                density_grid_real,
+                                                                density_assignment_method);
+                else
+                    FML::INTERPOLATION::particles_to_grid_any_domain<N, T>(part.get_particles_ptr(),
+                                                                           part.get_npart(),
+                                                                           part.get_npart_total(),
+                                                                           density_grid_real,
+                                                                           density_assignment_method);
+            };
+            auto kick = [&](std::array<Grid<N>, N> & force_real, double dt) {
+                if (local)
+                    KickParticles<N, T, Grid>(force_real, part, dt, density_assignment_method);
+                else
+                    KickParticlesAnyDomain<N, T, Grid>(force_real, part, dt, density_assignment_method);
+            };
+            deposit();
 
             // Density field -> force
             std::array<Grid<N>, N> force_real;
@@ -184,17 +209,13 @@ namespace FML {
                                                      options);
 
             // Update velocity of particles
-            KickParticles<N, T, Grid>(force_real, part, delta_time * 0.5, density_assignment_method);
+            kick(force_real, delta_time * 0.5);
 
             // Move particles (this does communication)
             DriftParticles<N, T>(part, delta_time, periodic_box);
 
             // Particles -> density field
-            FML::INTERPOLATION::particles_to_grid<N, T>(part.get_particles_ptr(),
-                                                        part.get_npart(),
-                                                        part.get_npart_total(),
-                                                        density_grid_real,
-                                                        density_assignment_method);
+            deposit();
 
             // Density field -> force
             compute_force_from_density_real<N, Grid>(density_grid_real,
@@ -204,7 +225,7 @@ namespace FML {
                                                      options);
 
             // Update velocity of particles
-            KickParticles<N, T, Grid>(force_real, part, delta_time * 0.5, density_assignment_method);
+            kick(force_real, delta_time * 0.5);
         }
 
         //===================================================================================
@@ -647,6 +668,45 @@ namespace FML {
                                 delta_time,
                                 interpolation_method,
                                 velocity_scale);
+        }
+
+        /// @brief As KickParticles (v -> velocity_scale v - F delta_time) for particles on any task (e.g. a
+        /// PeanoHilbertDomain): the force is gathered from the tasks that hold its cells
+        /// (interpolate_grids_to_particles_any_domain). Collective
+        template <int N, class T, template <int> class Grid>
+        void KickParticlesAnyDomain(std::array<Grid<N>, N> & force_grid,
+                                    MPIParticles<T> & part,
+                                    double delta_time,
+                                    std::string interpolation_method,
+                                    double velocity_scale) {
+            static_assert(FML::PARTICLE::has_get_vel<T>(),
+                          "[KickParticlesAnyDomain] Particle must have velocity to use this method");
+            T * p = part.get_particles_ptr();
+            const size_t NumPart = part.get_npart();
+            std::array<const Grid<N> *, N> grids;
+            for (int idim = 0; idim < N; idim++)
+                grids[idim] = &force_grid[idim];
+            std::vector<std::array<double, N>> force;
+            FML::INTERPOLATION::interpolate_grids_to_particles_any_domain<N, N, T, Grid>(grids,
+                                                                                         p,
+                                                                                         NumPart,
+                                                                                         force,
+                                                                                         interpolation_method);
+            double max_dvel = 0.0;
+            for (size_t i = 0; i < NumPart; i++) {
+                auto * vel = FML::PARTICLE::GetVel(p[i]);
+                for (int idim = 0; idim < N; idim++) {
+                    // (the force rounded to the grid value type, as in KickParticles)
+                    const double dvel = -double(FML::GRID::FloatType(force[i][idim])) * delta_time;
+                    max_dvel = std::max(max_dvel, std::abs(dvel));
+                    if (velocity_scale != 1.0)
+                        vel[idim] *= velocity_scale;
+                    vel[idim] += dvel;
+                }
+            }
+            FML::MaxOverTasks(&max_dvel);
+            if (FML::ThisTask == 0)
+                std::cout << "[Kick] Max delta_vel : " << max_dvel << "\n";
         }
 
         template <int N, class T>

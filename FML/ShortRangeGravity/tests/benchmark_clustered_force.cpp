@@ -107,7 +107,7 @@ std::vector<Vector> short_range_acceleration(Container & p, const Case & test) {
     FML::SumOverTasks(&total_mass);
     const auto kernel =
         make_kernel(test, SR::fml_acceleration_coupling(1.5 * OmegaM * epoch, total_mass, 1), size_t(test.table));
-    auto sources = SR::exchange_domain_ghosts(owned, FML::domain, kernel);
+    auto sources = SR::exchange_domain_ghosts(owned, FML::default_particle_domain, kernel);
     if (test.backend == "cell")
         return SR::CellList(sources.particles, kernel).compute(owned).acceleration;
     SR::TreeOptions tree;

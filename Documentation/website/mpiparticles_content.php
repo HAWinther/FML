@@ -29,7 +29,7 @@ Figure 1: Here we show the full domain. The red region is the domain the current
 </p>
 
 <p>
-<b>Domains.</b> How the particles are split over the tasks is an <tt>FML::Domain</tt>: slabs in $x$ (the default), pencils in $x$-$y$ or a Peano&ndash;Hilbert partition. Give one to the constructor (<tt>MPIParticles&lt;T&gt; part(domain)</tt>) or use the global <tt>FML::domain</tt>. <tt>create</tt>, <tt>communicate_particles</tt> and <tt>set_domain(new_domain)</tt> (move the particles to their new owners) work with every domain. <tt>create_particle_grid</tt> makes the lattice on Slab and Pencil domains and throws <tt>std::invalid_argument</tt> for others (make it on slabs and call <tt>set_domain</tt>). The grids of FML need the particles on their domain: slabs for <tt>FFTWGrid</tt>, pencils for <a href="pencilgrid.php" style="display: inline">$\texttt{PencilGrid}$</a>.
+<b>Domains.</b> How the particles are split over the tasks is an <tt>FML::Domain</tt>: slabs in $x$ (the default), pencils in $x$-$y$ or a Peano&ndash;Hilbert partition. Give one to the constructor (<tt>MPIParticles&lt;T&gt; part(domain)</tt>) or use the global <tt>FML::default_particle_domain</tt>. <tt>create</tt>, <tt>communicate_particles</tt> and <tt>set_domain(new_domain)</tt> (move the particles to their new owners) work with every domain. <tt>create_particle_grid</tt> makes the lattice on Slab and Pencil domains and throws <tt>std::invalid_argument</tt> for others (make it on slabs and call <tt>set_domain</tt>). Each grid has its own decomposition (<tt>grid.decomposition()</tt>, also <tt>FML::GRID::particle_domain_of(grid)</tt>): slabs for <tt>FFTWGrid</tt>, pencils for <a href="pencilgrid.php" style="display: inline">$\texttt{PencilGrid}$</a>. P(k) of particles, its multipoles and the N-body step <tt>KickDriftKickNBodyStep</tt> work for particles on any domain (on the grid's partition locally, otherwise with the deposit for any domain); the rest of the grid code needs the particles on the domain of the grid. The global is called <tt>FML::default_particle_domain</tt> (it replaces <tt>FML::domain</tt>, which is removed).
 </p>
 
 <header class="entry-header text-center">
@@ -145,11 +145,8 @@ FML::PARTICLE::MPIParticles&lt; Particle&lt;3&gt; &gt; part;
 // (the particles get IDs (ix * Npart_1D + iy) * Npart_1D + iz if they have a set_id method)
 const int Npart_1D = 6;           // Make Npart_1D^NDIM particles
 const double buffer_factor = 2.0; // How many more particles we allocate for
-part.create_particle_grid(
-   Npart_1D, 
-   buffer_factor, 
-   FML::xmin_domain, 
-   FML::xmax_domain);
+// (on the default particle domain FML::default_particle_domain, or the domain given to the constructor)
+part.create_particle_grid(Npart_1D, buffer_factor);
 
 // Move some particles out of bounds
 for(int i = 0; i &lt; 5; i++){
@@ -176,15 +173,9 @@ int NumPart;
 
 //... then we can make MPIParticles out of them by running create
 FML::PARTICLE::MPIParticles&lt; Particle &gt; part;
-const bool all_tasks_have_the_same_particles = false; // If all tasks reads the same file for example
-auto nallocate_local = 10000;                         // Maximum number of particles we think we need on each task (exits if we ever go over)
-part.create(
-    p,
-    NumPart, 
-    nallocate_local, 
-    FML::xmin_domain, 
-    FML::xmax_domain, 
-    all_tasks_have_the_same_particles);
+// Input::Replicated if all tasks have the same particles (e.g. all read the same file), else Input::Distributed
+auto nallocate_local = 10000; // Maximum number of particles we think we need on each task (exits if we ever go over)
+part.create(p, NumPart, nallocate_local, FML::PARTICLE::Input::Distributed);
 </pre>
 </div>
 </div>

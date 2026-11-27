@@ -2,13 +2,11 @@
 #define FML_GLOBAL_DOMAIN_H
 
 // =====================================================================================================================
-// The decomposition of the periodic unit box [0,1)^NDIM over the MPI tasks: which task owns a point (of particles,
-// and for Pencil and PeanoHilbert also of the cells of a grid). Three classes and a wrapper:
+// The decomposition of the periodic unit box [0,1)^NDIM over the MPI tasks: which task owns a point (of particles, or
+// of the cells of a grid). Three classes and a wrapper:
 //
 //   SlabDomain          task i owns [x_min[i], x_max[i]) (the ranges partition [0,1) in rank order; empty slabs
-//                       allowed). The default, and for now the only type that the rest of FML supports (grids,
-//                       density assignment, interpolation, FoF, ... assume x-slabs given by FML::xmin_domain,
-//                       FML::xmax_domain)
+//                       allowed). The default for particles, and the decomposition of an FFTWGrid
 //   PencilDomain        a P0 x P1 process grid in (x, y): the task with process coordinates (ix, iy) is rank
 //                       ix * P1 + iy and owns [x_edges[ix], x_edges[ix+1]) x [y_edges[iy], y_edges[iy+1]) x [0,1).
 //                       Needs NDIM >= 2. The decomposition of a PencilGrid (PencilDomain/PencilGrid.h), whose edges
@@ -16,16 +14,19 @@
 //   PeanoHilbertDomain  contiguous ranges of the Peano-Hilbert key (HilbertCurve<3> of PeanoHilbertDomain/
 //                       HilbertCurve.h, `bits` bits per coordinate): task i owns the keys [boundaries[i],
 //                       boundaries[i+1]). Built load-balanced from particle keys (build), or from boundaries. Needs
-//                       NDIM = 3. The layout of DistributedGrid3D (PeanoHilbertDomain/DistributedGrid3D.h)
-//   Domain              one of the three (a std::variant): what MPIParticles and FML::domain hold. owner(pos),
-//                       owner_near(task, pos) and contains(task, pos) are inline (a switch on the type, no virtual
-//                       calls); they read the first ncoordinates() coordinates of pos (1, 2 or 3), which must be in
-//                       [0,1) (wrap them first), comparing in the position's own type. get<T>() gives the class
+//                       NDIM = 3. The layout of DistributedGrid3D and AdaptiveMPIGrid
+//   Domain              one of the three (a std::variant): what MPIParticles, the default particle domain and
+//                       grid.decomposition() hold. owner(pos), owner_near(task, pos) and contains(task, pos) are
+//                       inline (a switch on the type, no virtual calls); they read the first ncoordinates()
+//                       coordinates of pos (1, 2 or 3), which must be in [0,1) (wrap them first), comparing in the
+//                       position's own type. get<T>() gives the class. A partition has one representation: P0 x 1
+//                       pencils are stored as the SlabDomain with the same x-edges (pencils() views a Slab as
+//                       pencils), so same_partition(a, b) is a == b
 //
-// Pencil and PeanoHilbert are the preparation for supporting them in more of FML: choosing them (FML::set_domain, or
-// an MPIParticles constructed with one) gives a warning, and code that needs slabs asserts it (require_slab).
-// The global instance is FML::domain (Global.h), a Slab whose ranges are FML::xmin_domain, FML::xmax_domain of each
-// task (set by init_fml, or by set_domain). This header is included at the end of Global.h.
+// The default particle domain is FML::default_particle_domain (Global.h): uniform slabs set by init_fml, changed with
+// set_default_particle_domain. On a box domain (Slab or Pencil) box(task) is the local region of a task. Grids describe
+// their own decomposition (grid.decomposition()); code where particles meet a grid compares the two (same_partition).
+// Code that needs slabs asserts it (require_slab). This header is included at the end of Global.h.
 // =====================================================================================================================
 
 #include <FML/Global/Global.h>
@@ -212,10 +213,6 @@ namespace FML {
             return process_grid_ == o.process_grid_ and xedges == o.xedges and yedges == o.yedges;
         }
 
-        /// The domain of particles that matches these pencils: a SlabDomain in x if P1 = 1 (e.g. a 2D PencilGrid;
-        /// supported by all of FML), else this PencilDomain. For MPIParticles, so that particles live on the rank of
-        /// their cells
-        Domain particle_domain() const;
 
       private:
         static int wrap(int i, int n) {
@@ -377,7 +374,18 @@ namespace FML {
         /// A slab domain of one task ([0,1))
         Domain() = default;
         Domain(SlabDomain d) : d(std::move(d)) {}
-        Domain(PencilDomain d) : d(std::move(d)) {}
+        /// Pencils with one task along y (P0 x 1) are x-slabs: they are stored as the SlabDomain with the same
+        /// x-edges, so that a partition has one representation (is_slab() is true for every slab partition). The
+        /// PencilDomain itself (e.g. the geometry of a PencilGrid) can still be P0 x 1
+        Domain(PencilDomain d) {
+            if (d.process_grid()[1] == 1) {
+                const auto & e = d.x_edges();
+                this->d = SlabDomain::from_ranges(std::vector<double>(e.begin(), e.end() - 1),
+                                                  std::vector<double>(e.begin() + 1, e.end()));
+            } else {
+                this->d = std::move(d);
+            }
+        }
         Domain(PeanoHilbertDomain d) : d(std::move(d)) {
             std::get<PeanoHilbertDomain>(this->d).nranks(); // must be built
         }
@@ -457,9 +465,49 @@ namespace FML {
         double x_min(int task) const { return get<SlabDomain>().x_min(task); }
         double x_max(int task) const { return get<SlabDomain>().x_max(task); }
         bool valid_slab_partition() const { return is_slab() and get<SlabDomain>().valid_partition(); }
-        /// Pencil: the process grid and the edges
-        int pencil_px() const { return get<PencilDomain>().process_grid()[0]; }
-        int pencil_py() const { return get<PencilDomain>().process_grid()[1]; }
+        /// The domain as pencils: a Pencil itself, a Slab (a valid partition, in rank order) as P0 x 1 pencils with
+        /// its x-edges (as a PencilGrid lays out slabs); throws for PeanoHilbert
+        PencilDomain pencils() const {
+            if (holds<PencilDomain>())
+                return get<PencilDomain>();
+            if (not valid_slab_partition())
+                throw std::invalid_argument(
+                    "[Domain::pencils] Needs Pencil or a Slab partition of [0,1] in rank order");
+            std::vector<double> e(x_min_per_task());
+            e.push_back(1.0);
+            return PencilDomain::from_edges(std::move(e), {0.0, 1.0});
+        }
+        /// The process grid as pencils (a Slab: NTasks x 1)
+        int pencil_px() const { return pencils().process_grid()[0]; }
+        int pencil_py() const { return pencils().process_grid()[1]; }
+
+        /// The local region of a task on a box domain (Slab or Pencil): [lo[d], hi[d]) in each coordinate d, [0, 1)
+        /// in the coordinates the domain does not split
+        struct Box {
+            std::array<double, 3> lo{0.0, 0.0, 0.0};
+            std::array<double, 3> hi{1.0, 1.0, 1.0};
+        };
+        /// Slab and Pencil domains are boxes (every task owns a box); a PeanoHilbert region is not
+        bool is_box() const { return not holds<PeanoHilbertDomain>(); }
+        /// The box of a task (Slab or Pencil; throws for a PeanoHilbert domain)
+        Box box(int task) const {
+            Box b;
+            if (is_slab()) {
+                b.lo[0] = x_min(task);
+                b.hi[0] = x_max(task);
+            } else if (holds<PencilDomain>()) {
+                const auto & p = get<PencilDomain>();
+                const auto c = p.coords_of(task);
+                b.lo[0] = p.x_edges()[c[0]];
+                b.hi[0] = p.x_edges()[c[0] + 1];
+                b.lo[1] = p.y_edges()[c[1]];
+                b.hi[1] = p.y_edges()[c[1] + 1];
+            } else {
+                throw std::invalid_argument("[Domain::box] A PeanoHilbert domain is not a box domain");
+            }
+            return b;
+        }
+        /// Pencil: the edges
         const std::vector<double> & x_edges() const { return get<PencilDomain>().x_edges(); }
         const std::vector<double> & y_edges() const { return get<PencilDomain>().y_edges(); }
         /// PeanoHilbert: the key boundaries, bits per coordinate and the key of a point
@@ -600,12 +648,10 @@ namespace FML {
         std::variant<SlabDomain, PencilDomain, PeanoHilbertDomain> d{};
     };
 
-    inline Domain PencilDomain::particle_domain() const {
-        if (process_grid_[1] == 1)
-            return SlabDomain::from_ranges(std::vector<double>(xedges.begin(), xedges.end() - 1),
-                                           std::vector<double>(xedges.begin() + 1, xedges.end()));
-        return *this;
-    }
+    /// Do two domains give every point of [0,1)^3 the same task? Domains are normalised (P0 x 1 pencils are slabs),
+    /// so this is equality. For the coupling of particles and grids (the same partition: the local path)
+    inline bool same_partition(const Domain & a, const Domain & b) { return a == b; }
+
 
     inline PeanoHilbertDomain
     PeanoHilbertDomain::build(const std::vector<Key> & local_keys, unsigned bits, unsigned histogram_bits) {

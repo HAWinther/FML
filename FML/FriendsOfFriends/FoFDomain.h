@@ -2,7 +2,8 @@
 #define FML_FOF_DOMAIN_H
 
 // =====================================================================================================================
-// Friends-of-friends for particles on any box domain (Slab or Pencil; FoF.h is for the global slabs).
+// Friends-of-friends for particles on any box domain (Slab or Pencil): the implementation of FriendsOfFriends (FoF.h
+// calls it with the default particle domain).
 //
 // The algorithm of FoF.h generalized from x-slabs to boxes: a task owns the box [lo, hi) (along the axes the domain
 // splits over the tasks; all of the other axes). It gets a copy of the particles of the neighbor tasks within the
@@ -270,6 +271,22 @@ namespace FML {
             size_t ncells_total = 1;
             for (int d = 0; d < NDIM; d++)
                 ncells_total *= size_t(ncells[d]);
+            if (FoF_verbose) {
+                long long nboundary = (long long)NumPart_boundary;
+                FML::SumOverTasks(&nboundary);
+                if (FML::ThisTask == 0) {
+                    std::cout << "\n#=====================================================\n";
+                    std::cout << "# FriendsOfFriends linking (" << domain.type_name() << " domain)\n";
+                    std::cout << "# FoF Linking Length: " << linking_length << "\n";
+                    std::cout << "# FoF Linking Distance: " << fof_distance << "\n";
+                    std::cout << "# Buffer / Boxsize: " << Buffersize_over_Boxsize << "\n";
+                    std::cout << "# Periodic box: " << std::boolalpha << periodic << "\n";
+                    std::cout << "# FoF linking Gridsize = " << Ngrid << " (cells on task 0: " << ncells_total << ")\n";
+                    std::cout << "# Maximum possible FoF gridsize = " << int(0.5 / fof_distance) << "\n";
+                    std::cout << "# Boundary particles copied (all tasks): " << nboundary << "\n";
+                    std::cout << "#=====================================================\n\n";
+                }
+            }
             auto particle = [&](size_t g) -> T & {
                 return g < NumPart_boundary ? boundary_particles[g] : part[g - NumPart_boundary];
             };
@@ -408,9 +425,12 @@ namespace FML {
                 FoFID++;
             }
             FML::SumOverTasks(&FoF_number_of_groups_reaching_buffer_edge);
-            if (FoF_number_of_groups_reaching_buffer_edge > 0 and FML::ThisTask == 0 and FoF_verbose)
+            if (FoF_number_of_groups_reaching_buffer_edge > 0 and FML::ThisTask == 0)
                 std::cout << "WARNING: [FriendsOfFriends] " << FoF_number_of_groups_reaching_buffer_edge
-                          << " groups reach the edge of the buffer: increase the buffer\n";
+                          << " groups reach the edge of the buffer of particles copied from the neighbor tasks ("
+                          << Buffersize_over_Boxsize << " of the box). They might be cut off and then also found as "
+                          << "a second, partial group on the neighbor task. Increase the buffer (to more than the size "
+                          << "of the largest groups) to be sure the result does not depend on the number of tasks\n";
 
             // Unique IDs over the tasks
             std::vector<long long int> addfofid(FML::NTasks, 0);
@@ -457,6 +477,14 @@ namespace FML {
                         }
                 }
 #endif
+            }
+
+            // How many groups we found
+            if (FoF_verbose) {
+                size_t nhalos = LocalFoFGroups.size();
+                FML::SumOverTasks(&nhalos);
+                if (FML::ThisTask == 0)
+                    std::cout << "# We found a total of " << nhalos << " (" << LocalFoFGroups.size() << " on task 0)\n";
             }
         }
 

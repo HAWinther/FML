@@ -23,7 +23,7 @@ namespace FML::FIELDLEVEL::FRONTEND {
     using LPTPosterior = FRAMEWORK::DistributedLPTPosteriorT<Grid>;
     inline std::array<int, 2> process_grid() {
 #ifdef FML_FIELDLEVEL_PENCIL_GRID
-        return FML::domain.get<FML::PencilDomain>().process_grid();
+        return FML::default_particle_domain.pencils().process_grid();
 #else
         return {FML::NTasks, 1};
 #endif
@@ -61,7 +61,7 @@ namespace FML::FIELDLEVEL::FRONTEND {
                 values[p] = double(static_cast<long long>(p) * common / parts) / common;
             return values;
         };
-        FML::set_domain(FML::Domain::pencil(edges(dims[0]), edges(dims[1])));
+        FML::set_default_particle_domain(FML::Domain::pencil(edges(dims[0]), edges(dims[1])));
         if (FML::ThisTask == 0)
             std::cout << "FieldLevel backend: PencilGrid " << dims[0] << " x " << dims[1] << '\n';
 #else

@@ -250,8 +250,10 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                         std::isfinite(d.mean_momentum[2]), "[Field PM] Unrepresentable momentum diagnostics");
         }
       public:
-        ParticleMeshForwardT(Configuration initial, Spectrum spectrum, PMSettings settings = {},
-                             const FML::Domain & domain = FML::domain)
+        ParticleMeshForwardT(Configuration initial,
+                             Spectrum spectrum,
+                             PMSettings settings = {},
+                             const FML::Domain & domain = FML::default_particle_domain)
             : linear_(initial, std::move(spectrum), {}, {}, domain), settings_(std::move(settings)) {
             // The supplied configuration describes the initial-field generator.
             // A denser particle/IC lattice may sample a coarser force mesh. Keep

@@ -139,12 +139,15 @@ template<class Grid> static Snapshot exercise(const FML::Domain & domain,const s
     return result;
 }
 int main(int argc,char ** argv) {
-    FML::FMLSetup::init(&argc,&argv);const auto slab=FML::Domain::uniform_slab(FML::NTasks);FML::set_domain(slab);
+    FML::FMLSetup::init(&argc, &argv);
+    const auto slab = FML::Domain::uniform_slab(FML::NTasks);
+    FML::set_default_particle_domain(slab);
     const auto baseline=exercise<FML::GRID::FFTWGrid<3>>(slab,"slab");
     const auto tsc=exercise<FML::GRID::FFTWGrid<3>>(slab,"TSC-slab",FF::PMAssignment::TSC);
 #ifdef USE_MPI
     int px=FML::NTasks==4?2:FML::NTasks,py=FML::NTasks/px;
-    const auto pencil=FML::Domain::uniform_pencil(px,py);FML::set_domain(pencil);
+    const auto pencil = FML::Domain::uniform_pencil(px, py);
+    FML::set_default_particle_domain(pencil);
     const auto other=exercise<FML::GRID::PencilGrid<3>>(pencil,"pencil");double error=0;
     for(size_t j=0;j<baseline.values.size();++j)error=std::max(error,std::abs(baseline.values[j]-other.values[j]));
     const auto tsc_other=exercise<FML::GRID::PencilGrid<3>>(pencil,"TSC-pencil",FF::PMAssignment::TSC);

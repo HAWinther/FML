@@ -836,7 +836,7 @@ int main(int argc, char ** argv) {
         int py = FML::NTasks / px;
         if (const char * e = std::getenv("FML_PENCILS"))
             std::sscanf(e, "%d %d", &px, &py);
-        FML::set_domain(FML::Domain::uniform_pencil(px, py));
+        FML::set_default_particle_domain(FML::Domain::uniform_pencil(px, py));
     }
 #endif
     if (mode == "all" || mode == "power")

@@ -65,15 +65,15 @@ Snapshot evaluate(Model & m, const std::string & label) {
         counts[q] = id % 4;
     }
     check(coordinates, label + " window callbacks receive physical global x/y/z");
-    auto saved = FML::domain;
-    FML::set_domain(FML::Domain::uniform_slab(FML::NTasks));
+    auto saved = FML::default_particle_domain;
+    FML::set_default_particle_domain(FML::Domain::uniform_slab(FML::NTasks));
     auto likelihood = [&] {
         if constexpr (Poisson)
             return FF::SurveyPoissonLikelihood(m, window, counts, exposure, .1);
         else
             return FF::SurveyGaussianLikelihood(m, window, data, variance);
     }();
-    FML::set_domain(saved);
+    FML::set_default_particle_domain(saved);
     auto prediction = m.predict(s, p, w);
     Snapshot result;
     if constexpr (Poisson)

@@ -59,7 +59,7 @@ int main() {
     }
     std::vector<Particle> local;
     for (auto & p : all)
-        if (p.pos[0] >= FML::xmin_domain and p.pos[0] < FML::xmax_domain)
+        if (FML::default_particle_domain.contains(FML::ThisTask, p.pos))
             local.push_back(p);
     const double total_mass = double(all.size());
 
@@ -68,7 +68,8 @@ int main() {
     std::vector<size_t> which;
     for (size_t h = 0; h < centers.size(); h++) {
         std::array<double, 3> g{wrap(centers[h][0] + 0.003), wrap(centers[h][1] - 0.002), centers[h][2]};
-        if (g[0] >= FML::xmin_domain and g[0] < FML::xmax_domain) {
+        if (g[0] >= FML::default_particle_domain.x_min(FML::ThisTask) and
+            g[0] < FML::default_particle_domain.x_max(FML::ThisTask)) {
             guess.push_back(g);
             which.push_back(h);
         }
@@ -187,11 +188,12 @@ int main() {
         const double M200 = Delta * total * V200;
         std::vector<Particle> localnfw;
         for (auto & p : allnfw)
-            if (p.pos[0] >= FML::xmin_domain and p.pos[0] < FML::xmax_domain)
+            if (FML::default_particle_domain.contains(FML::ThisTask, p.pos))
                 localnfw.push_back(p);
         std::vector<std::array<double, 3>> gnfw;
         for (auto & c : cnfw)
-            if (c[0] >= FML::xmin_domain and c[0] < FML::xmax_domain)
+            if (c[0] >= FML::default_particle_domain.x_min(FML::ThisTask) and
+                c[0] < FML::default_particle_domain.x_max(FML::ThisTask))
                 gnfw.push_back({wrap(c[0] + 0.002), wrap(c[1] - 0.002), c[2]});
         std::vector<double> rinit(gnfw.size(), R200);
         auto sonfw = FML::FOF::SphericalOverdensity<Particle, NDIM>(localnfw.data(),

@@ -110,7 +110,7 @@ int main(int argc, char ** argv) {
         FML::RANDOM::COUNTER_BASED::Stream rng(42, p.id, 0x474c4153u);
         for (int d = 0; d < 3; ++d)
             valid &= p.position[d] == rng.uniform() && p.q[d] == p.position[d] && p.velocity[d] == 0;
-        valid &= p.position[0] >= FML::xmin_domain && p.position[0] < FML::xmax_domain;
+        valid &= FML::default_particle_domain.contains(FML::ThisTask, p.position.data());
     }
     check(valid && load.particles.get_npart_total() == 257,
           "seed positions, IDs and ownership independent of rank count");
@@ -248,7 +248,7 @@ int main(int argc, char ** argv) {
                 Particle p;
                 p.id = (ix * 8 + iy) * 8 + iz;
                 p.q = p.position = {ix / 8., iy / 8., iz / 8.};
-                if (p.position[0] >= FML::xmin_domain && p.position[0] < FML::xmax_domain)
+                if (FML::default_particle_domain.contains(FML::ThisTask, p.position.data()))
                     lattice.push_back(p);
             }
     Load gridload;

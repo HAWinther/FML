@@ -787,7 +787,7 @@ namespace FML {
                 if constexpr (ORDER == 1)
                     if (FML::NTasks == 1 and ix[0] >= Nmesh)
                         ix[0] -= Nmesh;
-                // A particle in the local domain can be in the cell just outside it from round-off: xmin_domain =
+                // A particle in the local domain can be in the cell just outside it from round-off: the slab edge
                 // ThisTask / NTasks is not exactly Local_x_start / Nmesh (e.g. a particle at x = 63/90 has
                 // int(x * 90) = 62 with 10 tasks). Use the nearest cell in the domain (as in the interpolation)
                 if (FML::NTasks > 1) {

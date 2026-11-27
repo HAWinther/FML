@@ -78,7 +78,7 @@ FFTW MPI returns both an owned slab and a possibly larger required allocation;
 planner flag (`FML::GRID::set_fftw_planner_flag`, FFTW_ESTIMATE by default; wisdom is
 shared with FFTWGrid). Only owned elements enter field operations and sums. On slabs
 empty slabs, uneven partitions and odd meshes are supported. On pencils the solver
-uses `FML::domain` when its edges lie on cells and otherwise the process grid of
+uses `FML::default_particle_domain` when its edges lie on cells and otherwise the process grid of
 `FML::pencil_domain()` with the edges on cells, so any mesh works there too. The
 grids have no extra cells: the local cells are `wave().get_real_grid()[i]` for
 `i < local_size()`, with global integer coordinates `coordinate(i)` and positions

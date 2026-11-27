@@ -16,7 +16,8 @@
 namespace FML::SURVEY {
     using Vector = std::array<double, 3>;
     // The meshes: FFTWGrid slabs, or (-DFML_SURVEY_PENCIL_MESH) PencilGrid pencils decomposed as the
-    // fiducial domain FML::domain (FML::set_domain(FML::Domain::uniform_pencil(px, py)))
+    // fiducial domain FML::default_particle_domain (FML::set_default_particle_domain(FML::Domain::uniform_pencil(px,
+    // py)))
 #ifdef FML_SURVEY_PENCIL_MESH
     using Mesh = FML::GRID::PencilGrid<3>;
 #else
@@ -160,7 +161,7 @@ namespace FML::SURVEY {
             }
         }
         inline Mesh empty_mesh(const Geometry & g, int ghosts = 0) {
-            auto grid = FML::GRID::make_grid<Mesh>(g.nmesh, ghosts, ghosts, FML::domain);
+            auto grid = FML::GRID::make_grid<Mesh>(g.nmesh, ghosts, ghosts, FML::default_particle_domain);
             grid.set_grid_status_real(true);
             for (auto i : grid.get_real_range())
                 grid.set_real_from_index(i, 0);

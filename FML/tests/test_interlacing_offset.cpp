@@ -43,8 +43,8 @@ std::vector<P> particles(bool empty_rank) {
     using Pos = std::remove_cv_t<std::remove_reference_t<decltype(P{}.pos[0])>>;
     for (size_t j = 0; j < p.size(); j++) {
         for (int d = 0; d < N; d++) {
-            const Pos lo = d == 0 ? Pos(FML::xmin_domain) : Pos(0);
-            const Pos hi = d == 0 ? Pos(FML::xmax_domain) : Pos(1);
+            const Pos lo = d == 0 ? Pos(FML::default_particle_domain.x_min(FML::ThisTask)) : Pos(0);
+            const Pos hi = d == 0 ? Pos(FML::default_particle_domain.x_max(FML::ThisTask)) : Pos(1);
             Pos x = Pos(double(lo) + (double(hi) - lo) * uniform(rng));
             if (j % 7 == 0)
                 x = lo;

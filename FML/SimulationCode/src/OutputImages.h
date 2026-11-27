@@ -179,8 +179,10 @@ void output_images(NBodySimulation<NDIM, T> & sim, double redshift, const std::s
             // 1.5 OmegaM a cancels in the ratio)
             auto magnitude = [&](const Grid & source, double factor) {
                 // (the same layout as the source: the indices of the cells are the same)
-                auto out = FML::GRID::make_grid<Grid>(
-                    source.get_nmesh(), source.get_n_extra_slices_left(), source.get_n_extra_slices_right());
+                auto out = FML::GRID::make_grid<Grid>(source.get_nmesh(),
+                                                      source.get_n_extra_slices_left(),
+                                                      source.get_n_extra_slices_right(),
+                                                      source.decomposition());
                 out.fill_real_grid(0.0);
                 for (int d = 0; d < 3; d++) {
                     auto component = source;

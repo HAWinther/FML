@@ -200,10 +200,11 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
         DistributedEulerianLPTModelT(EulerianLPTConfiguration c,
                                      Spectrum spectrum,
                                      std::array<Parameter, 4> bias_parameters,
-                                     const FML::Domain & domain = FML::domain)
+                                     const FML::Domain & domain = FML::default_particle_domain)
             : config_(c), spectrum_size_(spectrum.parameters.size()), spectrum_(spectrum),
               matter_(gravity_config(c), spectrum, {}, {}, domain),
-              bias_(FML::GRID::make_grid<Grid>(product_size(c), 0, 0, domain), c.boxsize, c.matter_band), parameters_() {
+              bias_(FML::GRID::make_grid<Grid>(product_size(c), 0, 0, domain), c.boxsize, c.matter_band),
+              parameters_() {
             controls({double(c.mesh), double(c.product_mesh), c.likelihood_band.cutoff,
                       double(c.likelihood_band.geometry)});
             if (c.mesh != product_mesh()) {

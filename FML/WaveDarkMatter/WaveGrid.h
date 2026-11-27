@@ -43,23 +43,23 @@ namespace FML::WAVEDM {
         inline constexpr bool is_slab_grid_v = std::is_same_v<Grid, FML::GRID::CFFTWGrid<3>>;
 
         /// A wave grid of mesh n without extra cells: CFFTWGrid slabs (any n: FFTW may leave tasks without slabs).
-        /// Other grids (pencils): the fiducial domain FML::domain if its edges lie on cells, otherwise the grid's
-        /// default decomposition for n (pencils: the process grid of FML::pencil_domain() with the edges on cells),
-        /// so any n works as for slabs
+        /// Other grids (pencils): the fiducial domain FML::default_particle_domain if its edges lie on cells, otherwise
+        /// the grid's default decomposition for n (pencils: the process grid of FML::pencil_domain() with the edges on
+        /// cells), so any n works as for slabs
         template <class Grid>
         Grid make_grid(int n) {
             if constexpr (is_slab_grid_v<Grid>) {
                 return Grid(n);
             } else {
                 bool on_cells = false;
-                if (FML::domain.holds<FML::PencilDomain>()) {
+                if (FML::default_particle_domain.holds<FML::PencilDomain>()) {
                     on_cells = true;
-                    const auto & pd = FML::domain.get<FML::PencilDomain>();
+                    const auto & pd = FML::default_particle_domain.get<FML::PencilDomain>();
                     for (const auto * edges : {&pd.x_edges(), &pd.y_edges()})
                         for (double e : *edges)
                             on_cells &= std::abs(e * n - std::round(e * n)) < 1e-6;
                 }
-                return on_cells ? FML::GRID::make_grid<Grid>(n, 0, 0, FML::domain) : Grid(n);
+                return on_cells ? FML::GRID::make_grid<Grid>(n, 0, 0, FML::default_particle_domain) : Grid(n);
             }
         }
 

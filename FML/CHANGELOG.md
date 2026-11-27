@@ -5,6 +5,38 @@ The entries below are relative to upstream commit `f9f666a` (April 2026).
 
 ## [Unreleased]
 
+### Domains: the default particle domain and the decomposition of grids
+- `FML::domain` is renamed `FML::default_particle_domain` (with `set_default_particle_domain` /
+  `get_default_particle_domain`): the default domain of particle sets and particle methods. The old names
+  (`FML::domain`, `FML::set_domain`, `FML::get_domain`) are removed. Grids have their own decomposition: `decomposition()` on `FFTWGrid` (the uniform slabs),
+  `PencilGrid` / `CPencilGrid` (`get_domain()` keeps the pencil geometry), `MPIGrid`, `MPIMultiGrid` and
+  `AdaptiveMPIGrid`; `FML::GRID::particle_domain_of(grid)` is `grid.decomposition()`. `make_grid` takes the decomposition
+  explicitly (no default). `PencilDomain::particle_domain()` is removed.
+- A `Domain` has one representation per partition: `P0 x 1` pencils are stored as the `SlabDomain` with the same edges;
+  `Domain::pencils()` views a Slab as `P0 x 1` pencils (`pencil_px()`, `pencil_py()` work for both);
+  `FML::same_partition(a, b)`.
+- Particles and grids on different partitions: P(k) of particles (`compute_power_spectrum` with the domain of the
+  particles, the multipoles of `MPIParticles`) and `KickDriftKickNBodyStep` deposit and kick locally on the same
+  partition and otherwise with the deposit / interpolation for any domain (`particles_to_fourier_grid_any_domain`, new,
+  and `KickParticlesAnyDomain`, new), e.g. for particles on a Peano-Hilbert domain; the same results to round-off
+  (`tests/test_coupling_any_domain`).
+- FoF: one implementation, `FoFDomain.h` (any box domain); `FriendsOfFriends(part, ...)` calls it with the default
+  particle domain. The original slab implementation in `FoF.h` (~820 lines) is removed (the same catalogue and FoF IDs,
+  the same speed). The buffer-edge warning is printed also when `FoF_verbose` is false, as the slab version did.
+- `MPIPeriodicDelaunay`: one mode, on the domain of the particles (`DomainBuffer`); the default constructor uses the
+  default particle domain (resolved in `create`). The slab mode (~300 lines, `get_dx_buffer()`) is removed (the same
+  Voronoi volumes to 1e-13, the same speed).
+- `FML::xmin_domain` / `FML::xmax_domain` are removed: they only described slabs, and the default particle domain is
+  now the only record of the decomposition (`get_default_particle_domain()` no longer gathers them; it returns
+  `default_particle_domain`). The local region of a task on a Slab or Pencil domain is `Domain::box(task)` (new, with
+  `is_box()`); ownership tests use `domain.contains(FML::ThisTask, pos)`. Code that assigned `xmin_domain` /
+  `xmax_domain` calls `set_default_particle_domain(FML::Domain::slab(x_min, x_max))` instead. The library (GlassIC,
+  SphericalOverdensity, the void finders, SPH, PhaseSpaceHaloFinder, the GADGET and RAMSES readers, DTFE, sheet
+  interpolation, `ANALYSIS::redistribute_particles`, `append_periodic_slab_ghosts`, the SimulationCode lightcone) uses
+  the domain; several slab / pencil branches merge into one.
+- Tests: `test_grid_decomposition` (new), `test_coupling_any_domain` (new), normalisation and `box()` checks in
+  `test_domain`.
+
 ### SimulationCode: the short-range force is removed (TreePMCode replaces it)
 - `force_short_range` (PM + P3M/TreePM at a common time step, N-body and COLA, backlog item 47) is removed with its
   settings, the GravityModel hooks (`GeffOverG_highk`, `short_range_comoving_range`, `short_range_screening_active`,

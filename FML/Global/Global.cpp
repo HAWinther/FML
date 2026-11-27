@@ -43,9 +43,9 @@ namespace FML {
 
     FML::UTILS::Timings global_timer;
 
-    // The decomposition of particles (a Slab whose ranges are xmin_domain, xmax_domain). Defined before fmlsetup
+    // The default domain of particles (uniform slabs, set in init_fml). Defined before fmlsetup
     // below: it is dynamically initialized and init_fml (called by fmlsetup) sets it
-    Domain domain{};
+    Domain default_particle_domain{};
 
     // Initialize FML, set the few globals we have and init MPI
     // and FFTW. If no auto setup you must init MPI and FFTW
@@ -64,9 +64,6 @@ namespace FML {
     bool FFTWThreadsOK = false;
     bool MPIThreadsOK = false;
 
-    // The local extent of the domain (global domain goes from 0 to 1)
-    double xmin_domain = 0.0;
-    double xmax_domain = 1.0;
 
     // A simple random [0,1) generator
     std::mt19937 generator;
@@ -147,33 +144,21 @@ namespace FML {
         }
 #endif
 
-        // Set range for local domain
-        xmin_domain = ThisTask / double(NTasks);
-        xmax_domain = (ThisTask + 1) / double(NTasks);
-        domain = Domain::uniform_slab(NTasks);
+        // The default particle domain: uniform slabs
+        default_particle_domain = Domain::uniform_slab(NTasks);
     }
 
-    void set_domain(const Domain & new_domain) {
-        const std::string msg = "[set_domain] The domain is made for " + std::to_string(new_domain.ntasks()) +
-                                " tasks, but we have " + std::to_string(NTasks);
+    void set_default_particle_domain(const Domain & new_domain) {
+        const std::string msg = "[set_default_particle_domain] The domain is made for " +
+                                std::to_string(new_domain.ntasks()) + " tasks, but we have " + std::to_string(NTasks);
         assert_mpi(new_domain.ntasks() == NTasks, msg.c_str());
-        domain = new_domain;
-        if (new_domain.is_slab()) {
-            assert_mpi(new_domain.valid_slab_partition(), "[set_domain] The slabs must partition [0,1] in rank order");
-            xmin_domain = new_domain.x_min(ThisTask);
-            xmax_domain = new_domain.x_max(ThisTask);
-        } else if (ThisTask == 0) {
-            std::cout << "NB: the domain is " << new_domain.type_name()
-                      << ": xmin_domain, xmax_domain are unchanged (code that uses them assumes the Slab domain); "
-                         "the grids for these particles are PencilGrids (FML::GRID::make_grid)\n";
-        }
+        if (new_domain.is_slab())
+            assert_mpi(new_domain.valid_slab_partition(),
+                       "[set_default_particle_domain] The slabs must partition [0,1] in rank order");
+        default_particle_domain = new_domain;
     }
 
-    Domain get_domain() {
-        if (domain.is_slab())
-            return slab_domain_from_local_range(xmin_domain, xmax_domain);
-        return domain;
-    }
+    Domain get_default_particle_domain() { return default_particle_domain; }
 
     Domain slab_domain_from_local_range(double xmin, double xmax) {
         return Domain::slab(GatherFromTasks(&xmin), GatherFromTasks(&xmax));
@@ -242,8 +227,11 @@ namespace FML {
         for (int i = 0; i < NTasks; i++) {
             if (FML::ThisTask == i) {
                 std::cout << "# Task " << std::setw(4) << i << " [" << processor_name << "]\n";
-                std::cout << "#     x-domain [" << std::setw(8) << FML::xmin_domain << " , " << std::setw(8)
-                          << FML::xmax_domain << ")" << std::endl;
+                if (default_particle_domain.is_box()) {
+                    const auto b = default_particle_domain.box(i);
+                    std::cout << "#     x-domain [" << std::setw(8) << b.lo[0] << " , " << std::setw(8) << b.hi[0]
+                              << ")" << std::endl;
+                }
             }
 #ifdef USE_MPI
             // Sleep to synchronize output to screen (this is not guaranteed to ensure synchronized output, but the only

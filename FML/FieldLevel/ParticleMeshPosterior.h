@@ -74,10 +74,13 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
             Modes & cotangent_buffer() { return cotangent; }
             const PMAdjointReport & adjoint_report() const { return report; }
         };
-        PeriodicPMModelT(Configuration c, Spectrum spectrum, PMSettings settings = {},
-                        Parameter noise = {"log_noise_power", std::log(1000.), std::log(1000.), 2., -30., 40.},
-                        PMAdjointOptions reverse = {}, const FML::Domain & domain = FML::domain,
-                        PMObservationSettings observed = {})
+        PeriodicPMModelT(Configuration c,
+                         Spectrum spectrum,
+                         PMSettings settings = {},
+                         Parameter noise = {"log_noise_power", std::log(1000.), std::log(1000.), 2., -30., 40.},
+                         PMAdjointOptions reverse = {},
+                         const FML::Domain & domain = FML::default_particle_domain,
+                         PMObservationSettings observed = {})
             : config_(c), dynamics_(initial_configuration(c), std::move(spectrum), std::move(settings), domain),
               observation_(observation_configuration(c), Spectrum::fixed([](double) { return 1.; }), {}, {}, domain),
               reverse_(reverse) {

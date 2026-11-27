@@ -78,7 +78,7 @@ inputs/settings throw collectively before the corresponding numerical operation.
 ## Distributed ownership, memory and reproducibility
 
 Every entry point is collective on `FML::communicator`. Call in the same order on
-all ranks. The FFT slabs must be nonempty and match `FML::xmin_domain/xmax_domain`;
+all ranks. The FFT slabs must be nonempty and match the slabs of `FML::default_particle_domain`;
 use a mesh divisible by the task count with the standard equal-width domains.
 One halo on each side is required. Empty **particle** slabs are supported.
 Settings and IO prefixes must agree across ranks. Catastrophic allocation failures

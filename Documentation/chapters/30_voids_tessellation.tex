@@ -1,5 +1,5 @@
 \chapter{Voids and tessellations}\label{ch:voids}
-\chapterstatus{written}{2026-11-20}
+\chapterstatus{written}{2026-11-26}
 
 The Delaunay tessellation of the particles gives density and velocity fields without a grid (DTFE) and the Voronoi densities of
 watershed void finders. \fml{} has its own MPI-parallel Delaunay triangulation and periodic Voronoi tessellation in 2D and 3D, with
@@ -110,7 +110,8 @@ Next for the moving mesh: recomputing only the geometry around moved points, and
 The DTFE (\cls{DTFE}, \code{DTFETessellation}) uses \fml{}'s own tessellation by default: the particles can be on any task, and the
 triangulation is made exact over the grid cells each task fills; \code{DTFETessellation::CGAL} uses \cls{MPIPeriodicDelaunay} instead.
 \cls{MPIPeriodicDelaunay} builds the 3D Delaunay tessellation of particles spread over the tasks with CGAL: each task triangulates its
-particles plus a buffer from the neighbours (slabs or pencils, \cref{sec:par-communication}), and cells whose tetrahedra might be affected by the
+particles plus a buffer from the neighbours (on the domain of the particles, slabs or pencils: the one given to the constructor or the
+default particle domain; \cref{sec:par-communication}), and cells whose tetrahedra might be affected by the
 buffer edge are flagged as unreliable. Voronoi volumes are the volumes of the contiguous Voronoi cells.
 
 The Delaunay tessellation field estimator \cite{Schaap2000,Cautun2011} assigns each particle the density

@@ -144,14 +144,11 @@ namespace FML {
                 : std::true_type {};
         } // namespace detail
 
-        /// The domain of the particles that go with a grid (they are on the task of their cells): a grid with a domain
-        /// (get_domain(), e.g. PencilGrid): its particle_domain(); FFTWGrid: the global slabs FML::domain
+        /// The domain of the particles that go with a grid (they are on the task of their cells): the decomposition of
+        /// the grid (grid.decomposition(); FFTWGrid: its FFTW slabs, PencilGrid: its pencils, P0 x 1 pencils as a Slab)
         template <class Grid>
         FML::Domain particle_domain_of(const Grid & grid) {
-            if constexpr (detail::has_get_domain<Grid>::value)
-                return grid.get_domain().particle_domain();
-            else
-                return FML::domain;
+            return grid.decomposition();
         }
 
         /// A grid of another size decomposed the same way (NUFFT: the fine grid). FFTWGrid: the FFTW slabs (see
@@ -161,7 +158,7 @@ namespace FML {
             return FFTWGrid<N>(Nmesh, n_extra_left, n_extra_right);
         }
         /// Do grids of Nmesh cells have the decomposition of the particles of the grid? FFTWGrid: the slabs of
-        /// FML::domain need Nmesh divisible by the number of tasks
+        /// FML::default_particle_domain need Nmesh divisible by the number of tasks
         template <int N>
         bool fits_grid_like(const FFTWGrid<N> &, int Nmesh) {
             return Nmesh % FML::NTasks == 0;
@@ -184,8 +181,8 @@ namespace FML {
         template <class Grid>
         struct grid_type_tag {};
 
-        /// An FFTWGrid: the FFTW slabs (the domain is not used: the slabs of FML::domain are those of FFTW for Nmesh
-        /// divisible by the number of tasks)
+        /// An FFTWGrid: the FFTW slabs (the domain is only checked to be a Slab: the slabs of an FFTWGrid are always
+        /// the uniform ones, see FFTWGrid::decomposition)
         template <int N>
         FFTWGrid<N> make_grid_on_domain(grid_type_tag<FFTWGrid<N>>, int Nmesh, int n_extra_left, int n_extra_right,
                                         const FML::Domain & domain) {
@@ -193,11 +190,11 @@ namespace FML {
             return FFTWGrid<N>(Nmesh, n_extra_left, n_extra_right);
         }
 
-        /// A grid of type Grid (FFTWGrid, PencilGrid, ...) decomposed as a domain (default: the fiducial FML::domain).
-        /// Functions that make grids for particles use the domain of the particles. Other grid types provide
-        /// make_grid_on_domain (found by argument dependent lookup, e.g. in PencilGrid.h)
+        /// A grid of type Grid (FFTWGrid, PencilGrid, ...) decomposed as a domain (no default: a grid made for
+        /// particles takes the domain of the particles, a grid like another grid its decomposition()). Other grid types
+        /// provide make_grid_on_domain (found by argument dependent lookup, e.g. in PencilGrid.h)
         template <class Grid>
-        Grid make_grid(int Nmesh, int n_extra_left = 0, int n_extra_right = 0, const FML::Domain & domain = FML::domain) {
+        Grid make_grid(int Nmesh, int n_extra_left, int n_extra_right, const FML::Domain & domain) {
             return make_grid_on_domain(grid_type_tag<Grid>{}, Nmesh, n_extra_left, n_extra_right, domain);
         }
 

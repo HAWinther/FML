@@ -1,5 +1,6 @@
-// Friends-of-friends on a domain (FriendsOfFriends/FoFDomain.h) finds the same groups as FoF.h, for
-// particles on slabs and on every pencil layout: the same members (independent of the labels) and the same catalogue
+// Friends-of-friends on a domain (FriendsOfFriends/FoFDomain.h, which FoF.h calls with the default particle domain)
+// finds the same groups for the particles on the default slabs and on every pencil layout: the same members
+// (independent of the labels) and the same catalogue
 #include <FML/FriendsOfFriends/FoF.h>
 #include <FML/FriendsOfFriends/FoFDomain.h>
 #include <FML/Global/Global.h>
@@ -149,7 +150,7 @@ int main() {
     FML::FOF::FoF_verbose = false;
 
     for (bool periodic : {true, false}) {
-        // The reference: FoF.h with the particles on the global slabs
+        // The reference: FoF.h (the default particle domain, the slabs)
         FML::PARTICLE::MPIParticles<Part> slabs;
         slabs.create(mine, 3 * mine.size() + 1000, FML::PARTICLE::Input::Distributed);
         std::vector<FML::FOF::FoFHalo<Part, 3>> halos;
@@ -166,7 +167,7 @@ int main() {
                   (periodic ? "" : ", not periodic") + ")");
 
         // The domain version on the slabs and on every pencil layout
-        std::vector<FML::Domain> domains{FML::domain};
+        std::vector<FML::Domain> domains{FML::default_particle_domain};
         for (int p0 = 1; p0 <= FML::NTasks; p0++)
             if (FML::NTasks % p0 == 0)
                 domains.push_back(FML::Domain::uniform_pencil(p0, FML::NTasks / p0));

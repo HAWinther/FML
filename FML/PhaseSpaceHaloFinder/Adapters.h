@@ -65,7 +65,7 @@ namespace FML::PHASE_SPACE_HALOS {
         }
         detail::collective_require(valid, "Invalid SO seed options");
         detail::agree_options(o);
-        // (the owner in the particle domain FML::domain: the slab or the pencil of the centre)
+        // (the owner in the particle domain FML::default_particle_domain: the slab or the pencil of the centre)
         std::vector<std::vector<SOSeed>> outgoing(FML::NTasks);
         for (const auto & seed : seeds) {
             int owner = -1;
@@ -73,7 +73,7 @@ namespace FML::PHASE_SPACE_HALOS {
             for (int d = 0; d < int(seed.position.size()); d++)
                 inside = inside and seed.position[d] >= 0.0 and seed.position[d] < 1.0;
             if (inside)
-                owner = FML::domain.owner(seed.position.data());
+                owner = FML::default_particle_domain.owner(seed.position.data());
             if (owner < 0 or owner >= FML::NTasks)
                 valid = false;
             else

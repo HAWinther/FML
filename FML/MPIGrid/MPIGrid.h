@@ -208,6 +208,21 @@ namespace FML {
             std::array<int, 2> get_local_range(int axis) const { return {_start[axis], _nloc[axis]}; }
             /// The domain the grid was made on (none for the fiducial slabs)
             const std::optional<FML::Domain> & get_domain() const { return _domain; }
+            /// The decomposition of the grid over the tasks as an FML::Domain: the domain it was made on, or its
+            /// slabs (N / NTasks slices per task, one more on the first N % NTasks tasks)
+            FML::Domain decomposition() const {
+                if (_domain)
+                    return *_domain;
+                std::vector<double> lo(FML::NTasks), hi(FML::NTasks);
+                int start = 0;
+                for (int task = 0; task < FML::NTasks; task++) {
+                    const int n = _N / FML::NTasks + (task < _N % FML::NTasks ? 1 : 0);
+                    lo[task] = double(start) / double(_N);
+                    hi[task] = double(start + n) / double(_N);
+                    start += n;
+                }
+                return FML::Domain::slab(std::move(lo), std::move(hi));
+            }
 
             // Returns the position of the cell in the global grid
             std::array<double, NDIM> get_pos(IndexInt index);

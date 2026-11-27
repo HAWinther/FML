@@ -126,7 +126,7 @@ static std::vector<Particle> read_particles(size_t & npart) {
         for (auto & v : p.vel)
             ss >> v;
         p.gid = npart++;
-        if (p.pos[0] >= FML::xmin_domain and p.pos[0] < FML::xmax_domain)
+        if (FML::default_particle_domain.contains(FML::ThisTask, p.pos))
             part.push_back(p);
     }
     return part;

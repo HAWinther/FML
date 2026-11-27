@@ -2,7 +2,7 @@
 
 `SphericalOverdensity<T, NDIM>` in `SphericalOverdensity.h` measures halos around locally supplied seed centers using the distributed particle catalogue. The routine is collective over the FML communicator, including ranks without particles or halos. It requires the same search radius, density thresholds and global total mass on every rank. Halo counts and initial centering radii may differ between ranks.
 
-Particle coordinates must lie in the periodic unit box, with x owned by the rank's half-open slab `[xmin_domain, xmax_domain)`. Slabs must form a contiguous, rank-ordered partition of `[0,1]`; nonuniform and empty slabs are supported. Empty slabs must have no particles or halo centers. Particle masses (or the unit-mass fallback), thresholds and global total mass must be finite and positive. Seed centers can be unwrapped finite coordinates and are normalized to `[0,1)`. Initial radii must be finite and nonnegative; the search radius must be finite and positive.
+Particle coordinates must lie in the periodic unit box, owned by the rank's region in `FML::default_particle_domain` (a Slab or Pencil domain: `box(FML::ThisTask)`, half-open). Nonuniform and empty slabs are supported. Empty slabs must have no particles or halo centers. Particle masses (or the unit-mass fallback), thresholds and global total mass must be finite and positive. Seed centers can be unwrapped finite coordinates and are normalized to `[0,1)`. Initial radii must be finite and nonnegative; the search radius must be finite and positive.
 
 ## Multi-slab coverage and centering
 

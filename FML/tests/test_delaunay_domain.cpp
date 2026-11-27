@@ -1,6 +1,7 @@
-// The periodic Delaunay tessellation on a domain (MPIPeriodicDelaunay(domain), Global/DomainBuffer.h) gives
-// the same tessellation as on the global slabs, for particles on slabs and on every pencil layout: the same Voronoi
-// volume of every particle, no unreliable cells, the boundary values, and the same watershed basins
+// The periodic Delaunay tessellation on a domain (MPIPeriodicDelaunay(domain), Global/DomainBuffer.h) gives the same
+// tessellation for the particles on the default particle domain (the slabs; the default constructor) and on every
+// pencil layout: the Voronoi volumes sum to the box, the same Voronoi volume of every particle, no unreliable cells,
+// the boundary values, and the same watershed basins
 #include <FML/Global/Global.h>
 #include <FML/MPIParticles/MPIParticles.h>
 #include <FML/Triangulation/PeriodicDelaunay.h>
@@ -157,7 +158,7 @@ int main() {
     for (size_t i = FML::ThisTask; i < all.size(); i += FML::NTasks)
         mine.push_back(all[i]);
 
-    // The reference: the tessellation on the global slabs
+    // The reference: the tessellation on the default particle domain (the slabs)
     FML::PARTICLE::MPIParticles<Part> slabs;
     slabs.create(mine, 3 * mine.size() + 1000, FML::PARTICLE::Input::Distributed);
     MPIPeriodicDelaunay<Part, VertexDataWatershed> D0;
@@ -169,7 +170,7 @@ int main() {
           "the reference: the volumes fill the box, no unreliable cells, " + std::to_string(ref.basins.size()) +
               " basins");
 
-    std::vector<FML::Domain> domains{FML::domain};
+    std::vector<FML::Domain> domains{FML::default_particle_domain};
     for (int p0 = 1; p0 <= FML::NTasks; p0++)
         if (FML::NTasks % p0 == 0)
             domains.push_back(FML::Domain::uniform_pencil(p0, FML::NTasks / p0));

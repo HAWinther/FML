@@ -75,8 +75,8 @@ into account.
 
 With MPI, all communication goes through \code{FML::communicator} (normally \code{MPI_COMM_WORLD}). The task index is
 \code{FML::ThisTask} and the number of tasks \code{FML::NTasks}. The default decomposition is in \emph{slabs} along the
-first coordinate: task $t$ owns $x\in[x_{\min}^{(t)},x_{\max}^{(t)})$ (\code{FML::xmin_domain},
-\code{FML::xmax_domain}) for its particles, and the corresponding slices of every grid. Grids can allocate extra
+first coordinate: task $t$ owns $x\in[x_{\min}^{(t)},x_{\max}^{(t)})$ for its particles
+(\code{FML::default_particle_domain}; \code{box(t)} gives the range), and the corresponding slices of every grid. Grids can allocate extra
 slices on the left and right (\emph{ghost} slices) that are filled from the neighbours when needed. Pencil and
 Peano--Hilbert decompositions exist as separate modules (\cref{ch:parallelism}). OpenMP is used inside a task.
 

@@ -200,7 +200,8 @@ namespace FML {
                 FML::SumOverTasks(&sum);
                 const double mean = sum / double(ntot);
                 const auto nextra = FML::INTERPOLATION::get_extra_slices(method);
-                auto grid = FML::GRID::make_grid<Grid>(nmesh, nextra.first, nextra.second);
+                auto grid =
+                    FML::GRID::make_grid<Grid>(nmesh, nextra.first, nextra.second, FML::default_particle_domain);
                 FML::INTERPOLATION::particles_to_grid(points.data(), points.size(), ntot, grid, method);
                 for (auto && index : grid.get_real_range()) {
                     const double value = (double(grid.get_real_from_index(index)) + 1.0) * mean -
@@ -222,7 +223,7 @@ namespace FML {
             if (ntot == 0)
                 throw std::runtime_error("[particle_density_contrast] No particles");
             const auto nextra = FML::INTERPOLATION::get_extra_slices(method);
-            auto delta = FML::GRID::make_grid<Grid>(nmesh, nextra.first, nextra.second);
+            auto delta = FML::GRID::make_grid<Grid>(nmesh, nextra.first, nextra.second, FML::default_particle_domain);
             FML::INTERPOLATION::particles_to_grid(part, npart, ntot, delta, method);
             return delta;
         }
@@ -252,7 +253,7 @@ namespace FML {
             }
             // The number field (for the shift in deposit_weights) and the mass field M
             const auto nextra = FML::INTERPOLATION::get_extra_slices(method);
-            auto number = FML::GRID::make_grid<Grid>(nmesh, nextra.first, nextra.second);
+            auto number = FML::GRID::make_grid<Grid>(nmesh, nextra.first, nextra.second, FML::default_particle_domain);
             FML::INTERPOLATION::particles_to_grid(points.data(), points.size(), ntot, number, method);
             for (size_t i = 0; i < npart; i++)
                 points[i].weight = double(FML::PARTICLE::GetMass(part[i]));
@@ -278,7 +279,7 @@ namespace FML {
             const double min_mass = 1e-3 * mean_mass;
 
             // theta(k) = -sum_d i k_d v_d(k) (the layout of the momentum grids: the same indices)
-            auto theta = FML::GRID::make_grid<Grid>(nmesh, nextra.first, nextra.second);
+            auto theta = FML::GRID::make_grid<Grid>(nmesh, nextra.first, nextra.second, FML::default_particle_domain);
             theta.set_grid_status_real(false);
             for (auto && index : theta.get_fourier_range())
                 theta.set_fourier_from_index(index, 0.0);

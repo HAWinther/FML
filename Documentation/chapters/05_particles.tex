@@ -52,7 +52,7 @@ double m = GetMass(p);                      // 1.0: equal masses
 \section{MPIParticles}\label{sec:part-mpiparticles}
 
 \cls{MPIParticles} holds the local particles of a \cls{Domain} (\cref{sec:par-domains}): the one given to the constructor or
-the global \code{FML::domain}, a slab by default. Particles are created
+the global \code{FML::default_particle_domain}, a slab by default. Particles are created
 \begin{itemize}
 \item from a set of particles: \code{Input::Replicated} (every task has the same, e.g.\ read from one file, and keeps those it
       owns), \code{Input::Distributed} (different particles anywhere, sent to their owners in batches, so one task can hold all

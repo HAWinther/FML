@@ -6,7 +6,7 @@ Periodic Delaunay/Voronoi tessellations of particles in the unit box and what is
 |---|---|
 | `Predicates.h`, `Delaunay.h`, `PeriodicVoronoi.h` | FML's own Delaunay triangulation and periodic Voronoi tessellation (`FML::DELAUNAY`, 2D and 3D, MPI, moving points), see [DELAUNAY.md](DELAUNAY.md) |
 | `VoronoiTessellation.h` | `PeriodicVoronoiTessellation<NDIM>`: FML's own tessellation for the library (no CGAL). Voronoi volumes, neighbours, values of the neighbours on other tasks. The particles can be on any task; no buffer to choose; the result does not depend on the number of tasks |
-| `PeriodicDelaunay.h` | `MPIPeriodicDelaunay`: CGAL's tessellation on the slabs (or a domain) with a buffer from the neighbour tasks and guard points (`USE_CGAL=true`) |
+| `PeriodicDelaunay.h` | `MPIPeriodicDelaunay`: CGAL's tessellation on the domain of the particles (Slab or Pencil; the default particle domain unless one is given) with a buffer from the neighbour tasks and guard points (`USE_CGAL=true`) |
 | `Watershed.h` | The watershed on the neighbour graph of either tessellation (`WatershedGeneral`, `WatershedDensity`, `WatershedDensityNative`) |
 | `DTFE.h` | The DTFE density, fields and velocity derivatives on a grid, on either tessellation (`DTFETessellation`) |
 

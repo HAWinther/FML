@@ -169,8 +169,12 @@ template<class Grid> static void particle_mesh(const FML::Domain & domain) {
     check(exact.fit.status==FF::MAPStatus::Converged && exact.fit.gradient_norm<o.tolerance,"real PM null response reaches the exact prior optimum");
 }
 int main(int argc,char **argv){FML::FMLSetup::init(&argc,&argv);quadratic();stable_changes();
-    auto slab=FML::Domain::uniform_slab(FML::NTasks);FML::set_domain(slab);particle_mesh<FML::GRID::FFTWGrid<3>>(slab);
+    auto slab = FML::Domain::uniform_slab(FML::NTasks);
+    FML::set_default_particle_domain(slab);
+    particle_mesh<FML::GRID::FFTWGrid<3>>(slab);
 #ifdef USE_MPI
-    auto pencil=FML::Domain::uniform_pencil(FML::NTasks==4?2:FML::NTasks,FML::NTasks==4?2:1);FML::set_domain(pencil);particle_mesh<FML::GRID::PencilGrid<3>>(pencil);
+    auto pencil = FML::Domain::uniform_pencil(FML::NTasks == 4 ? 2 : FML::NTasks, FML::NTasks == 4 ? 2 : 1);
+    FML::set_default_particle_domain(pencil);
+    particle_mesh<FML::GRID::PencilGrid<3>>(pencil);
 #endif
     return FML::TESTS::summary("MAP optimizer");}

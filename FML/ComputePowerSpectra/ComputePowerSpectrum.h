@@ -25,6 +25,7 @@
 #include <unordered_map>
 #include <algorithm>
 #include <FML/Global/Global.h>
+#include <FML/Interpolation/DistributedDeposit.h>
 #include <FML/Interpolation/ParticleGridInterpolation.h>
 #include <FML/LPT/Reconstruction.h>        // For particles->redshiftspace
 #include <FML/MPIParticles/MPIParticles.h> // Only for compute_multipoles from particles
@@ -111,7 +112,7 @@ namespace FML {
                                     PowerSpectrumBinning<N> & pofk,
                                     std::string density_assignment_method,
                                     bool interlacing,
-                                    const FML::Domain & domain = FML::domain);
+                                    const FML::Domain & domain = FML::default_particle_domain);
 
         //================================================================================
         /// @brief Brute force (but aliasing free) computation of the power spectrum.
@@ -293,7 +294,7 @@ namespace FML {
                                   PolyspectrumBinning<N, ORDER, COMPACT> & polyofk,
                                   std::string density_assignment_method,
                                   bool interlacing,
-                                    const FML::Domain & domain = FML::domain);
+                                  const FML::Domain & domain = FML::default_particle_domain);
 
         //================================================================================
         /// @brief Computes the polyspectrum \f$ P(k_1,k_2,\ldots,k_{\rm ORDER}) = \left<\delta(k_1)\cdots\delta(k_{\rm
@@ -832,9 +833,19 @@ namespace FML {
                 Pell_all[idim] = Pell;
             }
 
-            // Allocate density grid (decomposed as the particles)
-            auto density_k = FML::GRID::make_grid<Grid<N>>(Ngrid, nleft, nright, part.get_domain());
+            // Allocate density grid: decomposed as the particles if the grid type can be (an FFTWGrid has its own
+            // slabs; other grids Slab or Pencil domains), else its own layout and the deposit for any domain
+            const FML::Domain & domain = part.get_domain();
+            const bool grid_follows = FML::GRID::is_fftwgrid_v<Grid<N>> ?
+                                          domain.is_slab() :
+                                          (domain.is_slab() or domain.holds<FML::PencilDomain>());
+            auto density_k =
+                FML::GRID::make_grid<Grid<N>>(Ngrid,
+                                              nleft,
+                                              nright,
+                                              grid_follows ? domain : FML::Domain::uniform_slab(FML::NTasks));
             density_k.add_memory_label("FFTWGrid::compute_power_spectrum_multipoles::density_k");
+            const bool local = FML::same_partition(domain, density_k.decomposition());
 
             // Loop over all the N axes we are going to put the particles
             // into redshift space
@@ -854,7 +865,17 @@ namespace FML {
 
                 // Bin particles to grid
                 density_k.set_grid_status_real(true);
-                if (interlacing) {
+                if (not local) {
+
+                    FML::INTERPOLATION::particles_to_fourier_grid_any_domain<N, T>(part.get_particles_ptr(),
+                                                                                   part.get_npart(),
+                                                                                   part.get_npart_total(),
+                                                                                   density_k,
+                                                                                   density_assignment_method,
+                                                                                   interlacing);
+                    deconvolve_window_function_fourier<N>(density_k, density_assignment_method);
+
+                } else if (interlacing) {
 
                     // Bin to grid and interlaced grid and deconvolve window function
                     FML::INTERPOLATION::particles_to_fourier_grid_interlacing(part.get_particles_ptr(),
@@ -932,11 +953,31 @@ namespace FML {
             const int nleft = nleftright.first;
             const int nright = nleftright.second + (interlacing ? 1 : 0);
 
-            // Bin particles to grid (decomposed as the domain of the particles: the fiducial FML::domain unless given)
-            auto density_k = FML::GRID::make_grid<Grid<N>>(Ngrid, nleft, nright, domain);
+            // The grid: decomposed as the particles (domain: the default particle domain unless given) if the grid type
+            // can be (an FFTWGrid has its own slabs; other grids Slab or Pencil domains), else its own layout.
+            // Particles on the grid's partition are deposited locally, others (e.g. on a PeanoHilbert domain) with the
+            // deposit for any domain (Interpolation/DistributedDeposit.h)
+            const bool grid_follows = FML::GRID::is_fftwgrid_v<Grid<N>> ?
+                                          domain.is_slab() :
+                                          (domain.is_slab() or domain.holds<FML::PencilDomain>());
+            auto density_k =
+                FML::GRID::make_grid<Grid<N>>(Ngrid,
+                                              nleft,
+                                              nright,
+                                              grid_follows ? domain : FML::Domain::uniform_slab(FML::NTasks));
             density_k.add_memory_label("FFTWGrid::compute_power_spectrum::density_k");
 
-            if (interlacing) {
+            if (not FML::same_partition(domain, density_k.decomposition())) {
+
+                FML::INTERPOLATION::particles_to_fourier_grid_any_domain<N, T>(part,
+                                                                               NumPart,
+                                                                               NumPartTotal,
+                                                                               density_k,
+                                                                               density_assignment_method,
+                                                                               interlacing);
+                deconvolve_window_function_fourier<N>(density_k, density_assignment_method);
+
+            } else if (interlacing) {
 
                 // Bin to grid using interlaced grids to produce a fourier space density field
                 FML::INTERPOLATION::particles_to_fourier_grid_interlacing(part,

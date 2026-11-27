@@ -145,7 +145,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                                 Spectrum spectrum,
                                 FourierResponse response = {},
                                 std::vector<Parameter> priors = {},
-                                const FML::Domain & domain = FML::domain)
+                                const FML::Domain & domain = FML::default_particle_domain)
             : config_(config), domain_(domain), spectrum_(std::move(spectrum)) {
             int tasks = FML::NTasks;
 #ifdef USE_MPI

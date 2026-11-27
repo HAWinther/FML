@@ -1,5 +1,5 @@
 // SPH (routing of the particles to their task and the ghosts within the kernel support) on a pencil
-// FML::domain evolves the gas as on the slabs (2D and 3D)
+// FML::default_particle_domain evolves the gas as on the slabs (2D and 3D)
 #include <FML/Global/Global.h>
 #include <FML/SPH/SPH.h>
 #include <FML/tests/TestHelpers.h>
@@ -69,13 +69,13 @@ namespace {
     template <int D>
     void compare(int n, int steps) {
         const auto ref = evolve<D>(n, steps);
-        const FML::Domain slab_domain = FML::domain;
+        const FML::Domain slab_domain = FML::default_particle_domain;
         for (int p0 = 1; p0 <= FML::NTasks; p0++) {
             if (FML::NTasks % p0)
                 continue;
-            FML::set_domain(FML::Domain::uniform_pencil(p0, FML::NTasks / p0));
+            FML::set_default_particle_domain(FML::Domain::uniform_pencil(p0, FML::NTasks / p0));
             const auto res = evolve<D>(n, steps);
-            FML::set_domain(slab_domain);
+            FML::set_default_particle_domain(slab_domain);
             double diff = res.size() == ref.size() ? 0.0 : 1e100;
             for (size_t i = 0; diff < 1e100 and i < res.size(); i++)
                 for (size_t j = 0; j < res[i].size(); j++) {

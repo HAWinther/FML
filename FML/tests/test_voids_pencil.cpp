@@ -109,7 +109,7 @@ int main() {
     std::vector<std::vector<std::vector<double>>> ref_sph;
     for (auto & o : sph)
         ref_sph.push_back(rows(V::SphericalVoidFinder(pslab.get_particles_ptr(), pslab.get_npart(), o)));
-    const FML::Domain slab_domain = FML::domain;
+    const FML::Domain slab_domain = FML::default_particle_domain;
 
     for (int p0 = 1; p0 <= FML::NTasks; p0++) {
         if (FML::NTasks % p0)
@@ -131,7 +131,7 @@ int main() {
                       ": " + std::to_string(res.size()) + " as on slabs (max diff " + num(diff, 2) + ")");
         }
         // The spherical void finder uses the global domain
-        FML::set_domain(domain);
+        FML::set_default_particle_domain(domain);
         for (size_t i = 0; i < sph.size(); i++) {
             const auto res =
                 rows(V::SphericalVoidFinder<Part, FML::GRID::PencilGrid>(p.get_particles_ptr(), p.get_npart(), sph[i]));
@@ -141,7 +141,7 @@ int main() {
                       ": spherical voids (recentering steps " + std::to_string(sph[i].recentering_steps) + "): " +
                       std::to_string(res.size()) + " as on slabs (max diff " + num(diff, 2) + ")");
         }
-        FML::set_domain(slab_domain);
+        FML::set_default_particle_domain(slab_domain);
     }
     return FML::TESTS::summary("voxel void finder on pencils");
 }

@@ -255,7 +255,7 @@ namespace FML::FIELDLEVEL::FRAMEWORK {
                              Spectrum spectrum,
                              FourierResponse response = {},
                              std::vector<Parameter> priors = {},
-                             const FML::Domain & domain = FML::domain)
+                             const FML::Domain & domain = FML::default_particle_domain)
             : config_(c),
               linear_(linear_config(c), std::move(spectrum), std::move(response), linear_priors(priors), domain) {
             linear_.controls({double(c.evolution), double(c.density_mesh), double(c.kernel_width),

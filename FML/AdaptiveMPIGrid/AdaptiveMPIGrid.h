@@ -271,6 +271,8 @@ namespace FML {
                 static_assert(NDIM == 3, "AdaptiveMPIGrid::get_domain: only for NDIM = 3 (PeanoHilbertDomain is 3D)");
                 return FML::Domain::peano_hilbert(_domain_start, unsigned(LMAX));
             }
+            /// The decomposition of the grid over the tasks (as every grid type): get_domain()
+            FML::Domain decomposition() const { return get_domain(); }
 
             //======================================================================
             // Geometry

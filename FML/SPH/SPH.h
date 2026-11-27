@@ -135,7 +135,7 @@ namespace FML::SPH {
         }
         template <class Record, class GetParticle>
         std::vector<Record> migrate(const std::vector<Record> & records, GetParticle get) const {
-            const bool pencils = FML::domain.holds<FML::PencilDomain>();
+            const bool pencils = FML::default_particle_domain.holds<FML::PencilDomain>();
             auto result = detail::route(
                 records,
                 [&](const Record & r) {
@@ -144,7 +144,7 @@ namespace FML::SPH {
                             const double xy[2] = {
                                 std::min(std::nextafter(1., 0.), get(r).position[0] / options_.boxsize),
                                 std::min(std::nextafter(1., 0.), get(r).position[1] / options_.boxsize)};
-                            return FML::domain.owner(xy);
+                            return FML::default_particle_domain.owner(xy);
                         }
                     }
                     const double x = std::min(std::nextafter(1., 0.), get(r).position[0] / options_.boxsize);
@@ -463,9 +463,9 @@ namespace FML::SPH {
         Solver(std::vector<P> particles, Options options = {}, BackgroundFunction bg = {})
             : options_(options), background_(std::move(bg)) {
             validate_options();
-            if (FML::domain.holds<FML::PencilDomain>()) {
+            if (FML::default_particle_domain.holds<FML::PencilDomain>()) {
                 if (D < 2)
-                    throw std::invalid_argument("[SPH] A pencil FML::domain needs D >= 2");
+                    throw std::invalid_argument("[SPH] A pencil FML::default_particle_domain needs D >= 2");
             } else {
                 slabs_ = detail::slabs();
             }

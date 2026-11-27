@@ -102,7 +102,10 @@ int main() {
         std::vector<Particle> part(10);
         for (size_t i = 0; i < part.size(); i++) {
             // all particles belong to task 0's slab
-            part[i].pos[0] = FML::xmin_domain + 1e-3 * (i + 1) * (FML::xmax_domain - FML::xmin_domain);
+            part[i].pos[0] = FML::default_particle_domain.x_min(FML::ThisTask) +
+                             1e-3 * (i + 1) *
+                                 (FML::default_particle_domain.x_max(FML::ThisTask) -
+                                  FML::default_particle_domain.x_min(FML::ThisTask));
             part[i].pos[1] = part[i].pos[2] = 0.5;
         }
         mp.create(part.data(), part.size(), 10, FML::PARTICLE::Input::Distributed);

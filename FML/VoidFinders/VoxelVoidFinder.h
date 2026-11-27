@@ -317,7 +317,7 @@ namespace FML {
                                 size_t NumPart,
                                 const VoxelOptions & options,
                                 Grid<3> & grid,
-                                const FML::Domain & domain = FML::domain) {
+                                const FML::Domain & domain = FML::default_particle_domain) {
             constexpr bool fftw = FML::GRID::is_fftwgrid_v<Grid<3>>;
 
             assert_mpi(FML::PARTICLE::GetNDIM(T()) == 3, "[void_density_field] Only implemented in 3D");
@@ -421,7 +421,7 @@ namespace FML {
                                           size_t NumPart,
                                           const VoxelOptions & options = VoxelOptions(),
                                           FML::GRID::non_deduced_t<Grid<3>> * density_grid = nullptr,
-                                          const FML::Domain & domain = FML::domain) {
+                                          const FML::Domain & domain = FML::default_particle_domain) {
             if (FML::ThisTask == 0)
                 std::cout << "[VoxelVoidFinder] Finding " << (options.find_clusters ? "clusters" : "voids") << "\n";
             Grid<3> grid;

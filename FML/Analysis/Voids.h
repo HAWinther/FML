@@ -170,8 +170,11 @@ namespace FML {
         template <class P>
         std::vector<FML::VOIDFINDER::Void> find_voxel_voids(P * part, size_t npart, const VoidSettings & settings) {
             settings.validate();
-            return FML::VOIDFINDER::VoxelVoidFinder<P, AnalysisGrid>(
-                part, npart, settings.voxel_options(), nullptr, FML::domain);
+            return FML::VOIDFINDER::VoxelVoidFinder<P, AnalysisGrid>(part,
+                                                                     npart,
+                                                                     settings.voxel_options(),
+                                                                     nullptr,
+                                                                     FML::default_particle_domain);
         }
 
         template <class P>

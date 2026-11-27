@@ -12,15 +12,15 @@
 namespace FML {
     namespace ANALYSIS {
 
-        /// Send the particles to the task whose domain (slabs: [xmin_domain, xmax_domain)) holds their position after
+        /// Send the particles to the task whose domain (particles.get_domain()) holds their position after
         /// they have moved (positions in [0,1)), growing the storage first so that the receiving task has room for
         /// all its particles: MPIParticles::communicate_particles only uses the storage it has. Collective
         template <class P>
         void redistribute_particles(FML::PARTICLE::MPIParticles<P> & particles) {
             if (FML::NTasks == 1)
                 return;
-            const auto xmin = FML::GatherFromTasks(&FML::xmin_domain);
             const auto & domain = particles.get_domain();
+            const std::vector<double> xmin = domain.is_slab() ? domain.x_min_per_task() : std::vector<double>{};
             std::vector<size_t> counts(size_t(FML::NTasks), 0);
             for (size_t i = 0; i < particles.get_npart(); ++i) {
                 const auto * pos = FML::PARTICLE::GetPos(particles[i]);

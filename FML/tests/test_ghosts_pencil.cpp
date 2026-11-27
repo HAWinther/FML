@@ -1,4 +1,4 @@
-// The particle buffers on pencils. With FML::domain the pencils (every layout of the tasks):
+// The particle buffers on pencils. With FML::default_particle_domain the pencils (every layout of the tasks):
 //   - ShortRangeGravity::exchange_domain_ghosts: the short-range force of the particles with the ghosts is the force
 //     from all the particles (also with a cutoff wider than a pencil), no ghost twice
 //   - COMMUNICATION::append_periodic_domain_ghosts: the ghosts are exactly the records within the buffer of the
@@ -58,7 +58,7 @@ namespace {
         std::vector<SR::Particle> all(x.size()), local;
         for (size_t i = 0; i < x.size(); i++) {
             all[i] = {{x[i][0], x[i][1], x[i][2]}, 1.0, i};
-            if (FML::domain.owner(x[i].data()) == FML::ThisTask)
+            if (FML::default_particle_domain.owner(x[i].data()) == FML::ThisTask)
                 local.push_back(all[i]);
         }
         double worst = 0.0;
@@ -68,7 +68,7 @@ namespace {
             o.split_scale = rs;
             o.cutoff_tolerance = 1e-8;
             SR::Kernel k(o);
-            auto sources = SR::exchange_domain_ghosts(local, FML::domain, k);
+            auto sources = SR::exchange_domain_ghosts(local, FML::default_particle_domain, k);
             std::set<std::uint64_t> ids;
             for (auto & p : sources.particles)
                 ids.insert(p.id);
@@ -95,7 +95,7 @@ namespace {
         const auto x = positions(3000);
         std::vector<Record> mine;
         for (size_t i = 0; i < x.size(); i++)
-            if (FML::domain.owner(x[i].data()) == FML::ThisTask)
+            if (FML::default_particle_domain.owner(x[i].data()) == FML::ThisTask)
                 mine.push_back({{x[i][0], x[i][1], x[i][2]}, (long long)i});
         const double buffer = 0.07;
         const size_t nown = mine.size();
@@ -105,7 +105,7 @@ namespace {
         for (size_t i = nown; i < mine.size(); i++)
             got.insert(mine[i].id);
         // The records within the buffer of the pencil (not ours)
-        const auto & pencils = FML::domain.get<FML::PencilDomain>();
+        const auto pencils = FML::default_particle_domain.pencils();
         const auto c = pencils.coords_of(FML::ThisTask);
         auto dist = [](double v, double lo, double hi) {
             double best = 1.0;
@@ -115,7 +115,7 @@ namespace {
         };
         std::set<long long> expected;
         for (size_t i = 0; i < x.size(); i++) {
-            if (FML::domain.owner(x[i].data()) == FML::ThisTask)
+            if (FML::default_particle_domain.owner(x[i].data()) == FML::ThisTask)
                 continue;
             const double dx = dist(x[i][0], pencils.x_edges()[c[0]], pencils.x_edges()[c[0] + 1]);
             const double dy = dist(x[i][1], pencils.y_edges()[c[1]], pencils.y_edges()[c[1] + 1]);
@@ -175,13 +175,13 @@ namespace {
 } // namespace
 
 int main() {
-    const auto slabs = FML::domain;
+    const auto slabs = FML::default_particle_domain;
     const auto ref = halos();
     check(ref.size() >= 4, "the slabs: " + std::to_string(ref.size()) + " FoF halos");
     for (int p0 = 1; p0 <= FML::NTasks; p0++) {
         if (FML::NTasks % p0)
             continue;
-        FML::set_domain(FML::Domain::uniform_pencil(p0, FML::NTasks / p0));
+        FML::set_default_particle_domain(FML::Domain::uniform_pencil(p0, FML::NTasks / p0));
         const std::string name = "pencils " + std::to_string(p0) + "x" + std::to_string(FML::NTasks / p0);
         short_range_ghosts(name);
         record_ghosts(name);
@@ -192,7 +192,7 @@ int main() {
                 diff = std::max(diff, std::abs(h[i][k] - ref[i][k]) / (1e-12 + std::abs(ref[i][k])));
         check(diff < 1e-10, name + ": FoF and SO give the halos of the slabs (" + std::to_string(h.size()) +
                                 " halos, rel. diff " + num(diff, 2) + ")");
-        FML::set_domain(slabs);
+        FML::set_default_particle_domain(slabs);
     }
     return FML::TESTS::summary("buffers on pencils");
 }

@@ -44,7 +44,7 @@ static double mode_error(const FF::Modes & a, const FF::Modes & b) {
     return e;
 }
 template <class Forward = FF::DistributedLinearModel>
-static void reference_tests(const FML::Domain & domain = FML::domain) {
+static void reference_tests(const FML::Domain & domain = FML::default_particle_domain) {
     FF::Configuration c;
     c.mesh = 8;
     c.density_mesh = 16;
@@ -343,7 +343,7 @@ static void posterior_tests(Forward & m,
         std::cout << "SURVEY_POSTERIOR " << label << " U=" << U << " gradient0=" << gp[0] << '\n';
 }
 template <class Forward = FF::DistributedLPTModel>
-static void nonlinear_tests(FF::Evolution evolution, const FML::Domain & domain = FML::domain) {
+static void nonlinear_tests(FF::Evolution evolution, const FML::Domain & domain = FML::default_particle_domain) {
     FF::Configuration c;
     c.mesh = 8;
     c.density_mesh = 16;

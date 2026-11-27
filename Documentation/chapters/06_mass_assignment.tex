@@ -1,5 +1,5 @@
 \chapter{Particle--mesh interpolation, smoothing and NUFFT}\label{ch:mass-assignment}
-\chapterstatus{written}{2026-11-14}
+\chapterstatus{written}{2026-11-26}
 
 The link between particles and grids: density assignment with B-spline kernels, window deconvolution and interlacing,
 interpolation of grids to particles, deposits for particles on any domain, Fourier-space filters and shifts, non-uniform FFTs,
@@ -49,7 +49,13 @@ bit-reproducible. With too few slices per task (e.g.\ $N_{\rm mesh}=512$ on 32 t
 grid's, e.g.\ on a Peano--Hilbert domain, as GADGET's PM step does \cite{Springel2005}: each task deposits into a dense patch covering
 the cells its particles touch (in several passes if the patch would exceed a cell budget), and the overlap with each task's part of the
 grid is sent to it (all-zero blocks skipped) through the chunked exchange. It gives the same field as \code{particles_to_grid} up to the
-order of the sums, deterministically for any number of threads, for slab and pencil grids.
+order of the sums, deterministically for any number of threads, for slab and pencil grids. Its inverse,
+\code{interpolate_grids_to_particles_any_domain}, gathers the cells the particles' stencils touch from their owners, and
+\code{particles_to_fourier_grid_any_domain} adds the Fourier transform and interlacing. P(k) of particles
+(\code{compute_power_spectrum} with the domain of the particles, the multipoles of \cls{MPIParticles}) and the PM step
+\code{KickDriftKickNBodyStep} use them when the particles are not on the partition of the grid
+(\code{same_partition(part.get_domain(), grid.decomposition())}, \cref{sec:par-domains}), with the same results as on the
+slabs to round-off (\file{tests/test_coupling_any_domain}).
 
 \section{Aliasing and interlacing}\label{sec:ma-interlacing}
 

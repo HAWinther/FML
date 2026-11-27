@@ -248,7 +248,7 @@ namespace FML {
             template <int N, template <int> class Grid = FML::GRID::FFTWGrid>
             Grid<N> read_linear_field(const std::string & filename,
                                       LinearFieldFileHeader & header,
-                                      const FML::Domain & domain = FML::domain) {
+                                      const FML::Domain & domain = FML::default_particle_domain) {
                 std::string error;
                 try {
                     if (not detail_io::little_endian())

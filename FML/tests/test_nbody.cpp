@@ -173,8 +173,8 @@ void check_streamed_pgd(const std::string & label) {
     std::vector<P> original(FML::NTasks > 1 && FML::ThisTask == 0 ? 0 : 512);
     for (size_t i = 0; i < original.size(); ++i) {
         for (int d = 0; d < N; ++d) {
-            const Position lo = d == 0 ? Position(FML::xmin_domain) : Position(0);
-            const Position hi = d == 0 ? Position(FML::xmax_domain) : Position(1);
+            const Position lo = d == 0 ? Position(FML::default_particle_domain.x_min(FML::ThisTask)) : Position(0);
+            const Position hi = d == 0 ? Position(FML::default_particle_domain.x_max(FML::ThisTask)) : Position(1);
             Position x = Position(double(lo) + (double(hi) - lo) * uniform(31 * i + d + 7));
             if (i % 7 == 0)
                 x = lo;
@@ -198,9 +198,10 @@ void check_streamed_pgd(const std::string & label) {
                 for (size_t i = 0; i < expected.size(); ++i) {
                     for (int d = 0; d < N; ++d)
                         expected[i].pos[d] = original.front().pos[d];
-                    expected[i].pos[0] = alpha == 0.03 ?
-                                             std::nextafter(Position(FML::xmax_domain), Position(FML::xmin_domain)) :
-                                             Position(FML::xmin_domain);
+                    expected[i].pos[0] =
+                        alpha == 0.03 ? std::nextafter(Position(FML::default_particle_domain.x_max(FML::ThisTask)),
+                                                       Position(FML::default_particle_domain.x_min(FML::ThisTask))) :
+                                        Position(FML::default_particle_domain.x_min(FML::ThisTask));
                     expected[i].pos[1] = i < expected.size() / 2 ? Position(0.2) : Position(0.6);
                 }
                 actual = expected;
@@ -615,7 +616,8 @@ int main(int argc, char ** argv) {
         double maxerr = 0.0;
         int outside = 0;
         for (auto & p : mp) {
-            if (p.pos[0] < FML::xmin_domain or p.pos[0] >= FML::xmax_domain)
+            if (p.pos[0] < FML::default_particle_domain.x_min(FML::ThisTask) or
+                p.pos[0] >= FML::default_particle_domain.x_max(FML::ThisTask))
                 outside++;
             for (int idim = 0; idim < 3; idim++) {
                 double d = std::fabs(p.pos[idim] - p.expected[idim]);

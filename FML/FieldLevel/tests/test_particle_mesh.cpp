@@ -95,11 +95,11 @@ static Snapshot exercise(const FML::Domain & domain, const std::string & label, 
               r.density_layout.global_cells == size_t(nf) * nf * nf,
           label + " explicit time and particle/force layouts");
     check(error(baseline, snapshot(m.evolve(s, p, w))) == 0, label + " repeated evolution resets workspace exactly");
-    auto saved = FML::domain;
-    FML::set_domain(FML::Domain::uniform_slab(FML::NTasks));
+    auto saved = FML::default_particle_domain;
+    FML::set_default_particle_domain(FML::Domain::uniform_slab(FML::NTasks));
     auto fresh = m.workspace();
     check(error(baseline, snapshot(m.evolve(s, p, fresh))) < 2e-13, label + " copied domain survives global changes");
-    FML::set_domain(saved);
+    FML::set_default_particle_domain(saved);
     auto moved = std::move(fresh);
     check(error(baseline, snapshot(m.evolve(s, p, moved))) < 2e-13, label + " movable workspace preserves routing");
     auto bad = s; if (FML::ThisTask == 0) bad.pop_back();
@@ -255,7 +255,8 @@ static void native_reference() {
 }
 #endif
 int main(int argc, char ** argv) {
-    auto slab = FML::Domain::uniform_slab(FML::NTasks); FML::set_domain(slab);
+    auto slab = FML::Domain::uniform_slab(FML::NTasks);
+    FML::set_default_particle_domain(slab);
     FF::PMBackground eds{1.}, lcdm{.3};
     check(eds.growth(.1) == .1 && eds.growth_rate(.2) == 1 && std::abs(lcdm.growth(1.) - 1) < 1e-15,
           "background exact EdS and normalized LCDM growth");
@@ -307,7 +308,8 @@ int main(int argc, char ** argv) {
     }
     for (auto shape : {std::array<int, 2>{FML::NTasks, 1}, {1, FML::NTasks}}) {
         if (shape[0] > 8 || shape[1] > 5) continue;
-        auto domain = FML::Domain::uniform_pencil(shape[0], shape[1]); FML::set_domain(domain);
+        auto domain = FML::Domain::uniform_pencil(shape[0], shape[1]);
+        FML::set_default_particle_domain(domain);
         if (shape[1] <= 3)
             check(error(exercise<FML::GRID::PencilGrid<3>>(domain, "dense-pencil", .3, 8, 4), dense) < 2e-12,
                   "oversampled slab/pencil forward equality");
@@ -320,7 +322,8 @@ int main(int argc, char ** argv) {
         if (FML::ThisTask == 0) std::cout << "PM_BACKEND_ERROR " << e << '\n';
     }
     if (FML::NTasks == 4) {
-        auto domain = FML::Domain::uniform_pencil(2, 2); FML::set_domain(domain);
+        auto domain = FML::Domain::uniform_pencil(2, 2);
+        FML::set_default_particle_domain(domain);
         check(error(exercise<FML::GRID::PencilGrid<3>>(domain, "2x2"), baseline) < 2e-12, "2x2 pencil equals slab");
         auto uneven = exercise<FML::GRID::PencilGrid<3>>(domain, "uneven-N10", 1., 10, 20);
         check(!uneven.density.empty(), "unequal pencil particle and force boxes supported");
@@ -330,7 +333,7 @@ int main(int argc, char ** argv) {
         }), "force-grid domain edges must align on cells");
     }
 #endif
-    FML::set_domain(slab);
+    FML::set_default_particle_domain(slab);
     if (argc > 1) {
         if (FML::ThisTask == 0) {
             std::ofstream data(std::string(argv[1]) + ".snapshot"); data << std::setprecision(17);

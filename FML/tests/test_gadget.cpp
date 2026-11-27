@@ -109,7 +109,7 @@ bool check_particles(std::vector<T> & part, size_t ntotal, long long id_offset, 
             nbad++;
             continue;
         }
-        if (not(p.pos[0] >= FML::xmin_domain and p.pos[0] < FML::xmax_domain))
+        if (not(FML::default_particle_domain.contains(FML::ThisTask, p.pos)))
             nbad++;
         for (int idim = 0; idim < 3; idim++) {
             double dx = std::fabs(p.pos[idim] - expected_pos(p.id, idim));
@@ -275,12 +275,18 @@ int main(int argc, char ** argv) {
         gw.write_gadget_single(filename, part.data(), nfile, nfile, 1, aexp, box, OmegaM, 0.7, 0.7, box, vel_norm);
         my_files.push_back(filename);
 
-        const double saved_xmin = FML::xmin_domain, saved_xmax = FML::xmax_domain;
-        FML::xmin_domain = 0.0;
-        FML::xmax_domain = 0.01;
+        // (each task alone: a slab view in which this task owns [lo, hi); not a partition over the tasks)
+        const FML::Domain saved_domain = FML::default_particle_domain;
+        auto local_test_domain = [](double lo, double hi) {
+            std::vector<double> xmin(FML::NTasks, 1.0), xmax(FML::NTasks, 1.0);
+            xmin[FML::ThisTask] = lo;
+            xmax[FML::ThisTask] = hi;
+            return FML::Domain::slab(xmin, xmax);
+        };
+        FML::default_particle_domain = local_test_domain(0.0, 0.01);
         std::vector<Particle> expected;
         for (const auto & p : part)
-            if (p.pos[0] < FML::xmax_domain)
+            if (p.pos[0] < 0.01)
                 expected.push_back(p);
         GadgetReader reader;
         std::vector<Particle> read;
@@ -310,7 +316,7 @@ int main(int argc, char ** argv) {
         }
         check(ok, "filtered append preserves existing particles, positions, velocities and IDs");
 
-        FML::xmin_domain = FML::xmax_domain = 0.5;
+        FML::default_particle_domain = local_test_domain(0.5, 0.5);
         std::vector<Particle> empty;
         reader.read_gadget_single(filename, empty, true, false);
         check(empty.empty() and empty.capacity() == 0, "empty filtered domain allocates no particle storage");
@@ -322,8 +328,7 @@ int main(int argc, char ** argv) {
             for (size_t i = 0; i < all.size(); i++)
                 ok = matches(all[i], part[i]) and ok;
         check(ok, "unfiltered read retains every particle regardless of the local domain");
-        FML::xmin_domain = saved_xmin;
-        FML::xmax_domain = saved_xmax;
+        FML::default_particle_domain = saved_domain;
     }
 
     //==========================================================

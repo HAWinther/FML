@@ -10,6 +10,7 @@
 #include <functional>
 #include <limits>
 #include <numeric>
+#include <optional>
 #include <random>
 #include <type_traits>
 #include <memory>
@@ -92,62 +93,6 @@ namespace FML {
 #endif
         //========================================================================================
 
-        namespace detail {
-#ifdef USE_MPI
-            /// Send sendbytes bytes to dest and receive recvbytes bytes from source. Messages are split
-            /// into chunks so that we never pass a count larger than INT_MAX to MPI
-            inline void sendrecv_bytes(const void * sendbuf,
-                                       size_t sendbytes,
-                                       int dest,
-                                       void * recvbuf,
-                                       size_t recvbytes,
-                                       int source) {
-                const size_t chunk = size_t(1) << 30;
-                const size_t nsend = sendbytes / chunk + (sendbytes % chunk != 0);
-                const size_t nrecv = recvbytes / chunk + (recvbytes % chunk != 0);
-                int *tag_limit = nullptr, present = 0;
-                MPI_Comm_get_attr(FML::communicator, MPI_TAG_UB, &tag_limit, &present);
-                FML::COMMUNICATION::require_count(present && tag_limit &&
-                                                      std::max(nsend, nrecv) <= size_t(*tag_limit) + 1,
-                                                  "[Delaunay] Chunk tags exceed MPI tag range");
-                const auto layout = FML::COMMUNICATION::checked_size_layout(
-                    {FML::COMMUNICATION::Count(nsend), FML::COMMUNICATION::Count(nrecv)},
-                    std::min(size_t(INT_MAX), std::vector<MPI_Request>().max_size()));
-                std::vector<MPI_Request> requests(layout.total);
-                for (size_t k = 0; k < nrecv; k++) {
-                    const size_t bytes = std::min(chunk, recvbytes - k * chunk);
-                    MPI_Irecv(static_cast<char *>(recvbuf) + k * chunk,
-                              int(bytes),
-                              MPI_BYTE,
-                              source,
-                              int(k),
-                              FML::communicator,
-                              &requests[k]);
-                }
-                for (size_t k = 0; k < nsend; k++) {
-                    const size_t bytes = std::min(chunk, sendbytes - k * chunk);
-                    MPI_Isend(const_cast<char *>(static_cast<const char *>(sendbuf)) + k * chunk,
-                              int(bytes),
-                              MPI_BYTE,
-                              dest,
-                              int(k),
-                              FML::communicator,
-                              &requests[nrecv + k]);
-                }
-                MPI_Waitall(int(requests.size()), requests.data(), MPI_STATUSES_IGNORE);
-            }
-
-            /// Send one value to dest and receive one value from source
-            template <class Q>
-            void sendrecv_value(const Q & send, int dest, Q & recv, int source) {
-                static_assert(std::is_trivially_copyable_v<Q>);
-                sendrecv_bytes(&send, sizeof(Q), dest, &recv, sizeof(Q), source);
-            }
-
-#endif
-
-        } // namespace detail
-
         /// Fiducial assignment function for when we have info at vertices
         /// (the fiducial choice is no info)
         ///
@@ -177,7 +122,9 @@ namespace FML {
         /// Only available in 2D and 3D. Use define CGAL_NDIM to choose this
         /// at compiletime
         ///
-        /// The local particles are assumed to be inside the local domain [xmin_domain, xmax_domain)
+        /// The local particles must be on the task that owns them in the domain of the particles: the one given to the
+        /// constructor, or else the default particle domain (FML::get_default_particle_domain() when create is called;
+        /// Slab or Pencil)
         ///
         //====================================================================
 
@@ -195,26 +142,16 @@ namespace FML {
             // The CGAL tessellation structure
             PeriodicDelaunay dt;
 
-            // The size of the buffer
-            double dx_buffer{0.0};
-
             // Vertex handles to the regular and the boundary particles
             std::vector<Vertex_handle> vs{};
             std::vector<Vertex_handle> vs_boundary{};
 
-            // The boundary particles we got from the neighbor tasks
-            // The first recv_left came from the left task and the rest from the right task
+            // The copies of the neighbor tasks' particles within the buffer of the box of this task
             std::vector<T> p_boundary{};
-            size_t recv_left{0};
-            size_t recv_right{0};
 
-            // Index of the local particles we sent to the left and right task
-            std::vector<size_t> send_left{};
-            std::vector<size_t> send_right{};
-
-            // The particles on a given domain (Slab or Pencil): the buffer of the box of the task
-            bool on_domain{false};
-            FML::Domain domain_given{};
+            // The domain of the particles (Slab or Pencil): given to the constructor, or else the default particle
+            // domain when create is called
+            std::optional<FML::Domain> domain_given{};
             FML::DomainBuffer<CGAL_NDIM> dbuf{};
             // Is an axis split and only partly covered by the box plus the buffer (so it has guard points)?
             std::array<bool, CGAL_NDIM> partly_covered{};
@@ -228,25 +165,8 @@ namespace FML {
 #endif
             }
 
-            /// Select which of the local particles are inside the buffer of the neighbor tasks
-            void select_boundary_particles(T * p, size_t NumPart) {
-                send_left.clear();
-                send_right.clear();
-                if (FML::NTasks == 1)
-                    return;
-                for (size_t i = 0; i < NumPart; i++) {
-                    const double x = double(FML::PARTICLE::GetPos(p[i])[0]);
-                    if (x < FML::xmin_domain + dx_buffer)
-                        send_left.push_back(i);
-                    if (x > FML::xmax_domain - dx_buffer)
-                        send_right.push_back(i);
-                }
-            }
-
           public:
             std::vector<T> & get_boundary_particles() { return p_boundary; }
-
-            double get_dx_buffer() const { return dx_buffer; }
 
             /// Return the CGAL triangulation we have created
             PeriodicDelaunay & get_delaunay_triangulation() { return dt; }
@@ -255,10 +175,12 @@ namespace FML {
             const std::vector<Vertex_handle> & get_vertex_handles_regular() const { return vs; }
             const std::vector<Vertex_handle> & get_vertex_handles_boundary() const { return vs_boundary; }
 
+            /// The particles are on the default particle domain (FML::get_default_particle_domain() when create is
+            /// called)
             MPIPeriodicDelaunay() = default;
-            /// The particles are on this domain (Slab or Pencil; e.g. MPIParticles::get_domain()) instead
-            /// of the global slabs. The buffer along a split axis is buffer_fraction times the task's part of it
-            explicit MPIPeriodicDelaunay(const FML::Domain & domain) : on_domain(true), domain_given(domain) {}
+            /// The particles are on this domain (Slab or Pencil; e.g. MPIParticles::get_domain()). The buffer along a
+            /// split axis is buffer_fraction times the task's part of it
+            explicit MPIPeriodicDelaunay(const FML::Domain & domain) : domain_given(domain) {}
 
             /// Free all memory associated with this class
             void free() {
@@ -269,11 +191,6 @@ namespace FML {
                 vs_boundary.shrink_to_fit();
                 p_boundary.clear();
                 p_boundary.shrink_to_fit();
-                send_left.clear();
-                send_left.shrink_to_fit();
-                send_right.clear();
-                send_right.shrink_to_fit();
-                recv_left = recv_right = 0;
             }
 
             /// Call f(w) for all vertices w adjacent to v
@@ -306,106 +223,6 @@ namespace FML {
 #endif
             }
 
-            /// Communicate the full particle data of the particles that are inside the buffer of the neighbor tasks
-            /// The particles we receive are stored in p_to_recv: first the ones from the left task then the ones from
-            /// the right task
-            void communicate_boundary_particles(T * p, size_t NumPart, std::vector<T> & p_to_recv) {
-                p_to_recv.clear();
-                recv_left = recv_right = 0;
-                select_boundary_particles(p, NumPart);
-#ifdef USE_MPI
-                if (FML::NTasks == 1)
-                    return;
-
-                if (FML::ThisTask == 0)
-                    std::cout << "[MPIPeriodicDelaunay::communicate_boundary_particles]\n";
-
-                const int LeftTask = (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks;
-                const int RightTask = (FML::ThisTask + 1) % FML::NTasks;
-
-                // Pack particles to send
-                auto pack = [&](const std::vector<size_t> & index, std::vector<char> & buffer) {
-                    FML::COMMUNICATION::Count bytes = 0;
-                    bool valid = true;
-                    for (auto i : index) {
-                        const auto size = FML::PARTICLE::GetSize(p[i]);
-                        valid &= size > 0;
-                        if (size > 0)
-                            valid &= FML::COMMUNICATION::add_count(bytes,
-                                                                   FML::COMMUNICATION::Count(size),
-                                                                   buffer.max_size());
-                    }
-                    FML::COMMUNICATION::require_count(valid, "[Delaunay] Serialized byte count overflow");
-                    buffer.resize(size_t(bytes));
-                    char * b = buffer.data();
-                    for (auto i : index) {
-                        FML::PARTICLE::AppendToBuffer(p[i], b);
-                        b += FML::PARTICLE::GetSize(p[i]);
-                    }
-                };
-                std::vector<char> buffer_send_left;
-                std::vector<char> buffer_send_right;
-                pack(send_left, buffer_send_left);
-                pack(send_right, buffer_send_right);
-
-                // Communicate how many particles and bytes to send
-                const size_t count_left = send_left.size();
-                const size_t count_right = send_right.size();
-                const size_t bytes_send_left = buffer_send_left.size();
-                const size_t bytes_send_right = buffer_send_right.size();
-                size_t bytes_recv_left = 0;
-                size_t bytes_recv_right = 0;
-                detail::sendrecv_value(count_left, LeftTask, recv_right, RightTask);
-                detail::sendrecv_value(count_right, RightTask, recv_left, LeftTask);
-                detail::sendrecv_value(bytes_send_left, LeftTask, bytes_recv_right, RightTask);
-                detail::sendrecv_value(bytes_send_right, RightTask, bytes_recv_left, LeftTask);
-
-#ifdef DEBUG_TESSELATION
-                std::cout << "Task " << FML::ThisTask << " will send " << count_left << " + " << count_right
-                          << " and receive " << recv_left << " + " << recv_right << " boundary particles\n";
-#endif
-
-                // Communicate the particles
-                std::vector<char> buffer_recv_left(bytes_recv_left);
-                std::vector<char> buffer_recv_right(bytes_recv_right);
-                detail::sendrecv_bytes(buffer_send_left.data(),
-                                       bytes_send_left,
-                                       LeftTask,
-                                       buffer_recv_right.data(),
-                                       bytes_recv_right,
-                                       RightTask);
-                detail::sendrecv_bytes(buffer_send_right.data(),
-                                       bytes_send_right,
-                                       RightTask,
-                                       buffer_recv_left.data(),
-                                       bytes_recv_left,
-                                       LeftTask);
-                buffer_send_left = std::vector<char>();
-                buffer_send_right = std::vector<char>();
-
-                // Unpack
-                const auto received = FML::COMMUNICATION::checked_size_layout(
-                    {FML::COMMUNICATION::Count(recv_left), FML::COMMUNICATION::Count(recv_right)},
-                    p_to_recv.max_size());
-                p_to_recv.resize(received.total);
-                auto unpack = [&](const std::vector<char> & buffer, size_t offset, size_t count) {
-                    const char * b = buffer.data();
-                    size_t processed = 0;
-                    for (size_t i = 0; i < count; i++) {
-                        FML::PARTICLE::AssignFromBuffer(p_to_recv[offset + i], const_cast<char *>(b));
-                        const auto bytes = FML::PARTICLE::GetSize(p_to_recv[offset + i]);
-                        assert_mpi(bytes > 0 && size_t(bytes) <= buffer.size() - processed,
-                                   "[Delaunay] Invalid deserialized particle byte count");
-                        b += size_t(bytes);
-                        processed += size_t(bytes);
-                    }
-                    assert(processed == buffer.size());
-                };
-                unpack(buffer_recv_left, 0, recv_left);
-                unpack(buffer_recv_right, recv_left, recv_right);
-#endif
-            }
-
             /// Communicate a value for each local particle (values[i] belongs to particle i) and
             /// return the values for the boundary particles in the same order as the boundary particles
             /// (i.e. result[j] belongs to get_boundary_particles()[j] and get_vertex_handles_boundary()[j]).
@@ -414,48 +231,18 @@ namespace FML {
             std::vector<Q> communicate_boundary_values(const std::vector<Q> & values) const {
                 static_assert(std::is_trivially_copyable_v<Q>, "Can only communicate trivially copyable types");
                 assert(values.size() == vs.size());
-                if (on_domain)
-                    return dbuf.forward(values);
-                const auto received = FML::COMMUNICATION::checked_size_layout(
-                    {FML::COMMUNICATION::Count(recv_left), FML::COMMUNICATION::Count(recv_right)},
-                    std::vector<Q>().max_size());
-                std::vector<Q> result(received.total);
-#ifdef USE_MPI
-                if (FML::NTasks == 1)
-                    return result;
-                const int LeftTask = (FML::ThisTask - 1 + FML::NTasks) % FML::NTasks;
-                const int RightTask = (FML::ThisTask + 1) % FML::NTasks;
-                std::vector<Q> to_left(send_left.size());
-                std::vector<Q> to_right(send_right.size());
-                for (size_t k = 0; k < send_left.size(); k++)
-                    to_left[k] = values[send_left[k]];
-                for (size_t k = 0; k < send_right.size(); k++)
-                    to_right[k] = values[send_right[k]];
-                const size_t sl = FML::COMMUNICATION::checked_bytes(to_left.size(), sizeof(Q));
-                const size_t sr = FML::COMMUNICATION::checked_bytes(to_right.size(), sizeof(Q));
-                const size_t rl = FML::COMMUNICATION::checked_bytes(recv_left, sizeof(Q));
-                const size_t rr = FML::COMMUNICATION::checked_bytes(recv_right, sizeof(Q));
-                detail::sendrecv_bytes(to_left.data(),
-                                       sl,
-                                       LeftTask,
-                                       recv_right ? result.data() + recv_left : nullptr,
-                                       rr,
-                                       RightTask);
-                detail::sendrecv_bytes(to_right.data(),
-                                       sr,
-                                       RightTask,
-                                       recv_left ? result.data() : nullptr,
-                                       rl,
-                                       LeftTask);
-#endif
-                return result;
+                return dbuf.forward(values);
             }
 
             /// The buffer, the guard points (uniform in the part of the box not covered by the box of the
             /// task plus the buffer, and ~10% on its faces) and the copies of the neighbors' particles on a domain
-            void setup_on_domain(T * p, size_t NumPart, double buffer_fraction, size_t nrandom,
+            void setup_on_domain(const FML::Domain & domain,
+                                 T * p,
+                                 size_t NumPart,
+                                 double buffer_fraction,
+                                 size_t nrandom,
                                  std::vector<double> & positions_random) {
-                FML::DomainBuffer<CGAL_NDIM> probe(domain_given, {}, true);
+                FML::DomainBuffer<CGAL_NDIM> probe(domain, {}, true);
                 std::array<double, CGAL_NDIM> buffer{};
                 double covered_fraction = 1.0;
                 for (int d = 0; d < CGAL_NDIM; d++) {
@@ -470,7 +257,7 @@ namespace FML {
                     partly_covered[d] = w + 2.0 * buffer[d] < 1.0;
                     covered_fraction *= std::min(1.0, w + 2.0 * buffer[d]);
                 }
-                dbuf = FML::DomainBuffer<CGAL_NDIM>(domain_given, buffer, true);
+                dbuf = FML::DomainBuffer<CGAL_NDIM>(domain, buffer, true);
                 dbuf.exchange(p, NumPart, p_boundary, false);
 
                 positions_random.clear();
@@ -509,50 +296,6 @@ namespace FML {
                     }
                     positions_random.insert(positions_random.end(), x.begin(), x.end());
                 }
-            }
-
-            /// Generate guard points in the part of the box not covered by the local domain plus buffer.
-            /// We put a regular grid of points on the two edges of the covered region and the rest uniformly
-            /// in the uncovered region. They are only there to speed up the tessellation.
-            void make_random_points_outside_domain(size_t nrandom, std::vector<double> & positions_random) const {
-                positions_random.clear();
-                if (FML::NTasks == 1 or nrandom == 0)
-                    return;
-
-                // The uncovered region is [x0, x0 + length] (periodic)
-                const double x0 = FML::xmax_domain + dx_buffer;
-                const double length = 1.0 - (FML::xmax_domain - FML::xmin_domain) - 2.0 * dx_buffer;
-                if (length <= 0.0)
-                    return;
-
-                // ~10% of the points on the two edges
-                const int nborder = std::max(1, int(std::pow(nrandom / 10.0, 1.0 / (CGAL_NDIM - 1.0))));
-                const size_t nface = CGAL_NDIM == 2 ? size_t(nborder) : size_t(nborder) * size_t(nborder);
-                const size_t nvolume = nrandom > 2 * nface ? nrandom - 2 * nface : 0;
-                positions_random.reserve((nvolume + 2 * nface) * CGAL_NDIM);
-
-                std::mt19937_64 rng(random_seed + FML::ThisTask);
-                std::uniform_real_distribution<double> uniform(0.0, 1.0);
-
-                for (size_t i = 0; i < nvolume; i++) {
-                    positions_random.push_back(detail::wrap_periodic(x0 + length * uniform(rng)));
-                    for (int idim = 1; idim < CGAL_NDIM; idim++)
-                        positions_random.push_back(uniform(rng));
-                }
-
-                for (const double xface : {x0, x0 + length}) {
-                    for (size_t k = 0; k < nface; k++) {
-                        positions_random.push_back(detail::wrap_periodic(xface));
-                        positions_random.push_back((k % nborder) / double(nborder));
-                        if (CGAL_NDIM == 3)
-                            positions_random.push_back((k / nborder) / double(nborder));
-                    }
-                }
-
-#ifdef DEBUG_TESSELATION
-                std::cout << "Task " << FML::ThisTask << " made " << nvolume << " + 2 x " << nface
-                          << " guard points in [" << x0 << " , " << x0 + length << "]\n";
-#endif
             }
 
             /// Create the tessellation and check that it is good
@@ -608,20 +351,17 @@ namespace FML {
                     std::cout << "\n";
                 }
 
+                // The buffer of the box of the task on the domain of the particles, the copies of the neighbors'
+                // particles and the guard points (the default particle domain with its current ranges if none was
+                // given)
                 std::vector<double> positions_random;
-                if (on_domain) {
-                    // The buffer of the box of the task on the domain
-                    setup_on_domain(p, NumPart, buffer_fraction, size_t(NumPart * random_fraction), positions_random);
-                } else {
-                    // The buffersize we communicate particles from neighbor tasks
-                    dx_buffer = buffer_fraction * (FML::xmax_domain - FML::xmin_domain);
-
-                    // Guard points
-                    make_random_points_outside_domain(size_t(NumPart * random_fraction), positions_random);
-
-                    // Boundary particles
-                    communicate_boundary_particles(p, NumPart, p_boundary);
-                }
+                const FML::Domain domain = domain_given ? *domain_given : FML::get_default_particle_domain();
+                setup_on_domain(domain,
+                                p,
+                                NumPart,
+                                buffer_fraction,
+                                size_t(NumPart * random_fraction),
+                                positions_random);
                 const size_t nrandom = positions_random.size() / CGAL_NDIM;
                 const size_t nboundary = p_boundary.size();
 
@@ -863,36 +603,6 @@ namespace FML {
             /// are identified by their position. Always true when the buffer covers the whole box. For triangulations
             /// that are not 1-sheeted we cannot check this and return true.
             bool cell_is_reliable(Cell_handle c) const {
-                if (on_domain)
-                    return cell_is_reliable_on_domain(c);
-                const double width = FML::xmax_domain - FML::xmin_domain;
-                if (FML::NTasks == 1 or width + 2.0 * dx_buffer >= 1.0 or not dt.is_1_cover())
-                    return true;
-                const double xhigh = FML::xmax_domain + dx_buffer;
-                const double length_guard = 1.0 - width - 2.0 * dx_buffer;
-                for (int k = 0; k <= CGAL_NDIM; k++) {
-                    const double x = c->vertex(k)->point()[0];
-                    if (detail::wrap_periodic(x - xhigh) <= length_guard * (1.0 + 1e-10) + 1e-14)
-                        return false;
-                }
-#if CGAL_NDIM == 3
-                const auto pcell = dt.periodic_tetrahedron(c);
-                const Point q0 = dt.point(pcell[0]);
-                const Point cc = CGAL::circumcenter(q0, dt.point(pcell[1]), dt.point(pcell[2]), dt.point(pcell[3]));
-#elif CGAL_NDIM == 2
-                const auto pcell = dt.periodic_triangle(c);
-                const Point q0 = dt.point(pcell[0]);
-                const Point cc = CGAL::circumcenter(q0, dt.point(pcell[1]), dt.point(pcell[2]));
-#endif
-                const double radius = std::sqrt(CGAL::to_double(CGAL::squared_distance(cc, q0)));
-                double x = cc[0];
-                x -= std::round(x - 0.5 * (FML::xmin_domain + FML::xmax_domain));
-                return x - radius >= FML::xmin_domain - dx_buffer and x + radius <= xhigh;
-            }
-
-            /// The same on a domain: no guard points (outside the covered region, the faces included) and
-            /// the circumsphere inside the covered region along the partly covered axes
-            bool cell_is_reliable_on_domain(Cell_handle c) const {
                 bool any = false;
                 for (int d = 0; d < CGAL_NDIM; d++)
                     any = any or partly_covered[d];
@@ -940,14 +650,10 @@ namespace FML {
                     bool has_regular = false;
                     for (int k = 0; k <= CGAL_NDIM; k++) {
                         const auto & q = c->vertex(k)->point();
-                        if (on_domain) {
-                            std::array<double, CGAL_NDIM> x;
-                            for (int d = 0; d < CGAL_NDIM; d++)
-                                x[d] = q[d];
-                            has_regular = has_regular or dbuf.in_box(x.data());
-                        } else {
-                            has_regular = has_regular or (q[0] >= FML::xmin_domain and q[0] < FML::xmax_domain);
-                        }
+                        std::array<double, CGAL_NDIM> x;
+                        for (int d = 0; d < CGAL_NDIM; d++)
+                            x[d] = q[d];
+                        has_regular = has_regular or dbuf.in_box(x.data());
                     }
                     if (has_regular and not cell_is_reliable(c))
                         nbad++;
@@ -1124,10 +830,8 @@ namespace FML {
             // Create tessellation
             if (FML::ThisTask == 0)
                 std::cout << "[WatershedDensity] Computing tessellation\n";
-            // (the particles are on FML::domain: the slabs, or e.g. pencils with the domain constructor)
-            auto Dptr = FML::domain.is_slab() ? std::make_unique<MPIPeriodicDelaunay<T, VertexDataWatershed>>() :
-                                                std::make_unique<MPIPeriodicDelaunay<T, VertexDataWatershed>>(FML::domain);
-            auto & D = *Dptr;
+            // (the particles are on the default particle domain: the slabs, or e.g. pencils)
+            MPIPeriodicDelaunay<T, VertexDataWatershed> D;
             D.create(p, NumPart, buffer_fraction, random_fraction, vertex_assignment_function);
 
             // Compute Voronoi volumes

@@ -42,7 +42,7 @@ For the CGAL tessellation we use the <a href="https://www.cgal.org/" style="disp
 </figure>
 
 <p>
-<b>Any box domain.</b> <tt>MPIPeriodicDelaunay(domain)</tt> tessellates particles on a Slab or Pencil domain (e.g. a run on <a href="pencilgrid.php" style="display: inline">pencils</a>): each task gets the particles within the buffer of its box from up to 8 neighbours.
+<b>Any box domain.</b> <tt>MPIPeriodicDelaunay(domain)</tt> tessellates particles on a Slab or Pencil domain (e.g. a run on <a href="pencilgrid.php" style="display: inline">pencils</a>): each task gets the particles within the buffer of its box from up to 8 neighbours. The default constructor uses the default particle domain (the slabs unless changed).
 </p>
 
 <header class="entry-header text-center">

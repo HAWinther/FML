@@ -106,7 +106,7 @@ void ConvertToGrid(FML::GRID::MPIGrid<N, T> & from_grid, Grid<N> & to_grid) {
             to_grid = Grid<N>(Nmesh,
                               from_grid.get_n_extra_slices_left(),
                               from_grid.get_n_extra_slices_right(),
-                              from_grid.get_domain()->template get<FML::PencilDomain>());
+                              from_grid.get_domain()->pencils());
         const auto Ntot = from_grid.get_NtotLocal();
 #ifdef USE_OMP
 #pragma omp parallel for

@@ -1,7 +1,7 @@
 //==========================================================
-// Tests of the particle domain (Global/Domain.h, the global FML::domain) and of MPIParticles with
+// Tests of the particle domain (Global/Domain.h, the global FML::default_particle_domain) and of MPIParticles with
 // a domain:
-//  - the global domain is a Slab with the ranges xmin_domain, xmax_domain (also after changing them)
+//  - the global particle domain is uniform slabs; set_default_particle_domain; box()
 //  - owner() and owner_near() of Slab (with empty slabs), Pencil and PeanoHilbert against brute force (the key of the
 //    PeanoHilbertDomain module; the rank layout ix * py + iy of PencilDomain)
 //  - MPIParticles: the default (global Slab) and an explicit Slab give the same as before (create,
@@ -17,6 +17,7 @@
 #include <cmath>
 #include <cstdio>
 #include <random>
+#include <sstream>
 #include <string>
 #include <stdexcept>
 #include <vector>
@@ -148,30 +149,23 @@ int main() {
 
     // The global domain
     {
-        check(FML::domain.is_slab() and FML::domain.ntasks() == N, "the global particle domain is a Slab for NTasks");
-        const auto d = FML::get_domain();
-        check(d.x_min(FML::ThisTask) == FML::xmin_domain and d.x_max(FML::ThisTask) == FML::xmax_domain and
-                  d == FML::Domain::uniform_slab(N) and d.valid_slab_partition(),
-              "the global Slab has the ranges xmin_domain, xmax_domain (uniform)");
-        // Changing xmin_domain, xmax_domain (as some tests do) changes the global Slab's ranges
-        const double lo = FML::xmin_domain, hi = FML::xmax_domain;
+        check(FML::default_particle_domain.is_slab() and FML::default_particle_domain.ntasks() == N,
+              "the global particle domain is a Slab for NTasks");
+        const auto d = FML::get_default_particle_domain();
+        check(d == FML::Domain::uniform_slab(N) and d.valid_slab_partition() and d == FML::default_particle_domain,
+              "the global particle domain is uniform slabs");
+        // set_default_particle_domain with nonuniform slabs; box() gives the local slab
         std::vector<double> edges(N + 1);
         for (int i = 0; i <= N; i++)
             edges[i] = std::pow(i / double(N), 2);
-        FML::xmin_domain = edges[FML::ThisTask];
-        FML::xmax_domain = edges[FML::ThisTask + 1];
-        const auto d2 = FML::get_domain();
-        check(d2.x_min(FML::ThisTask) == edges[FML::ThisTask] and d2.valid_slab_partition(),
-              "the global Slab follows xmin_domain, xmax_domain");
-        FML::xmin_domain = lo;
-        FML::xmax_domain = hi;
-        // set_domain with a Slab sets xmin_domain, xmax_domain
-        FML::set_domain(FML::Domain::slab(std::vector<double>(edges.begin(), edges.end() - 1),
-                                          std::vector<double>(edges.begin() + 1, edges.end())));
-        check(FML::xmin_domain == edges[FML::ThisTask] and FML::xmax_domain == edges[FML::ThisTask + 1],
-              "set_domain (Slab) sets xmin_domain, xmax_domain");
-        FML::set_domain(FML::Domain::uniform_slab(N));
-        check(FML::xmin_domain == lo and FML::xmax_domain == hi, "set_domain (uniform Slab) restores them");
+        FML::set_default_particle_domain(FML::Domain::slab(std::vector<double>(edges.begin(), edges.end() - 1),
+                                                           std::vector<double>(edges.begin() + 1, edges.end())));
+        const auto b = FML::default_particle_domain.box(FML::ThisTask);
+        check(b.lo[0] == edges[FML::ThisTask] and b.hi[0] == edges[FML::ThisTask + 1] and b.lo[1] == 0.0 and
+                  b.hi[1] == 1.0 and b.lo[2] == 0.0 and b.hi[2] == 1.0,
+              "set_default_particle_domain (Slab); box() is the local slab");
+        FML::set_default_particle_domain(FML::Domain::uniform_slab(N));
+        check(FML::default_particle_domain == FML::Domain::uniform_slab(N), "set_default_particle_domain restores");
     }
 
     // owner() against brute force
@@ -202,6 +196,19 @@ int main() {
             ok = ok and pen.owner(x) == ix * 2 + iy and pen.contains(ix * 2 + iy, x);
         }
         check(ok, "Pencil owner = brute force (rank ix * py + iy)");
+        {
+            const auto b = pen.box(3); // (ix, iy) = (1, 1)
+            check(pen.is_box() and b.lo[0] == 0.25 and b.hi[0] == 0.5 and b.lo[1] == 0.6 and b.hi[1] == 1.0 and
+                      b.lo[2] == 0.0 and b.hi[2] == 1.0,
+                  "Pencil box(rank) = its pencil");
+            bool threw = false;
+            try {
+                FML::Domain::uniform_peano_hilbert(2).box(0);
+            } catch (const std::invalid_argument &) {
+                threw = true;
+            }
+            check(threw and not FML::Domain::uniform_peano_hilbert(2).is_box(), "PeanoHilbert has no box");
+        }
 
         // PeanoHilbert: the key = that of the module, owner = the range of the key
         for (unsigned bits : {4u, 21u}) {
@@ -239,6 +246,37 @@ int main() {
             threw = true;
         }
         check(threw, "Pencil refuses NDIM = 1");
+    }
+
+    // Normalisation: P0 x 1 pencils are the Slab with the same x-edges (one representation per partition); the
+    // pencil view of a Slab; same_partition
+    {
+        const auto e = std::vector<double>{0.0, 0.25, 0.6, 1.0};
+        const FML::Domain p31 = FML::Domain::pencil(e, {0.0, 1.0});
+        const FML::Domain s3 = FML::Domain::slab({0.0, 0.25, 0.6}, {0.25, 0.6, 1.0});
+        check(p31.is_slab() and p31 == s3 and FML::same_partition(p31, s3), "P0 x 1 pencils are stored as the Slab");
+        check(FML::Domain(FML::PencilDomain::uniform(4, 1)) == FML::Domain::uniform_slab(4) and
+                  FML::Domain::uniform_pencil(4, 1).is_slab(),
+              "uniform P0 x 1 pencils = the uniform Slab");
+        const FML::Domain p22 = FML::Domain::uniform_pencil(2, 2);
+        check(p22.holds<FML::PencilDomain>() and not FML::same_partition(p22, FML::Domain::uniform_slab(4)),
+              "P0 x P1 pencils (P1 > 1) stay pencils");
+        const FML::Domain p14 = FML::Domain::uniform_pencil(1, 4);
+        check(p14.holds<FML::PencilDomain>(), "1 x P1 pencils (y split) stay pencils");
+        const auto view = s3.pencils();
+        check(view.process_grid()[0] == 3 and view.process_grid()[1] == 1 and view.x_edges() == e and
+                  s3.pencil_px() == 3 and s3.pencil_py() == 1 and p22.pencil_px() == 2 and p22.pencil_py() == 2,
+              "the pencil view of a Slab (P0 x 1) and of pencils");
+        std::stringstream ss;
+        p31.write(ss);
+        check(FML::Domain::read(ss) == s3, "a normalised domain writes and reads as the Slab");
+        bool threw_ph = false;
+        try {
+            (void)FML::Domain::uniform_peano_hilbert(4).pencils();
+        } catch (const std::invalid_argument &) {
+            threw_ph = true;
+        }
+        check(threw_ph, "PeanoHilbert has no pencil view");
     }
 
     // MPIParticles with the (default) Slab: the domain of create(xmin, xmax) and create_particle_grid

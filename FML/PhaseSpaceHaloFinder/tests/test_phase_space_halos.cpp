@@ -265,7 +265,7 @@ void distributed() {
     const auto reference = find(all, o);
     std::vector<Particle> local;
     for (const auto & p : all)
-        if (p.position[0] >= FML::xmin_domain && p.position[0] < FML::xmax_domain)
+        if (FML::default_particle_domain.contains(FML::ThisTask, p.position.data()))
             local.push_back(p);
     const auto c = find_distributed(local, o);
     bool good = true;
@@ -305,7 +305,10 @@ void distributed() {
     if (FML::NTasks > 1) {
         Particle x;
         x.id = 777777;
-        x.position = {(FML::xmin_domain + FML::xmax_domain) / 2, .8, .8};
+        x.position = {
+            (FML::default_particle_domain.x_min(FML::ThisTask) + FML::default_particle_domain.x_max(FML::ThisTask)) / 2,
+            .8,
+            .8};
         duplicate.push_back(x);
         rejected = false;
         try {
@@ -326,7 +329,7 @@ void distributed() {
     const auto wide_reference = find(chain, wide);
     std::vector<Particle> chain_local;
     for (const auto & p : chain)
-        if (p.position[0] >= FML::xmin_domain && p.position[0] < FML::xmax_domain)
+        if (FML::default_particle_domain.contains(FML::ThisTask, p.position.data()))
             chain_local.push_back(p);
     const auto wide_distributed = find_distributed(chain_local, wide);
     good = true;
@@ -350,7 +353,7 @@ void distributed() {
     const auto routed = so_seeds_by_slab(c, o);
     good = true;
     for (const auto & seed : routed)
-        good &= seed.position[0] >= FML::xmin_domain && seed.position[0] < FML::xmax_domain;
+        good &= FML::default_particle_domain.contains(FML::ThisTask, seed.position.data());
     std::uint64_t nseeds = routed.size();
     FML::SumOverTasks(&nseeds);
     check(good && nseeds == halos, "SO seed adapter restores spatial ownership after parent-owner analysis");
@@ -410,7 +413,7 @@ void plummer_recovery() {
         check(good, "Plummer mass and circular velocity recover the analytic profile at two resolutions");
         std::vector<Particle> local;
         for (const auto & particle : p)
-            if (particle.position[0] >= FML::xmin_domain && particle.position[0] < FML::xmax_domain)
+            if (FML::default_particle_domain.contains(FML::ThisTask, particle.position.data()))
                 local.push_back(particle);
         const auto distributed = find_distributed(local, o);
         good = true;
@@ -546,7 +549,7 @@ void benchmark() {
         auto all = phase_test::plummer(n);
         std::vector<Particle> local;
         for (const auto & p : all)
-            if (p.position[0] >= FML::xmin_domain && p.position[0] < FML::xmax_domain)
+            if (FML::default_particle_domain.contains(FML::ThisTask, p.position.data()))
                 local.push_back(p);
         Options o;
         o.softening_support = .0005;

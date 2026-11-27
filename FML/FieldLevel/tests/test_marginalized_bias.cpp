@@ -152,8 +152,8 @@ void exercise(const FML::Domain & domain, const std::string & label, bool compac
 int main(int argc, char ** argv) {
     FML::FMLSetup::init(&argc, &argv);
     using Slab = FML::GRID::FFTWGrid<3>;
-    exercise<Slab>(FML::domain, "slab compact pswf", true, true);
-    exercise<Slab>(FML::domain, "slab shared smooth", false, false);
+    exercise<Slab>(FML::default_particle_domain, "slab compact pswf", true, true);
+    exercise<Slab>(FML::default_particle_domain, "slab shared smooth", false, false);
 #ifdef USE_MPI
     const int px = FML::NTasks % 2 == 0 ? 2 : 1;
     std::vector<double> xe, ye;

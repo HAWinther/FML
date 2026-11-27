@@ -24,8 +24,15 @@ template<class Grid>static void exercise(const FML::Domain & domain){
         check(canonical,"trace canonicalizes the rounded periodic endpoint to cell zero");
     }
 }
-int main(int argc,char **argv){FML::FMLSetup::init(&argc,&argv);auto slab=FML::Domain::uniform_slab(FML::NTasks);FML::set_domain(slab);exercise<FML::GRID::FFTWGrid<3>>(slab);
+int main(int argc, char ** argv) {
+    FML::FMLSetup::init(&argc, &argv);
+    auto slab = FML::Domain::uniform_slab(FML::NTasks);
+    FML::set_default_particle_domain(slab);
+    exercise<FML::GRID::FFTWGrid<3>>(slab);
 #ifdef USE_MPI
-    auto pencil=FML::Domain::uniform_pencil(FML::NTasks==4?2:FML::NTasks,FML::NTasks==4?2:1);FML::set_domain(pencil);exercise<FML::GRID::PencilGrid<3>>(pencil);
+    auto pencil = FML::Domain::uniform_pencil(FML::NTasks == 4 ? 2 : FML::NTasks, FML::NTasks == 4 ? 2 : 1);
+    FML::set_default_particle_domain(pencil);
+    exercise<FML::GRID::PencilGrid<3>>(pencil);
 #endif
-    return FML::TESTS::summary("PM read-only observer");}
+    return FML::TESTS::summary("PM read-only observer");
+}

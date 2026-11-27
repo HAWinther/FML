@@ -222,7 +222,8 @@ int main(int argc, char ** argv) {
             bool ok = mp.get_npart_total() == n * size_t(FML::NTasks);
             for (size_t i = 0; i < mp.get_npart(); i++) {
                 double xx = mp[i].pos[0];
-                ok = ok and xx >= FML::xmin_domain and xx < FML::xmax_domain;
+                ok = ok and xx >= FML::default_particle_domain.x_min(FML::ThisTask) and
+                     xx < FML::default_particle_domain.x_max(FML::ThisTask);
             }
             int iok = ok ? 0 : 1;
             FML::SumOverTasks(&iok);
@@ -241,7 +242,8 @@ int main(int argc, char ** argv) {
         const size_t n = 100;
         std::vector<Particle> part(n);
         for (auto & p : part)
-            p.pos[0] = p.pos[1] = p.pos[2] = 0.5 * (FML::xmin_domain + FML::xmax_domain);
+            p.pos[0] = p.pos[1] = p.pos[2] = 0.5 * (FML::default_particle_domain.x_min(FML::ThisTask) +
+                                                    FML::default_particle_domain.x_max(FML::ThisTask));
         FML::PARTICLE::MPIParticles<Particle> mp;
         mp.create(part.data(), n, n / 2, FML::PARTICLE::Input::Distributed);
     }
@@ -250,7 +252,8 @@ int main(int argc, char ** argv) {
     if (mode == "unwrapped") {
         std::vector<Particle> part(10);
         for (auto & p : part)
-            p.pos[0] = p.pos[1] = p.pos[2] = 0.5 * (FML::xmin_domain + FML::xmax_domain);
+            p.pos[0] = p.pos[1] = p.pos[2] = 0.5 * (FML::default_particle_domain.x_min(FML::ThisTask) +
+                                                    FML::default_particle_domain.x_max(FML::ThisTask));
         FML::PARTICLE::MPIParticles<Particle> mp;
         mp.create(part.data(), 10, 100, FML::PARTICLE::Input::Distributed);
         mp[0].pos[0] = 1.3;

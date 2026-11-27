@@ -68,7 +68,7 @@ namespace {
             }
         std::vector<Particle> local;
         for (auto & p : all)
-            if (p.pos[0] >= FML::xmin_domain and p.pos[0] < FML::xmax_domain)
+            if (FML::default_particle_domain.contains(FML::ThisTask, p.pos))
                 local.push_back(p);
         return local;
     }
@@ -229,7 +229,7 @@ int main() {
                 }
         std::vector<IDParticle> ic;
         for (auto & p : all)
-            if (p.pos[0] >= FML::xmin_domain and p.pos[0] < FML::xmax_domain)
+            if (FML::default_particle_domain.contains(FML::ThisTask, p.pos))
                 ic.push_back(p);
         for (bool correct : {false, true}) {
             std::vector<AN::detail::IdLattice> id_lattice;
@@ -405,7 +405,7 @@ int main() {
         AN::redistribute_particles(mp);
         bool owned = true;
         for (size_t i = 0; i < mp.get_npart(); i++)
-            owned = owned and mp[i].pos[0] >= FML::xmin_domain and mp[i].pos[0] < FML::xmax_domain;
+            owned = owned and FML::default_particle_domain.contains(FML::ThisTask, mp[i].pos);
         size_t n = mp.get_npart();
         FML::SumOverTasks(&n);
         check(n == ntotal, "redistribution keeps every particle");
@@ -438,7 +438,7 @@ int main() {
         const auto after = AN::measure_power_spectrum<3>(mp.get_particles_ptr(), mp.get_npart(), mp.get_npart_total(), ps, context);
         bool owned = true;
         for (size_t i = 0; i < mp.get_npart(); i++)
-            owned = owned and mp[i].pos[0] >= FML::xmin_domain and mp[i].pos[0] < FML::xmax_domain;
+            owned = owned and FML::default_particle_domain.contains(FML::ThisTask, mp[i].pos);
         check(mp.get_npart_total() == size_t(ntot), "baryonification keeps every particle");
         check(owned, "baryonification: every particle is on the task owning its new position");
         check(result.hosts.size() == 2, "baryonification: two hosts (" + num(result.hosts.size()) + ")");
@@ -466,7 +466,7 @@ int main() {
                 r2 += (p.pos[d] - 0.5) * (p.pos[d] - 0.5);
             if (r2 < 0.15 * 0.15)
                 continue;
-            if (p.pos[0] >= FML::xmin_domain and p.pos[0] < FML::xmax_domain)
+            if (FML::default_particle_domain.contains(FML::ThisTask, p.pos))
                 local.push_back(p);
         }
         AN::VoidSettings vs;
@@ -880,7 +880,8 @@ int main() {
             for (int j = 0; j < n; j++)
                 for (int k = 0; k < n; k++) {
                     const double x = double(i) / n, y = double(j) / n, z = double(k) / n;
-                    if (x < FML::xmin_domain or x >= FML::xmax_domain)
+                    if (x < FML::default_particle_domain.x_min(FML::ThisTask) or
+                        x >= FML::default_particle_domain.x_max(FML::ThisTask))
                         continue;
                     lattice.push_back({{x, y, z}, {A * std::sin(2 * M_PI * x), B * std::cos(4 * M_PI * y), 0.0}, 1.0});
                 }

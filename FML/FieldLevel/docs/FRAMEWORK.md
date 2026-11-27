@@ -346,7 +346,7 @@ auto workspace = model.workspace();
 ```
 
 The optional final constructor argument is a replicated `FML::Domain`; its default
-is `FML::domain`. The model copies it and creates every workspace on that domain,
+is `FML::default_particle_domain`. The model copies it and creates every workspace on that domain,
 independently of later global-domain changes. Domain kinds, edges and task counts
 are checked collectively before constructing FFT plans. Pencil edges must lie on
 mesh cells, with positive real x/y widths on every rank. Unequal partitions and

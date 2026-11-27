@@ -208,7 +208,14 @@ int main(int argc,char ** argv) {
         FML::COMMUNICATION::collective_try([&]{if(argc<4 || argc>9)throw std::invalid_argument("test_particle_mesh_checkpoint DIRECTORY prepare|resume|reject slab|pencil [alternate] [dense] [force_window] [reference_cic_mesh] [assignment]");directory=argv[1];phase=argv[2];backend=argv[3];if(argc>=5)alternate=std::stoi(argv[4]);if(argc>=6)dense=std::stoi(argv[5]);if(argc>=7)force_window=std::stoi(argv[6]);if(argc>=8)reference=std::stoi(argv[7]);if(argc==9)assignment=std::stoi(argv[8]);},"PM checkpoint test input");
         CP::same_string(directory);CP::same_string(phase);CP::same_string(backend);CP::same_string(std::to_string(alternate));CP::same_string(std::to_string(dense));CP::same_string(std::to_string(force_window));CP::same_string(std::to_string(reference));CP::same_string(std::to_string(assignment));
         FML::COMMUNICATION::collective_try([&]{if(FML::ThisTask==0)FS::create_directories(directory);},"PM test directory");
-        if(backend=="slab")exercise<FML::GRID::FFTWGrid<3>>(directory,phase,FML::domain,dense!=0,force_window,reference,assignment);
+        if (backend == "slab")
+            exercise<FML::GRID::FFTWGrid<3>>(directory,
+                                             phase,
+                                             FML::default_particle_domain,
+                                             dense != 0,
+                                             force_window,
+                                             reference,
+                                             assignment);
 #ifdef USE_MPI
         else if(backend=="pencil") {
             int dims[2]={0,0};MPI_Dims_create(FML::NTasks,2,dims);if(alternate==2){dims[0]=FML::NTasks;dims[1]=1;}

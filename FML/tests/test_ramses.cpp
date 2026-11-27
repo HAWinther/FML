@@ -152,7 +152,7 @@ int main() {
             for (auto & q : p) {
                 const int i = q.id - 1;
                 const double x = xpos(i) >= 1.0 ? 0.0 : xpos(i);
-                fields_ok = fields_ok and q.pos[0] >= FML::xmin_domain and q.pos[0] < FML::xmax_domain and
+                fields_ok = fields_ok and FML::default_particle_domain.contains(FML::ThisTask, q.pos) and
                             std::fabs(q.pos[0] - x) < 1e-14 and std::fabs(q.pos[1] - ypos(i)) < 1e-14 and
                             std::fabs(q.mass - 1.0 / npart) < 1e-14;
                 // v = v_code * unit_l / unit_t = v_code * 100 boxsize / aexp km/s
@@ -193,7 +193,7 @@ int main() {
         reader.read_ramses_single(0, p);
         bool ok = true;
         for (auto & q : p)
-            ok = ok and q.id > 0 and q.pos[0] >= FML::xmin_domain and q.pos[0] < FML::xmax_domain;
+            ok = ok and q.id > 0 and FML::default_particle_domain.contains(FML::ThisTask, q.pos);
         int bad = not ok;
         FML::SumOverTasks(&bad);
         check_local(bad == 0, "read_ramses_single returns only the particles in the domain");

@@ -77,13 +77,10 @@ namespace FML {
         /// Reading and writing GADGET files (DM only).
         namespace GADGET {
 
-            /// Is a position (in [0,1), wrapped) in the local part of the global domain FML::domain? Slabs: the x-range
-            /// [xmin_domain, xmax_domain) as before; other domains: the task that owns it
+            /// Is a position (in [0,1), wrapped) in the local part of the global domain FML::default_particle_domain?
             template <class Pos>
             bool in_local_domain(const Pos * x) {
-                if (FML::domain.is_slab())
-                    return x[0] >= FML::xmin_domain and x[0] < FML::xmax_domain;
-                return FML::domain.owner(x) == FML::ThisTask;
+                return FML::default_particle_domain.contains(FML::ThisTask, x);
             }
 
             // This is Mpl^2/(H0 Msun/h) used to set the mass of particles

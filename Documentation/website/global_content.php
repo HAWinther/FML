@@ -17,7 +17,7 @@
 <hr/>  
 
 <p>
-The domain we are working with in the library is a cubic box $[0,1)^{\rm NDIM}$ of any dimension(s). It is generally assumed periodic for which the point $1$ wraps around to $0$, but several classes and algorithms lets you specify if this is the case or not. There are no units assumed in the library. Grids have the same number of gridcells in each dimension. The default parallelization over MPI is a slab-based domain decomposition along the $x$-axis; the domain is an object, <tt>FML::domain</tt> (<tt>Global/Domain.h</tt>), that can also be <a href="pencilgrid.php" style="display: inline">pencils</a> in $x$&ndash;$y$ or contiguous pieces of a Peano&ndash;Hilbert curve.
+The domain we are working with in the library is a cubic box $[0,1)^{\rm NDIM}$ of any dimension(s). It is generally assumed periodic for which the point $1$ wraps around to $0$, but several classes and algorithms lets you specify if this is the case or not. There are no units assumed in the library. Grids have the same number of gridcells in each dimension. The default parallelization over MPI is a slab-based domain decomposition along the $x$-axis; the domain is an object, <tt>FML::default_particle_domain</tt> (<tt>Global/Domain.h</tt>), that can also be <a href="pencilgrid.php" style="display: inline">pencils</a> in $x$&ndash;$y$ or contiguous pieces of a Peano&ndash;Hilbert curve.
 </p>
 
 <p>
@@ -25,7 +25,7 @@ The library is divided into several namespaces. Global variables and functions a
 </p>
 
 <p>
-We have just a few global variables (that we could just as well have computed where they are needed). The most important ones are FML::ThisTask and FML::NTasks. This is the ID of a given task and the total number of tasks. Next we have FML::xmin_domain and FML::xmax_domain. This is the $x$-domain of the grid the given task is responsible for. We also have FML::NThreads which is the number of threads we have available (this is just OMP_NUM_THREADS). All the MPI communication in the library goes through FML::communicator (MPI_COMM_WORLD by default). We also have some general type definitions and a few useful functions.
+We have just a few global variables (that we could just as well have computed where they are needed). The most important ones are FML::ThisTask and FML::NTasks. This is the ID of a given task and the total number of tasks. Next we have FML::default_particle_domain, the default decomposition of particles over the tasks (uniform slabs in $x$ unless changed with FML::set_default_particle_domain); on a slab or pencil domain FML::default_particle_domain.box(FML::ThisTask) is the region the given task is responsible for. Grids have their own decomposition (grid.decomposition()). We also have FML::NThreads which is the number of threads we have available (this is just OMP_NUM_THREADS). All the MPI communication in the library goes through FML::communicator (MPI_COMM_WORLD by default). We also have some general type definitions and a few useful functions.
 </p>
 
 <p>

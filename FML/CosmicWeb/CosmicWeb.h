@@ -114,7 +114,7 @@ namespace FML {
             /// Explicit allocation/conversion to a grid of type Grid (FFTWGrid, PencilGrid, ...) on a domain (the same
             /// cells: the domain of the grid the classification was made on)
             template <class Grid>
-            Grid to_grid(const FML::Domain & domain = FML::domain) const {
+            Grid to_grid(const FML::Domain & domain = FML::default_particle_domain) const {
                 if (nmesh == 0)
                     return {};
                 auto grid = FML::GRID::make_grid<Grid>(nmesh, 0, 0, domain);
@@ -467,7 +467,7 @@ namespace FML {
                   int Nmesh,
                   const TWebOptions & options,
                   CosmicWebT<Grid<3>> & result,
-                  const FML::Domain & domain = FML::domain) {
+                  const FML::Domain & domain = FML::default_particle_domain) {
             long long int NumPartTot = (long long int)(NumPart);
             FML::SumOverTasks(&NumPartTot);
             const auto nextra = FML::INTERPOLATION::get_extra_slices(options.density_assignment_method);

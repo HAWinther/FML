@@ -64,7 +64,10 @@ std::vector<T> make_particles(size_t npart_total, uint64_t seed, F weight) {
     const size_t n = npart_total / FML::NTasks;
     std::vector<T> part(n);
     for (auto & p : part) {
-        p.pos[0] = FML::xmin_domain + (FML::xmax_domain - FML::xmin_domain) * uniform(rng);
+        p.pos[0] =
+            FML::default_particle_domain.x_min(FML::ThisTask) +
+            (FML::default_particle_domain.x_max(FML::ThisTask) - FML::default_particle_domain.x_min(FML::ThisTask)) *
+                uniform(rng);
         p.pos[1] = uniform(rng);
         p.pos[2] = uniform(rng);
         weight(p, uniform(rng));
@@ -979,7 +982,7 @@ int main(int argc, char ** argv) {
         auto part = make_particles<Particle>(Np, 4, [](Particle &, double) {});
         // Some particles in the last half cell (these are shifted outside the box for the interlaced grid)
         for (size_t i = 0; i < part.size(); i += 10)
-            part[i].pos[0] = std::min(FML::xmax_domain, 1.0) - 0.25 / 24.0;
+            part[i].pos[0] = std::min(FML::default_particle_domain.x_max(FML::ThisTask), 1.0) - 0.25 / 24.0;
         auto lr = FML::INTERPOLATION::get_extra_slices(method);
         Grid<3> grid(24, lr.first, lr.second + 1);
         FML::INTERPOLATION::particles_to_fourier_grid_interlacing(part.data(), part.size(), Np, grid, method);

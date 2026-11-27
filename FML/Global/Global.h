@@ -79,21 +79,16 @@ namespace FML {
     extern bool MPIThreadsOK;  // Set by init_mpi
     extern bool FFTWThreadsOK; // Set by init_fftw
 
-    /// The local extent of the domain (global domain goes from 0 to 1)
-    extern double xmin_domain;
-    /// The local extent of the domain (global domain goes from 0 to 1)
-    extern double xmax_domain;
+    /// The default domain of particles (Domain.h): what a set of particles (MPIParticles) is decomposed as unless it
+    /// is given its own, and what the particle methods use by default. Uniform slabs by default; the local region of
+    /// this task on a Slab or Pencil domain is default_particle_domain.box(ThisTask). Grids have their own
+    /// decomposition (grid.decomposition()). Change it with set_default_particle_domain (on all tasks)
+    extern Domain default_particle_domain;
+    /// Set the default particle domain (on all tasks, made for NTasks)
+    void set_default_particle_domain(const Domain & new_domain);
+    /// The default particle domain (the same as FML::default_particle_domain)
+    Domain get_default_particle_domain();
 
-    /// The decomposition of particles over the tasks (Domain.h): a Slab by default, whose ranges are
-    /// xmin_domain, xmax_domain of each task. Pencil and PeanoHilbert are not yet supported by the rest of FML (a
-    /// warning when chosen). Change it with set_domain
-    extern Domain domain;
-    /// Set the global particle domain (on all tasks, made for NTasks). A Slab also sets xmin_domain, xmax_domain to
-    /// the local range; Pencil and PeanoHilbert give a warning (most of FML assumes slabs)
-    void set_domain(const Domain & new_domain);
-    /// The global particle domain with its current ranges: for a Slab those of xmin_domain, xmax_domain gathered
-    /// from the tasks (collective: all tasks must call it), else domain
-    Domain get_domain();
     /// A Slab domain from the local range [xmin, xmax) of each task (collective)
     Domain slab_domain_from_local_range(double xmin, double xmax);
     /// Equal pencils on a px x py process grid (px = py = 0: chosen by MPI_Dims_create; px * py = NTasks)

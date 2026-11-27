@@ -22,19 +22,20 @@ namespace FML::COMMUNICATION {
 
     /// Append remote records within buffer of the local periodic x slab, once per
     /// source record/destination. Input must contain only owned records, with x in
-    /// [xmin_domain,xmax_domain) and [0,1). Coordinates remain wrapped; no duplicate
-    /// periodic images are appended. Slabs may be nonuniform or empty, and buffers
-    /// may differ by rank. Collective on FML::communicator, including empty ranks.
-    /// Record must be trivially copyable. get_x(record) returns its x coordinate.
-    /// Outgoing records are staged per intersecting peer; receive scratch is bounded
-    /// by max_message_bytes. The final owned+ghost vector is reserved before receipt.
+    /// the local slab of FML::default_particle_domain (a Slab domain) and [0,1). Coordinates remain wrapped; no
+    /// duplicate periodic images are appended. Slabs may be nonuniform or empty, and buffers may differ by rank.
+    /// Collective on FML::communicator, including empty ranks. Record must be trivially copyable. get_x(record) returns
+    /// its x coordinate. Outgoing records are staged per intersecting peer; receive scratch is bounded by
+    /// max_message_bytes. The final owned+ghost vector is reserved before receipt.
     template <class Record, class GetX>
     void append_periodic_slab_ghosts(std::vector<Record> & records,
                                      double buffer,
                                      GetX get_x,
                                      size_t max_message_bytes = 8 * 1024 * 1024) {
         static_assert(std::is_trivially_copyable_v<Record>, "Slab records must be trivially copyable");
-        const double lo = FML::xmin_domain, hi = FML::xmax_domain;
+        FML::default_particle_domain.require_slab("[append_periodic_slab_ghosts]");
+        const double lo = FML::default_particle_domain.x_min(FML::ThisTask);
+        const double hi = FML::default_particle_domain.x_max(FML::ThisTask);
         assert_mpi(std::isfinite(buffer) && buffer >= 0 && lo >= 0 && hi <= 1 && lo <= hi,
                    "[append_periodic_slab_ghosts] Invalid slab or buffer");
         bool owned = true;
@@ -98,21 +99,21 @@ namespace FML::COMMUNICATION {
         (void)max_message_bytes;
 #endif
     }
-    /// The same for the particle domain FML::domain (Slab: the function above; Pencil: the records within buffer of
-    /// the pencil of each task, the corners included). get_xy(record) returns {x, y} (in [0,1)); with a Slab domain
-    /// only x is used
+    /// The same for the particle domain FML::default_particle_domain (Slab: the function above; Pencil: the records
+    /// within buffer of the pencil of each task, the corners included). get_xy(record) returns {x, y} (in [0,1)); with
+    /// a Slab domain only x is used
     template <class Record, class GetXY>
     void append_periodic_domain_ghosts(std::vector<Record> & records,
                                        double buffer,
                                        GetXY get_xy,
                                        size_t max_message_bytes = 8 * 1024 * 1024) {
-        if (not FML::domain.holds<FML::PencilDomain>()) {
+        if (not FML::default_particle_domain.holds<FML::PencilDomain>()) {
             append_periodic_slab_ghosts(
                 records, buffer, [&](const Record & r) { return double(get_xy(r)[0]); }, max_message_bytes);
             return;
         }
         static_assert(std::is_trivially_copyable_v<Record>, "Records must be trivially copyable");
-        const auto & pencils = FML::domain.get<FML::PencilDomain>();
+        const auto & pencils = FML::default_particle_domain.get<FML::PencilDomain>();
         auto box_of = [&](int task) {
             const auto c = pencils.coords_of(task);
             return std::array<double, 4>{pencils.x_edges()[c[0]],

@@ -45,7 +45,7 @@ A galaxy survey is not a periodic box: the number density varies across the sky 
 </figure>
 
 <p>
-<b>Pencils.</b> Compiled with <tt>-DFML_SURVEY_PENCIL_MESH</tt> the survey meshes are <a href="pencilgrid.php" style="display: inline">$\texttt{PencilGrid}$s</a> on the pencils of <tt>FML::domain</tt> (<tt>FML::set_domain(FML::Domain::uniform_pencil(px, py))</tt>); the multipoles, windows and reconstruction work the same way.
+<b>Pencils.</b> Compiled with <tt>-DFML_SURVEY_PENCIL_MESH</tt> the survey meshes are <a href="pencilgrid.php" style="display: inline">$\texttt{PencilGrid}$s</a> on the pencils of <tt>FML::default_particle_domain</tt> (<tt>FML::set_default_particle_domain(FML::Domain::uniform_pencil(px, py))</tt>); the multipoles, windows and reconstruction work the same way.
 </p>
 
 <header class="entry-header text-center">

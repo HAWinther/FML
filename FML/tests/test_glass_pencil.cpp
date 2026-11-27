@@ -1,5 +1,5 @@
-// Glass initial conditions on a pencil FML::domain (long-range force on PencilGrids, short-range ghosts
-// from the domain, migration and ownership by the pencils): the relaxation, the displacement of the glass by IC
+// Glass initial conditions on a pencil FML::default_particle_domain (long-range force on PencilGrids, short-range
+// ghosts from the domain, migration and ownership by the pencils): the relaxation, the displacement of the glass by IC
 // fields and save/load give what the slabs give
 #include <FML/FFTWGrid/FFTWGrid.h>
 #include <FML/GlassIC/GlassIC.h>
@@ -64,8 +64,8 @@ namespace {
             GL::save_load(load, save);
         std::array<G, 3> disp, vel;
         for (int c = 0; c < 3; c++) {
-            disp[c] = FML::GRID::make_grid<G>(mesh, 1, 1, FML::domain);
-            vel[c] = FML::GRID::make_grid<G>(mesh, 1, 1, FML::domain);
+            disp[c] = FML::GRID::make_grid<G>(mesh, 1, 1, FML::default_particle_domain);
+            vel[c] = FML::GRID::make_grid<G>(mesh, 1, 1, FML::default_particle_domain);
             fill<3>(disp[c], [&](auto x) { return field(c, x); });
             fill<3>(vel[c], [&](auto x) { return 2.0 * field(c, x); });
         }
@@ -77,18 +77,18 @@ namespace {
 int main() {
     std::vector<std::array<double, 7>> ref_relaxed;
     const auto ref = run<FML::GRID::FFTWGrid<3>>(ref_relaxed, "");
-    const FML::Domain slab = FML::domain;
+    const FML::Domain slab = FML::default_particle_domain;
     for (int p0 = 1; p0 <= FML::NTasks; p0++) {
         const int p1 = FML::NTasks / p0;
         if (FML::NTasks % p0 or mesh % p0 or mesh % p1)
             continue;
         const std::string name = "pencils " + std::to_string(p0) + "x" + std::to_string(p1);
         const std::string prefix = "test_glass_pencil_" + std::to_string(p0);
-        FML::set_domain(FML::Domain::uniform_pencil(p0, p1));
+        FML::set_default_particle_domain(FML::Domain::uniform_pencil(p0, p1));
         std::vector<std::array<double, 7>> relaxed;
         const auto res = run<FML::GRID::PencilGrid<3>>(relaxed, prefix);
         // The glass saved on pencils, loaded on slabs
-        FML::set_domain(slab);
+        FML::set_default_particle_domain(slab);
         auto back = GL::load_load(prefix);
         auto loaded = all(back);
         const double d1 = diff(relaxed, ref_relaxed), d2 = diff(res, ref);

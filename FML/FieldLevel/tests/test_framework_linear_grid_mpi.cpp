@@ -251,13 +251,13 @@ int main(int argc, char ** argv) {
                 have = true;
             }
             // Workspaces retain the model domain even after the global default changes.
-            auto saved = FML::domain;
-            FML::set_domain(FML::Domain::uniform_slab(FML::NTasks));
+            auto saved = FML::default_particle_domain;
+            FML::set_default_particle_domain(FML::Domain::uniform_slab(FML::NTasks));
             auto w = m.workspace();
             check(error(global_modes(m, m.predict(m.white_noise(91), m.initial_parameters(), w)), result.prediction) <
                       1e-13,
                   label + " workspace preserves explicit domain");
-            FML::set_domain(saved);
+            FML::set_default_particle_domain(saved);
         }
     // Mesh not divisible by task count (for 4/6 ranks); unequal widths in both axes when possible.
     c.mesh = 10;

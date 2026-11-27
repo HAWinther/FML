@@ -184,7 +184,8 @@ static Summary exercise(const FML::Domain & domain, const std::string & label,
     if (FML::ThisTask == 0) std::cout << "PM_ADJOINT_BACKEND_ERROR " << label << ' ' << e << '\n';
 }
 int main(int argc, char ** argv) {
-    const auto slab = FML::Domain::uniform_slab(FML::NTasks); FML::set_domain(slab);
+    const auto slab = FML::Domain::uniform_slab(FML::NTasks);
+    FML::set_default_particle_domain(slab);
     std::ofstream table;
     if (argc > 1 && FML::ThisTask == 0) {
         table.open(argv[1]); table << std::setprecision(17) << "backend,channel,h,analytic,numeric,relative_error\n";
@@ -200,7 +201,8 @@ int main(int argc, char ** argv) {
 #ifdef USE_MPI
     for (auto shape : {std::array<int, 2>{FML::NTasks, 1}, {1, FML::NTasks}}) {
         if (shape[0] > 8 || shape[1] > 5) continue;
-        const auto domain = FML::Domain::uniform_pencil(shape[0], shape[1]); FML::set_domain(domain);
+        const auto domain = FML::Domain::uniform_pencil(shape[0], shape[1]);
+        FML::set_default_particle_domain(domain);
         auto value = exercise<FML::GRID::PencilGrid<3>>(domain, "pencil", 8, 16, .3, 8, false, &table);
         compare(baseline, value, "pencil");
         if (shape[1] <= 3)
@@ -213,13 +215,14 @@ int main(int argc, char ** argv) {
             compare(dense, exercise<FML::GRID::PencilGrid<3>>(domain, "dense-pencil", 8, 4, .3, 4, false, &table), "dense-pencil");
     }
     if (FML::NTasks == 4) {
-        const auto domain = FML::Domain::uniform_pencil(2, 2); FML::set_domain(domain);
+        const auto domain = FML::Domain::uniform_pencil(2, 2);
+        FML::set_default_particle_domain(domain);
         compare(baseline, exercise<FML::GRID::PencilGrid<3>>(domain, "2x2", 8, 16, .3, 8, false, &table), "2x2");
         compare(tsc_comp, exercise<FML::GRID::PencilGrid<3>>(domain, "TSC-2x2", 8, 4, .3, 4, false, &table, FF::PMForceWindow::TSCCompensated, FF::PMAssignment::TSC), "TSC-2x2");
         exercise<FML::GRID::PencilGrid<3>>(domain, "unequal-N10", 10, 20, .3, 4, false, &table);
     }
     if (FML::NTasks > 1) {
-        FML::set_domain(slab);
+        FML::set_default_particle_domain(slab);
         check(FML::TESTS::throws([&]{auto s=settings();s.assignment=FML::ThisTask?FF::PMAssignment::TSC:FF::PMAssignment::CIC;FF::ParticleMeshForward bad(configuration(),spectrum(),s);}),"rank-dependent assignment rejected collectively");
         FF::ParticleMeshForward m(configuration(), spectrum(), settings()); auto w = m.workspace();
         m.evolve(m.white_noise(1), m.initial_parameters(), w);

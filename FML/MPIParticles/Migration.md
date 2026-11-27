@@ -4,7 +4,7 @@
 
 The container's domains must form a finite, contiguous rank-ordered partition of `[0,1]`. Nonuniform and empty slabs are allowed. Particles must have finite x in `[0,1]`; the existing exact-boundary convention remains: with multiple ranks, x=1 moves to the preceding representable coordinate and x=0 to the smallest positive normal coordinate of the particle's position type. Ordinary callers remain responsible for periodic wrapping.
 
-The owner of a particle comes from the container's `Domain` (`Global/Domain.h`): the one given to the constructor, or the global `FML::domain` (a Slab by default, with the ranges `FML::xmin_domain`, `FML::xmax_domain`). Everything above describes the Slab. With a Pencil or Peano-Hilbert domain the same routes are used with the domain's `owner()` (the boundary convention applied to the x and y, or x, y and z, coordinates); these domains are a preparation for more of FML and give a warning when chosen.
+The owner of a particle comes from the container's `Domain` (`Global/Domain.h`): the one given to the constructor, or the global `FML::default_particle_domain` (uniform slabs by default). Everything above describes the Slab. With a Pencil or Peano-Hilbert domain the same routes are used with the domain's `owner()` (the boundary convention applied to the x and y, or x, y and z, coordinates); P(k), FoF, the Delaunay tessellation, the N-body step and most particle methods support Pencil domains, and P(k) and the N-body step also Peano-Hilbert ones.
 
 ## Ownership and route selection
 

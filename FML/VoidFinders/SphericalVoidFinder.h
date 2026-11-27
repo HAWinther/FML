@@ -72,9 +72,10 @@ namespace FML {
         /// nmembers = the number of particles inside, density_ratio = 0 (not defined). The catalogue is sorted by
         /// radius (largest first).
         ///
-        /// The particles must be in [0,1)^3 and inside the local domain of FML::domain (e.g. MPIParticles). The
-        /// result is the same on all tasks (for a given grid). Smoothing the candidate grid requires FFTW (USE_FFTW).
-        /// With a pencil FML::domain use Grid = PencilGrid (the candidate grid is decomposed as the particles).
+        /// The particles must be in [0,1)^3 and inside the local domain of FML::default_particle_domain (e.g.
+        /// MPIParticles). The result is the same on all tasks (for a given grid). Smoothing the candidate grid requires
+        /// FFTW (USE_FFTW). With a pencil FML::default_particle_domain use Grid = PencilGrid (the candidate grid is
+        /// decomposed as the particles).
         ///
         /// @param[in] p Pointer to the particles
         /// @param[in] NumPart Number of local particles
@@ -127,19 +128,12 @@ namespace FML {
                           << " , " << rmax << "] (box units)\n";
 
             // The local domain of the particles: [xlo, xhi) x [ylo, yhi) (slabs: y whole)
-            double xlo = FML::xmin_domain, xhi = FML::xmax_domain, ylo = 0.0, yhi = 1.0;
-            if (FML::domain.holds<FML::PencilDomain>()) {
-                const auto & pencils = FML::domain.get<FML::PencilDomain>();
-                const auto pc = pencils.coords_of(FML::ThisTask);
-                xlo = pencils.x_edges()[pc[0]];
-                xhi = pencils.x_edges()[pc[0] + 1];
-                ylo = pencils.y_edges()[pc[1]];
-                yhi = pencils.y_edges()[pc[1] + 1];
-            }
+            const auto box = FML::default_particle_domain.box(FML::ThisTask);
+            const double xlo = box.lo[0], xhi = box.hi[0], ylo = box.lo[1], yhi = box.hi[1];
 
             // Candidate centers from the density grid
             Grid<3> grid;
-            void_density_field<T, Grid>(p, NumPart, options.grid, grid, FML::domain);
+            void_density_field<T, Grid>(p, NumPart, options.grid, grid, FML::default_particle_domain);
             const int Nmesh = grid.get_nmesh();
             const auto local_nx = grid.get_local_range(0)[1], local_x_start = grid.get_local_range(0)[0];
             const auto local_ny = grid.get_local_range(1)[1], local_y_start = grid.get_local_range(1)[0];

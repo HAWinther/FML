@@ -131,7 +131,7 @@ namespace FML {
             mutable size_t nghosts{0};
             mutable std::vector<std::vector<std::pair<size_t, size_t>>> serve;
             size_t NumPart{0};
-            // The particles are on a given domain (Slab or Pencil) instead of the slabs of FML::domain
+            // The particles are on a given domain (Slab or Pencil) instead of the slabs of FML::default_particle_domain
             bool on_domain{false};
             FML::Domain domain_given{};
 
@@ -251,7 +251,8 @@ namespace FML {
             DTFE() = default;
             explicit DTFE(DTFETessellation t) : tessellation(t) {}
             /// The particles are on this domain (Slab or Pencil; e.g. MPIParticles::get_domain()) instead
-            /// of the slabs of FML::domain. The grids are then made on this domain (PencilGrid for pencils)
+            /// of the slabs of FML::default_particle_domain. The grids are then made on this domain (PencilGrid for
+            /// pencils)
             explicit DTFE(const FML::Domain & domain, DTFETessellation t = DTFETessellationDefault)
                 :
 #ifdef USE_CGAL
@@ -264,7 +265,9 @@ namespace FML {
             DTFETessellation get_tessellation_type() const { return tessellation; }
 
             /// The domain of the particles
-            const FML::Domain & particle_domain() const { return on_domain ? domain_given : FML::domain; }
+            const FML::Domain & particle_domain() const {
+                return on_domain ? domain_given : FML::default_particle_domain;
+            }
 
             /// Free all the memory
             void free() {
@@ -425,11 +428,13 @@ namespace FML {
                 const double h = 1.0 / Nmesh;
                 const bool native = tessellation == DTFETessellation::Native;
                 const bool have_cells = local_nx > 0 and local_ny > 0;
-                if (not native and have_cells and not on_domain)
-                    assert_mpi(local_x_start * h >= FML::xmin_domain - 1e-12 and
-                                   (local_x_start + local_nx - 1) * h < FML::xmax_domain,
+                if (not native and have_cells and not on_domain) {
+                    const auto box = FML::default_particle_domain.box(FML::ThisTask);
+                    assert_mpi(local_x_start * h >= box.lo[0] - 1e-12 and
+                                   (local_x_start + local_nx - 1) * h < box.hi[0],
                                "[DTFE::interpolate_to_grid] The grid slab is not inside the particle domain. Nmesh "
                                "must be divisible by the number of tasks");
+                }
                 if (not native and have_cells and on_domain) {
                     // The centers of the first and the last of our cells are owned by us
                     const double lo[3] = {(local_x_start + 0.5) * h, (local_y_start + 0.5) * h, 0.0};

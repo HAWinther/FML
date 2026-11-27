@@ -99,6 +99,10 @@ namespace FML {
 
             /// The domain (none for the fiducial slabs)
             const std::optional<FML::Domain> & get_domain() const { return _domain; }
+            /// The decomposition of the (finest) grid over the tasks as an FML::Domain
+            FML::Domain decomposition() const {
+                return _y.empty() ? FML::Domain::uniform_slab(FML::NTasks) : _y[0].decomposition();
+            }
 
             // Fetch info about the grid
             IndexInt get_NtotLocal(int level = 0) const;

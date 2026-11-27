@@ -101,15 +101,16 @@ namespace FML {
             constexpr int get_ndim() const { return N; }
         };
 
-        /// @brief Move a vector of particles (any type with get_pos) to the task that owns their position: slabs (the
-        /// domain decomposition in FML::xmin_domain / xmax_domain) the x-coordinate; other domains (pencils) the owner
+        /// @brief Move a vector of particles (any type with get_pos) to the task that owns their position in domain:
+        /// slabs by the x-coordinate (positions outside [0,1) go to the first or last task); other domains the owner
         template <class T>
-        void redistribute_particles_by_x(std::vector<T> & part, const FML::Domain & domain = FML::domain) {
+        void redistribute_particles_by_x(std::vector<T> & part,
+                                         const FML::Domain & domain = FML::default_particle_domain) {
 #ifdef USE_MPI
             if (FML::NTasks == 1)
                 return;
-            auto xmin_per_task = FML::GatherFromTasks(&FML::xmin_domain);
             const bool slab = domain.is_slab();
+            const std::vector<double> xmin_per_task = slab ? domain.x_min_per_task() : std::vector<double>{};
             std::vector<std::vector<T>> send(FML::NTasks);
             for (auto & p : part) {
                 const auto * pos = FML::PARTICLE::GetPos(p);
@@ -146,7 +147,7 @@ namespace FML {
                                                int Npart_1D,
                                                std::array<Grid<N>, N> & Psi,
                                                std::array<double, N> & lattice_offset,
-                                               const FML::Domain & domain = FML::domain) {
+                                               const FML::Domain & domain = FML::default_particle_domain) {
             static_assert(FML::PARTICLE::has_get_q<T>(),
                           "displacement_field_from_particles needs particles with a Lagrangian coordinate (get_q)");
             const int Np = Npart_1D;

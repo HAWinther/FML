@@ -124,8 +124,9 @@ namespace FML::PHASE_SPACE_HALOS {
         }
         detail::collective_require(valid, "Invalid options or particles on at least one rank");
         detail::agree_options(o);
-        if (FML::domain.is_slab()) {
-            const std::array<double, 2> slab{FML::xmin_domain, FML::xmax_domain};
+        if (FML::default_particle_domain.is_slab()) {
+            const std::array<double, 2> slab{FML::default_particle_domain.x_min(FML::ThisTask),
+                                             FML::default_particle_domain.x_max(FML::ThisTask)};
             auto slab_copy = slab;
             const auto slabs = FML::GatherFromTasks(&slab_copy);
             valid = slab[0] >= 0 && slab[1] <= 1 && slab[0] <= slab[1];
@@ -135,12 +136,12 @@ namespace FML::PHASE_SPACE_HALOS {
             for (const auto & p : particles)
                 valid &= p.position[0] / o.boxsize >= slab[0] && p.position[0] / o.boxsize < slab[1];
         } else {
-            // (the particles on the pencils of FML::domain)
-            valid = FML::domain.holds<FML::PencilDomain>();
+            // (the particles on the pencils of FML::default_particle_domain)
+            valid = FML::default_particle_domain.holds<FML::PencilDomain>();
             for (const auto & p : particles) {
                 const std::array<double, 3> x{p.position[0] / o.boxsize, p.position[1] / o.boxsize,
                                               p.position[2] / o.boxsize};
-                valid &= FML::domain.owner(x.data()) == FML::ThisTask;
+                valid &= FML::default_particle_domain.owner(x.data()) == FML::ThisTask;
             }
         }
         detail::collective_require(valid, "Slabs must partition [0,1) and particles must already have migrated");

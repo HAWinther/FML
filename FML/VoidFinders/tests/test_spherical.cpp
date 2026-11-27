@@ -35,10 +35,14 @@ void test_exchange() {
         for (const auto & r : all) {
             if (sparse && r.x >= .5)
                 continue; // empty source ranks
-            const bool owned = r.x >= FML::xmin_domain && r.x < FML::xmax_domain;
+            const bool owned = r.x >= FML::default_particle_domain.x_min(FML::ThisTask) &&
+                               r.x < FML::default_particle_domain.x_max(FML::ThisTask);
             if (owned)
                 local.push_back(r);
-            if (owned || included(r.x, FML::xmin_domain, FML::xmax_domain, buffer))
+            if (owned || included(r.x,
+                                  FML::default_particle_domain.x_min(FML::ThisTask),
+                                  FML::default_particle_domain.x_max(FML::ThisTask),
+                                  buffer))
                 expected.insert(r.id);
         }
         // Rank-dependent limits force multiple whole-record rounds and zero-length edges.
@@ -68,7 +72,6 @@ void test_exchange() {
     std::vector<Record> empty;
     FML::COMMUNICATION::append_periodic_slab_ghosts(empty, .3, [](const Record & r) { return r.x; }, sizeof(Record));
     check(empty.empty(), "all ranks empty");
-    const double saved_lo = FML::xmin_domain, saved_hi = FML::xmax_domain;
     // Nonuniform domains, including an empty final slab for MPI builds.
     auto boundary = [](int task) {
         if (FML::NTasks == 1)
@@ -76,11 +79,14 @@ void test_exchange() {
         const double t = std::min(task, FML::NTasks - 1) / double(FML::NTasks - 1);
         return t * t;
     };
-    FML::xmin_domain = boundary(FML::ThisTask);
-    FML::xmax_domain = boundary(FML::ThisTask + 1);
+    std::vector<double> lo(FML::NTasks), hi(FML::NTasks);
+    for (int t = 0; t < FML::NTasks; ++t) {
+        lo[t] = boundary(t);
+        hi[t] = boundary(t + 1);
+    }
+    FML::set_default_particle_domain(FML::Domain::slab(lo, hi));
     run(.17, false, "nonuniform and empty slabs");
-    FML::xmin_domain = saved_lo;
-    FML::xmax_domain = saved_hi;
+    FML::set_default_particle_domain(FML::Domain::uniform_slab(FML::NTasks));
 }
 
 struct Particle {
@@ -250,7 +256,7 @@ void test_catalogue() {
             all[i].mass = weighted ? (i % 3 ? .5 : 2) : 1;
         local.clear();
         for (const auto & p : all)
-            if (p.pos[0] >= FML::xmin_domain && p.pos[0] < FML::xmax_domain)
+            if (FML::default_particle_domain.contains(FML::ThisTask, p.pos))
                 local.push_back(p);
         for (double max_radius : {8.0, .6})
             for (int drift : {0, 6}) {

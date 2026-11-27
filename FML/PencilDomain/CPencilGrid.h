@@ -224,7 +224,10 @@ namespace FML {
             /// The number of dimensions N
             int get_ndim() const { return N; }
             /// The pencils of the grid
+            /// The pencils of the grid (its geometry; can be P0 x 1)
             const PencilDomain & get_domain() const { return domain; }
+            /// The decomposition of the grid over the tasks as an FML::Domain (P0 x 1 pencils are a Slab)
+            FML::Domain decomposition() const { return FML::Domain(domain); }
             /// The number of local cells in x
             ptrdiff_t get_local_nx() const { return Local_nx; }
             /// The global x-index of the first local cell

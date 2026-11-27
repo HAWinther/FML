@@ -223,8 +223,8 @@ namespace FML {
                 if (FML::NTasks == 1)
                     return result;
                 // Pencils: the 8 neighbors in x and y (also the corners: a group can reach into the diagonal task)
-                if (FML::domain.holds<FML::PencilDomain>()) {
-                    const auto & pencils = FML::domain.get<FML::PencilDomain>();
+                if (FML::default_particle_domain.holds<FML::PencilDomain>()) {
+                    const auto & pencils = FML::default_particle_domain.get<FML::PencilDomain>();
                     const auto P = pencils.process_grid();
                     const auto c = pencils.coords_of(FML::ThisTask);
                     int tag = 30;

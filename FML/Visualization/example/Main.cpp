@@ -24,7 +24,7 @@ int main() {
     const auto box = FML::EXAMPLEDATA::clustered_box(400000, 1.0);
     std::vector<Particle> part;
     for (auto & p : box.particles)
-        if (p.pos[0] >= FML::xmin_domain and p.pos[0] < FML::xmax_domain)
+        if (FML::default_particle_domain.contains(FML::ThisTask, p.pos.data()))
             part.push_back({{p.pos[0], p.pos[1], p.pos[2]}});
     const size_t npart_total = box.particles.size();
 

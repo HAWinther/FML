@@ -85,7 +85,7 @@ The factors of h cancel in G for these mass/length units. The phase-space partic
 auto catalogue = find_distributed(owned_particles, options);
 ```
 
-This is collective on `FML::communicator`, including empty ranks. Input must already occupy FML's periodic x slabs (`xmin_domain`, `xmax_domain` in unit-box coordinates). Positions still use `options.boxsize`. Options must agree across ranks. IDs are globally checked by hashing IDs to validation owners; particle payloads are not gathered for this check.
+This is collective on `FML::communicator`, including empty ranks. Input must already be on the tasks that own it in `FML::default_particle_domain` (slabs or pencils, in unit-box coordinates). Positions still use `options.boxsize`. Options must agree across ranks. IDs are globally checked by hashing IDs to validation owners; particle payloads are not gathered for this check.
 
 Owned particles plus link-radius ghosts form local FoF edges. Group minima propagate through subscribed ID/label metadata until a global fixed point; this stitches chains crossing any number of slabs, including cutoffs wider than a slab. The global minimum particle ID identifies the parent. Complete parent members are then routed to a deterministic hash owner for analysis, and final particle assignments return to their original input ranks. Halo catalogues remain on parent owners, which can be different from spatial centre owners. No rank holds a replicated global particle catalogue. The largest parent is still analyzed on one rank, and hash assignment balances groups statistically, not their actual computational work.
 

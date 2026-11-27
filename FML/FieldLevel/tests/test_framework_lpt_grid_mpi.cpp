@@ -264,13 +264,13 @@ Snapshot exercise(const FF::Configuration & c, const FML::Domain & domain, const
           }),
           label + " one-rank malformed state rejected collectively");
     // Model-owned domain is retained even if callers change the global domain between evaluations.
-    auto saved = FML::domain;
-    FML::set_domain(FML::Domain::uniform_slab(FML::NTasks));
+    auto saved = FML::default_particle_domain;
+    FML::set_default_particle_domain(FML::Domain::uniform_slab(FML::NTasks));
     auto fresh = m.workspace();
     auto again = m.predict(s, p, fresh);
     check(error(global_modes(m, again), out.prediction) < 1e-12,
           label + " both workspace meshes preserve model domain");
-    FML::set_domain(saved);
+    FML::set_default_particle_domain(saved);
     if (FML::ThisTask == 0)
         std::cout << std::setprecision(17) << "LPT_GRADIENT " << label << ' ' << field_error << ' ' << scalar_error
                   << ' ' << adjoint_error << ' ' << large_error << '\n';

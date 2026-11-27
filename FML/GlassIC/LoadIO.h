@@ -22,22 +22,14 @@ namespace FML::GLASSIC {
         }
         // IDs must be exactly a permutation of [0,N). Route a validation copy by ID, avoiding a global ID array.
         inline void unique_ids(Load & load) {
-            const auto lower = FML::GatherFromTasks(&FML::xmin_domain), upper = FML::GatherFromTasks(&FML::xmax_domain);
-            const bool pencils = FML::domain.holds<FML::PencilDomain>();
             std::vector<Particle> local(load.particles.get_npart());
             for (size_t i = 0; i < local.size(); ++i) {
                 local[i] = load.particles.get_particles_ptr()[i];
                 const auto owner = size_t(local[i].id % FML::NTasks);
-                // A position in the domain of the task "owner" (slabs: the middle of its slab; pencils: of its
-                // pencil)
-                if (pencils) {
-                    const auto & d = FML::domain.get<FML::PencilDomain>();
-                    const auto c = d.coords_of(int(owner));
-                    local[i].position[0] = (d.x_edges()[c[0]] + d.x_edges()[c[0] + 1]) * .5;
-                    local[i].position[1] = (d.y_edges()[c[1]] + d.y_edges()[c[1] + 1]) * .5;
-                } else {
-                    local[i].position[0] = (lower[owner] + upper[owner]) * .5;
-                }
+                // A position in the domain of the task "owner" (the middle of its slab or pencil)
+                const auto box = FML::default_particle_domain.box(int(owner));
+                local[i].position[0] = (box.lo[0] + box.hi[0]) * .5;
+                local[i].position[1] = (box.lo[1] + box.hi[1]) * .5;
             }
             Particles ids;
             ids.move_from(std::move(local));

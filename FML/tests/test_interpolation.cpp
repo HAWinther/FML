@@ -44,9 +44,12 @@ std::vector<Particle> random_particles(int n, int seed) {
     std::uniform_real_distribution<double> U(0, 1);
     std::vector<Particle> part(n);
     for (auto & p : part) {
-        p.pos[0] = xmin_domain + (xmax_domain - xmin_domain) * U(gen);
-        if (p.pos[0] >= xmax_domain)
-            p.pos[0] = xmin_domain;
+        p.pos[0] =
+            FML::default_particle_domain.x_min(FML::ThisTask) +
+            (FML::default_particle_domain.x_max(FML::ThisTask) - FML::default_particle_domain.x_min(FML::ThisTask)) *
+                U(gen);
+        if (p.pos[0] >= FML::default_particle_domain.x_max(FML::ThisTask))
+            p.pos[0] = FML::default_particle_domain.x_min(FML::ThisTask);
         p.pos[1] = U(gen);
         p.pos[2] = U(gen);
     }
@@ -112,8 +115,8 @@ void test_interpolation_exact() {
     }
 }
 
-// Particles within round-off of the slab boundaries: x = xmin_domain - 1 ulp (as the round-off in a lattice gives),
-// and x = xmax_domain - 1 ulp (x * Nmesh can round up to the first cell of the right task)
+// Particles within round-off of the slab boundaries: x = (start of the local slab) - 1 ulp (as the round-off in a
+// lattice gives), and x = (end of the local slab) - 1 ulp (x * Nmesh can round up to the first cell of the right task)
 void test_slab_boundary_ulp() {
     if (NTasks == 1)
         return;
@@ -122,7 +125,8 @@ void test_slab_boundary_ulp() {
     std::mt19937 gen(7 + ThisTask);
     std::uniform_real_distribution<double> U(0, 1);
     for (int i = 0; i < 2000; i++) {
-        double x = (i % 2 == 0) ? std::nextafter(xmin_domain, 0.0) : std::nextafter(xmax_domain, 0.0);
+        double x = (i % 2 == 0) ? std::nextafter(FML::default_particle_domain.x_min(FML::ThisTask), 0.0) :
+                                  std::nextafter(FML::default_particle_domain.x_max(FML::ThisTask), 0.0);
         if (ThisTask == 0 and i % 2 == 0)
             x = 0.0;
         part.push_back({{x, U(gen), U(gen)}});
@@ -173,7 +177,8 @@ void test_slab_boundary() {
     std::vector<Particle> part;
     for (int i = 0; i < Np; i++) {
         const double x = i / double(Np);
-        if (not(x >= xmin_domain and x < xmax_domain))
+        if (not(x >= FML::default_particle_domain.x_min(FML::ThisTask) and
+                x < FML::default_particle_domain.x_max(FML::ThisTask)))
             continue;
         for (int j = 0; j < Np; j++)
             for (int k = 0; k < Np; k++)
@@ -242,7 +247,7 @@ int main(int argc, char ** argv) {
     const std::string mode = argc > 1 ? argv[1] : "";
     if (mode == "unknown") {
         FFTWGrid g(8, 1, 1);
-        std::vector<Particle> part(1, Particle{{xmin_domain, 0.5, 0.5}});
+        std::vector<Particle> part(1, Particle{{FML::default_particle_domain.x_min(FML::ThisTask), 0.5, 0.5}});
         INTERPOLATION::particles_to_grid<3, Particle>(part.data(), 1, NTasks, g, "cic");
         return 0;
     }
@@ -250,7 +255,7 @@ int main(int argc, char ** argv) {
         // 4 tasks, Nmesh 4: one slice per task, PQS needs 2 extra slices
         auto nlr = INTERPOLATION::get_extra_slices("PQS");
         FFTWGrid g(4, nlr.first, nlr.second);
-        std::vector<Particle> part(1, Particle{{xmin_domain, 0.5, 0.5}});
+        std::vector<Particle> part(1, Particle{{FML::default_particle_domain.x_min(FML::ThisTask), 0.5, 0.5}});
         INTERPOLATION::particles_to_grid<3, Particle>(part.data(), 1, NTasks, g, "PQS");
         return 0;
     }
@@ -258,7 +263,9 @@ int main(int argc, char ** argv) {
     if (mode == "outside" or mode == "outside_interp") {
         // 2 tasks, Nmesh 16: the particle of task 0 is 0.1 * 16 = 1.6 cells into the slab of task 1
         FFTWGrid g(16, 1, 2);
-        std::vector<Particle> part(1, Particle{{xmin_domain + (ThisTask == 0 ? 0.6 : 0.1), 0.5, 0.5}});
+        std::vector<Particle> part(
+            1,
+            Particle{{FML::default_particle_domain.x_min(FML::ThisTask) + (ThisTask == 0 ? 0.6 : 0.1), 0.5, 0.5}});
         if (mode == "outside") {
             INTERPOLATION::particles_to_grid<3, Particle>(part.data(), 1, NTasks, g, "CIC");
         } else {

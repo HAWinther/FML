@@ -23,14 +23,12 @@ namespace FML::SPH::detail {
 #endif
     }
     inline std::vector<std::array<double, 2>> slabs() {
+        // The slabs of FML::default_particle_domain (a Slab domain)
+        FML::default_particle_domain.require_slab("[SPH]");
         std::vector<std::array<double, 2>> result;
         C::collective_try([&] { result.resize(FML::NTasks); }, "SPH slab metadata");
-        const std::array<double, 2> local{FML::xmin_domain, FML::xmax_domain};
-#ifdef USE_MPI
-        MPI_Allgather(local.data(), 2, MPI_DOUBLE, result.data(), 2, MPI_DOUBLE, FML::communicator);
-#else
-        result[0] = local;
-#endif
+        for (int j = 0; j < FML::NTasks; ++j)
+            result[j] = {FML::default_particle_domain.x_min(j), FML::default_particle_domain.x_max(j)};
         bool good = result.front()[0] == 0 && result.back()[1] == 1;
         for (size_t j = 0; j < result.size(); ++j)
             good &= std::isfinite(result[j][0]) && std::isfinite(result[j][1]) && result[j][0] <= result[j][1] &&
